@@ -1,27 +1,33 @@
 name: CI
 
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_dispatch:
+
+# CI deshabilitado en push y pull_request hasta que existan los
+# lockfiles (pnpm-lock.yaml y apps/backend/uv.lock). Eso pasa cuando
+# se corra por primera vez "pnpm install" y "uv sync" (regla #1 de
+# AGENTS.md: requieren OK humano).
+#
+# Una vez generados y commiteados los lockfiles, reactivar push/PR
+# reemplazando el bloque "on" por:
+#
+#   on:
+#     pull_request:
+#       branches: [main]
+#     push:
+#       branches: [main]
+#
+# Mientras tanto, CI se puede correr manualmente desde la pestaña
+# Actions del repo (workflow_dispatch).
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Los jobs de lint/test corren SOLO si existen los lockfiles
-# correspondientes. En la fase inicial del repo (pre-instalación) los
-# lockfiles todavía no existen y los jobs aparecen como "Skipped".
-# Una vez que se corra `pnpm install` y `uv sync` (con OK humano por
-# regla #1 de AGENTS.md), los lockfiles se commitean y CI empieza a
-# correr de verdad.
-
 jobs:
   lint-and-test-js:
     name: Lint + Typecheck + Test (JS/TS)
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('pnpm-lock.yaml') != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,7 +55,6 @@ jobs:
   lint-and-test-py:
     name: Lint + Test (Python)
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('apps/backend/uv.lock') != '' }}
     defaults:
       run:
         working-directory: apps/backend
@@ -76,7 +81,7 @@ jobs:
       - name: Test
         run: uv run pytest
 
-  # TODO: agregar job que falle si detecta `@supabase/supabase-js`
+  # TODO: agregar job que falle si detecta @supabase/supabase-js
   # en apps/web o apps/mobile (regla #5 de AGENTS.md).
   # TODO: agregar job que valide formato Conventional Commits en
   # español (regla #6).
