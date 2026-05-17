@@ -125,10 +125,18 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 2. [`docs/product/TONE-OF-VOICE.md`](./docs/product/TONE-OF-VOICE.md)
 3. Tono por modo en [`docs/product/MODES.md`](./docs/product/MODES.md).
 
+**Antes de tu primer PR** (humano o IA)
+
+1. [`CONTRIBUTING.md`](./CONTRIBUTING.md) — flujo de trabajo, branches, review, tono.
+2. [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md) — formato de commits.
+3. `bash scripts/ynara-doctor.sh` — debe salir con `exit 0`.
+
 **Tareas con un solo archivo**
 
 - **Convenciones de commits** — [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md)
 - **Reglas extendidas (estilo, anti-patterns)** — [`docs/conventions/AI-GUIDELINES.md`](./docs/conventions/AI-GUIDELINES.md) + [`docs/conventions/CODE-STYLE.md`](./docs/conventions/CODE-STYLE.md)
+- **Cómo contribuir (humano)** — [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- **Política de seguridad** — [`SECURITY.md`](./SECURITY.md)
 - **Crear un skill nuevo** — [`skills/README.md`](./skills/README.md)
 - **Histórico o por qué se decidió X** — [`docs/architecture/adrs/`](./docs/architecture/adrs/) (inmutables, ordenados por número)
 
@@ -140,6 +148,8 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 | `CLAUDE.md` / `CODEX.md` / `GEMINI.md` | Adapters por IDE — solo punteros, sin contenido propio |
 | `IDENTITY.md` | 4 pilares de marca + voz: qué es Ynara y qué no es |
 | `DESIGN.md` | Sistema visual — placeholder hasta aprobación del equipo |
+| `CONTRIBUTING.md` | Flujo de trabajo para humanos: branches, PRs, review, tono |
+| `SECURITY.md` | Política de seguridad, reporte de vulnerabilidades, principios |
 | `ynara.config.json` | Configuración canónica: 5 modos, 2 modelos, capas de memoria, fase de infra |
 | `apps/web/` | Next.js 16 + Tailwind v4 CSS-first (sin `tailwind.config.ts`) + shadcn/ui |
 | `apps/mobile/` | Expo 53+ + Expo Router + NativeWind (todavía sobre Tailwind 3) |
