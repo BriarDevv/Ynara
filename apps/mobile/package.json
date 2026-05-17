@@ -1,0 +1,38 @@
+{
+  "name": "@ynara/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "dev": "expo start",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "web": "expo start --web",
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'TODO: configurar Jest + react-native-testing-library'"
+  },
+  "dependencies": {
+    "expo": "~53.0.0",
+    "expo-router": "~4.0.0",
+    "expo-secure-store": "~14.0.0",
+    "expo-notifications": "~0.29.0",
+    "expo-status-bar": "~2.0.0",
+    "react": "19.0.0",
+    "react-native": "0.76.0",
+    "react-native-safe-area-context": "~4.12.0",
+    "react-native-screens": "~4.0.0",
+    "nativewind": "^4.1.0",
+    "tailwindcss": "^3.4.0",
+    "@tanstack/react-query": "^5.0.0",
+    "zustand": "^5.0.0",
+    "zod": "^3.23.0",
+    "@ynara/shared-types": "workspace:*",
+    "@ynara/shared-schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.6.0",
+    "@babel/core": "^7.25.0"
+  }
+}
