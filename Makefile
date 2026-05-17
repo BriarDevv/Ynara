@@ -9,7 +9,8 @@
         lint lint-js lint-py format format-js format-py \
         migrate migrate-create migrate-up migrate-down migrate-check \
         clean reset-memory seed export-user-data \
-        docker-dev-up docker-dev-down
+        docker-dev-up docker-dev-down \
+        doctor
 
 help: ## Mostrar esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -108,6 +109,11 @@ migrate-down:
 
 migrate-check:
 	cd apps/backend && uv run alembic check
+
+# ---------- Healthcheck pre-PR ----------
+
+doctor: ## Validaciones pre-PR (regla #1 a #5 + landmines). Exit 0 obligatorio antes de PR.
+	bash scripts/ynara-doctor.sh
 
 # ---------- Utilidades ----------
 
