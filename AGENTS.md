@@ -4,9 +4,16 @@
 
 ## Quickstart 30s
 
-Ynara es un asistente personal adaptativo on-prem con memoria propia. Stack: Next.js 16 (web) + Expo 53+ (mobile) + FastAPI + Pydantic v2 + SQLAlchemy 2 async (backend) + vLLM con dual stack Gemma 4 26B-A4B (conversacional) + Qwen 3.5-9B (agente) + Mem0 OSS v2 + Postgres 16 + pgvector.
+**Qué es Ynara**: asistente personal adaptativo on-prem con memoria propia.
 
-**Reglas más críticas**: (1) OK humano antes de commit/push/install/migraciones; (2) datos del usuario nunca fuera del perímetro; (3) cliente Supabase prohibido en frontend; (4) tablas de memoria sagradas (2 aprobaciones).
+**Stack**: Next.js 16 (web) + Expo 53+ (mobile) + FastAPI + Pydantic v2 + SQLAlchemy 2 async (backend) + vLLM con dual stack Gemma 4 26B-A4B (conversacional) + Qwen 3.5-9B (agente) + Mem0 OSS v2 + Postgres 16 + pgvector.
+
+**Reglas más críticas**:
+
+1. OK humano antes de commit / push / install / migraciones.
+2. Datos del usuario nunca fuera del perímetro.
+3. Cliente Supabase prohibido en frontend.
+4. Tablas de memoria sagradas (2 aprobaciones humanas).
 
 **Antes de cada PR**: `bash scripts/ynara-doctor.sh` debe `exit 0`.
 
@@ -25,27 +32,105 @@ Las carpetas `.claude/`, `.codex/`, `.gemini/` son **adapters** para los IDEs/CL
 
 ### Then choose by task
 
-| Tarea | Leer en este orden |
-| --- | --- |
-| Onboarding al repo | `README.md`<br>→ [`docs/README.md`](./docs/README.md)<br>→ [`docs/conventions/GLOSSARY.md`](./docs/conventions/GLOSSARY.md) |
-| Agregar o modificar un modo | [`docs/product/MODES.md`](./docs/product/MODES.md)<br>→ [`ynara.config.json`](./ynara.config.json)<br>→ `apps/backend/app/llm/router.py`<br>→ [`skills/add-new-mode/SKILL.md`](./skills/add-new-mode/SKILL.md) |
-| Agregar una tool al agente Qwen | [`apps/backend/docs/TOOLS.md`](./apps/backend/docs/TOOLS.md)<br>→ `apps/backend/app/llm/tools/`<br>→ [`skills/add-llm-tool/SKILL.md`](./skills/add-llm-tool/SKILL.md) |
-| Tocar memoria (lectura) | [`docs/product/MEMORY.md`](./docs/product/MEMORY.md)<br>→ `apps/backend/app/memory/` (wrappers) |
-| Tocar memoria (esquema o migración) | [`ADR-003`](./docs/architecture/adrs/ADR-003-mem0-vs-letta.md)<br>→ [`ADR-004`](./docs/architecture/adrs/ADR-004-postgres-pgvector-vs-pinecone.md)<br>→ [`docs/MODELS.md`](./apps/backend/docs/MODELS.md)<br>→ [`docs/MIGRATIONS.md`](./apps/backend/docs/MIGRATIONS.md)<br>→ **2 aprobaciones humanas** |
-| Endpoint HTTP nuevo | [`docs/ENDPOINTS.md`](./apps/backend/docs/ENDPOINTS.md)<br>→ `apps/backend/app/api/v1/`<br>→ `apps/backend/app/services/`<br>→ schema en `apps/backend/app/schemas/` |
-| Modelo SQLAlchemy nuevo | [`docs/MODELS.md`](./apps/backend/docs/MODELS.md)<br>→ `apps/backend/app/models/`<br>→ migración Alembic con tests |
-| Migración Alembic | [`docs/MIGRATIONS.md`](./apps/backend/docs/MIGRATIONS.md)<br>→ `apps/backend/alembic/env.py`<br>→ plantilla `script.py.mako` |
-| Workflow Celery nuevo | `apps/backend/app/workflows/`<br>→ `apps/backend/app/workers/celery_app.py` |
-| Cambio arquitectónico (stack, infra, deps mayores) | [`docs/architecture/adrs/`](./docs/architecture/adrs/)<br>→ [`skills/adr-create/SKILL.md`](./skills/adr-create/SKILL.md)<br>→ **ADR aprobado antes del PR de implementación** |
-| Frontend web | [`apps/web/AGENTS.md`](./apps/web/AGENTS.md)<br>→ [`apps/web/README.md`](./apps/web/README.md)<br>→ [`DESIGN.md`](./DESIGN.md) (placeholder)<br>→ `apps/web/src/app/globals.css` |
-| Mobile | [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)<br>→ [`apps/mobile/EAS.md`](./apps/mobile/EAS.md)<br>→ `apps/mobile/app.json` |
-| Migración Supabase → self-hosted | [`ADR-005`](./docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md)<br>→ [`docs/operations/MIGRATION-SUPABASE-TO-SELFHOSTED.md`](./docs/operations/MIGRATION-SUPABASE-TO-SELFHOSTED.md) |
-| Deploy o incidente | [`docs/operations/DEPLOY.md`](./docs/operations/DEPLOY.md)<br>→ [`docs/operations/RUNBOOK.md`](./docs/operations/RUNBOOK.md) |
-| Entender la voz del producto | [`IDENTITY.md`](./IDENTITY.md)<br>→ [`docs/product/TONE-OF-VOICE.md`](./docs/product/TONE-OF-VOICE.md)<br>→ tono por modo en `MODES.md` |
-| Convenciones de commits | [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md) |
-| Reglas extendidas (estilo, anti-patterns) | [`docs/conventions/AI-GUIDELINES.md`](./docs/conventions/AI-GUIDELINES.md)<br>+ [`docs/conventions/CODE-STYLE.md`](./docs/conventions/CODE-STYLE.md) |
-| Crear un skill nuevo | [`skills/README.md`](./skills/README.md)<br>→ cualquier `skills/*/SKILL.md` como plantilla |
-| Histórico o por qué se decidió X | [`docs/architecture/adrs/`](./docs/architecture/adrs/) (inmutables, ordenados por número) |
+Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, cada paso es un item de la lista numerada.
+
+**Onboarding al repo**
+
+1. [`README.md`](./README.md)
+2. [`docs/README.md`](./docs/README.md)
+3. [`docs/conventions/GLOSSARY.md`](./docs/conventions/GLOSSARY.md)
+
+**Agregar o modificar un modo**
+
+1. [`docs/product/MODES.md`](./docs/product/MODES.md)
+2. [`ynara.config.json`](./ynara.config.json)
+3. `apps/backend/app/llm/router.py`
+4. [`skills/add-new-mode/SKILL.md`](./skills/add-new-mode/SKILL.md)
+
+**Agregar una tool al agente Qwen**
+
+1. [`apps/backend/docs/TOOLS.md`](./apps/backend/docs/TOOLS.md)
+2. `apps/backend/app/llm/tools/`
+3. [`skills/add-llm-tool/SKILL.md`](./skills/add-llm-tool/SKILL.md)
+
+**Tocar memoria (lectura)**
+
+1. [`docs/product/MEMORY.md`](./docs/product/MEMORY.md)
+2. `apps/backend/app/memory/` (wrappers)
+
+**Tocar memoria (esquema o migración)**
+
+1. [`ADR-003`](./docs/architecture/adrs/ADR-003-mem0-vs-letta.md)
+2. [`ADR-004`](./docs/architecture/adrs/ADR-004-postgres-pgvector-vs-pinecone.md)
+3. [`apps/backend/docs/MODELS.md`](./apps/backend/docs/MODELS.md)
+4. [`apps/backend/docs/MIGRATIONS.md`](./apps/backend/docs/MIGRATIONS.md)
+5. **2 aprobaciones humanas obligatorias** (regla #3).
+
+**Endpoint HTTP nuevo**
+
+1. [`apps/backend/docs/ENDPOINTS.md`](./apps/backend/docs/ENDPOINTS.md)
+2. `apps/backend/app/api/v1/`
+3. `apps/backend/app/services/`
+4. Schema en `apps/backend/app/schemas/`
+
+**Modelo SQLAlchemy nuevo**
+
+1. [`apps/backend/docs/MODELS.md`](./apps/backend/docs/MODELS.md)
+2. `apps/backend/app/models/`
+3. Migración Alembic con tests.
+
+**Migración Alembic**
+
+1. [`apps/backend/docs/MIGRATIONS.md`](./apps/backend/docs/MIGRATIONS.md)
+2. `apps/backend/alembic/env.py`
+3. Plantilla `apps/backend/alembic/script.py.mako`
+
+**Workflow Celery nuevo**
+
+1. `apps/backend/app/workflows/`
+2. `apps/backend/app/workers/celery_app.py`
+
+**Cambio arquitectónico (stack, infra, deps mayores)**
+
+1. [`docs/architecture/adrs/`](./docs/architecture/adrs/)
+2. [`skills/adr-create/SKILL.md`](./skills/adr-create/SKILL.md)
+3. **ADR aprobado antes del PR de implementación.**
+
+**Frontend web**
+
+1. [`apps/web/AGENTS.md`](./apps/web/AGENTS.md)
+2. [`apps/web/README.md`](./apps/web/README.md)
+3. [`DESIGN.md`](./DESIGN.md) (placeholder)
+4. `apps/web/src/app/globals.css`
+
+**Mobile**
+
+1. [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)
+2. [`apps/mobile/EAS.md`](./apps/mobile/EAS.md)
+3. `apps/mobile/app.json`
+
+**Migración Supabase → self-hosted**
+
+1. [`ADR-005`](./docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md)
+2. [`docs/operations/MIGRATION-SUPABASE-TO-SELFHOSTED.md`](./docs/operations/MIGRATION-SUPABASE-TO-SELFHOSTED.md)
+
+**Deploy o incidente**
+
+1. [`docs/operations/DEPLOY.md`](./docs/operations/DEPLOY.md)
+2. [`docs/operations/RUNBOOK.md`](./docs/operations/RUNBOOK.md)
+
+**Entender la voz del producto**
+
+1. [`IDENTITY.md`](./IDENTITY.md)
+2. [`docs/product/TONE-OF-VOICE.md`](./docs/product/TONE-OF-VOICE.md)
+3. Tono por modo en [`docs/product/MODES.md`](./docs/product/MODES.md).
+
+**Tareas con un solo archivo**
+
+- **Convenciones de commits** — [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md)
+- **Reglas extendidas (estilo, anti-patterns)** — [`docs/conventions/AI-GUIDELINES.md`](./docs/conventions/AI-GUIDELINES.md) + [`docs/conventions/CODE-STYLE.md`](./docs/conventions/CODE-STYLE.md)
+- **Crear un skill nuevo** — [`skills/README.md`](./skills/README.md)
+- **Histórico o por qué se decidió X** — [`docs/architecture/adrs/`](./docs/architecture/adrs/) (inmutables, ordenados por número)
 
 ## Repo Map
 
@@ -59,7 +144,7 @@ Las carpetas `.claude/`, `.codex/`, `.gemini/` son **adapters** para los IDEs/CL
 | `apps/web/` | Next.js 16 + Tailwind v4 CSS-first (sin `tailwind.config.ts`) + shadcn/ui |
 | `apps/mobile/` | Expo 53+ + Expo Router + NativeWind (todavía sobre Tailwind 3) |
 | `apps/backend/app/api/v1/` | Rutas HTTP, un módulo por dominio |
-| `apps/backend/app/core/` | Settings (Pydantic Settings), security (JWT/bcrypt esqueleto), deps |
+| `apps/backend/app/core/` | Settings, security (esqueleto), deps de FastAPI |
 | `apps/backend/app/llm/router.py` | Único punto de entrada al LLM. Decide modelo según modo |
 | `apps/backend/app/llm/tools/` | Tools que solo Qwen llama (catálogo en `docs/TOOLS.md`) |
 | `apps/backend/app/memory/` | Wrappers de las 3 capas. **Tablas sagradas** (regla #3) |
@@ -72,7 +157,7 @@ Las carpetas `.claude/`, `.codex/`, `.gemini/` son **adapters** para los IDEs/CL
 | `packages/shared-schemas/` | Zod schemas — validación cliente, mirror de Pydantic |
 | `packages/ui/` | Componentes UI realmente compartibles entre web y mobile |
 | `packages/config/` | tsconfig.base estricto + biome + eslint compartidos |
-| `docs/architecture/adrs/` | 5 ADRs inmutables. Cualquier cambio arquitectónico nuevo = ADR |
+| `docs/architecture/adrs/` | 5 ADRs inmutables. Cambio arquitectónico nuevo = ADR nuevo |
 | `docs/conventions/AI-GUIDELINES.md` | 15 reglas extendidas + landmines aprendidas |
 | `infra/vllm/` | `start-vllm.sh` para Gemma + Qwen en la RTX 4080 |
 | `infra/docker/` | docker-compose dev (solo Redis) y prod |
@@ -81,18 +166,25 @@ Las carpetas `.claude/`, `.codex/`, `.gemini/` son **adapters** para los IDEs/CL
 
 ## Las 10 reglas no negociables
 
-| # | Regla | Severidad |
-| --- | --- | --- |
-| 1 | **Confirmación humana** antes de `git commit`, `git push`, `git rebase`, `git tag`, `pnpm add`, `pnpm install`, `uv add`, `uv sync`, cambios en `.md` raíz, cambios en `ynara.config.json` y cambios en migraciones Alembic. | bloqueante |
-| 2 | **Nunca tocar secrets.** Prohibido leer, copiar, mover o commitear `.env`, claves API, tokens, certificados. Si detectás un secret expuesto, alertá inmediatamente y no toques nada. | bloqueante |
-| 3 | **Tablas de memoria sagradas.** `semantic_memory`, `episodic_memory`, `procedural_memory` no se modifican sin tests pasando y **2 aprobaciones humanas**. Idem para migraciones Alembic que las afecten. | bloqueante |
-| 4 | **Datos de usuario nunca fuera del perímetro.** Prohibido enviar mensajes, memoria, metadata o cualquier dato a APIs externas (OpenAI, Anthropic, Google, Cohere, Mistral). Toda inferencia es on-prem. | bloqueante |
-| 5 | **Cliente Supabase prohibido en el frontend.** En fase MVP, Supabase es solo Postgres gestionado. Prohibido `@supabase/supabase-js` en `apps/web/` o `apps/mobile/`. Prohibido Supabase Auth, Storage, Realtime, Edge Functions, RLS como autorización primaria. Todo dato pasa por FastAPI. Ver [`ADR-005`](./docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md). | bloqueante |
-| 6 | **Conventional Commits en español imperativo.** Formato `tipo(scope): descripción`. Ejemplo: `feat(web): agregar modo bienestar`. Ver [`COMMITS.md`](./docs/conventions/COMMITS.md). | PR rechazado |
-| 7 | **Commits atómicos.** Un commit = un cambio lógico. No mezclar refactor con feature ni feature con docs. | recomendado fuerte |
-| 8 | **Scope obligatorio** para cambios en apps o packages (`feat(web):`, `fix(backend):`, etc.). Sin scope solo en cambios cross-cutting reales. | PR rechazado |
-| 9 | **Rioplatense conversacional** en docs y contenido de usuario. Voseo, evitar peninsular. Nombres de variables y funciones en inglés; comentarios y docs en español. | review obligatorio |
-| 10 | **Antes de tocar código nuevo**: leer este archivo → leer el `AGENTS.md` del app/package → leer los ADRs relevantes. Si no entendés algo, **preguntá**. | recomendado fuerte |
+1. **Confirmación humana** antes de `git commit`, `git push`, `git rebase`, `git tag`, `pnpm add`, `pnpm install`, `uv add`, `uv sync`, cambios en `.md` raíz, cambios en `ynara.config.json` y cambios en migraciones Alembic. **Severidad: bloqueante.**
+
+2. **Nunca tocar secrets.** Prohibido leer, copiar, mover o commitear `.env`, claves API, tokens, certificados. Si detectás un secret expuesto, alertá inmediatamente y no toques nada. **Severidad: bloqueante.**
+
+3. **Tablas de memoria sagradas.** `semantic_memory`, `episodic_memory`, `procedural_memory` no se modifican sin tests pasando y **2 aprobaciones humanas**. Idem para migraciones Alembic que las afecten. **Severidad: bloqueante.**
+
+4. **Datos de usuario nunca fuera del perímetro.** Prohibido enviar mensajes, memoria, metadata o cualquier dato a APIs externas (OpenAI, Anthropic, Google, Cohere, Mistral). Toda inferencia es on-prem (vLLM en prod, Ollama en dev). **Severidad: bloqueante.**
+
+5. **Cliente Supabase prohibido en el frontend.** En fase MVP, Supabase es solo Postgres gestionado. Prohibido `@supabase/supabase-js` en `apps/web/` o `apps/mobile/`. Prohibido Supabase Auth, Storage, Realtime, Edge Functions, RLS como autorización primaria. Todo dato pasa por FastAPI. **Severidad: bloqueante.** Ver [`ADR-005`](./docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md).
+
+6. **Conventional Commits en español imperativo.** Formato `tipo(scope): descripción`. Ejemplo: `feat(web): agregar modo bienestar`. **PR rechazado si no se cumple.** Ver [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md).
+
+7. **Commits atómicos.** Un commit = un cambio lógico. No mezclar refactor con feature ni feature con docs. **Recomendado fuerte.**
+
+8. **Scope obligatorio** para cambios en apps o packages (`feat(web):`, `fix(backend):`, etc.). Sin scope solo en cambios cross-cutting reales. **PR rechazado si falta.**
+
+9. **Rioplatense conversacional** en docs y contenido de usuario. Voseo, evitar peninsular (vosotros, ordenador, vale). Nombres de variables y funciones en inglés; comentarios y docs en español. **Review obligatorio.**
+
+10. **Antes de tocar código nuevo**: leer este archivo, después el `AGENTS.md` del app/package, después los ADRs relevantes. Si no entendés algo, **preguntá**. Mejor preguntar que inventar. **Recomendado fuerte.**
 
 Reglas extendidas (15 más + landmines del scaffold): [`docs/conventions/AI-GUIDELINES.md`](./docs/conventions/AI-GUIDELINES.md).
 
@@ -115,16 +207,21 @@ Reglas extendidas (15 más + landmines del scaffold): [`docs/conventions/AI-GUID
 
 Cosas que ya nos hicieron tropezar (o que sabemos que van a hacerlo). No las re-introduzcas.
 
-| Landmine | Detalle corto |
-| --- | --- |
-| `.gitignore` con `models/` sin slash | Matchea cualquier `models/` del árbol y oculta `apps/backend/app/models/`. Mantener `/models/` y `/checkpoints/` anclados a root. |
-| `tailwind.config.ts` en `apps/web` | Tailwind v4 es CSS-first. Tokens en `globals.css` con `@theme`; sources con `@source`. Si aparece el archivo, borralo. |
-| NativeWind 4 sobre Tailwind 4 | NativeWind todavía corre sobre Tailwind 3. `apps/mobile/package.json` mantiene `tailwindcss ^3.4`. No subir hasta que NativeWind soporte. |
-| Services con imports de framework | `apps/backend/app/services/` recibe deps por argumento; no importa de FastAPI ni de SQLAlchemy directo. Hace los services testeables sin levantar nada. |
-| Escritura de memoria sincrónica | Toda escritura va vía Celery, **fuera del path de respuesta**. Si necesitás sincrónica, parar y discutir. |
-| Zod divergente de Pydantic | Pydantic es fuente de verdad. Zod (`packages/shared-schemas/`) es mirror manual. Si divergen, corregir Zod en el mismo PR. |
-| Completar `security.py` a medias | Las funciones de `core/security.py` están en `NotImplementedError` a propósito. Se cierra en un PR enfocado con tests end-to-end. |
-| CI con `push`/`pull_request` antes de los lockfiles | CI hoy es solo `workflow_dispatch`. Reactivar `push`/`pull_request` recién cuando existan `pnpm-lock.yaml` y `apps/backend/uv.lock`. |
+**`.gitignore` con `models/` sin slash inicial.** Matchea cualquier carpeta `models/` del árbol y oculta `apps/backend/app/models/` (módulo Python legítimo). Mantener `/models/` y `/checkpoints/` anclados a root.
+
+**`tailwind.config.ts` en `apps/web`.** Tailwind v4 es CSS-first. Los tokens viven en `apps/web/src/app/globals.css` con `@theme`; las sources extra con `@source`. Si aparece el archivo, borralo.
+
+**NativeWind 4 sobre Tailwind 4.** NativeWind todavía corre sobre Tailwind 3. `apps/mobile/package.json` mantiene `tailwindcss ^3.4`. No subir hasta que NativeWind soporte v4.
+
+**Services con imports de framework.** `apps/backend/app/services/` recibe deps por argumento; no importa de FastAPI ni de SQLAlchemy directo. Esto los hace testeables sin levantar nada.
+
+**Escritura de memoria sincrónica.** Toda escritura va vía Celery, **fuera del path de respuesta** al usuario. Si necesitás sincrónica, parar y discutir.
+
+**Zod divergente de Pydantic.** Pydantic es fuente de verdad. Zod (`packages/shared-schemas/`) es mirror manual. Si divergen, corregir Zod en el mismo PR.
+
+**Completar `core/security.py` a medias.** Las funciones JWT/bcrypt están en `NotImplementedError` a propósito. Se cierra en un PR enfocado con tests end-to-end. No las uses; no las completes parcialmente.
+
+**CI con `push`/`pull_request` antes de los lockfiles.** CI hoy es solo `workflow_dispatch`. Reactivar `push`/`pull_request` recién cuando existan `pnpm-lock.yaml` y `apps/backend/uv.lock`.
 
 Detalle de cada landmine con código de bien/mal: [`docs/conventions/AI-GUIDELINES.md`](./docs/conventions/AI-GUIDELINES.md).
 
@@ -156,14 +253,43 @@ Detalle y más ejemplos: [`docs/conventions/COMMITS.md`](./docs/conventions/COMM
 
 Correr según el tipo de cambio antes de abrir o actualizar PR.
 
-| Tipo de cambio | Comando |
-| --- | --- |
-| **Cualquier PR** | `bash scripts/ynara-doctor.sh` (debe exit 0) |
-| Backend (código) | `cd apps/backend && uv run ruff check . && uv run ruff format --check . && uv run pytest` |
-| Frontend (código) | `pnpm biome check . && pnpm turbo run typecheck && pnpm turbo run test` |
-| Migración Alembic | `cd apps/backend && uv run alembic check && uv run alembic upgrade head && uv run alembic downgrade -1 && uv run alembic upgrade head` |
-| Toca tablas sagradas | Lo anterior + tests específicos + **2 aprobaciones humanas** |
-| Solo docs | Verificar links internos no rotos |
+**Cualquier PR** (siempre):
+
+```bash
+bash scripts/ynara-doctor.sh
+# debe exit 0
+```
+
+**Backend (código)**:
+
+```bash
+cd apps/backend
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest
+```
+
+**Frontend (código)**:
+
+```bash
+pnpm biome check .
+pnpm turbo run typecheck
+pnpm turbo run test
+```
+
+**Migración Alembic**:
+
+```bash
+cd apps/backend
+uv run alembic check
+uv run alembic upgrade head
+uv run alembic downgrade -1
+uv run alembic upgrade head
+```
+
+**Toca tablas sagradas**: lo anterior + tests específicos de la capa + **2 aprobaciones humanas** (regla #3).
+
+**Solo docs**: verificar que los links internos no estén rotos.
 
 ## Health check — Ynara doctor
 
@@ -173,13 +299,23 @@ bash scripts/ynara-doctor.sh
 make doctor
 ```
 
-Valida en un solo comando: `.env.example` presentes, ningún `.env` real commiteado, sin `@supabase/supabase-js` en frontend (regla #5), sin imports de IA externa en backend (regla #4), `ynara.config.json` parseable, adapters apuntan a `AGENTS.md`, alerta si el PR toca tablas sagradas (regla #3), lockfiles trackeados si existen, y sin `tailwind.config.ts` en `apps/web`.
+Valida en un solo comando:
+
+- `.env.example` presentes en root y en cada app.
+- Ningún `.env` real commiteado.
+- Sin `@supabase/supabase-js` en `apps/web` ni `apps/mobile` (regla #5).
+- Sin imports de IA externa en `apps/backend/app` (regla #4).
+- `ynara.config.json` parseable.
+- Adapters CLAUDE / CODEX / GEMINI referencian `AGENTS.md`.
+- Alerta si el PR toca tablas sagradas (regla #3).
+- Lockfiles trackeados si existen.
+- Sin `tailwind.config.ts` en `apps/web` (Tailwind v4 es CSS-first).
 
 **Exit 0 obligatorio antes de cualquier PR.** Cuando configuremos `pre-commit install`, los hooks de `pre-push` lo van a invocar automáticamente.
 
 ## Adapters por herramienta
 
-| Herramienta | Adapter (markdown) | Carpeta de comandos / agents |
+| Herramienta | Adapter | Carpeta |
 | --- | --- | --- |
 | Claude Code | [`CLAUDE.md`](./CLAUDE.md) | `.claude/` |
 | OpenAI Codex | [`CODEX.md`](./CODEX.md) | `.codex/` |
