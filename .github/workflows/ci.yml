@@ -21,7 +21,7 @@ jobs:
   lint-and-test-js:
     name: Lint + Typecheck + Test (JS/TS)
     runs-on: ubuntu-latest
-    if: hashFiles('pnpm-lock.yaml') != ''
+    if: ${{ hashFiles('pnpm-lock.yaml') != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,7 +49,7 @@ jobs:
   lint-and-test-py:
     name: Lint + Test (Python)
     runs-on: ubuntu-latest
-    if: hashFiles('apps/backend/uv.lock') != ''
+    if: ${{ hashFiles('apps/backend/uv.lock') != '' }}
     defaults:
       run:
         working-directory: apps/backend
