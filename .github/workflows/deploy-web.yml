@@ -1,0 +1,25 @@
+name: Deploy Web (Vercel)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+
+# TODO: el deploy real lo gestiona Vercel via Git integration.
+# Este workflow es opcional para correr smoke tests post-deploy o
+# trigger manual via API. Si Vercel ya está enganchado al repo, se
+# puede dejar comentado o usar para tareas auxiliares (purge cache,
+# notificación a Slack, etc.).
+
+jobs:
+  notify:
+    name: Notificar deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: echo "TODO: integrar notificación de deploy de Vercel."

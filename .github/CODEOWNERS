@@ -1,0 +1,25 @@
+# CODEOWNERS — Ynara
+# Sintaxis: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default — todo el equipo aprueba cualquier path no listado abajo
+*                                    @MateoGs013 @BriarDevv @querques20
+
+# Tablas sagradas de memoria (regla #3) — requiere doble aprobación
+apps/backend/app/memory/             @MateoGs013 @BriarDevv @querques20
+apps/backend/alembic/versions/       @MateoGs013 @BriarDevv @querques20
+
+# Configuración del producto
+ynara.config.json                    @MateoGs013 @BriarDevv @querques20
+
+# Sistema visual — owner único hasta que se cierre la identidad
+DESIGN.md                            @MateoGs013
+
+# Contratos AI-friendly
+AGENTS.md                            @MateoGs013 @BriarDevv @querques20
+CLAUDE.md                            @MateoGs013 @BriarDevv @querques20
+CODEX.md                             @MateoGs013 @BriarDevv @querques20
+GEMINI.md                            @MateoGs013 @BriarDevv @querques20
+docs/conventions/                    @MateoGs013 @BriarDevv @querques20
+
+# ADRs — cualquier ADR nuevo o modificación pasa por los 3
+docs/architecture/adrs/              @MateoGs013 @BriarDevv @querques20
