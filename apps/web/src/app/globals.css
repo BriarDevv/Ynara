@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+/* Escanear también los componentes compartidos del monorepo */
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";
+
+/*
+ * Tokens visuales — TODO: completar cuando se cierre DESIGN.md.
+ * Mientras tanto, dejamos placeholders genéricos para que la app
+ * compile y renderice algo razonable.
+ *
+ * Cualquier cambio a estos tokens requiere PR con aprobación de
+ * @MateoGs013 (CODEOWNER de DESIGN.md).
+ */
+
+@theme {
+  /* TODO: paleta final de Ynara */
+  --color-background: #ffffff;
+  --color-foreground: #0a0a0a;
+  --color-muted: #6b7280;
+  --color-accent: #3b82f6;
+
+  /* TODO: tipografías finales */
+  --font-display: ui-sans-serif, system-ui, sans-serif;
+  --font-body: ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #0a0a0a;
+    --color-foreground: #fafafa;
+  }
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
