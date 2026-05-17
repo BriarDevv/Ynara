@@ -10,10 +10,18 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Los jobs de lint/test corren SOLO si existen los lockfiles
+# correspondientes. En la fase inicial del repo (pre-instalación) los
+# lockfiles todavía no existen y los jobs aparecen como "Skipped".
+# Una vez que se corra `pnpm install` y `uv sync` (con OK humano por
+# regla #1 de AGENTS.md), los lockfiles se commitean y CI empieza a
+# correr de verdad.
+
 jobs:
   lint-and-test-js:
     name: Lint + Typecheck + Test (JS/TS)
     runs-on: ubuntu-latest
+    if: hashFiles('pnpm-lock.yaml') != ''
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +49,7 @@ jobs:
   lint-and-test-py:
     name: Lint + Test (Python)
     runs-on: ubuntu-latest
+    if: hashFiles('apps/backend/uv.lock') != ''
     defaults:
       run:
         working-directory: apps/backend
@@ -50,6 +59,7 @@ jobs:
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
+          cache-dependency-glob: apps/backend/uv.lock
 
       - name: Set up Python
         run: uv python install 3.12
