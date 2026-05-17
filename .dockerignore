@@ -1,0 +1,58 @@
+# Docker ignore — copia mínima al build context
+
+node_modules
+.pnpm-store
+.venv
+__pycache__
+*.py[cod]
+
+.next
+dist
+build
+out
+.turbo
+.expo
+*.tsbuildinfo
+
+coverage
+.nyc_output
+htmlcov
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+*.log
+
+.env
+.env.*
+!.env.example
+
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Pesos de modelos — nunca al container de la app
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.ckpt
+models/
+checkpoints/
+
+exports/
+backups/
+*.dump
+
+# Git
+.git
+.gitignore
+
+# Docs grandes
+docs/architecture/diagrams/*.png
+docs/architecture/diagrams/*.svg
+docs/architecture/informe-tecnico.pdf
+
+# OMC
+.omc

@@ -1,0 +1,84 @@
+# Dependencias
+node_modules/
+.pnpm-store/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Builds
+.next/
+dist/
+build/
+out/
+.turbo/
+.expo/
+.expo-shared/
+*.tsbuildinfo
+
+# Coverage / tests
+coverage/
+.nyc_output/
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Entornos
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Mobile / Expo
+*.jks
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Python / uv
+.python-version
+*.egg-info/
+.uv-cache/
+
+# Alembic ad-hoc
+apps/backend/alembic/versions/__pycache__/
+
+# vLLM / modelos / checkpoints (NUNCA commitear pesos)
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.ckpt
+models/
+checkpoints/
+
+# Datos de usuario / exports / backups
+exports/
+backups/
+*.dump
+
+# Claude / Codex / Gemini caches locales (no los adapters md/json)
+.claude/cache/
+.codex/cache/
+.gemini/cache/
+
+# oh-my-claudecode (local del dev, no parte del repo)
+.omc/
