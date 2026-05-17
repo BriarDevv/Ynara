@@ -1,0 +1,71 @@
+{
+  "$schema": "./docs/architecture/ynara-config.schema.json",
+  "version": "0.1.0",
+  "name": "ynara",
+  "description": "Asistente personal adaptativo con memoria propia",
+  "modes": {
+    "productividad": {
+      "model": "qwen-3.5-9b",
+      "memory_layers": ["semantic", "episodic"],
+      "tools_enabled": ["calendar", "reminders", "memory"],
+      "tone": "neutro-eficaz"
+    },
+    "estudio": {
+      "model": "gemma-4-26b-a4b",
+      "memory_layers": ["episodic", "procedural"],
+      "tools_enabled": [],
+      "tone": "encouragement"
+    },
+    "bienestar": {
+      "model": "gemma-4-26b-a4b",
+      "memory_layers": ["procedural", "semantic"],
+      "tools_enabled": [],
+      "tone": "casual-empatico"
+    },
+    "vida": {
+      "model": "gemma-4-26b-a4b",
+      "memory_layers": ["procedural"],
+      "tools_enabled": ["calendar"],
+      "tone": "casual-rioplatense"
+    },
+    "memoria": {
+      "model": "qwen-3.5-9b",
+      "memory_layers": ["episodic", "semantic", "procedural"],
+      "tools_enabled": ["memory"],
+      "tone": "neutro-eficaz"
+    }
+  },
+  "models": {
+    "gemma-4-26b-a4b": {
+      "role": "conversational",
+      "writes_memory": false,
+      "endpoint": "http://localhost:8000/v1",
+      "context_window": 128000
+    },
+    "qwen-3.5-9b": {
+      "role": "agent",
+      "writes_memory": true,
+      "endpoint": "http://localhost:8001/v1",
+      "context_window": 262144
+    }
+  },
+  "memory": {
+    "engine": "mem0-oss-v2",
+    "store": "postgres-pgvector",
+    "embedding_model": "bge-m3",
+    "consolidation": "celery-async"
+  },
+  "infrastructure": {
+    "phase": "mvp",
+    "database": {
+      "provider": "supabase",
+      "type": "postgres-managed",
+      "pgvector": true,
+      "migration_target": "postgres-selfhosted-v2"
+    },
+    "cache": {
+      "provider": "upstash-or-docker",
+      "type": "redis"
+    }
+  }
+}
