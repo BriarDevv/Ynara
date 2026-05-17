@@ -1,0 +1,13 @@
+# pyproject.toml raíz — solo herramientas de dev compartidas (ruff, pre-commit).
+# El proyecto Python real vive en apps/backend/pyproject.toml.
+
+[tool.ruff]
+# Aplica al backend; tener config raíz permite correr `ruff` desde el root.
+extend = "apps/backend/pyproject.toml"
+
+[tool.ruff.lint]
+# Reglas base — el detalle va en apps/backend/pyproject.toml.
+select = ["E", "F", "I", "B", "UP", "RUF"]
+
+# TODO: agregar bloque [tool.pyright] o [tool.mypy] cuando definamos
+# type checker oficial para Python.

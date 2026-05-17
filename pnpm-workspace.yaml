@@ -1,0 +1,6 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# TODO: agregar overrides cuando aparezcan conflictos de versiones
+# transversales entre web y mobile (ej: react, react-dom).
