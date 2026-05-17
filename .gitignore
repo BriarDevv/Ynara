@@ -67,8 +67,9 @@ apps/backend/alembic/versions/__pycache__/
 *.gguf
 *.pt
 *.ckpt
-models/
-checkpoints/
+# anclado a root: solo top-level, no afecta apps/backend/app/models/
+/models/
+/checkpoints/
 
 # Datos de usuario / exports / backups
 exports/
