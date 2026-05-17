@@ -1,0 +1,37 @@
+# pre-commit — corre lint/format básicos antes de cada commit.
+# Instalación: pre-commit install (requiere `pip install pre-commit` o
+# `pipx install pre-commit`). Confirmación humana para correrlo la
+# primera vez.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ["--maxkb=512"]
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.0
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+        files: ^apps/backend/
+      - id: ruff-format
+        files: ^apps/backend/
+
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v2.0.0
+    hooks:
+      - id: biome-check
+        additional_dependencies: ["@biomejs/biome@2.0.0"]
+
+  # TODO: agregar hook que verifique que no se importa
+  # @supabase/supabase-js desde apps/web o apps/mobile (regla #5).
+  # TODO: agregar hook que verifique formato Conventional Commits en
+  # español (regla #6).
