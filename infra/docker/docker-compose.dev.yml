@@ -1,0 +1,34 @@
+# docker-compose para dev local
+# Solo Redis (la DB en MVP está en Supabase, conexión directa).
+# El backend FastAPI se levanta con `uv run uvicorn ...` localmente,
+# no dentro del compose, para tener hot reload nativo.
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: ynara-redis-dev
+    ports:
+      - "6379:6379"
+    command: redis-server --loglevel warning
+    volumes:
+      - redis-data-dev:/data
+
+  # TODO opcional: si alguien quiere Postgres local en vez de Supabase
+  # para dev (más rápido), descomentar este bloque. Pero la regla
+  # canónica del MVP es usar Supabase para que match con prod.
+  #
+  # postgres:
+  #   image: pgvector/pgvector:pg16
+  #   container_name: ynara-postgres-dev
+  #   environment:
+  #     POSTGRES_USER: ynara
+  #     POSTGRES_PASSWORD: ynara
+  #     POSTGRES_DB: ynara
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres-data-dev:/var/lib/postgresql/data
+
+volumes:
+  redis-data-dev:
+  # postgres-data-dev:

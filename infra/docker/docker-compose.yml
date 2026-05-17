@@ -1,0 +1,68 @@
+# docker-compose para producción
+# La DB está en Supabase (fase MVP) → no se incluye en compose.
+# Redis sí está self-hosted en la VPS.
+# El backend FastAPI corre acá detrás de Cloudflare Tunnel.
+
+services:
+  api:
+    image: ${DOCKER_REGISTRY}/ynara-backend:latest
+    container_name: ynara-api
+    restart: unless-stopped
+    env_file:
+      - ../../apps/backend/.env
+    depends_on:
+      - redis
+    networks:
+      - ynara
+    # Solo expuesto a Cloudflared, no a internet
+    expose:
+      - "8080"
+
+  worker:
+    image: ${DOCKER_REGISTRY}/ynara-backend:latest
+    container_name: ynara-worker
+    restart: unless-stopped
+    command: >
+      uv run celery -A app.workers.celery_app worker
+      --loglevel=info --concurrency=2
+    env_file:
+      - ../../apps/backend/.env
+    depends_on:
+      - redis
+    networks:
+      - ynara
+
+  redis:
+    image: redis:7-alpine
+    container_name: ynara-redis
+    restart: unless-stopped
+    command: >
+      redis-server --save 60 1 --loglevel warning --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - ynara
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: ynara-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - api
+    networks:
+      - ynara
+
+  # TODO: agregar vLLM como service cuando levantemos producción.
+  # Por ahora vLLM corre fuera del compose, directamente en la VPS
+  # con systemd. Ver infra/vllm/.
+
+volumes:
+  redis-data:
+
+networks:
+  ynara:
+    driver: bridge
