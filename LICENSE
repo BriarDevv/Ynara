@@ -1,25 +1,75 @@
-Ynara — Licencia Propietaria
+Ynara — Licencia Propietaria (All Rights Reserved)
 
-Copyright (c) 2026 Ynara y sus autores.
+Copyright (c) 2026 Mateo García (@MateoGs013),
+                   BriarDevv (@BriarDevv),
+                   Querques (@querques20).
 
 Todos los derechos reservados.
 
-Este software es propietario y confidencial. Está prohibido copiar,
-modificar, distribuir, sub-licenciar, publicar o usar este software,
-total o parcialmente, sin autorización previa por escrito de los
-titulares del copyright.
+================================================================================
 
-El acceso a este repositorio no concede ningún derecho de uso fuera
-del marco del equipo de desarrollo autorizado.
+Este software, su código fuente, su documentación, sus modelos entrenados
+y cualquier artefacto derivado son propiedad exclusiva de los titulares
+del copyright listados arriba.
 
-TODO: definir licencia comercial final (EULA, términos de uso para
-usuarios finales) antes del lanzamiento del producto.
+ESTÁ PROHIBIDO, sin autorización previa por escrito de los titulares:
+
+  1. Copiar, reproducir, distribuir o publicar el software, total o
+     parcialmente, por cualquier medio.
+  2. Modificar, adaptar, traducir, fusionar el software o crear obras
+     derivadas a partir de él.
+  3. Sub-licenciar, alquilar, prestar, vender, ceder o transferir el
+     software o cualquier derecho sobre el mismo a terceros.
+  4. Ingeniería inversa, descompilación o desensamblado del software,
+     excepto en la medida en que la ley aplicable lo permita
+     expresamente.
+  5. Eliminar, alterar u oscurecer cualquier aviso de copyright, marca
+     registrada u otra mención de propiedad presente en el software.
+  6. Usar el software para entrenar modelos de inteligencia artificial,
+     sistemas de aprendizaje automático o cualquier proceso de derivación
+     automática.
+
+El acceso a este repositorio (sea como contribuyente autorizado, lector
+con permiso de lectura, o cualquier otra modalidad) no concede ningún
+derecho de uso, distribución ni explotación comercial fuera del marco
+acordado por escrito con los titulares del copyright.
+
+Cualquier contribución hecha a este repositorio por personas no
+listadas como titulares del copyright se considera cedida a los
+titulares bajo los términos de un acuerdo de contribución (Contributor
+License Agreement) cuando corresponda, sin perjuicio de los derechos
+morales del autor.
+
+Los usuarios finales del producto Ynara (consumidores del servicio que
+opera sobre este software) están sujetos a los Términos de Uso y la
+Política de Privacidad correspondientes, que se publican por separado
+y no forman parte de esta licencia.
+
+================================================================================
+
+EXENCIÓN DE GARANTÍAS
 
 EL SOFTWARE SE PROVEE "TAL COMO ESTÁ", SIN GARANTÍAS DE NINGÚN TIPO,
-EXPRESAS O IMPLÍCITAS, INCLUYENDO PERO SIN LIMITARSE A GARANTÍAS DE
-COMERCIABILIDAD, IDONEIDAD PARA UN PROPÓSITO PARTICULAR Y NO
-INFRACCIÓN. EN NINGÚN CASO LOS AUTORES O TITULARES DEL COPYRIGHT
-SERÁN RESPONSABLES POR NINGÚN RECLAMO, DAÑO U OTRA RESPONSABILIDAD,
-YA SEA EN UNA ACCIÓN CONTRACTUAL, EXTRACONTRACTUAL O DE OTRO TIPO,
-DERIVADA DE, FUERA DE O EN CONEXIÓN CON EL SOFTWARE O EL USO U OTRAS
-OPERACIONES SOBRE EL SOFTWARE.
+EXPRESAS O IMPLÍCITAS, INCLUYENDO PERO SIN LIMITARSE A LAS GARANTÍAS
+IMPLÍCITAS DE COMERCIABILIDAD, IDONEIDAD PARA UN PROPÓSITO PARTICULAR
+Y NO INFRACCIÓN.
+
+LIMITACIÓN DE RESPONSABILIDAD
+
+EN NINGÚN CASO LOS AUTORES O TITULARES DEL COPYRIGHT SERÁN RESPONSABLES
+POR NINGÚN RECLAMO, DAÑO U OTRA RESPONSABILIDAD, YA SEA EN UNA ACCIÓN
+CONTRACTUAL, EXTRACONTRACTUAL O DE OTRO TIPO, DERIVADA DE, FUERA DE O
+EN CONEXIÓN CON EL SOFTWARE O EL USO U OTRAS OPERACIONES SOBRE EL
+SOFTWARE.
+
+================================================================================
+
+CONTACTO
+
+Para autorizaciones, licencias comerciales, contribuciones, o cualquier
+otra consulta legal sobre este software, contactar a los titulares del
+copyright a través del repositorio oficial en GitHub:
+
+  https://github.com/BriarDevv/Ynara
+
+Última actualización: 2026-05-17.
