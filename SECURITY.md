@@ -2,16 +2,36 @@
 
 ## Reportar una vulnerabilidad
 
-Si encontraste una vulnerabilidad, **no abras un issue público**.
-Mandala por mail a security@ynara.app <!-- TODO: confirmar dirección
-oficial cuando esté el dominio --> con:
+Si encontraste una vulnerabilidad, **no la reportes en un issue
+público**. Usá la funcionalidad **Private Vulnerability Reporting
+(PVR)** de GitHub, que es la versión privada y trackeable del flow
+de issues para reportes de seguridad.
 
-- Descripción de la vulnerabilidad.
-- Pasos para reproducirla.
-- Impacto estimado.
-- Si conocés una mitigación, sugerirla.
+### Cómo reportar
 
-Vamos a responder dentro de 72 horas hábiles.
+1. Andá a
+   [github.com/BriarDevv/Ynara/security/advisories](https://github.com/BriarDevv/Ynara/security/advisories/new).
+2. Click en **"Report a vulnerability"**.
+3. Completá:
+   - Descripción de la vulnerabilidad.
+   - Pasos para reproducirla.
+   - Impacto estimado (qué datos / qué función queda expuesta).
+   - Si conocés una mitigación, sugerirla.
+
+Te respondemos dentro de **72 horas hábiles**. Si la vulnerabilidad
+es crítica (data exfiltration, RCE, auth bypass), la prioridad
+salta a inmediata.
+
+> Si PVR no aparece habilitado, pedir a un admin del repo que lo
+> active en `Settings → Code security and analysis → Private
+> vulnerability reporting → Enable`.
+
+### Issues normales
+
+Para bugs no-sensibles, features, o cualquier otro tipo de tema
+público, usar
+[github.com/BriarDevv/Ynara/issues](https://github.com/BriarDevv/Ynara/issues)
+con el template correspondiente.
 
 ## Principios
 
@@ -52,7 +72,9 @@ agenda, recordatorios). La política de seguridad refleja eso:
 ## Datos personales y borrado
 
 El usuario tiene derecho a:
-- Exportar toda su memoria y conversaciones (`scripts/export-user-data.sh`).
+
+- Exportar toda su memoria y conversaciones
+  (`scripts/export-user-data.sh`).
 - Borrar todo (`scripts/reset-memory.sh`).
 - Pausar la memoria semántica de forma temporal.
 
@@ -71,10 +93,12 @@ Detalle de implementación en
 <!-- TODO: completar threat model formal cuando armemos el doc -->
 
 Adversarios considerados:
+
 - Atacante externo intentando acceso a memoria de usuarios.
 - Insider con acceso a la VPS de producción.
 - Cliente comprometido (token robado).
 
 No considerados (por ahora):
+
 - Análisis side-channel de inferencia.
 - Ataques físicos a la GPU.

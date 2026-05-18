@@ -1,11 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Pregunta general / discusión
-    url: https://github.com/MateoGs013/ynara/discussions
+    url: https://github.com/BriarDevv/Ynara/discussions
     about: Para preguntas que no son bugs ni features específicas. Usá Discussions.
-  - name: Reporte de seguridad
-    url: mailto:security@ynara.app
-    about: No abrir issues públicas. Mandá mail según SECURITY.md.
-
-# TODO: confirmar el URL de Discussions una vez que esté el repo en
-# GitHub. Confirmar también el dominio del mail de security.
+  - name: Reporte de seguridad (privado)
+    url: https://github.com/BriarDevv/Ynara/security/advisories/new
+    about: Vulnerabilidades vía GitHub Private Vulnerability Reporting, no por issues públicos. Ver SECURITY.md.
