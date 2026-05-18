@@ -14,9 +14,8 @@
 3. **TypeScript strict.** Sin `any`. Sin `// @ts-ignore` salvo
    justificación.
 4. **No hardcodear colores ni tipografías.** Tokens vía CSS variables
-   en `globals.css`, consumidos por Tailwind v4 `@theme`. Mientras
-   `DESIGN.md` esté vacío, usar tokens neutrales de Tailwind por
-   defecto.
+   en `globals.css`, consumidos por Tailwind v4 `@theme`. Sistema visual
+   completo documentado en [`../../DESIGN.md`](../../DESIGN.md).
 
 ## Patrones recomendados
 
@@ -43,6 +42,26 @@ backend. Usar **ese** cliente, no `fetch` crudo regado por la app.
 - Componentes: `PascalCase.tsx` si son principales (`ChatPanel.tsx`),
   `kebab-case.tsx` para utilidades.
 - Hooks: `useNombre.ts`.
+
+## Dónde viven las primitives
+
+- **`apps/web/src/components/ui/`** → primitives web-only (Button, Card,
+  TextField, OptionCard, YnaraMark, etc.). Pueden usar APIs DOM y
+  Tailwind sin restricciones.
+- **`apps/web/src/components/`** (raíz) → composiciones no-feature
+  (header global, footer, etc.).
+- **`apps/web/src/features/<feature>/`** → todo lo de un feature
+  (steps, hooks, store, schemas, tests, componentes propios).
+- **`packages/ui/`** → reservado para cosas **realmente** web/mobile
+  compartibles y RN-compatibles. Por ahora vacío. No mover primitives
+  acá hasta que haya consumidor mobile.
+
+## Sandbox del design system
+
+`/test-ds` ([`src/app/test-ds/page.tsx`](src/app/test-ds/page.tsx))
+renderiza el sistema visual entero (paleta, tipografía, gradientes,
+modos, botones, cards). Después de cada cambio a `globals.css` o
+primitives, abrir `/test-ds` y verificar a ojo antes del PR.
 
 ## Tests
 
