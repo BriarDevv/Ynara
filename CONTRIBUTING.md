@@ -52,10 +52,6 @@
    - Asignar al menos un CODEOWNER del path afectado.
    - Sin auto-merge.
    - CI verde antes de pedir review.
-   - El bot de review automática (Claude) va a postear un
-     comentario con hallazgos. No bloquea el merge, pero conviene
-     resolverlos antes de pedir review humana. Ver
-     [`docs/operations/CLAUDE-REVIEW.md`](./docs/operations/CLAUDE-REVIEW.md).
 
 ## Code review
 

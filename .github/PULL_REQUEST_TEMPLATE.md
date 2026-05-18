@@ -47,8 +47,7 @@ Sub-secciones por área del cambio. Bullets con detalle, no prosa larga.
 
 <!--
 Marcar SOLO lo que aplica al PR. Si una regla no se toca, dejar sin
-marcar o eliminar la línea. No marcar a la ligera — el bot de review
-chequea esto contra el diff.
+marcar o eliminar la línea. No marcar a la ligera.
 -->
 
 - [ ] Sin secrets commiteados (regla #2)
