@@ -15,6 +15,7 @@
       "!**/build",
       "!**/.turbo",
       "!**/.expo",
+      "!**/public/**",
       "!apps/backend/**"
     ]
   },
