@@ -1,0 +1,90 @@
+/* Keyframes reutilizables. Documentado en DESIGN.md §7. */
+
+@keyframes ynara-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ynara-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ynara-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes ynara-slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes ynara-pulse-soft {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.92;
+  }
+}
+
+@keyframes ynara-gradient-sweep {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+@layer utilities {
+  .anim-fade-up {
+    animation: ynara-fade-up var(--duration-screen, 350ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  .anim-fade-in {
+    animation: ynara-fade-in var(--duration-base, 250ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  .anim-slide-in-right {
+    animation: ynara-slide-in-right var(--duration-screen, 350ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  .anim-slide-in-left {
+    animation: ynara-slide-in-left var(--duration-screen, 350ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  .anim-pulse-soft {
+    animation: ynara-pulse-soft 1500ms ease-in-out infinite;
+  }
+}

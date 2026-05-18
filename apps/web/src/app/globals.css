@@ -1,50 +1,372 @@
 @import "tailwindcss";
+@import "../styles/motion.css";
 
 /* Escanear también los componentes compartidos del monorepo */
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
 
-/*
- * Tokens visuales — TODO: completar cuando se cierre DESIGN.md.
- * Mientras tanto, dejamos placeholders genéricos para que la app
- * compile y renderice algo razonable.
- *
- * Cualquier cambio a estos tokens requiere PR con aprobación de
- * @MateoGs013 (CODEOWNER de DESIGN.md).
- */
+/* ============================================================
+ * Tokens — single source of truth.
+ * Documentado en DESIGN.md (raíz del repo).
+ * Cualquier cambio acá requiere PR con review de @MateoGs013.
+ * ============================================================ */
 
-@theme {
-  /* TODO: paleta final de Ynara */
-  --color-background: #ffffff;
-  --color-foreground: #0a0a0a;
-  --color-muted: #6b7280;
-  --color-accent: #3b82f6;
+:root {
+  /* Texto (ink) */
+  --color-ink: #242c3f;
+  --color-ink-soft: rgb(36 44 63 / 0.65);
+  --color-ink-muted: rgb(36 44 63 / 0.45);
+  --color-ink-faint: rgb(36 44 63 / 0.18);
+  --color-on-dark: #ffffff;
 
-  /* TODO: tipografías finales */
-  --font-display: ui-sans-serif, system-ui, sans-serif;
-  --font-body: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Fondos */
+  --color-bg: #ffffff;
+  --color-bg-soft: #f6f6f8;
+
+  /* Bordes */
+  --color-border: rgb(36 44 63 / 0.12);
+  --color-border-strong: rgb(36 44 63 / 0.22);
+
+  /*
+   * Stops individuales — fuente única para gradientes Y para usos
+   * puntuales (focus-ring, stops del logo SVG). Si cambia uno, cambia
+   * todo lo derivado.
+   */
+  --color-blue-base-from: #2f5aa6;
+  --color-blue-base-to: #1f66db;
+  --color-blue-relief-from: #4b7ee6;
+  --color-blue-relief-to: #7ba1f4;
+  --color-violet-from: #8c63b8;
+  --color-violet-to: #7c4fa3;
+  --color-jade-from: #4a9c8c;
+  --color-jade-to: #6fbfae;
+  --color-amber-from: #d9a24a;
+  --color-amber-to: #e8c77a;
+
+  /* Acento puntual (focus-ring, etc.). Alias del stop inicial del azul base. */
+  --color-accent: var(--color-blue-base-from);
+
+  /* Gradientes — uso semántico */
+  --gradient-blue-base: linear-gradient(
+    135deg,
+    var(--color-blue-base-from),
+    var(--color-blue-base-to)
+  );
+  --gradient-blue-relief: linear-gradient(
+    135deg,
+    var(--color-blue-relief-from),
+    var(--color-blue-relief-to)
+  );
+  --gradient-violet: linear-gradient(
+    135deg,
+    var(--color-violet-from),
+    var(--color-violet-to)
+  );
+  --gradient-jade: linear-gradient(
+    135deg,
+    var(--color-jade-from),
+    var(--color-jade-to)
+  );
+  --gradient-amber: linear-gradient(
+    135deg,
+    var(--color-amber-from),
+    var(--color-amber-to)
+  );
+
+  /* Tints por modo */
+  --mode-productividad: var(--gradient-blue-base);
+  --mode-estudio: var(--gradient-blue-relief);
+  --mode-bienestar: var(--gradient-jade);
+  --mode-vida: var(--gradient-amber);
+  --mode-memoria: var(--gradient-violet);
+
+  /* Radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-pill: 9999px;
+
+  /* Elevation */
+  --shadow-soft: 0 1px 2px rgb(36 44 63 / 0.06),
+    0 4px 12px rgb(36 44 63 / 0.04);
+  --shadow-lifted: 0 8px 24px rgb(36 44 63 / 0.08),
+    0 24px 48px rgb(36 44 63 / 0.06);
+
+  /* Motion */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-base: 250ms;
+  --duration-screen: 350ms;
 }
 
+/* Dark mode discreto */
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-background: #0a0a0a;
-    --color-foreground: #fafafa;
+    --color-ink: #e8ecf4;
+    --color-ink-soft: rgb(232 236 244 / 0.7);
+    --color-ink-muted: rgb(232 236 244 / 0.5);
+    --color-ink-faint: rgb(232 236 244 / 0.2);
+    --color-bg: #0e1219;
+    --color-bg-soft: #161b25;
+    --color-border: rgb(232 236 244 / 0.12);
+    --color-border-strong: rgb(232 236 244 / 0.22);
   }
+}
+
+[data-theme="light"] {
+  --color-ink: #242c3f;
+  --color-ink-soft: rgb(36 44 63 / 0.65);
+  --color-ink-muted: rgb(36 44 63 / 0.45);
+  --color-ink-faint: rgb(36 44 63 / 0.18);
+  --color-bg: #ffffff;
+  --color-bg-soft: #f6f6f8;
+  --color-border: rgb(36 44 63 / 0.12);
+  --color-border-strong: rgb(36 44 63 / 0.22);
+}
+
+[data-theme="dark"] {
+  --color-ink: #e8ecf4;
+  --color-ink-soft: rgb(232 236 244 / 0.7);
+  --color-ink-muted: rgb(232 236 244 / 0.5);
+  --color-ink-faint: rgb(232 236 244 / 0.2);
+  --color-bg: #0e1219;
+  --color-bg-soft: #161b25;
+  --color-border: rgb(232 236 244 / 0.12);
+  --color-border-strong: rgb(232 236 244 / 0.22);
+}
+
+/* ============================================================
+ * Tailwind v4 @theme — expone tokens como utilities.
+ * ============================================================ */
+
+@theme inline {
+  /* Colores */
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-ink-faint: var(--color-ink-faint);
+  --color-on-dark: var(--color-on-dark);
+  --color-bg: var(--color-bg);
+  --color-bg-soft: var(--color-bg-soft);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+
+  /* Tipografía — fallback chain */
+  --font-display: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  --font-body: var(--font-body), "DM Sans", system-ui, sans-serif;
+
+  /* Radius */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-pill: var(--radius-pill);
+}
+
+/* ============================================================
+ * Tipografía base.
+ * ============================================================ */
+
+html {
+  font-size: 16px;
+}
+
+html.text-size-sm {
+  font-size: 15px;
+}
+
+html.text-size-lg {
+  font-size: 18px;
 }
 
 body {
-  background-color: var(--color-background);
-  color: var(--color-foreground);
-  font-family: var(--font-body);
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
+/* ============================================================
+ * Tipografía utilities (Tailwind no genera estas escalas custom).
+ * ============================================================ */
+
+@layer utilities {
+  .text-hero {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 700;
+    /* Escala responsiva: 2.25rem en 320px → 3rem en >=480px. Evita corte
+       de caracteres con letter-spacing negativo en pantallas chicas. */
+    font-size: clamp(2.25rem, 1.5rem + 3.75vw, 3rem);
+    line-height: 1.08;
+    letter-spacing: -0.04em;
   }
+
+  .text-title {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.75rem, 1.35rem + 2vw, 2.125rem);
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+  }
+
+  .text-subtitle {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 1.375rem;
+    line-height: 1.75rem;
+    letter-spacing: -0.018em;
+  }
+
+  .text-body {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    letter-spacing: -0.006em;
+  }
+
+  .text-body-sm {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    letter-spacing: -0.003em;
+  }
+
+  .text-caption {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .text-button {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 1rem;
+    line-height: 1.25rem;
+    letter-spacing: -0.006em;
+  }
+
+  /* Gradientes como background */
+  .bg-gradient-blue-base {
+    background-image: var(--gradient-blue-base);
+  }
+  .bg-gradient-blue-relief {
+    background-image: var(--gradient-blue-relief);
+  }
+  .bg-gradient-violet {
+    background-image: var(--gradient-violet);
+  }
+  .bg-gradient-jade {
+    background-image: var(--gradient-jade);
+  }
+  .bg-gradient-amber {
+    background-image: var(--gradient-amber);
+  }
+
+  /* Tints por modo */
+  .bg-mode-productividad {
+    background-image: var(--mode-productividad);
+  }
+  .bg-mode-estudio {
+    background-image: var(--mode-estudio);
+  }
+  .bg-mode-bienestar {
+    background-image: var(--mode-bienestar);
+  }
+  .bg-mode-vida {
+    background-image: var(--mode-vida);
+  }
+  .bg-mode-memoria {
+    background-image: var(--mode-memoria);
+  }
+
+  /* Gradiente aplicado a texto */
+  .text-gradient-blue-base {
+    background-image: var(--gradient-blue-base);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .text-gradient-violet {
+    background-image: var(--gradient-violet);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Elevation */
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-lifted {
+    box-shadow: var(--shadow-lifted);
+  }
+}
+
+/* ============================================================
+ * A11y — overrides aplicables desde el store de accesibilidad.
+ * ============================================================ */
+
+html.theme-high-contrast {
+  --color-ink-soft: rgb(36 44 63 / 0.85);
+  --color-ink-muted: rgb(36 44 63 / 0.65);
+  --color-border: rgb(36 44 63 / 0.25);
+  --color-border-strong: rgb(36 44 63 / 0.45);
+}
+
+html.theme-high-contrast[data-theme="dark"] {
+  --color-ink-soft: rgb(232 236 244 / 0.92);
+  --color-ink-muted: rgb(232 236 244 / 0.75);
+  --color-border: rgb(232 236 244 / 0.28);
+  --color-border-strong: rgb(232 236 244 / 0.48);
+}
+
+/*
+ * Modelo de reduced-motion: respetar el OS-pref por default, permitir
+ * override del usuario desde el toggle de a11y (Sesión 4.6 / 5 del plan).
+ *
+ * Layers (prioridad de menor a mayor):
+ *   1. OS pide reduce  → animaciones off  (selector raíz sin html.motion-on)
+ *   2. User pide off   → animaciones off  (html.motion-off)
+ *   3. User pide on    → animaciones on   (html.motion-on, gana siempre)
+ *
+ * Sin !important: la specificity de html.motion-on (0,1,1) le gana al
+ * selector universal (0,0,0) del bloque OS-pref.
+ */
+
+@media (prefers-reduced-motion: reduce) {
+  html:not(.motion-on) *,
+  html:not(.motion-on) *::before,
+  html:not(.motion-on) *::after {
+    animation-duration: 0.001ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.001ms;
+    scroll-behavior: auto;
+  }
+}
+
+html.motion-off *,
+html.motion-off *::before,
+html.motion-off *::after {
+  animation-duration: 0.001ms;
+  animation-iteration-count: 1;
+  transition-duration: 0.001ms;
+  scroll-behavior: auto;
+}
+
+/* ============================================================
+ * Focus rings — accesibles y con identidad.
+ * ============================================================ */
+
+:focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 2px var(--color-bg),
+    0 0 0 4px var(--color-accent);
+  border-radius: var(--radius-sm);
 }
