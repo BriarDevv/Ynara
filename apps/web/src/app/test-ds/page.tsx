@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { MODES } from "@/components/ui/modes";
 import { YnaraMark } from "@/components/ui/YnaraMark";
+import { InteractiveShowcase } from "./InteractiveShowcase";
 
 export const metadata: Metadata = {
   title: "Design System · Test",
@@ -157,6 +158,10 @@ export default function TestDsPage() {
             <p className="text-body-sm">anim-pulse-soft</p>
           </div>
         </div>
+      </Section>
+
+      <Section title="Primitives interactivos">
+        <InteractiveShowcase />
       </Section>
     </main>
   );
