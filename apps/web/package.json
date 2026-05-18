@@ -13,28 +13,42 @@
     "clean": "rm -rf .next .turbo node_modules"
   },
   "dependencies": {
-    "next": "^16.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@tanstack/react-query": "^5.0.0",
-    "zustand": "^5.0.0",
-    "zod": "^3.23.0",
-    "react-hook-form": "^7.53.0",
     "@hookform/resolvers": "^3.9.0",
+    "@tanstack/react-query": "^5.0.0",
+    "@ynara/shared-schemas": "workspace:*",
+    "@ynara/shared-types": "workspace:*",
+    "@ynara/ui": "workspace:*",
+    "clsx": "^2.1.1",
     "gsap": "^3.12.0",
     "lenis": "^1.1.0",
+    "msw": "^2.14.6",
+    "next": "^16.0.0",
     "next-auth": "5.0.0-beta.31",
-    "@ynara/shared-types": "workspace:*",
-    "@ynara/shared-schemas": "workspace:*",
-    "@ynara/ui": "workspace:*"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.53.0",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^3.23.0",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.6.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.4.0",
     "tailwindcss": "^4.0.0",
-    "@tailwindcss/postcss": "^4.0.0",
-    "postcss": "^8.4.0"
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.6"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }
