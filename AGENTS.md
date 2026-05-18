@@ -131,6 +131,12 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 2. [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md) — formato de commits.
 3. `bash scripts/ynara-doctor.sh` — debe salir con `exit 0`.
 
+**Review un PR** (humano o IA)
+
+1. [`skills/pr-review/SKILL.md`](./skills/pr-review/SKILL.md) — workflow completo: setup, verificaciones mecánicas, análisis cualitativo, estructura del comentario.
+2. Invocación: `/pr-review <PR_NUMBER>` desde Claude Code (ver [`.claude/commands/pr-review.md`](./.claude/commands/pr-review.md)).
+3. Output: un solo comentario vía `gh pr comment`. No mergear, no aprobar formalmente.
+
 **Tareas con un solo archivo**
 
 - **Convenciones de commits** — [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md)
@@ -171,7 +177,8 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 | `docs/conventions/AI-GUIDELINES.md` | 15 reglas extendidas + landmines aprendidas |
 | `infra/vllm/` | `start-vllm.sh` para Gemma + Qwen en la RTX 4080 |
 | `infra/docker/` | docker-compose dev (solo Redis) y prod |
-| `skills/*/SKILL.md` | 5 procedimientos reutilizables para humanos e IAs |
+| `skills/*/SKILL.md` | 6 procedimientos reutilizables para humanos e IAs |
+| `.claude/commands/` | Slash commands locales (ej: `/pr-review`). Adapter Claude Code |
 | `scripts/ynara-doctor.sh` | Validaciones pre-PR — exit 0 obligatorio |
 
 ## Las 10 reglas no negociables

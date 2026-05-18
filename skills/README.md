@@ -15,6 +15,9 @@ Skills reutilizables para humanos y agentes IA, en formato Anthropic
   Record.
 - [`create-ui-component/`](./create-ui-component/) — crear un
   componente UI compartido.
+- [`pr-review/`](./pr-review/) — review estructurada de un PR
+  aplicando las 10 reglas no negociables. Invocable desde la
+  terminal vía `/pr-review <PR_NUMBER>`.
 
 ## Convención
 
