@@ -1,0 +1,18 @@
+# Mantener line endings consistentes en Windows / macOS / Linux.
+# Biome config requiere LF (ver biome.json -> "lineEnding": "lf").
+
+* text=auto eol=lf
+
+# Binarios: nunca normalizar.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.svg   binary
+*.pdf   binary
+*.zip   binary
+*.tar   binary
+*.gz    binary
+*.woff  binary
+*.woff2 binary
