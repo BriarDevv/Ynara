@@ -14,6 +14,12 @@ export function YnaraMark({ size = 96, className, title = "Ynara" }: Props) {
       aria-label={title}
       className={className}
     >
+      {/*
+       * Stops sincronizados con --color-{blue-base,blue-relief,violet}-{from,to}
+       * de globals.css. Si cambia un token, actualizar acá también.
+       * Los fallbacks hex son por si el var() no resuelve (e.g. Safari viejo
+       * con SVG en contextos donde no hereda CSS vars, o uso fuera del DOM).
+       */}
       <defs>
         <linearGradient
           id="ynara-y-base"
@@ -23,8 +29,8 @@ export function YnaraMark({ size = 96, className, title = "Ynara" }: Props) {
           y2="160"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0" stopColor="#2F5AA6" />
-          <stop offset="1" stopColor="#1F66DB" />
+          <stop offset="0" stopColor="var(--color-blue-base-from, #2F5AA6)" />
+          <stop offset="1" stopColor="var(--color-blue-base-to, #1F66DB)" />
         </linearGradient>
         <linearGradient
           id="ynara-y-relief"
@@ -34,8 +40,8 @@ export function YnaraMark({ size = 96, className, title = "Ynara" }: Props) {
           y2="185"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0" stopColor="#4B7EE6" stopOpacity="0.88" />
-          <stop offset="1" stopColor="#7BA1F4" stopOpacity="0.55" />
+          <stop offset="0" stopColor="var(--color-blue-relief-from, #4B7EE6)" stopOpacity="0.88" />
+          <stop offset="1" stopColor="var(--color-blue-relief-to, #7BA1F4)" stopOpacity="0.55" />
         </linearGradient>
         <linearGradient
           id="ynara-y-diamond"
@@ -45,8 +51,8 @@ export function YnaraMark({ size = 96, className, title = "Ynara" }: Props) {
           y2="168"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0" stopColor="#8C63B8" />
-          <stop offset="1" stopColor="#7C4FA3" />
+          <stop offset="0" stopColor="var(--color-violet-from, #8C63B8)" />
+          <stop offset="1" stopColor="var(--color-violet-to, #7C4FA3)" />
         </linearGradient>
       </defs>
 

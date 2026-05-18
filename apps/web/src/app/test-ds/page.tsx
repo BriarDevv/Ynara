@@ -7,6 +7,7 @@ import { YnaraMark } from "@/components/ui/YnaraMark";
 export const metadata: Metadata = {
   title: "Design System · Test",
   description: "Sandbox del sistema visual de Ynara.",
+  robots: { index: false, follow: false },
 };
 
 const COLOR_TOKENS = [

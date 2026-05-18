@@ -26,12 +26,51 @@
   --color-border: rgb(36 44 63 / 0.12);
   --color-border-strong: rgb(36 44 63 / 0.22);
 
+  /*
+   * Stops individuales — fuente única para gradientes Y para usos
+   * puntuales (focus-ring, stops del logo SVG). Si cambia uno, cambia
+   * todo lo derivado.
+   */
+  --color-blue-base-from: #2f5aa6;
+  --color-blue-base-to: #1f66db;
+  --color-blue-relief-from: #4b7ee6;
+  --color-blue-relief-to: #7ba1f4;
+  --color-violet-from: #8c63b8;
+  --color-violet-to: #7c4fa3;
+  --color-jade-from: #4a9c8c;
+  --color-jade-to: #6fbfae;
+  --color-amber-from: #d9a24a;
+  --color-amber-to: #e8c77a;
+
+  /* Acento puntual (focus-ring, etc.). Alias del stop inicial del azul base. */
+  --color-accent: var(--color-blue-base-from);
+
   /* Gradientes — uso semántico */
-  --gradient-blue-base: linear-gradient(135deg, #2f5aa6, #1f66db);
-  --gradient-blue-relief: linear-gradient(135deg, #4b7ee6, #7ba1f4);
-  --gradient-violet: linear-gradient(135deg, #8c63b8, #7c4fa3);
-  --gradient-jade: linear-gradient(135deg, #4a9c8c, #6fbfae);
-  --gradient-amber: linear-gradient(135deg, #d9a24a, #e8c77a);
+  --gradient-blue-base: linear-gradient(
+    135deg,
+    var(--color-blue-base-from),
+    var(--color-blue-base-to)
+  );
+  --gradient-blue-relief: linear-gradient(
+    135deg,
+    var(--color-blue-relief-from),
+    var(--color-blue-relief-to)
+  );
+  --gradient-violet: linear-gradient(
+    135deg,
+    var(--color-violet-from),
+    var(--color-violet-to)
+  );
+  --gradient-jade: linear-gradient(
+    135deg,
+    var(--color-jade-from),
+    var(--color-jade-to)
+  );
+  --gradient-amber: linear-gradient(
+    135deg,
+    var(--color-amber-from),
+    var(--color-amber-to)
+  );
 
   /* Tints por modo */
   --mode-productividad: var(--gradient-blue-base);
@@ -155,17 +194,19 @@ body {
   .text-hero {
     font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
     font-weight: 700;
-    font-size: 3rem;
-    line-height: 3.25rem;
-    letter-spacing: -0.05em;
+    /* Escala responsiva: 2.25rem en 320px → 3rem en >=480px. Evita corte
+       de caracteres con letter-spacing negativo en pantallas chicas. */
+    font-size: clamp(2.25rem, 1.5rem + 3.75vw, 3rem);
+    line-height: 1.08;
+    letter-spacing: -0.04em;
   }
 
   .text-title {
     font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
     font-weight: 700;
-    font-size: 2.125rem;
-    line-height: 2.375rem;
-    letter-spacing: -0.03em;
+    font-size: clamp(1.75rem, 1.35rem + 2vw, 2.125rem);
+    line-height: 1.12;
+    letter-spacing: -0.025em;
   }
 
   .text-subtitle {
@@ -284,24 +325,37 @@ html.theme-high-contrast[data-theme="dark"] {
   --color-border-strong: rgb(232 236 244 / 0.48);
 }
 
-html.motion-reduced *,
-html.motion-reduced *::before,
-html.motion-reduced *::after {
-  animation-duration: 0.001ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0.001ms !important;
-  scroll-behavior: auto !important;
-}
+/*
+ * Modelo de reduced-motion: respetar el OS-pref por default, permitir
+ * override del usuario desde el toggle de a11y (Sesión 4.6 / 5 del plan).
+ *
+ * Layers (prioridad de menor a mayor):
+ *   1. OS pide reduce  → animaciones off  (selector raíz sin html.motion-on)
+ *   2. User pide off   → animaciones off  (html.motion-off)
+ *   3. User pide on    → animaciones on   (html.motion-on, gana siempre)
+ *
+ * Sin !important: la specificity de html.motion-on (0,1,1) le gana al
+ * selector universal (0,0,0) del bloque OS-pref.
+ */
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
+  html:not(.motion-on) *,
+  html:not(.motion-on) *::before,
+  html:not(.motion-on) *::after {
+    animation-duration: 0.001ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.001ms;
+    scroll-behavior: auto;
   }
+}
+
+html.motion-off *,
+html.motion-off *::before,
+html.motion-off *::after {
+  animation-duration: 0.001ms;
+  animation-iteration-count: 1;
+  transition-duration: 0.001ms;
+  scroll-behavior: auto;
 }
 
 /* ============================================================
@@ -313,6 +367,6 @@ html.motion-reduced *::after {
   outline-offset: 2px;
   box-shadow:
     0 0 0 2px var(--color-bg),
-    0 0 0 4px #2f5aa6;
+    0 0 0 4px var(--color-accent);
   border-radius: var(--radius-sm);
 }

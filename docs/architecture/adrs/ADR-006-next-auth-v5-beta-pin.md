@@ -95,6 +95,13 @@ Cambio puntual en [`apps/web/package.json`](../../../apps/web/package.json):
 
 Sin cambios adicionales en el resto del monorepo (Auth.js v5 está dentro de `apps/web` únicamente).
 
+**Verificación de la versión elegida**:
+- Confirmado que `5.0.0-beta.31` es la última beta disponible al momento de redactar este ADR (`pnpm view next-auth versions --json` lista las betas, mensaje de error de `pnpm install` reportaba `beta: 5.0.0-beta.31` como tag actual del registry).
+- `pnpm install` exitoso con la versión pineada (45.3s, monorepo completo).
+
+**Aprobación humana del install (regla #1)**:
+Este pin destrabó `pnpm install` que requiere OK humano explícito por regla #1 de `AGENTS.md`. La aprobación se otorgó en la conversación de pair-programming del 2026-05-18 (@MateoGs013), inmediatamente antes del primer `pnpm install` del repo. Se documenta acá para auditoría futura.
+
 ## Referencias
 
 - [Auth.js v5 migration guide](https://authjs.dev/getting-started/migrating-to-v5) — patrones que vamos a usar.

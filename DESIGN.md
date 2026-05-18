@@ -112,18 +112,18 @@ El store de a11y puede aplicar `text-size-sm`, `text-size-md` (default), o `text
 
 ## 4. Spacing
 
-Escala base 4:
+Escala base 4. **Sin tokens propios**: usamos la escala default de Tailwind v4 (`p-1` = 4px, `p-2` = 8px, …) para minimizar superficie de tokens y facilitar onboarding. Esta tabla documenta el uso semántico, no introduce variables CSS nuevas.
 
-| Token | Valor | Uso típico |
+| Token Tailwind | Valor | Uso típico |
 |---|---|---|
-| `xs` | `4px` | Microajustes, gap mínimo |
-| `sm` | `8px` | Gap entre elementos relacionados |
-| `md` | `12px` | Padding pequeño |
-| `base` | `16px` | Padding default, gap de cards |
-| `lg` | `24px` | Padding de cards, gap entre secciones |
-| `xl` | `32px` | Sección |
-| `2xl` | `48px` | Bloque grande |
-| `3xl` | `64px` | Margen vertical de hero |
+| `1` (`xs`) | `4px` | Microajustes, gap mínimo |
+| `2` (`sm`) | `8px` | Gap entre elementos relacionados |
+| `3` (`md`) | `12px` | Padding pequeño |
+| `4` (`base`) | `16px` | Padding default, gap de cards |
+| `6` (`lg`) | `24px` | Padding de cards, gap entre secciones |
+| `8` (`xl`) | `32px` | Sección |
+| `12` (`2xl`) | `48px` | Bloque grande |
+| `16` (`3xl`) | `64px` | Margen vertical de hero |
 
 ---
 
@@ -143,11 +143,13 @@ Escala base 4:
 
 3 niveles. Más allá de eso → revisar jerarquía, no agregar sombra.
 
-| Token | Sombra | Uso |
+Implementados como **utilities custom** en `globals.css` (no como CSS vars), porque la composición de sombra interna del navegador no se beneficia de la indirección var().
+
+| Utility | Sombra | Uso |
 |---|---|---|
-| `shadow-none` | sin sombra | Cards default, inputs |
-| `shadow-soft` | `0 1px 2px rgb(36 44 63 / 0.06), 0 4px 12px rgb(36 44 63 / 0.04)` | Cards interactivas, hover |
-| `shadow-lifted` | `0 8px 24px rgb(36 44 63 / 0.08), 0 24px 48px rgb(36 44 63 / 0.06)` | Modales, toasts, dropdowns |
+| (ninguna) | — | Cards default, inputs |
+| `.shadow-soft` | `0 1px 2px rgb(36 44 63 / 0.06), 0 4px 12px rgb(36 44 63 / 0.04)` | Cards interactivas, hover |
+| `.shadow-lifted` | `0 8px 24px rgb(36 44 63 / 0.08), 0 24px 48px rgb(36 44 63 / 0.06)` | Modales, toasts, dropdowns |
 
 ---
 
@@ -182,6 +184,8 @@ Escala base 4:
 ## 8. Componentes (primitives)
 
 Los primitives web-only viven en [`apps/web/src/components/ui/`](./apps/web/src/components/ui/) (regla del repo: el `packages/ui` está reservado para cosas web/mobile-portables RN-compatibles).
+
+> **Deuda explícita**: `YnaraMark.tsx` (SVG puro) y `modes.ts` (type-only + readonly array) son **portables a mobile** sin cambios significativos. Cuando arranque la sesión mobile, mover `YnaraMark` a `packages/ui` (sustituir `<svg>` por `<Svg>` de `react-native-svg`) y `modes.ts` a `packages/shared-types`. Por ahora viven en web para no inflar el scope del plan actual.
 
 | Componente | Variants | Notas |
 |---|---|---|
