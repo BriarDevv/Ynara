@@ -32,10 +32,30 @@
    - Python: `cd apps/backend && uv run ruff check . && uv run ruff format .`.
 
 5. **PR**:
-   - Usar el template (`.github/PULL_REQUEST_TEMPLATE.md`).
+   - Usar el template (`.github/PULL_REQUEST_TEMPLATE.md`). La
+     estructura esperada:
+     - **Resumen** — qué cambia y por qué, 2-3 líneas.
+     - **Commits** — lista numerada de los commits atómicos del PR.
+     - **Cambios mayores** — sub-secciones por área con bullets.
+     - **Verificación local** — checklist de doctor, tests, lint,
+       typecheck corridos antes del push.
+     - **Compliance con reglas no negociables** — marcar SOLO lo
+       que aplica al PR.
+     - **Conocido fuera de scope** — limitaciones explícitas con
+       razón.
+     - **Reviewer ask** — pedidos específicos por reviewer (omitir
+       si el PR es self-explanatory).
+     - **Test plan** — pasos manuales para validar.
+     - **Próximo PR** — si es parte de una serie, qué viene.
+   - PR chico es PR bueno: target <500 líneas o <10 archivos. Si
+     es más grande, considerá splitear por sesión.
    - Asignar al menos un CODEOWNER del path afectado.
    - Sin auto-merge.
    - CI verde antes de pedir review.
+   - El bot de review automática (Claude) va a postear un
+     comentario con hallazgos. No bloquea el merge, pero conviene
+     resolverlos antes de pedir review humana. Ver
+     [`docs/operations/CLAUDE-REVIEW.md`](./docs/operations/CLAUDE-REVIEW.md).
 
 ## Code review
 
