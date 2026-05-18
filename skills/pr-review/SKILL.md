@@ -49,6 +49,32 @@ Desde Claude Code, en una sesión activa sobre el repo:
 
 ## Paso a paso
 
+### Fase 0 — Git state fresco (obligatorio)
+
+Antes de cualquier comparación, asegurate de estar viendo el estado
+actual del repo. Las comparaciones `main..pr-branch` son confiables
+**solo si `main` local matchea `origin/main`**.
+
+```bash
+git fetch origin
+git log --oneline origin/main..main      # debe estar vacío
+git log --oneline main..origin/main      # debe estar vacío
+```
+
+Si local main diverge de origin/main, **frená**. Cualquier diff
+contra `main` local va a mezclar tu estado con el del PR y generar
+falsos positivos. Sincronizar primero:
+
+```bash
+git checkout main
+git pull --ff-only origin main
+```
+
+> **Lección histórica**: en la review de PR #1, un critic agent
+> reportó un hallazgo BLOQUEANTE falso porque comparó contra `main`
+> local desactualizado y vio cambios en `CODEOWNERS` que estaban en
+> el remoto, no en el PR. Esta fase elimina ese tipo de FP.
+
 ### Fase 1 — Setup y contexto
 
 1. **Metadata del PR:**
@@ -185,6 +211,66 @@ analizar.
    - Docs y user-facing content: voseo, evitar peninsular.
    - Comentarios en código: español; identificadores en inglés.
 
+7. **Cross-referencias obligatorias** — esto es lo que separa una
+   review superficial de una review real. Para cada uno, abrir
+   los archivos y verificar contra el estado actual del repo:
+
+   - **Claims del PR description vs. archivos reales.** Si el PR
+     body dice "pineo X a Y" o "agrego Z en el archivo W", abrir
+     el archivo y confirmar. **No tomar el PR body como
+     evidencia**.
+     ```bash
+     # Ejemplo: PR dice "pineo next-auth a 5.0.0-beta.31"
+     grep '"next-auth"' apps/web/package.json
+     ```
+
+   - **Doc ↔ código alineados.** Si el PR toca docs y código del
+     mismo área, verificar que queden consistentes.
+     - PR agrega un token en `globals.css`? Chequear si
+       `DESIGN.md` lo documenta.
+     - `DESIGN.md` menciona un valor pero `globals.css` no lo
+       implementa (o viceversa)? Flag.
+     - PR menciona un ADR? Leer el ADR y verificar que la
+       implementación matchee la decisión documentada.
+
+   - **Valores duplicados** — hex codes, version pins, model
+     names, paths. Cuando el mismo valor aparece en múltiples
+     archivos, hay que confirmar que matchean.
+     ```bash
+     # Hex de paleta usado en varios lugares
+     grep -rn "#2f5aa6" --include="*.css" --include="*.tsx" --include="*.md"
+
+     # Pin de version en package.json vs README/ADR
+     grep -rn "5\.0\.0-beta\.31" --include="*.json" --include="*.md"
+
+     # Nombre de modelo en config vs router
+     grep -rn "claude-sonnet-4-6\|gemma-4-26b-a4b" --include="*.py" --include="*.json"
+     ```
+     Si un valor diverge entre archivos, **siempre es un hallazgo**
+     (mínimo menor, mayor si afecta runtime).
+
+   - **Cierre de reviews previas.** Si hay reviews anteriores en
+     este PR o en PRs predecesores del mismo plan, verificar uno
+     por uno cuáles hallazgos están cerrados. **Citar el comment
+     URL original como evidencia.**
+
+   - **Templates ↔ archivos referenciados.** Si el PR agrega un
+     archivo que un template menciona (ej:
+     `PULL_REQUEST_TEMPLATE.md` linkea a `CLAUDE-REVIEW.md`),
+     verificar que el archivo existe y que el link no está roto.
+
+8. **Verbatim sobre paráfrasis.** Cuando reportes un hallazgo,
+   citá el contenido exacto del archivo en bloque de código con
+   sintaxis. **No parafrasees** lo que el código hace.
+   - Mal: "el componente hardcodea un color azul".
+   - Bien:
+     ````
+     `apps/web/src/app/globals.css:316` tiene `#2f5aa6` literal:
+     ```css
+     box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px #2f5aa6;
+     ```
+     ````
+
 ### Fase 4 — Output: comentario en el PR
 
 Estructura canónica (ver PR #1 y PR #2 como referencia viva):
@@ -285,20 +371,36 @@ comentar.
 - Review sin haber leído `AGENTS.md` raíz primero.
 - "LGTM" sin justificación.
 - Aprobar PRs con hallazgos blocker sin explicitar el bloqueo.
-- Hallazgos sin file:line.
+- Hallazgos sin `archivo:línea`.
 - Comentar el mismo hallazgo en múltiples lugares.
 - Inventar hallazgos para llenar las secciones del template.
 - Re-revisar un PR cerrado o mergeado.
 - Tono sicofántico o moralizante.
 - Modificar archivos del repo durante la review (solo lectura
-  + gh pr comment).
+  + `gh pr comment`).
+- **Comparar el diff contra `main` local sin `git fetch origin`
+  previo** — riesgo de FP por estado divergente. Ver Fase 0.
+- **Tomar el PR description como evidencia** sin verificar contra
+  los archivos reales. El PR body cuenta intenciones, los
+  archivos cuentan hechos.
+- **Parafrasear código** en un hallazgo en vez de citar verbatim
+  con bloque de código.
 
 ## Checklist final antes de postear
 
+- [ ] `git fetch origin` corrido. Local `main` matchea
+      `origin/main` (Fase 0).
 - [ ] Doctor corrió OK (o el fallo está como hallazgo blocker).
 - [ ] Las 5 reglas mecánicas (#1, #2, #3, #4, #5) chequeadas
       con grep.
+- [ ] Claims del PR description verificadas contra los archivos
+      reales (Fase 3.7).
+- [ ] Doc ↔ código verificado consistente cuando ambos cambian
+      (Fase 3.7).
+- [ ] Valores duplicados (hex / version / model / path)
+      cross-checked con grep (Fase 3.7).
 - [ ] Cada hallazgo tiene severidad + `archivo:línea` + fix.
+- [ ] Hallazgos citados verbatim, no parafraseados (Fase 3.8).
 - [ ] Veredicto explícito al principio del comentario.
 - [ ] Sin emojis.
 - [ ] Sin sicofancia ni relleno.
