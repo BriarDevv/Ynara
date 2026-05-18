@@ -10,7 +10,7 @@ docs/
 ├── architecture/      # Decisiones técnicas, diagramas, ADRs
 │   ├── adrs/          # Architecture Decision Records (uno por decisión)
 │   ├── diagrams/      # Diagramas del sistema (markdown + mermaid)
-│   └── informe-tecnico.pdf  # Informe técnico del proyecto (subir manualmente)
+│   └── informe-tecnico.pdf  # Informe técnico fundacional (Mayo 2026) con bitácora de versiones
 ├── product/           # Visión, modos, memoria, voz
 ├── operations/        # Instalación, deploy, runbook, migraciones
 └── conventions/       # Commits, glosario, AI guidelines, code style
@@ -38,7 +38,18 @@ docs/
 
 ## Para el `informe-tecnico.pdf`
 
-El informe técnico fundacional del proyecto debe vivir en
-`docs/architecture/informe-tecnico.pdf`. **No está commiteado por
-defecto** porque no nació en el repo; copiarlo manualmente a esa
-ubicación cuando esté la copia oficial aprobada.
+El informe técnico fundacional del proyecto vive en
+`docs/architecture/informe-tecnico.pdf` (Mayo 2026). Es la pieza de
+referencia que explica el **por qué** de cada decisión técnica
+(modelos, memoria, infra, posicionamiento).
+
+El informe trae al final una **bitácora de actualizaciones de
+versión**. Cuando una versión puntual del stack avance (Next.js
+16 → 17, Expo 53 → 54, etc.), se agrega una línea a esa bitácora
+y se actualizan los manifests correspondientes (`package.json`,
+`pyproject.toml`, `ynara.config.json`).
+
+Los cambios de **decisión arquitectónica** (cambiar Mem0 por otro
+engine, cambiar vLLM por otro server, etc.) **no** se reflejan
+editando el informe: se hacen vía ADR nuevo en
+`docs/architecture/adrs/`, que supersede al ADR previo.

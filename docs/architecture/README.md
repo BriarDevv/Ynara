@@ -7,8 +7,11 @@ Acá vive el "porqué" detrás de las decisiones técnicas del proyecto.
 - `adrs/` — Architecture Decision Records, uno por decisión
   significativa. Inmutables una vez aprobados.
 - `diagrams/` — Diagramas del sistema en Mermaid + assets exportados.
-- `informe-tecnico.pdf` — informe técnico fundacional (copiar
-  manualmente; no nace en el repo).
+- `informe-tecnico.pdf` — informe técnico fundacional del proyecto
+  (Mayo 2026). Documenta el porqué de cada decisión (modelos,
+  memoria, infra) y trae al final una bitácora de actualizaciones
+  de versión. Las versiones puntuales se actualizan en el PDF + en
+  los manifests; los cambios de decisión arquitectónica van por ADR.
 
 ## ADRs actuales
 
