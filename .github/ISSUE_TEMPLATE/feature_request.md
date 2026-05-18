@@ -1,26 +1,41 @@
 ---
 name: Feature request
-about: Proponer una nueva funcionalidad
+about: Proponer una nueva funcionalidad o mejora
 labels: enhancement
 ---
 
-## Qué proponés
+## Resumen
 
-## Por qué (problema que resuelve)
+<!-- Qué proponés, en 1-2 líneas. -->
+
+## Problema que resuelve
+
+<!-- Qué fricción existe hoy. Si hay user research, feedback o métrica que lo respalde, citarlo. -->
 
 ## Cómo se ve idealmente
 
-## Modos afectados
+<!-- Comportamiento esperado. Mockups, ejemplos, referencias visuales. -->
 
-- [ ] Productividad
-- [ ] Estudio
-- [ ] Bienestar
-- [ ] Vida
-- [ ] Memoria
-- [ ] Global
+## Alternativas consideradas
+
+<!-- Otras maneras de resolver el mismo problema. Por qué descartadas. -->
+
+## Scope
+
+- App afectada: [ ] web · [ ] mobile · [ ] backend · [ ] global
+- Modos afectados: [ ] productividad · [ ] estudio · [ ] bienestar · [ ] vida · [ ] memoria · [ ] global
 
 ## Requiere ADR?
 
-- [ ] Sí (cambio arquitectónico) → crear ADR en
-  `docs/architecture/adrs/`
-- [ ] No
+- [ ] Sí — cambio arquitectónico. Crear ADR en `docs/architecture/adrs/` primero.
+- [ ] No — feature incremental sobre stack existente.
+
+## Impacto en memoria del usuario
+
+- [ ] No toca memoria
+- [ ] Lee de memoria (semántica / episódica / procedural)
+- [ ] Escribe en memoria — atención: regla #3 (2 aprobaciones humanas para migrations)
+
+## Reviewer ask (opcional)
+
+<!-- Si querés foco específico de alguien del team. -->
