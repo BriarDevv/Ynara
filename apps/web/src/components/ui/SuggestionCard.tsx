@@ -5,18 +5,30 @@ type Props = {
   modeId: ModeId;
   title: string;
   subtitle?: string;
-  onClick?: () => void;
+  /** Handler obligatorio: una SuggestionCard sin acción es un botón muerto. */
+  onClick: () => void;
+  disabled?: boolean;
   className?: string;
 };
 
-export function SuggestionCard({ modeId, title, subtitle, onClick, className }: Props) {
+export function SuggestionCard({
+  modeId,
+  title,
+  subtitle,
+  onClick,
+  disabled = false,
+  className,
+}: Props) {
   const mode = MODE_BY_ID[modeId];
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        "group relative flex w-full flex-col gap-3 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] p-5 text-left transition-[transform,box-shadow,border-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)] hover:-translate-y-[1px] hover:border-[var(--color-border-strong)] hover:shadow-soft",
+        "group relative flex w-full flex-col gap-3 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] p-5 text-left transition-[transform,box-shadow,border-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)] disabled:cursor-not-allowed disabled:opacity-50",
+        !disabled &&
+          "hover:-translate-y-[1px] hover:border-[var(--color-border-strong)] hover:shadow-soft",
         className,
       )}
     >

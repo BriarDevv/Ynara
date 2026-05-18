@@ -19,13 +19,17 @@ function makeQueryClient() {
 
 /**
  * Aplica las clases del store de a11y al <html> tras hidratar.
- * Subscribe al store para mantenerlo en sync con cambios en vivo.
+ * Subscribe sólo a los campos relevantes para evitar re-renders
+ * innecesarios cuando se llaman setters/reset (anti-patrón de Zustand
+ * sin selector).
  */
 function A11yApplier(): null {
-  const state = useA11yStore();
+  const textSize = useA11yStore((s) => s.textSize);
+  const highContrast = useA11yStore((s) => s.highContrast);
+  const motion = useA11yStore((s) => s.motion);
   useEffect(() => {
-    applyA11yClasses(state);
-  }, [state]);
+    applyA11yClasses({ textSize, highContrast, motion });
+  }, [textSize, highContrast, motion]);
   return null;
 }
 

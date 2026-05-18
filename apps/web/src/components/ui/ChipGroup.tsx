@@ -1,4 +1,6 @@
-import { useId } from "react";
+"use client";
+
+import { type KeyboardEvent, useId, useRef } from "react";
 import { cn } from "@/lib/cn";
 
 type ChipOption<T extends string> = {
@@ -14,6 +16,15 @@ type Props<T extends string> = {
   className?: string;
 };
 
+/**
+ * Pill-toggle group con semántica de radiogroup.
+ *
+ * Implementa el patrón WAI-ARIA Radio Group:
+ *  - `tabIndex={selected ? 0 : -1}`: el grupo entra una sola vez con Tab.
+ *  - ArrowLeft/Right (y Home/End): mueven la selección dentro del grupo.
+ *
+ * Referencia: https://www.w3.org/WAI/ARIA/apd/patterns/radio/
+ */
 export function ChipGroup<T extends string>({
   label,
   options,
@@ -22,6 +33,45 @@ export function ChipGroup<T extends string>({
   className,
 }: Props<T>) {
   const groupId = useId();
+  const buttonsRef = useRef<Map<T, HTMLButtonElement>>(new Map());
+
+  const focusValue = (next: T) => {
+    onChange(next);
+    requestAnimationFrame(() => buttonsRef.current.get(next)?.focus());
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (options.length === 0) return;
+    const currentIndex = options.findIndex((opt) => opt.value === value);
+    if (currentIndex < 0) return;
+
+    const moveTo = (index: number) => {
+      const target = options[((index % options.length) + options.length) % options.length];
+      if (target) focusValue(target.value);
+    };
+
+    switch (event.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        event.preventDefault();
+        moveTo(currentIndex + 1);
+        break;
+      case "ArrowLeft":
+      case "ArrowUp":
+        event.preventDefault();
+        moveTo(currentIndex - 1);
+        break;
+      case "Home":
+        event.preventDefault();
+        moveTo(0);
+        break;
+      case "End":
+        event.preventDefault();
+        moveTo(options.length - 1);
+        break;
+    }
+  };
+
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       {label ? (
@@ -32,17 +82,23 @@ export function ChipGroup<T extends string>({
       <div
         role="radiogroup"
         aria-labelledby={label ? `${groupId}-label` : undefined}
+        onKeyDown={handleKeyDown}
         className="inline-flex w-fit gap-2 rounded-[var(--radius-pill)] bg-[var(--color-bg-soft)] p-1"
       >
         {options.map((opt) => {
           const selected = opt.value === value;
           return (
-            // biome-ignore lint/a11y/useSemanticElements: patrón de pill-toggle visual; <input type="radio"> no acepta children con tipografía/spacing/shadow custom. Conserva a11y vía role + aria-checked + radiogroup.
+            // biome-ignore lint/a11y/useSemanticElements: patrón de pill-toggle visual; <input type="radio"> no acepta children con tipografía/spacing/shadow custom. Conserva a11y vía role + aria-checked + radiogroup + keyboard nav (ArrowLeft/Right/Home/End).
             <button
               key={opt.value}
+              ref={(el) => {
+                if (el) buttonsRef.current.set(opt.value, el);
+                else buttonsRef.current.delete(opt.value);
+              }}
               type="button"
               role="radio"
               aria-checked={selected}
+              tabIndex={selected ? 0 : -1}
               onClick={() => onChange(opt.value)}
               className={cn(
                 "text-button rounded-[var(--radius-pill)] px-4 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",

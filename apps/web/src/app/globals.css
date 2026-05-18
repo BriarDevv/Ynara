@@ -45,6 +45,10 @@
   /* Acento puntual (focus-ring, etc.). Alias del stop inicial del azul base. */
   --color-accent: var(--color-blue-base-from);
 
+  /* Errores (form fields invalid, toasts variant=error). */
+  --color-error: #c0392b;
+  --color-error-soft: rgb(192 57 43 / 0.12);
+
   /* Gradientes — uso semántico */
   --gradient-blue-base: linear-gradient(
     135deg,

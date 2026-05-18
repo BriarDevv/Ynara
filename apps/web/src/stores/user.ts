@@ -4,6 +4,13 @@ import type { ModeId } from "@/components/ui/modes";
 
 export type UserProfile = {
   userId: string | null;
+  /**
+   * Token de sesión. Lo consume el fetcher (api.ts) cuando esté
+   * disponible para adjuntar Authorization: Bearer <token>.
+   * Sesión 3 (AuthStep) lo escribe; el shape final se cierra
+   * con @BriarDevv junto al contrato de auth.
+   */
+  token: string | null;
   displayName: string;
   isEphemeral: boolean;
   /** Resultados del Step 3 — mood. */
@@ -16,7 +23,7 @@ export type UserProfile = {
 };
 
 type UserActions = {
-  setAuth: (input: { userId: string; isEphemeral: boolean }) => void;
+  setAuth: (input: { userId: string; token: string; isEphemeral: boolean }) => void;
   setDisplayName: (name: string) => void;
   setMood: (mood: string[], freeText: string) => void;
   setInterestedModes: (modes: ModeId[]) => void;
@@ -26,6 +33,7 @@ type UserActions = {
 
 const initialState: UserProfile = {
   userId: null,
+  token: null,
   displayName: "",
   isEphemeral: false,
   mood: [],
@@ -39,7 +47,7 @@ export const useUserStore = create<UserProfile & UserActions>()(
   persist(
     (set) => ({
       ...initialState,
-      setAuth: ({ userId, isEphemeral }) => set({ userId, isEphemeral }),
+      setAuth: ({ userId, token, isEphemeral }) => set({ userId, token, isEphemeral }),
       setDisplayName: (displayName) => set({ displayName }),
       setMood: (mood, moodFreeText) => set({ mood, moodFreeText }),
       setInterestedModes: (interestedModes) => set({ interestedModes }),

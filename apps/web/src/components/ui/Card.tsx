@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { cn } from "@/lib/cn";
 
 type Variant = "default" | "interactive";
 
@@ -17,10 +18,8 @@ const VARIANTS: Record<Variant, string> = {
 };
 
 export function Card({ variant = "default", children, className, ...rest }: Props) {
-  const classes = [BASE, VARIANTS[variant], className ?? ""].filter(Boolean).join(" ");
-
   return (
-    <div className={classes} {...rest}>
+    <div className={cn(BASE, VARIANTS[variant], className)} {...rest}>
       {children}
     </div>
   );

@@ -26,7 +26,7 @@ export function TestMockClient() {
           <p className="text-body text-[var(--color-ink-soft)]">Cargando…</p>
         ) : null}
         {query.error ? (
-          <p className="text-body text-[#c0392b]">
+          <p className="text-body text-[var(--color-error)]">
             Error {query.error.status}: {query.error.message}
           </p>
         ) : null}

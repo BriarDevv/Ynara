@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { siteConfig } from "@/config/site";
+import { a11yInitScript } from "./a11y-init";
 import { fontBody, fontDisplay } from "./fonts";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -17,6 +18,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   const fontClasses = `${fontDisplay.variable} ${fontBody.variable} text-size-md`;
   return (
     <html lang="es-AR" suppressHydrationWarning className={fontClasses}>
+      <head>
+        {/*
+          Script inline pre-paint para aplicar preferencias de a11y antes
+          del primer render. Evita FOUC entre el default server-rendered
+          (text-size-md) y la preferencia persistida del usuario.
+          Sincronizado con stores/a11y.ts.
+        */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: snippet inline necesario para correr antes del primer paint y evitar FOUC; contenido es código propio en a11y-init.ts, no input del usuario. */}
+        <script dangerouslySetInnerHTML={{ __html: a11yInitScript }} />
+      </head>
       <body className="min-h-screen antialiased">
         <Providers>{children}</Providers>
       </body>
