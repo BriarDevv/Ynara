@@ -1,10 +1,10 @@
 # Frontend MVP · Onboarding + Home vacío — Plan completo
 
-> **Estado**: borrador para review
+> **Estado**: v2 — feedback de @BriarDevv (review de PR #1) incorporado
 > **Fecha**: 2026-05-18
 > **Owner**: @MateoGs013
 > **Reviewers sugeridos**: @BriarDevv (foundations / infra), @querques20 (UX / UI)
-> **Alcance**: `apps/web` + primitives en `packages/ui`. Mobile (Expo) queda fuera.
+> **Alcance**: `apps/web` (incluye primitives web-only en `apps/web/src/components/ui/`). Mobile (Expo) y `packages/ui` (reservado para RN-compatibles) quedan fuera.
 
 ---
 
@@ -254,6 +254,16 @@ Conocen features y reglas web-específicas.
 - **Mock MSW**: `POST /v1/auth/login` y `POST /v1/auth/signup` devuelven `{ token, userId }` siempre OK. Toggle de dev para simular 401.
 - **Estado**: guarda `{ userId, isEphemeral }` en store de onboarding.
 
+> **Contrato con backend — landmine documentada**
+>
+> `apps/backend/app/core/security.py` está en `NotImplementedError` a propósito (ver [`docs/conventions/AI-GUIDELINES.md`](../conventions/AI-GUIDELINES.md): _"si necesitás auth para tu feature, abrí un issue/discusión primero"_). El shape `{ token, userId }` mockeado acá es **provisional** y no tiene contraparte real en backend todavía.
+>
+> Reglas para no acumular deuda de divergencia Zod ↔ Pydantic:
+>
+> 1. **Antes de mergear la PR de Sesión 3**, abrir issue con @BriarDevv para acordar el contrato (shape de request/response, claims del JWT, scopes). Si ya existe PR en curso de `core/security.py`, referenciarlo.
+> 2. **Schemas Zod en `packages/shared-schemas/`** desde el día 1 (no inline en `apps/web`). Cuando el backend defina Pydantic, los modelos se mirroran manualmente contra los Zod existentes — eso vuelve la divergencia detectable en code review.
+> 3. **MSW handlers comentados** con un `TODO(@BriarDevv)` y link al issue, así no quedan handlers huérfanos cuando el backend reemplace los mocks.
+
 ### 4.3 Step 2 · Nombre
 
 - **Copy**: "¿Cómo te llamo?" / "Lo uso solo cuando hablo con vos."
@@ -495,6 +505,10 @@ packages/ui/src/index.ts       ← barrel update
 
 ### 6.3 Deps a agregar (requieren OK humano — regla #1 AGENTS.md)
 
+Las deps se instalan en **dos batches**, cada uno en su sesión correspondiente, para que cada `pnpm add` tenga aprobación explícita y para no inflar `package.json` con deps muertas hasta que se usen (feedback del review de @BriarDevv en PR del plan).
+
+**Batch 1 — Sesión 2** (core de la app):
+
 ```
 # apps/web
 clsx
@@ -508,11 +522,17 @@ vitest
 @testing-library/jest-dom
 @testing-library/user-event
 jsdom
+```
+
+**Batch 2 — Sesión 6** (solo cuando arranca testing E2E):
+
+```
+# apps/web devDependencies
 @axe-core/playwright
 
 # root (tests/e2e)
 @playwright/test
-msw
+msw  # reusar handlers entre dev/unit/e2e
 ```
 
 ### 6.4 Decisión: dónde viven primitives
@@ -552,7 +572,7 @@ Por qué: el `apps/web/src/app/globals.css` actual ya escanea `packages/ui/src/*
 **Branch**: `feat/web-foundations`
 **PR**: `feat(web): providers, MSW, primitives restantes`
 
-1. Instalar deps (con OK): `clsx`, `tailwind-merge`, `msw`, `vitest` + RTL stack, `@axe-core/playwright`.
+1. Instalar deps **batch 1** (con OK): `clsx`, `tailwind-merge`, `msw`, `vitest` + RTL stack (`@vitejs/plugin-react`, `@testing-library/{react,jest-dom,user-event}`, `jsdom`). Sin `playwright` ni `axe` todavía — van en Sesión 6.
 2. `apps/web/src/lib/env.ts` con Zod.
 3. `apps/web/src/lib/api.ts` (fetcher tipado).
 4. `apps/web/src/lib/api.mocks.ts` con MSW handlers (`/auth/login`, `/auth/signup`, `/user/onboard`, `/health`).
@@ -571,17 +591,20 @@ Por qué: el `apps/web/src/app/globals.css` actual ya escanea `packages/ui/src/*
 **Branch**: `feat/onboarding-1`
 **PR**: `feat(onboarding): auth y nombre`
 
-1. `features/onboarding/schemas.ts`.
-2. `features/onboarding/constants.ts`.
-3. `features/onboarding/store.ts` (sessionStorage).
-4. `components/OnboardingHeader.tsx`.
-5. `components/StepShell.tsx` (GSAP fade+slide).
-6. `components/StepFooter.tsx`.
-7. `app/onboarding/layout.tsx` + `[step]/page.tsx`.
-8. `AuthStep.tsx` completo (tabs + RHF + mock + errores inline).
-9. `NameStep.tsx` completo.
+**Antes de arrancar**: abrir issue con @BriarDevv para acordar el contrato de auth con el backend (ver §4.2 — landmine de `core/security.py`). El PR se mergea con link al issue, no antes.
 
-**Done**: `/onboarding` arranca, auth + nombre funcionan, refresh retoma.
+1. Schemas Zod de auth (signup + login + sesión) en **`packages/shared-schemas/`** — no inline en `apps/web`. Esto permite mirrorearlos contra Pydantic cuando el backend implemente `core/security.py`.
+2. `features/onboarding/schemas.ts` (importa desde `@ynara/shared-schemas`).
+3. `features/onboarding/constants.ts`.
+4. `features/onboarding/store.ts` (sessionStorage).
+5. `components/OnboardingHeader.tsx`.
+6. `components/StepShell.tsx` (GSAP fade+slide).
+7. `components/StepFooter.tsx`.
+8. `app/onboarding/layout.tsx` + `[step]/page.tsx`.
+9. `AuthStep.tsx` completo (tabs + RHF + mock + errores inline). MSW handlers con `TODO(@BriarDevv)` linkeando al issue de contrato.
+10. `NameStep.tsx` completo.
+
+**Done**: `/onboarding` arranca, auth + nombre funcionan, refresh retoma. Issue de contrato de auth abierto y referenciado en el PR.
 
 ### 7.4 Sesión 4 — Onboarding parte 2 (Mood + Modos + A11y + Outro) (3-4h)
 
@@ -618,14 +641,15 @@ Por qué: el `apps/web/src/app/globals.css` actual ya escanea `packages/ui/src/*
 **Branch**: `feat/web-tests`
 **PR**: `test(web): vitest + playwright + axe`
 
-1. `vitest.config.ts` + setup en `apps/web`.
-2. Tests de componente: `store`, `MoodStep` (limit), `ModesStep` (min 1), `A11yStep` (clases `<html>`).
-3. `tests/e2e/playwright.config.ts` si no existe.
-4. `tests/e2e/onboarding.spec.ts` (happy path + auth error + axe).
-5. Responsive 375 / 768 / 1280 (screenshots para PR).
-6. `prefers-reduced-motion` (devtools).
-7. `pnpm typecheck && lint && test` verde.
-8. `bash scripts/ynara-doctor.sh` → `exit 0`.
+1. Instalar deps **batch 2** (con OK): `@playwright/test`, `@axe-core/playwright`, `msw` en root para `tests/e2e/`.
+2. `vitest.config.ts` + setup en `apps/web`.
+3. Tests de componente: `store`, `MoodStep` (limit), `ModesStep` (min 1), `A11yStep` (clases `<html>`).
+4. `tests/e2e/playwright.config.ts` si no existe.
+5. `tests/e2e/onboarding.spec.ts` (happy path + auth error + axe).
+6. Responsive 375 / 768 / 1280 (screenshots para PR).
+7. `prefers-reduced-motion` (devtools).
+8. `pnpm typecheck && lint && test` verde.
+9. `bash scripts/ynara-doctor.sh` → `exit 0`.
 
 **Done**: PR final con red de seguridad.
 
@@ -641,6 +665,12 @@ Por qué: el `apps/web/src/app/globals.css` actual ya escanea `packages/ui/src/*
 | 6 | `test(web): vitest + playwright + axe` | `feat/web-tests` | M | @BriarDevv |
 
 **Por qué partido**: 6 PRs pequeñas tienen turnaround real. 1 PR enorme nadie lo revisa.
+
+#### Checkpoint de entregable parcial
+
+Si el cronograma se aprieta (problemas de scope, otras prioridades del equipo), **el corte natural cae tras Sesión 4**: el onboarding queda navegable de punta a punta con mocks, pero la home no existe todavía y la red de tests no está armada. Eso ya es suficiente para una primera demo interna y para mostrar el flow de UX al equipo.
+
+Recomendación: revisar progreso al cerrar Sesión 4 y decidir si seguir directo a Sesión 5 + 6 o pausar para integrar feedback de UX antes de avanzar.
 
 ---
 
