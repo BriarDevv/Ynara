@@ -1,0 +1,51 @@
+import { cn } from "@/lib/cn";
+
+type Props = {
+  total: number;
+  current: number;
+  className?: string;
+  ariaLabel?: string;
+};
+
+type Dot = {
+  id: string;
+  active: boolean;
+  isCurrent: boolean;
+};
+
+function buildDots(total: number, current: number): Dot[] {
+  return Array.from({ length: total }, (_, i) => ({
+    id: `dot-${i}`,
+    active: i <= current,
+    isCurrent: i === current,
+  }));
+}
+
+export function ProgressDots({ total, current, className, ariaLabel = "Progreso" }: Props) {
+  const dots = buildDots(total, current);
+  return (
+    <div
+      role="progressbar"
+      aria-label={ariaLabel}
+      aria-valuemin={1}
+      aria-valuemax={total}
+      aria-valuenow={Math.max(1, Math.min(total, current + 1))}
+      className={cn("flex items-center gap-2", className)}
+    >
+      {dots.map((dot) => (
+        <span
+          key={dot.id}
+          aria-hidden
+          className={cn(
+            "h-1.5 rounded-[var(--radius-pill)] transition-[width,background-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
+            dot.isCurrent
+              ? "bg-gradient-blue-base w-8"
+              : dot.active
+                ? "w-1.5 bg-[var(--color-ink)]"
+                : "w-1.5 bg-[var(--color-ink-faint)]",
+          )}
+        />
+      ))}
+    </div>
+  );
+}
