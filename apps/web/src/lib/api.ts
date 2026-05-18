@@ -12,6 +12,20 @@ export class ApiError extends Error {
   }
 }
 
+/*
+ * TODO(@BriarDevv) — Sesión 3 AuthStep: inyectar Authorization: Bearer
+ * <token> automáticamente cuando el usuario esté autenticado.
+ *
+ * Patrón propuesto:
+ *   - El token vive en useUserStore (campo `token: string | null`),
+ *     ya agregado.
+ *   - `request()` lee `useUserStore.getState().token` y si existe lo
+ *     adjunta como header `Authorization`.
+ *   - Para no acoplar este módulo al store, alternativa: aceptar
+ *     `init.auth?: { token: string } | "skip"` y dejar que los callers
+ *     decidan. Decidir junto al contrato de auth con backend.
+ */
+
 type FetchInit = Omit<RequestInit, "body"> & {
   /** El body se serializa a JSON automáticamente. */
   body?: unknown;

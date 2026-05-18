@@ -156,26 +156,32 @@ export function InteractiveShowcase() {
             modeId="productividad"
             title="Agendame algo"
             subtitle="Probá pedirle al modo productividad"
+            onClick={() => console.info("click productividad")}
           />
           <SuggestionCard
             modeId="estudio"
             title="Explicame un tema"
             subtitle="El modo estudio te tutorea"
+            onClick={() => console.info("click estudio")}
           />
           <SuggestionCard
             modeId="bienestar"
             title="¿Cómo estás?"
             subtitle="Charla casual, sin presión"
+            onClick={() => console.info("click bienestar")}
           />
           <SuggestionCard
             modeId="memoria"
             title="Recordá esto sobre mí"
             subtitle="Memoria semántica explícita"
+            onClick={() => console.info("click memoria")}
           />
           <SuggestionCard
             modeId="vida"
             title="Recomendame algo"
             subtitle="Sugerencias del día a día"
+            disabled
+            onClick={() => console.info("click vida (disabled)")}
           />
         </div>
       </section>

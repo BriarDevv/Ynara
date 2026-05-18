@@ -13,6 +13,12 @@ type Dot = {
   isCurrent: boolean;
 };
 
+/**
+ * Genera N dots con ids `dot-0`..`dot-N`. La lista nunca se reordena
+ * (la cantidad y el orden son función pura de `total`), así que usar el
+ * índice como parte del id es semánticamente correcto y estable —
+ * no es un workaround de una key-reordering issue.
+ */
 function buildDots(total: number, current: number): Dot[] {
   return Array.from({ length: total }, (_, i) => ({
     id: `dot-${i}`,

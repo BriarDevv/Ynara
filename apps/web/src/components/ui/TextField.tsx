@@ -35,13 +35,13 @@ export const TextField = forwardRef<HTMLInputElement, Props>(function TextField(
         className={cn(
           "text-body w-full rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-4 py-3 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] transition-[border-color,box-shadow] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
           invalid
-            ? "border-[#c0392b]"
+            ? "border-[var(--color-error)]"
             : "border-[var(--color-border)] hover:border-[var(--color-border-strong)]",
         )}
         {...rest}
       />
       {error ? (
-        <p id={errorId} role="alert" className="text-body-sm text-[#c0392b]">
+        <p id={errorId} role="alert" className="text-body-sm text-[var(--color-error)]">
           {error}
         </p>
       ) : hint ? (

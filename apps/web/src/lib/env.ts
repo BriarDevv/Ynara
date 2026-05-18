@@ -33,6 +33,15 @@ if (!parsed.success) {
 
 export const env: ClientEnv = parsed.data;
 
-/** True si los mocks de MSW deben prenderse en este runtime. */
+/**
+ * True si los mocks de MSW deben prenderse en este runtime.
+ *
+ * **Hard-gate por NODE_ENV**: en `production` los mocks SIEMPRE están off
+ * sin importar el flag, para evitar accidentes que filtren MSW al bundle
+ * o expongan handlers de auth fake en el ambiente real. Si necesitás
+ * activar mocks en un build no-dev (preview/staging), usar
+ * `NEXT_PUBLIC_ENABLE_MOCKS=true` con `NODE_ENV !== "production"`.
+ */
 export const shouldEnableMocks =
-  env.NEXT_PUBLIC_ENABLE_MOCKS || process.env.NODE_ENV === "development";
+  process.env.NODE_ENV !== "production" &&
+  (process.env.NODE_ENV === "development" || env.NEXT_PUBLIC_ENABLE_MOCKS);

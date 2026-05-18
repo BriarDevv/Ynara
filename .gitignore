@@ -6,6 +6,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# MSW worker — generado por `pnpm msw:init` o predev hook.
+# Nunca commitearlo: evita que se sirva en prod y mantiene devDep status.
+apps/web/public/mockServiceWorker.js
+
 # Builds
 .next/
 dist/

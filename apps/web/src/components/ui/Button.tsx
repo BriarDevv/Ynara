@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "ghost";
 
@@ -28,12 +29,12 @@ export function Button({
   type = "button",
   ...rest
 }: Props) {
-  const classes = [BASE, VARIANTS[variant], fullWidth ? "w-full" : "", className ?? ""]
-    .filter(Boolean)
-    .join(" ");
-
   return (
-    <button type={type} className={classes} {...rest}>
+    <button
+      type={type}
+      className={cn(BASE, VARIANTS[variant], fullWidth && "w-full", className)}
+      {...rest}
+    >
       {children}
     </button>
   );
