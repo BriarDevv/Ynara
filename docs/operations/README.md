@@ -11,6 +11,8 @@ Cómo se instala, se corre en local, se deploya y se mantiene.
   responder.
 - [`MIGRATION-SUPABASE-TO-SELFHOSTED.md`](./MIGRATION-SUPABASE-TO-SELFHOSTED.md)
   — plan de migración de DB de MVP a V2.
+- [`CLAUDE-REVIEW.md`](./CLAUDE-REVIEW.md) — review automática de
+  PRs con Claude (setup, cuándo revisar el workflow, debugging).
 
 ## Antes de levantar nada
 
