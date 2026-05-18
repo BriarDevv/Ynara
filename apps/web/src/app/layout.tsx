@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { siteConfig } from "@/config/site";
 import { fontBody, fontDisplay } from "./fonts";
 import "./globals.css";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: {
@@ -13,12 +14,11 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  const fontClasses = `${fontDisplay.variable} ${fontBody.variable}`;
+  const fontClasses = `${fontDisplay.variable} ${fontBody.variable} text-size-md`;
   return (
     <html lang="es-AR" suppressHydrationWarning className={fontClasses}>
       <body className="min-h-screen antialiased">
-        {/* TODO: providers (TanStack Query, Theme, Auth) cuando estén montados */}
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
