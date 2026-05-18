@@ -1,0 +1,55 @@
+name: Claude on @mention
+
+# Responde a @claude en comentarios de issues, PRs o reviews.
+# Para deep-dive on-demand: respuesta a preguntas, profundizacion
+# de un PR ya revisado, asistencia interactiva con el contexto del
+# repo (AGENTS.md cargado automaticamente via checkout).
+# Modelo: Sonnet 4.6 por default. Para opus on-demand, mencionar
+# "@claude --opus" en el comentario y ajustar el prompt manualmente
+# en un PR de seguimiento.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened, assigned]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: claude-mention-${{ github.event.issue.number || github.event.pull_request.number }}-${{ github.event.comment.id || github.event.review.id }}
+  cancel-in-progress: false
+
+jobs:
+  respond:
+    name: Claude respond
+    # Solo dispara si el contenido del trigger menciona @claude.
+    # Evita loops y consumo de cuota innecesario.
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Claude respond to mention
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model claude-sonnet-4-6
+            --max-turns 10
+            --append-system-prompt "Antes de cualquier respuesta, lee AGENTS.md raiz y los AGENTS.md del app correspondiente al contexto. Aplica las 10 reglas no negociables. Tono: rioplatense conversacional, codigo en ingles, sin sicofancia, sin emojis salvo que el repo ya los use. No comitees ni hagas cambios destructivos sin OK humano explicito."

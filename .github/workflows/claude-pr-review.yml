@@ -1,0 +1,118 @@
+name: Claude PR Review (auto)
+
+# Review automática en cada PR abierto o actualizado.
+# Modelo: Sonnet 4.6 (balance calidad / consumo de cuota Pro/Max).
+# Auth: CLAUDE_CODE_OAUTH_TOKEN generado con `claude setup-token` local.
+# Si el token expira, regenerarlo y actualizar el secret en
+# repo Settings -> Secrets -> Actions -> CLAUDE_CODE_OAUTH_TOKEN.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Nota: para re-triggerar una review manualmente, hacé push a la rama
+# o reabri el PR. No hay workflow_dispatch porque la action necesita
+# contexto de PR (numero, head sha, base sha) que un dispatch manual
+# no provee de forma confiable.
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+concurrency:
+  group: claude-review-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Claude review
+    # Saltea drafts (review cuando este ready) y PRs de bots conocidos.
+    # Si alguien quiere review del bot mientras el PR esta en draft,
+    # marcarlo "ready for review" dispara el evento ready_for_review.
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.user.login != 'renovate[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model claude-sonnet-4-6
+            --max-turns 8
+          prompt: |
+            Sos el reviewer automatico de Ynara en este PR. Antes de cualquier otra cosa:
+
+            1. Lee `AGENTS.md` (raiz) entero. Aplica las 10 reglas no negociables.
+            2. Si el PR toca `apps/web/**`, lee `apps/web/AGENTS.md`.
+               Si toca `apps/mobile/**`, lee `apps/mobile/AGENTS.md`.
+               Si toca `apps/backend/**`, lee `apps/backend/AGENTS.md`.
+            3. Lee `docs/conventions/AI-GUIDELINES.md` para las 15 reglas
+               extendidas + las landmines aprendidas. Especial atencion a:
+               Tailwind v4 CSS-first, gitignore anclado, services sin
+               framework, consolidacion de memoria async, security.py sin
+               implementar, CI manual hasta lockfiles.
+            4. Si el PR toca `apps/backend/app/memory/**` o
+               `apps/backend/alembic/versions/**` (tablas sagradas, regla
+               #3): flag inmediato en el comentario que esto requiere
+               2 aprobaciones humanas explicitas con tests, sin importar
+               el resto del diff.
+
+            Despues de leer el contexto, revisa el diff del PR y posteá un
+            UNICO comentario en el PR con esta estructura:
+
+            ## Review @claude-bot
+
+            **Veredicto**: approve | approve con cambios menores | request changes | block
+
+            ### Hallazgos accionables
+            Tabla o lista numerada. Para cada hallazgo:
+            - Severidad: **blocker** | **mayor** | **menor**
+            - File:line citado (ej: `apps/web/src/app/globals.css:316`).
+            - Que rompe y por que (referencia a regla numero si aplica).
+            - Fix sugerido concreto (1-3 lineas de codigo o instruccion).
+
+            ### Cierre de hallazgos de reviews previas
+            Si hay comments previos del bot o de reviewers humanos sobre
+            este PR o sobre PRs predecesores en el plan, marcar cuales
+            estan cerrados / siguen abiertos / aplazados. Si no hay,
+            omitir esta seccion.
+
+            ### Deuda explicita (no bloquea)
+            Cosas que el PR introduce y conviene trackear como issue
+            separado pero no impiden mergear. Maximo 3 puntos.
+
+            ### Compliance con reglas duras
+            Tabla compacta con: regla -> estado (OK / WARN / FAIL +
+            evidencia).
+
+            ### Cosas bien hechas (opcional, max 3 puntos)
+            Solo si hay decisiones notables que valen la pena reforzar.
+            No relleno.
+
+            REGLAS DEL COMENTARIO:
+            - Tono: rioplatense conversacional. Codigo, nombres de
+              variables, paths y palabras tecnicas quedan en ingles.
+            - No usar emojis salvo que el repo ya los use.
+            - No ser sicofantico. No decir "great job" generico.
+            - Si no hay hallazgos blocker/mayor, decirlo. No inventar
+              hallazgos para llenar la tabla.
+            - Si el PR rompe regla #3 (tablas sagradas) o regla #5
+              (Supabase JS en frontend) o regla #1 (commits sin OK):
+              veredicto = **block** y el primer hallazgo es el motivo.
+            - Citar texto verbatim del archivo cuando ayuda (con
+              triple backtick).
+            - El comentario va en un solo post, no en review formal con
+              checkboxes. Es un comentario tipo "review note".
+            - No proponer cambios al PR mas alla del fix sugerido por
+              hallazgo. No abrir issues, no crear branches, no
+              comitear nada.
