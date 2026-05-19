@@ -9,7 +9,10 @@ import { useUserStore } from "@/stores/user";
 /**
  * Layout del flujo de onboarding.
  *
- * - Si el user ya completó onboarding → redirect a /home.
+ * - Si el user ya completó onboarding → redirect a `/` (que vuelve a
+ *   bounciar a `/onboarding`). TODO(Sesión 5): cambiar a `/home` cuando
+ *   exista. Sin esto, un user con `onboardingCompleted=true` que tipea
+ *   `/onboarding/*` cae en un 404 muerto.
  * - Header sticky con ProgressDots + skip-all.
  * - El [step]/page renderiza el step actual; la prop `total/current`
  *   del ProgressDots las pasa cada step que usa StepShell (no las
@@ -21,7 +24,8 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
   const completed = useUserStore((s) => s.onboardingCompleted);
 
   useEffect(() => {
-    if (completed) router.replace("/home");
+    // TODO(Sesión 5): cambiar a "/home" cuando exista.
+    if (completed) router.replace("/");
   }, [completed, router]);
 
   if (completed) return null;
@@ -57,7 +61,8 @@ function OnboardingHeaderWithProgress() {
 
   const handleSkipAll = () => {
     reset();
-    router.replace("/home");
+    // TODO(Sesión 5): cambiar a "/home" cuando exista.
+    router.replace("/");
   };
 
   return <OnboardingHeader total={5} current={index} onSkipAll={handleSkipAll} />;
