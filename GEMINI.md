@@ -7,10 +7,14 @@
 ## Antes de hacer cualquier cosa
 
 1. Leer `AGENTS.md` y respetar las 10 reglas no negociables.
-2. Si tu tarea toca un app específico, leer el `AGENTS.md` de ese app
+2. Leer [`CONTRIBUTING.md`](./CONTRIBUTING.md) y
+   [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md) —
+   flujo operativo + cómo splitear commits en atómicos.
+   **Obligatorio**, no opcional.
+3. Si tu tarea toca un app específico, leer el `AGENTS.md` de ese app
    (`apps/web/AGENTS.md`, `apps/mobile/AGENTS.md`,
    `apps/backend/AGENTS.md`).
-3. Si la tarea es arquitectónica, leer los ADRs en
+4. Si la tarea es arquitectónica, leer los ADRs en
    `docs/architecture/adrs/`.
 
 ## Comandos específicos de Gemini
