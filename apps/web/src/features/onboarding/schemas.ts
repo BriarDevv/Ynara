@@ -5,6 +5,7 @@ import {
   DisplayNameSchema,
   LoginRequestSchema,
   ModeSchema,
+  OnboardRequestSchema,
   SignupRequestSchema,
 } from "@ynara/shared-schemas";
 import { z } from "zod";
@@ -30,7 +31,7 @@ export type NameFormValues = z.infer<typeof NameFormSchema>;
 // Re-export para que features/onboarding no tenga que importar dos paquetes
 // ============================================================
 
-export type { A11yPrefs, ApiErrorBody, Mode } from "@ynara/shared-schemas";
+export type { A11yPrefs, ApiErrorBody, Mode, OnboardRequest } from "@ynara/shared-schemas";
 export {
   A11yPrefsSchema,
   ApiErrorBodySchema,
@@ -38,5 +39,6 @@ export {
   DisplayNameSchema,
   LoginRequestSchema,
   ModeSchema,
+  OnboardRequestSchema,
   SignupRequestSchema,
 };
