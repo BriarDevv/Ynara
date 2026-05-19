@@ -30,6 +30,17 @@
      `chore/<descripcion>`.
    - Ejemplo: `feat/web-modo-bienestar`,
      `fix/backend-extraccion-episodica`.
+   - **Verificar HEAD antes de `git checkout -b`**: `git status` +
+     `git log -1` deben mostrar que estás en `main` y que el SHA
+     matchea `origin/main`. Si no, primero
+     `git checkout main && git pull --rebase origin main`. Ver
+     landmine "Ramas nuevas derivadas de un PR ajeno" en
+     [`docs/conventions/AI-GUIDELINES.md`](./docs/conventions/AI-GUIDELINES.md).
+   - **Sync con remote: rebase, no merge**. Usar
+     `git pull --rebase origin main` siempre. Configuración global
+     recomendada: `git config --global pull.rebase true`. Detalle
+     en la sección "Sync con remote: usá rebase, no merge" de
+     `AI-GUIDELINES.md`.
 
 2. **Commits**: Conventional Commits en español, imperativo.
    - `feat(web): agregar modo bienestar`

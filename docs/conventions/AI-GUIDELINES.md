@@ -227,6 +227,60 @@ doctor en vez de dejarla solo en docs. El doctor es la verdad
 ejecutable; las docs son la verdad declarativa. Ambas tienen que
 estar alineadas.
 
+### Sync con remote: usá rebase, no merge
+
+`git pull` por default es `git fetch + git merge`, que cuando hay
+divergencia genera un **merge commit** ("Merge branch 'main' of
+origin..."). Esos merge commits ensucian el log y son ruido — la
+intención no era "incorporar una rama", era "ponerme al día con
+remote".
+
+Para historial limpio, usar siempre `git pull --rebase`:
+
+```bash
+# Mal — puede generar merge commit espurio
+git pull origin main
+
+# Bien — reescribe tus commits encima del remote, sin merge commit
+git pull --rebase origin main
+```
+
+Para que sea el default sin pensarlo cada vez, configurar git
+globalmente (una vez por máquina):
+
+```bash
+git config --global pull.rebase true
+git config --global rebase.autoStash true   # stash automatico si hay tree sucio
+```
+
+Mismo principio cuando una rama feature necesita actualizarse
+contra main: **rebase sobre merge**.
+
+```bash
+# Mal — merge commit espurio en la feature branch
+git checkout feat/algo
+git merge main
+
+# Bien — reescribe la feature encima de main actualizado
+git checkout feat/algo
+git fetch origin
+git rebase origin/main
+```
+
+Cuándo SÍ está bien hacer merge en lugar de rebase:
+
+- **Mergear un PR a `main`** vía GitHub UI o `gh pr merge`. Acá el
+  merge commit es valioso: marca el evento "PR #N entró a main" y
+  el log `--first-parent main` queda como historial de PRs.
+- **Conflictos masivos** donde reescribir la historia de la rama
+  feature sería más caro que aceptar un merge commit.
+- **Ramas compartidas con otra persona** — rebasear una rama que
+  otro ya pulló rompe su copia local. Para ramas solas, rebase OK.
+
+Si la rama tiene commits que otra persona ya bajó, alternativa
+sin reescribir: `git pull --rebase` solo afecta los commits
+locales todavía no pusheados.
+
 ### Ramas nuevas derivadas de un PR ajeno (incident PR #13)
 
 `git checkout -b nueva-rama` ramifica desde **HEAD actual**, no
