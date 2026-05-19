@@ -25,10 +25,12 @@ Las carpetas `.claude/`, `.codex/`, `.gemini/` son **adapters** para los IDEs/CL
 
 ## Read Order
 
-### Always first
+### Always first (obligatorio antes de cualquier PR)
 
 1. Este archivo (`AGENTS.md`).
 2. [`README.md`](./README.md).
+3. [`CONTRIBUTING.md`](./CONTRIBUTING.md) — flujo de trabajo, branches, commits, PR, review, merge strategy (rebase merge). Es la guía operativa diaria del repo.
+4. [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md) — formato de commits + cómo splitear en atómicos (regla #7 es bloqueante).
 
 ### Then choose by task
 
