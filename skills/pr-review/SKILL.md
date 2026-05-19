@@ -27,8 +27,13 @@ El output siempre es **un solo comentario** posteado en el PR vía
   del app afectado.
 - PRs triviales (1-2 líneas de typo o config). Un comentario
   manual rápido alcanza.
-- PRs propios del agente que está reviewando — no auto-aprobarte
-  en el mismo contexto (regla de `CLAUDE.md`).
+
+> **Self-review (autor = operador):** **no es razón para parar**.
+> Cuando el operador es autor del PR o los commits están
+> co-authored con Claude, la skill delega la Fase 3 a un
+> sub-agent `code-reviewer` en sesión nueva con prompt
+> self-contained, y agrega un banner obligatorio en el comentario.
+> Ver sección [Self-review](#self-review--autor-del-pr-es-el-operador).
 
 ## Pre-requisitos
 
@@ -365,6 +370,96 @@ comentar.
 - **Verbatim sobre interpretación**: si citás contenido del
   diff, usar bloque de código con sintaxis. Si interpretás
   intención, decir "asumo que...".
+
+## Self-review — autor del PR es el operador
+
+Cuando el operador es autor del PR (o los commits están
+co-authored con Claude), la skill **no para**. Lo que cumple el
+espíritu de la regla "no auto-aprobarte en el mismo contexto" no
+es bloquear la review, es **garantizar que la pasada de análisis
+ocurra en una sesión nueva, con contexto fresco y mindset
+adversarial**.
+
+### Cómo proceder
+
+1. **Delegar la Fase 3 (análisis cualitativo) a un sub-agent
+   `code-reviewer`** con prompt self-contained que incluya:
+   - Las 10 reglas no negociables (`AGENTS.md`).
+   - El `AGENTS.md` del app afectado (web / mobile / backend).
+   - El diff del PR y la metadata (`gh pr view --json ...`).
+   - Las landmines del scaffold relevantes al diff.
+   - Foco específico del review (bugs, a11y, security, etc.).
+
+   El sub-agent corre en sesión nueva, sin la historia de las
+   decisiones que tomó el operador cuando escribió el código.
+   Eso es lo que evita el sesgo de confirmación y la
+   contaminación de contexto.
+
+2. **Banner obligatorio al principio del comentario del PR**.
+   Antes del veredicto, agregar la línea visible:
+
+   ```md
+   > **Review delegada a sub-agent `code-reviewer`** — autor del PR
+   > coincide con el operador. Análisis hecho en sesión nueva con
+   > contexto fresco; la pasada humana sigue siendo recomendable
+   > antes de mergear.
+   ```
+
+3. **Postear igual con `gh pr comment`**. La estructura del
+   comentario (veredicto, hallazgos por severidad, compliance
+   table, etc.) se mantiene idéntica. Solo cambia el banner
+   inicial.
+
+4. **Cierre humano recomendado** para cambios sensibles: tablas
+   sagradas (regla #3), migraciones Alembic, deps del lockfile,
+   `.md` raíz, `ynara.config.json`. El sub-agent cubre el chequeo
+   mecánico + cualitativo, pero el humano cierra el loop de
+   accountability.
+
+### Por qué esto cumple la regla
+
+La regla de `CLAUDE.md` dice *"la pasada de review siempre va en
+un agente separado"*. La palabra clave es **separado**, no **otro
+modelo**. Un sub-agent `code-reviewer` invocado con prompt
+self-contained corre en sesión independiente, sin acceso a la
+conversación donde se escribió el código. Eso ya cumple el
+espíritu — el reviewer ve el código, no las racionalizaciones del
+autor.
+
+Los dos riesgos que la regla original busca evitar:
+
+- **Sesgo de confirmación** — el mismo contexto que escribió el
+  código tiende a justificar decisiones en lugar de cuestionarlas.
+  El sub-agent fresh no tiene esas decisiones cargadas, las ve
+  como hechos del diff.
+- **Contaminación de contexto** — los trade-offs y supuestos del
+  operador no se filtran al review. El sub-agent solo ve lo que
+  llega en el prompt self-contained.
+
+### Cuándo SÍ parar (incluso siendo self-review)
+
+- PR ya mergeado o cerrado.
+- PR trivial (1-2 líneas de typo) — un comentario manual alcanza.
+- Working tree del operador sucio y la skill no puede hacer
+  `gh pr checkout` limpio.
+- `gh` no autenticado.
+- `bash scripts/ynara-doctor.sh` falla irrecuperablemente sobre
+  `main` (Fase 0 — sin doctor verde no hay baseline confiable).
+
+### Sub-agentes alternativos según foco
+
+`code-reviewer` es el default. Para PRs con foco específico vale
+usar el sub-agent más afilado:
+
+- **Seguridad fuerte** (auth, secrets, env, fetcher, headers):
+  delegar también a `security-reviewer` en paralelo.
+- **Verificación de claims del PR contra el código real**: usar
+  `verifier`.
+- **Causal tracing de un bug existente**: `tracer`.
+
+Si invocás dos sub-agents en paralelo, consolidá los findings en
+un único comentario antes de postear — no dos comentarios
+separados sobre el mismo PR.
 
 ## Anti-patterns del review
 

@@ -26,6 +26,12 @@ Ejecutá la skill [`skills/pr-review/SKILL.md`](../../skills/pr-review/SKILL.md)
 - Citar `archivo:línea` en cada hallazgo o el hallazgo no es accionable.
 - Si no hay hallazgos blocker / mayor, decirlo explícito — no inventar.
 
-## Auto-revisión prohibida
+## Self-review (autor del PR = operador)
 
-Si el PR es propio (sos el autor o tu agente sub creó los commits), **parar**. No auto-aprobarte en el mismo contexto (regla de `CLAUDE.md`). Pedile a otro reviewer humano o agente que lo haga.
+Si sos autor del PR o los commits están co-authored con Claude, **no parar**. Delegá la Fase 3 (análisis cualitativo) a un sub-agent `code-reviewer` con prompt self-contained y agregá el banner obligatorio al principio del comentario:
+
+> **Review delegada a sub-agent `code-reviewer`** — autor del PR coincide con el operador. Análisis hecho en sesión nueva con contexto fresco; la pasada humana sigue siendo recomendable antes de mergear.
+
+El sub-agent corre en sesión nueva, sin la historia de las decisiones que tomaste cuando escribiste el código — eso cumple el espíritu de la regla de `CLAUDE.md` ("la pasada de review siempre va en un agente separado").
+
+Detalle completo en la sección [Self-review](../../skills/pr-review/SKILL.md#self-review--autor-del-pr-es-el-operador) de `skills/pr-review/SKILL.md`, incluyendo cuándo SÍ parar (PR mergeado, trivial, doctor falla) y cuándo conviene delegar también a `security-reviewer` o `verifier` en paralelo.
