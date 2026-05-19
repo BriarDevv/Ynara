@@ -73,10 +73,33 @@ Retención del audit log: 24 meses.
 - Backup más reciente puede contener la entrada borrada durante
   hasta 30 días — política comunicada explícitamente en la UI.
 
-## Open questions
+## Políticas operacionales
 
-<!-- TODO: cerrar -->
-- Cómo manejamos "olvido por decaimiento" en procedural memory.
-- Retención de memoria episódica en modo Bienestar — ¿más corta por
-  defecto?
-- Encriptación en reposo a nivel campo (no solo a nivel disco).
+Las tres decisiones operacionales de memoria (decay, retention
+diferenciada, encriptación a nivel campo) están cerradas en
+[`ADR-007`](../architecture/adrs/ADR-007-memory-decay-retention-encryption.md).
+Resumen:
+
+### Decay en procedural memory
+
+Decay exponencial con threshold: `confidence *= 0.9` cada 14 días
+sin reforzar. Cuando `confidence < 0.3`, la entrada queda `stale=true`
+y el router no la inyecta automáticamente — el agente puede preguntar
+al usuario antes de actuar. Borrado físico cuando `confidence < 0.1` Y
+`last_reinforced_at > 90 días`.
+
+### Retention de memoria episódica
+
+Default: 12 meses. Modo **Bienestar**: 6 meses (configurable
+1-12 meses por usuario via `PATCH /v1/memory/settings`). Flag
+`is_sensitive=true` gatilla audit log diferenciado y export anidado.
+
+### Encriptación a nivel campo
+
+`semantic_memory.content` y `episodic_memory.summary` cifrados con
+AES-256-GCM. Key derivada por usuario via HKDF-SHA256 sobre master
+key server-side. Embeddings sin cifrar (necesarios para pgvector).
+`procedural_memory.value` queda en JSONB plain — son preferencias
+no sensibles. Helper: `apps/backend/app/core/crypto.py`.
+
+Detalle completo, alternativas descartadas y mitigaciones en el ADR.
