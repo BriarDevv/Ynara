@@ -82,6 +82,13 @@
    - Asignar al menos un CODEOWNER del path afectado.
    - Sin auto-merge.
    - CI verde antes de pedir review.
+   - **Merge strategy: rebase merge.** Usar
+     `gh pr merge <N> --rebase --delete-branch` (o el botón
+     "Rebase and merge" en la UI). Los commits del PR se reaplican
+     lineal sobre `main`, sin merge commit. Mantiene la regla #7
+     (commits atómicos) y el grafo de `main` queda lineal. Branch
+     protection rechaza merge commits explícitamente
+     (`required_linear_history: true`).
 
 ## Code review
 
