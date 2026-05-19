@@ -16,18 +16,11 @@ esqueleto.
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel
 
-
-class Mode(StrEnum):
-    PRODUCTIVIDAD = "productividad"
-    ESTUDIO = "estudio"
-    BIENESTAR = "bienestar"
-    VIDA = "vida"
-    MEMORIA = "memoria"
+from app.enums import Mode
 
 
 class ChatRequest(BaseModel):
