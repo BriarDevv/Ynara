@@ -49,6 +49,9 @@
   --color-error: #c0392b;
   --color-error-soft: rgb(192 57 43 / 0.12);
 
+  /* Overlay para modales/dialogs (backdrop). */
+  --color-overlay: rgb(36 44 63 / 0.4);
+
   /* Gradientes — uso semántico */
   --gradient-blue-base: linear-gradient(
     135deg,
@@ -113,6 +116,7 @@
     --color-bg-soft: #161b25;
     --color-border: rgb(232 236 244 / 0.12);
     --color-border-strong: rgb(232 236 244 / 0.22);
+    --color-overlay: rgb(14 18 25 / 0.6);
   }
 }
 
@@ -125,6 +129,7 @@
   --color-bg-soft: #f6f6f8;
   --color-border: rgb(36 44 63 / 0.12);
   --color-border-strong: rgb(36 44 63 / 0.22);
+  --color-overlay: rgb(36 44 63 / 0.4);
 }
 
 [data-theme="dark"] {
@@ -136,6 +141,7 @@
   --color-bg-soft: #161b25;
   --color-border: rgb(232 236 244 / 0.12);
   --color-border-strong: rgb(232 236 244 / 0.22);
+  --color-overlay: rgb(14 18 25 / 0.6);
 }
 
 /* ============================================================
