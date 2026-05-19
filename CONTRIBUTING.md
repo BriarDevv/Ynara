@@ -5,6 +5,25 @@
 
 ## Flujo de trabajo
 
+> **Regla del repo — `main` solo se actualiza vía PR mergeado en GitHub.**
+>
+> **Prohibido**, aunque haya OK humano para el comando individual:
+>
+> - `git push origin main` directo (sin pasar por PR).
+> - `git merge <rama>` local hacia `main` + `git push` del resultado.
+> - `git push --force` o cualquier force-push a `main`.
+> - Borrar la rama `main` (`git push origin :main`,
+>   `git branch -D main` seguido de un push, etc.).
+>
+> Esta regla complementa la regla #1 de
+> [`AGENTS.md`](./AGENTS.md#las-10-reglas-no-negociables): los
+> cambios pasan por revisión, CI, traza explícita y posibilidad
+> de rollback antes de tocar producción. Branch protection en
+> GitHub la hace cumplir técnicamente; si la protection no está
+> habilitada todavía, la regla sigue vigente por convención del
+> equipo. Para deploy de prod, ver
+> [`docs/operations/DEPLOY.md`](./docs/operations/DEPLOY.md).
+
 1. **Crear branch desde `main`**.
    - Naming: `feat/<scope>-<descripcion-corta>`,
      `fix/<scope>-<descripcion>`, `docs/<descripcion>`,

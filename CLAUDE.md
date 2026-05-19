@@ -40,6 +40,10 @@ usar los sub-agents nativos (`explore`, `executor`, `verifier`,
   Alembic, archivos `.env`, y archivos `.md` raíz.
 - Hacer `git commit` o `git push` sin confirmación humana explícita
   (regla #1 de `AGENTS.md`).
+- Pushear directo a `main`, mergear local hacia `main`, o
+  force-pushear a `main`. Toda actualización de `main` va por PR
+  mergeado en GitHub (regla #1 ampliada en `AGENTS.md`; flujo
+  completo en [`CONTRIBUTING.md`](./CONTRIBUTING.md#flujo-de-trabajo)).
 - Tocar `apps/backend/app/memory/` o `apps/backend/alembic/versions/`
   sin doble confirmación.
 - Auto-aprobarte en el mismo contexto: la pasada de review siempre
