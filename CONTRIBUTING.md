@@ -42,15 +42,24 @@
      en la sección "Sync con remote: usá rebase, no merge" de
      `AI-GUIDELINES.md`.
 
-2. **Commits**: Conventional Commits en español, imperativo.
+2. **Commits**: Conventional Commits en español, imperativo, y
+   **atómicos** (un commit = un cambio lógico — regla #7 de
+   `AGENTS.md`, bloqueante).
    - `feat(web): agregar modo bienestar`
    - `fix(backend): corregir extracción episódica`
    - `docs(architecture): agregar ADR-006`
    - `chore(infra): actualizar versión de Redis en compose`
    - `refactor(shared-types): renombrar UserMemory a MemoryRecord`
    - `test(backend): cubrir consolidación de memoria episódica`
-   - Detalle completo en
-     [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md).
+   - **Cómo splitear PRs grandes en commits chicos** (workflow,
+     triggers operativos, ejemplos bien/mal):
+     [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md)
+     sección "Commits atómicos". Lectura obligatoria antes de tu
+     primer PR no trivial.
+   - Trigger: si tu PR pasa de ~200 líneas o de 3 archivos en áreas
+     distintas, parar y splitear antes de pushear.
+   - Tablas sagradas (regla #3): commit propio aislado para que las
+     2 aprobaciones humanas inspeccionen un commit específico.
 
 3. **Tests**: antes de pedir review.
    - `pnpm test` en el root corre todo.
