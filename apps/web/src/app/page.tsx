@@ -18,12 +18,10 @@ export default function RootPage() {
   const completed = useUserStore((s) => s.onboardingCompleted);
 
   useEffect(() => {
-    if (completed) {
-      // TODO(Sesión 5): cambiar a /home cuando exista.
-      router.replace("/onboarding");
-    } else {
-      router.replace("/onboarding");
-    }
+    // TODO(Sesión 5): cuando exista `/home`, separar las ramas: completed
+    // → `/home`, pendiente → `/onboarding`. Hoy ambas van al mismo lado.
+    void completed;
+    router.replace("/onboarding");
   }, [completed, router]);
 
   return (
