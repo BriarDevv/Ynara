@@ -1,8 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import type { OnboardingStep } from "@/features/onboarding/constants";
+import { type OnboardingStep, STEP_INDEX } from "@/features/onboarding/constants";
+import { A11yStep } from "@/features/onboarding/steps/A11yStep";
 import { AuthStep } from "@/features/onboarding/steps/AuthStep";
+import { ModesStep } from "@/features/onboarding/steps/ModesStep";
+import { MoodStep } from "@/features/onboarding/steps/MoodStep";
 import { NameStep } from "@/features/onboarding/steps/NameStep";
 import { useOnboardingStore } from "@/features/onboarding/store";
 
@@ -13,18 +17,28 @@ type Props = {
 /**
  * Renderiza el step actual según el slug de la URL.
  *
- * También sincroniza el store: si alguien navega directo a una URL
- * (e.g. /onboarding/modos) que el store dice que no le toca todavía,
- * por ahora dejamos pasar y actualizamos el store. La invariante
- * "no podés saltar steps por URL manipulada" se hará en Sesión 4
- * cuando aparezcan los steps que dependen de auth.
+ * Invariante "no podés saltar steps por URL manipulada":
+ *   - URL > store → redirigir al currentStep real (bloqueo de adelanto).
+ *   - URL < store → sincronizar store con URL (volver atrás es libre).
+ *   - URL = store → no-op (evita race entre `setStep` y `router.push`
+ *     durante `useOnboardingNav.next()`).
  */
 export function StepRouter({ step }: Props) {
+  const router = useRouter();
+  const storeStep = useOnboardingStore((s) => s.currentStep);
   const setStep = useOnboardingStore((s) => s.setStep);
 
   useEffect(() => {
-    setStep(step);
-  }, [step, setStep]);
+    const stepIndexFromUrl = STEP_INDEX[step];
+    const storeStepIndex = STEP_INDEX[storeStep];
+    if (stepIndexFromUrl > storeStepIndex) {
+      router.replace(`/onboarding/${storeStep}`);
+      return;
+    }
+    if (stepIndexFromUrl < storeStepIndex) {
+      setStep(step);
+    }
+  }, [step, storeStep, router, setStep]);
 
   switch (step) {
     case "auth":
@@ -32,19 +46,10 @@ export function StepRouter({ step }: Props) {
     case "nombre":
       return <NameStep />;
     case "dia":
+      return <MoodStep />;
     case "modos":
+      return <ModesStep />;
     case "a11y":
-      return <ComingInSession4 step={step} />;
+      return <A11yStep />;
   }
-}
-
-function ComingInSession4({ step }: { step: string }) {
-  return (
-    <div className="anim-fade-up mx-auto flex w-full max-w-[480px] flex-1 flex-col gap-4 px-6 py-12 text-center">
-      <h1 className="text-title">Próximamente</h1>
-      <p className="text-body text-[var(--color-ink-soft)]">
-        Step <code>{step}</code> llega en Sesión 4 del plan (mood + modos + a11y + outro).
-      </p>
-    </div>
-  );
 }

@@ -24,14 +24,17 @@ export type OnboardingDraft = {
   // Step 2 — Nombre
   displayName: string;
 
-  // Step 3 — Mood (Sesión 4)
+  // Step 3 — Mood
   mood: string[];
   moodFreeText: string;
 
-  // Step 4 — Modos (Sesión 4)
+  // Step 4 — Modos
   interestedModes: string[];
 
-  // Step 5 — A11y (Sesión 4)
+  // Step 5 — A11y (mirror del useA11yStore para mostrar valores actuales en
+  // el step; la fuente canónica de a11y es siempre useA11yStore — D3 del
+  // plan §7.4. Estos campos se mantienen por compat pero no se leen en
+  // useCompleteOnboarding).
   a11yTextSize: "sm" | "md" | "lg";
   a11yHighContrast: boolean;
   a11yMotion: "auto" | "reduce" | "normal";
