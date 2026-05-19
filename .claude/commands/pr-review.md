@@ -26,6 +26,10 @@ Ejecutá la skill [`skills/pr-review/SKILL.md`](../../skills/pr-review/SKILL.md)
 - Citar `archivo:línea` en cada hallazgo o el hallazgo no es accionable.
 - Si no hay hallazgos blocker / mayor, decirlo explícito — no inventar.
 
+## Higiene de rama (CRÍTICO)
+
+Antes y después de cualquier `gh pr checkout <N>` o `git fetch origin pull/<N>/head:<rama>` durante este review: confirmar que HEAD está en `main` y sincronizada con `origin/main` (`git status` + `git log -1`). Al terminar, volver a `main` antes de crear cualquier rama nueva. Si no, `git checkout -b` deriva del tip del PR ajeno y el siguiente merge fast-forward arrastra esos commits a `main` por inercia (incident PR #13). Detalle en `skills/pr-review/SKILL.md` sección "Higiene post-review (obligatorio)".
+
 ## Self-review (autor del PR = operador)
 
 Si sos autor del PR o los commits están co-authored con Claude, **no parar**. Delegá la Fase 3 (análisis cualitativo) a un sub-agent `code-reviewer` con prompt self-contained y agregá el banner obligatorio al principio del comentario:

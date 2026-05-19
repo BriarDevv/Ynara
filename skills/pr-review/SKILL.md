@@ -43,6 +43,30 @@ El output siempre es **un solo comentario** posteado en el PR vía
   `gh pr checkout`).
 - Tener corrido `bash scripts/ynara-doctor.sh` recientemente
   sobre `main`.
+- **HEAD en `main` y sincronizada con `origin/main`** antes de
+  empezar (`git status` + `git log -1` para confirmar SHA).
+  Crítico para no contaminar la base de futuras ramas. Ver
+  landmine "Ramas nuevas derivadas de un PR ajeno" en
+  [`docs/conventions/AI-GUIDELINES.md`](../../docs/conventions/AI-GUIDELINES.md).
+
+## Higiene post-review (obligatorio)
+
+Después de cualquier `git fetch origin pull/<N>/head:<rama>` o
+`gh pr checkout <N>` que hagas durante el review, **volver a
+`main` antes de hacer cualquier otra cosa**:
+
+```bash
+git checkout main
+git pull --ff-only origin main
+# Borrar la rama local del PR ajeno (opcional):
+git branch -D pr-<N>-review
+```
+
+Si no volvés a `main` y después corrés `git checkout -b nueva-rama`,
+esa rama va a heredar los commits del PR ajeno como ancestros. Cuando
+se mergee con fast-forward, GitHub arrastra esos commits a `main` por
+inercia (incident PR #13). El check `[10/10]` de `ynara-doctor.sh`
+detecta esto antes del PR — corrélo siempre antes de abrir uno nuevo.
 
 ## Invocación
 

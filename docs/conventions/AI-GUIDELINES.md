@@ -227,6 +227,127 @@ doctor en vez de dejarla solo en docs. El doctor es la verdad
 ejecutable; las docs son la verdad declarativa. Ambas tienen que
 estar alineadas.
 
+### Sync con remote: usá rebase, no merge
+
+`git pull` por default es `git fetch + git merge`, que cuando hay
+divergencia genera un **merge commit** ("Merge branch 'main' of
+origin..."). Esos merge commits ensucian el log y son ruido — la
+intención no era "incorporar una rama", era "ponerme al día con
+remote".
+
+Para historial limpio, usar siempre `git pull --rebase`:
+
+```bash
+# Mal — puede generar merge commit espurio
+git pull origin main
+
+# Bien — reescribe tus commits encima del remote, sin merge commit
+git pull --rebase origin main
+```
+
+Para que sea el default sin pensarlo cada vez, configurar git
+globalmente (una vez por máquina):
+
+```bash
+git config --global pull.rebase true
+git config --global rebase.autoStash true   # stash automatico si hay tree sucio
+```
+
+Mismo principio cuando una rama feature necesita actualizarse
+contra main: **rebase sobre merge**.
+
+```bash
+# Mal — merge commit espurio en la feature branch
+git checkout feat/algo
+git merge main
+
+# Bien — reescribe la feature encima de main actualizado
+git checkout feat/algo
+git fetch origin
+git rebase origin/main
+```
+
+Cuándo SÍ está bien hacer merge en lugar de rebase:
+
+- **Mergear un PR a `main`** vía GitHub UI o `gh pr merge`. Acá el
+  merge commit es valioso: marca el evento "PR #N entró a main" y
+  el log `--first-parent main` queda como historial de PRs.
+- **Conflictos masivos** donde reescribir la historia de la rama
+  feature sería más caro que aceptar un merge commit.
+- **Ramas compartidas con otra persona** — rebasear una rama que
+  otro ya pulló rompe su copia local. Para ramas solas, rebase OK.
+
+Si la rama tiene commits que otra persona ya bajó, alternativa
+sin reescribir: `git pull --rebase` solo afecta los commits
+locales todavía no pusheados.
+
+### Ramas nuevas derivadas de un PR ajeno (incident PR #13)
+
+`git checkout -b nueva-rama` ramifica desde **HEAD actual**, no
+desde `main` automáticamente. Esto es una landmine real porque
+los workflows de review de PRs ajenos suelen dejar HEAD apuntando
+a la rama del PR sin que el operador se dé cuenta.
+
+**Mal — secuencia que metió el incident**:
+
+```bash
+# Estás en main, todo bien.
+git fetch origin pull/9/head:pr-9-review   # crea rama pr-9-review.
+gh pr checkout 9                            # (alguna operación implícita movió HEAD).
+# ...review del PR #9, varios git commands...
+
+# Más tarde, querés trabajar en otra cosa:
+git checkout -b docs/adr-007                # ⚠️ ramifica desde HEAD = top de PR #9,
+                                            # no desde main.
+# Hacés tus commits, abrís PR.
+# GitHub muestra solo TU diff (calcula contra merge-base con main).
+# Al mergear con fast-forward, GitHub arrastra los commits de PR #9 a main
+# por inercia. PR #9 queda "mergeado" sin que nadie haya clickeado merge.
+```
+
+**Bien — verificar siempre la base antes de crear rama**:
+
+```bash
+# Antes de cualquier `git checkout -b`:
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+
+# Ahora sí:
+git checkout -b docs/mi-cambio
+```
+
+El check `[10/10]` de `scripts/ynara-doctor.sh` detecta este
+problema: compara `git merge-base HEAD origin/main` con el tip
+de `origin/main`. Si difieren, la rama deriva de un commit que
+no es el tip de main — flag inmediato.
+
+### Force-push a main como remediación de un incident
+
+Si el incident ya ocurrió (commits ajenos entraron a main por
+inercia), la única forma de limpiar la historia es:
+
+1. Desactivar branch protection temporalmente
+   (`gh api -X DELETE repos/<owner>/<repo>/branches/main/protection`).
+2. `git reset --hard <ultimo-commit-limpio>`.
+3. Re-aplicar los commits propios con `git cherry-pick` o
+   recrearlos.
+4. Para mantener el style "Merge pull request #N" del repo,
+   envolver el commit re-aplicado en un merge no-ff con el mismo
+   mensaje del PR original.
+5. `git push --force-with-lease origin main`.
+6. Reactivar branch protection
+   (`gh api -X PUT .../protection --input -`).
+7. Comentar en los PRs afectados explicando: GitHub **no
+   re-evalúa** el estado de un PR después de force-push. Un PR
+   marcado `MERGED` queda `MERGED` aunque sus commits ya no
+   estén en main — y no se puede reabrir. Hay que abrir un PR
+   nuevo desde la misma branch.
+
+Este flow no debe ser frecuente. Si lo necesitás más de una vez,
+hay un problema de proceso que arreglar antes que de
+herramientas.
+
 ## Cómo agregar reglas nuevas
 
 PR contra este archivo con justificación. Si la regla es bloqueante,
