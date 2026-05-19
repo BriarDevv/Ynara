@@ -63,6 +63,18 @@
   }
 }
 
+@keyframes ynara-pulse-violet {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.85;
+  }
+}
+
 @layer utilities {
   .anim-fade-up {
     animation: ynara-fade-up var(--duration-screen, 350ms)
@@ -86,5 +98,9 @@
 
   .anim-pulse-soft {
     animation: ynara-pulse-soft 1500ms ease-in-out infinite;
+  }
+
+  .anim-pulse-violet {
+    animation: ynara-pulse-violet 1500ms var(--ease-out-soft, ease-out) both;
   }
 }
