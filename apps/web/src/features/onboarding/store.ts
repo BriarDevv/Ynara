@@ -44,6 +44,11 @@ type OnboardingActions = {
     token: string;
     mode: "signup" | "login" | "ephemeral";
   }) => void;
+  /**
+   * Resetea el draft y deja el user marcado como ephemeral en una
+   * sola pasada. Evita la race teórica de llamar reset() + setAuth().
+   */
+  startEphemeral: (input: { userId: string; token: string }) => void;
   setDisplayName: (name: string) => void;
   setMood: (mood: string[], freeText: string) => void;
   setInterestedModes: (modes: string[]) => void;
@@ -73,20 +78,11 @@ const initialState: OnboardingDraft = {
 
 /**
  * createJSONStorage(() => sessionStorage) con guard para SSR: en
- * server-side `sessionStorage` no existe; devolvemos un storage no-op
- * y Zustand resuelve fallback.
+ * server-side `sessionStorage` no existe. `createJSONStorage` acepta
+ * `undefined` y Zustand v5 lo trata como "no persistir".
  */
-const noopStorage: Storage = {
-  length: 0,
-  clear: () => undefined,
-  getItem: () => null,
-  key: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
-};
-
 const sessionJsonStorage = createJSONStorage(() =>
-  typeof window === "undefined" ? noopStorage : sessionStorage,
+  typeof window === "undefined" ? undefined : sessionStorage,
 );
 
 export const useOnboardingStore = create<OnboardingDraft & OnboardingActions>()(
@@ -96,6 +92,13 @@ export const useOnboardingStore = create<OnboardingDraft & OnboardingActions>()(
       setStep: (currentStep) => set({ currentStep }),
       setAuth: ({ userId, token, mode }) =>
         set({ authedUserId: userId, authedToken: token, authMode: mode }),
+      startEphemeral: ({ userId, token }) =>
+        set({
+          ...initialState,
+          authedUserId: userId,
+          authedToken: token,
+          authMode: "ephemeral",
+        }),
       setDisplayName: (displayName) => set({ displayName }),
       setMood: (mood, moodFreeText) => set({ mood, moodFreeText }),
       setInterestedModes: (interestedModes) => set({ interestedModes }),

@@ -40,6 +40,19 @@ export const STEP_COPY: Record<OnboardingStep, { title: string; subtitle: string
   },
 };
 
+/**
+ * Copy específico de los dos modos visuales del step `auth` (signup y
+ * login). `STEP_COPY.auth` mantiene el copy de signup por compatibilidad
+ * con el header. `LoginForm` lee desde `AUTH_STEP_COPY.login`.
+ */
+export const AUTH_STEP_COPY = {
+  signup: STEP_COPY.auth,
+  login: {
+    title: "Bienvenido de vuelta",
+    subtitle: "Ingresá con tu cuenta existente.",
+  },
+} as const;
+
 export type MoodOption = {
   value: string;
   label: string;

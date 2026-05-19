@@ -39,7 +39,7 @@ export const handlers = [
         {
           error: "validation",
           detail: first?.message ?? "body inválido",
-          field: typeof first?.path[0] === "string" ? first.path[0] : undefined,
+          field: first?.path[0] !== undefined ? String(first.path[0]) : undefined,
         },
         400,
       );
@@ -61,7 +61,7 @@ export const handlers = [
         {
           error: "validation",
           detail: first?.message ?? "body inválido",
-          field: typeof first?.path[0] === "string" ? first.path[0] : undefined,
+          field: first?.path[0] !== undefined ? String(first.path[0]) : undefined,
         },
         400,
       );
@@ -85,7 +85,7 @@ export const handlers = [
         {
           error: "validation",
           detail: first?.message ?? "body inválido",
-          field: typeof first?.path[0] === "string" ? first.path[0] : undefined,
+          field: first?.path[0] !== undefined ? String(first.path[0]) : undefined,
         },
         400,
       );

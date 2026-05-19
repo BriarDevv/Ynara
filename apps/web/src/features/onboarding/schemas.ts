@@ -1,5 +1,7 @@
 import {
   A11yPrefsSchema,
+  ApiErrorBodySchema,
+  AuthResponseSchema,
   DisplayNameSchema,
   LoginRequestSchema,
   ModeSchema,
@@ -12,19 +14,8 @@ import { z } from "zod";
  *
  * Los Zod que tienen contraparte en backend (auth, onboard, displayName,
  * a11y) viven en `packages/shared-schemas`. Acá sólo lo específico de
- * la UI del onboarding: el discriminator de tab auth, el step-by-step
- * del store, etc.
+ * la UI del onboarding: el step-by-step del store, etc.
  */
-
-// ============================================================
-// Step 1 · Auth — discriminated union para tabs signup/login
-// ============================================================
-
-export const AuthFormSchema = z.discriminatedUnion("mode", [
-  z.object({ mode: z.literal("signup") }).merge(SignupRequestSchema),
-  z.object({ mode: z.literal("login") }).merge(LoginRequestSchema),
-]);
-export type AuthFormValues = z.infer<typeof AuthFormSchema>;
 
 // ============================================================
 // Step 2 · Nombre
@@ -39,5 +30,13 @@ export type NameFormValues = z.infer<typeof NameFormSchema>;
 // Re-export para que features/onboarding no tenga que importar dos paquetes
 // ============================================================
 
-export type { A11yPrefs, Mode } from "@ynara/shared-schemas";
-export { A11yPrefsSchema, DisplayNameSchema, ModeSchema, SignupRequestSchema };
+export type { A11yPrefs, ApiErrorBody, Mode } from "@ynara/shared-schemas";
+export {
+  A11yPrefsSchema,
+  ApiErrorBodySchema,
+  AuthResponseSchema,
+  DisplayNameSchema,
+  LoginRequestSchema,
+  ModeSchema,
+  SignupRequestSchema,
+};

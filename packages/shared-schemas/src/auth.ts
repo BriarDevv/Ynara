@@ -35,8 +35,8 @@ export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 export const AuthResponseSchema = z.object({
   token: z.string().min(1),
   userId: z.string().min(1),
-  /** ISO 8601. Opcional hasta acuerdo final con backend. */
-  expiresAt: z.string().datetime().optional(),
+  /** ISO 8601 con offset opcional. Opcional hasta acuerdo final con backend. */
+  expiresAt: z.string().datetime({ offset: true }).optional(),
 });
 export type AuthResponse = z.infer<typeof AuthResponseSchema>;
 
