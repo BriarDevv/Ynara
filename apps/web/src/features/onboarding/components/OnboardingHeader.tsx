@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ProgressDots } from "@/components/ui/ProgressDots";
 import { YnaraMark } from "@/components/ui/YnaraMark";
@@ -47,6 +47,15 @@ export function OnboardingHeader({ total, current, onSkipAll, className }: Props
   );
 }
 
+/**
+ * Confirmación de "saltar onboarding".
+ *
+ * Implementado con `HTMLDialogElement` + `showModal()`: el browser provee
+ * focus trap, manejo de Escape y devolución de focus al elemento que tenía
+ * focus antes de abrir (el botón "Saltar"). El click en el backdrop cierra
+ * detectando que el target del evento es el propio `<dialog>` (no su
+ * contenido interior).
+ */
 function SkipConfirmDialog({
   onCancel,
   onConfirm,
@@ -54,12 +63,37 @@ function SkipConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const node = dialogRef.current;
+    if (!node) return;
+    if (!node.open) node.showModal();
+    return () => {
+      if (node.open) node.close();
+    };
+  }, []);
+
+  const handleBackdropClick = (event: React.MouseEvent<HTMLDialogElement>) => {
+    // Si el click cayó directamente en el <dialog> (no en su contenido
+    // interior), es click en el backdrop → cerrar.
+    if (event.target === dialogRef.current) onCancel();
+  };
+
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="skip-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(36_44_63_/_0.4)] p-6"
+      onClick={handleBackdropClick}
+      onCancel={(event) => {
+        // Escape dispara `cancel` → prevenir el close default para que
+        // React controle el unmount vía `confirmOpen`.
+        event.preventDefault();
+        onCancel();
+      }}
+      className="m-0 max-h-full max-w-full bg-transparent p-0 backdrop:bg-[var(--color-overlay)]"
     >
       <div className="anim-fade-up flex w-full max-w-[420px] flex-col gap-4 rounded-[var(--radius-lg)] bg-[var(--color-bg)] p-6 shadow-lifted">
         <h2 id="skip-title" className="text-subtitle">
@@ -77,6 +111,6 @@ function SkipConfirmDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }
