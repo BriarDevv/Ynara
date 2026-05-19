@@ -2,12 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import {
-  type ApiErrorBody,
-  AuthResponseSchema,
-  LoginRequestSchema,
-  SignupRequestSchema,
-} from "@ynara/shared-schemas";
 import { useState } from "react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import type { z } from "zod";
@@ -16,17 +10,20 @@ import { TextField } from "@/components/ui/TextField";
 import { ApiError, api } from "@/lib/api";
 import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
-import { STEP_COPY } from "../constants";
+import { AUTH_STEP_COPY } from "../constants";
 import { useOnboardingNav } from "../hooks/useOnboardingNav";
+import {
+  type ApiErrorBody,
+  AuthResponseSchema,
+  LoginRequestSchema,
+  SignupRequestSchema,
+} from "../schemas";
 import { useOnboardingStore } from "../store";
 
 type AuthMode = "signup" | "login";
 
-const SignupFormSchema = SignupRequestSchema;
-const LoginFormSchema = LoginRequestSchema;
-
-type SignupValues = z.infer<typeof SignupFormSchema>;
-type LoginValues = z.infer<typeof LoginFormSchema>;
+type SignupValues = z.infer<typeof SignupRequestSchema>;
+type LoginValues = z.infer<typeof LoginRequestSchema>;
 
 export function AuthStep() {
   const [mode, setMode] = useState<AuthMode>("signup");
@@ -42,13 +39,12 @@ export function AuthStep() {
 // ============================================================
 
 function SignupForm({ onSwitch }: { onSwitch: () => void }) {
-  const copy = STEP_COPY.auth;
   const { next } = useOnboardingNav("auth");
   const setAuth = useOnboardingStore((s) => s.setAuth);
-  const reset = useOnboardingStore((s) => s.reset);
+  const startEphemeral = useOnboardingStore((s) => s.startEphemeral);
 
   const form = useForm<SignupValues>({
-    resolver: zodResolver(SignupFormSchema),
+    resolver: zodResolver(SignupRequestSchema),
     defaultValues: { email: "", password: "" },
     mode: "onSubmit",
   });
@@ -71,8 +67,8 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
 
   return (
     <StepShell
-      title={copy.title}
-      subtitle={copy.subtitle}
+      title={AUTH_STEP_COPY.signup.title}
+      subtitle={AUTH_STEP_COPY.signup.subtitle}
       footer={
         <StepFooter
           customNext={
@@ -89,7 +85,7 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
         />
       }
     >
-      <ModeTabs mode="signup" onChange={onSwitch} />
+      <AuthModeSwitchLink mode="signup" onChange={onSwitch} />
       <form
         id="signup-form"
         onSubmit={form.handleSubmit(onSubmit)}
@@ -117,10 +113,9 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
       <EphemeralButton
         onContinue={() => {
           const id = `ephemeral-${Date.now()}`;
-          setAuth({ userId: id, token: `ephemeral-${id}`, mode: "ephemeral" });
+          startEphemeral({ userId: id, token: `ephemeral-${id}` });
           next();
         }}
-        onReset={reset}
       />
     </StepShell>
   );
@@ -130,13 +125,17 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
 // Login
 // ============================================================
 
+/**
+ * LoginForm intencionalmente no muestra `EphemeralButton`: la cuenta
+ * efímera es para users nuevos sin credenciales (flujo signup). Si
+ * el user llegó al tab login, asumimos que tiene cuenta real.
+ */
 function LoginForm({ onSwitch }: { onSwitch: () => void }) {
-  const copy = STEP_COPY.auth;
   const { next } = useOnboardingNav("auth");
   const setAuth = useOnboardingStore((s) => s.setAuth);
 
   const form = useForm<LoginValues>({
-    resolver: zodResolver(LoginFormSchema),
+    resolver: zodResolver(LoginRequestSchema),
     defaultValues: { email: "", password: "" },
     mode: "onSubmit",
   });
@@ -157,8 +156,8 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
 
   return (
     <StepShell
-      title="Bienvenido de vuelta"
-      subtitle="Ingresá con tu cuenta existente."
+      title={AUTH_STEP_COPY.login.title}
+      subtitle={AUTH_STEP_COPY.login.subtitle}
       footer={
         <StepFooter
           customNext={
@@ -175,7 +174,7 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
         />
       }
     >
-      <ModeTabs mode="login" onChange={onSwitch} />
+      <AuthModeSwitchLink mode="login" onChange={onSwitch} />
       <form
         id="login-form"
         onSubmit={form.handleSubmit(onSubmit)}
@@ -200,7 +199,6 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
           {...form.register("password")}
         />
       </form>
-      {copy ? null : null /* keep import used */}
     </StepShell>
   );
 }
@@ -209,7 +207,13 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
 // Sub-componentes
 // ============================================================
 
-function ModeTabs({ mode, onChange }: { mode: AuthMode; onChange: () => void }) {
+/**
+ * Switch textual entre signup ↔ login. Intencionalmente NO es un
+ * `role="tablist"`: no hay paneles separados, solo dos modos del mismo
+ * form. Si en algún momento se rediseña como tabs reales (con role=tab
+ * + aria-controls + arrow-key nav), renombrar a `AuthModeTabs`.
+ */
+function AuthModeSwitchLink({ mode, onChange }: { mode: AuthMode; onChange: () => void }) {
   return (
     <div className="flex items-center gap-2 text-body-sm text-[var(--color-ink-soft)]">
       <span>{mode === "signup" ? "¿Ya tenés cuenta?" : "¿Sos nuevo?"}</span>
@@ -224,15 +228,12 @@ function ModeTabs({ mode, onChange }: { mode: AuthMode; onChange: () => void }) 
   );
 }
 
-function EphemeralButton({ onContinue, onReset }: { onContinue: () => void; onReset: () => void }) {
+function EphemeralButton({ onContinue }: { onContinue: () => void }) {
   return (
     <div className="mt-2 flex flex-col gap-2">
       <button
         type="button"
-        onClick={() => {
-          onReset();
-          onContinue();
-        }}
+        onClick={onContinue}
         className="text-body-sm text-[var(--color-ink-soft)] underline-offset-4 hover:text-[var(--color-ink)] hover:underline"
       >
         Probar sin cuenta

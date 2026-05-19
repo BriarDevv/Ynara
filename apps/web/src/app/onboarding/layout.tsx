@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 import { OnboardingHeader } from "@/features/onboarding/components/OnboardingHeader";
+import { ONBOARDING_STEPS, STEP_INDEX } from "@/features/onboarding/constants";
 import { useOnboardingStore } from "@/features/onboarding/store";
 import { useUserStore } from "@/stores/user";
 
@@ -48,16 +49,7 @@ function OnboardingHeaderWithProgress() {
   const reset = useOnboardingStore((s) => s.reset);
   const current = useOnboardingStore((s) => s.currentStep);
 
-  // STEP_INDEX viene de constants.ts pero importarlo crearía un ciclo de
-  // imports con el feature. Lo replico acá (5 steps fijos por contrato).
-  const STEP_TO_INDEX: Record<string, number> = {
-    auth: 0,
-    nombre: 1,
-    dia: 2,
-    modos: 3,
-    a11y: 4,
-  };
-  const index = STEP_TO_INDEX[current] ?? 0;
+  const index = STEP_INDEX[current] ?? 0;
 
   const handleSkipAll = () => {
     reset();
@@ -65,5 +57,11 @@ function OnboardingHeaderWithProgress() {
     router.replace("/");
   };
 
-  return <OnboardingHeader total={5} current={index} onSkipAll={handleSkipAll} />;
+  return (
+    <OnboardingHeader
+      total={ONBOARDING_STEPS.length}
+      current={index}
+      onSkipAll={handleSkipAll}
+    />
+  );
 }
