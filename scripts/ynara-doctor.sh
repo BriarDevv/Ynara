@@ -17,7 +17,7 @@ cd "$REPO_ROOT"
 
 PASS=0
 FAIL=0
-TOTAL_CHECKS=9
+TOTAL_CHECKS=10
 
 ok() {
   echo "  OK    $1"
@@ -168,6 +168,34 @@ if [ -f apps/web/tailwind.config.ts ] || [ -f apps/web/tailwind.config.js ]; the
   bad "apps/web tiene tailwind.config — Tailwind v4 es CSS-first, los tokens van en globals.css con @theme"
 else
   ok "ningún tailwind.config en apps/web"
+fi
+
+# ---------------------------------------------------------------------
+# 10. Rama actual deriva del tip de origin/main (landmine: PR #13 incident)
+# ---------------------------------------------------------------------
+header 10 "Rama actual deriva del tip de origin/main"
+current_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "DETACHED")
+if [ "$current_branch" = "main" ]; then
+  skip "estás en main — no aplica"
+elif [ "$current_branch" = "DETACHED" ]; then
+  skip "HEAD detached — no aplica"
+else
+  origin_main_sha=$(git rev-parse origin/main 2>/dev/null || echo "")
+  merge_base_sha=$(git merge-base HEAD origin/main 2>/dev/null || echo "")
+  if [ -z "$origin_main_sha" ]; then
+    skip "no se pudo leer origin/main (no fetch reciente?)"
+  elif [ -z "$merge_base_sha" ]; then
+    skip "no se pudo calcular merge-base con origin/main"
+  elif [ "$merge_base_sha" = "$origin_main_sha" ]; then
+    ok "rama '$current_branch' deriva del tip de origin/main"
+  else
+    bad "rama '$current_branch' diverge de origin/main"
+    echo "        merge-base con origin/main: $merge_base_sha"
+    echo "        origin/main tip:            $origin_main_sha"
+    echo "        Si la rama deriva del tip de un PR ajeno, el merge fast-forward"
+    echo "        puede arrastrar esos commits a main por inercia (caso PR #13)."
+    echo "        Fix: git fetch origin && git rebase origin/main"
+  fi
 fi
 
 # ---------------------------------------------------------------------

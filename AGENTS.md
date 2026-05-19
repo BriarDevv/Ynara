@@ -240,6 +240,8 @@ Cosas que ya nos hicieron tropezar (o que sabemos que van a hacerlo). No las re-
 
 **CI con `push`/`pull_request` antes de los lockfiles.** CI hoy es solo `workflow_dispatch`. Reactivar `push`/`pull_request` recién cuando existan `pnpm-lock.yaml` y `apps/backend/uv.lock`.
 
+**Crear ramas nuevas sin verificar la base.** `git checkout -b nueva-rama` ramifica desde HEAD actual, no desde `main` automáticamente. Si recién hiciste `gh pr checkout <N>` o `git fetch origin pull/<N>/head:<rama>` para revisar un PR ajeno y no volviste a `main`, la rama nueva hereda los commits de ese PR. Cuando esa rama nueva se mergea con fast-forward, GitHub arrastra los commits ajenos a `main` por inercia (incident PR #13 — los commits de PR #3 y PR #9 entraron a `main` sin click de merge real). **Antes de cualquier `git checkout -b`, correr `bash scripts/ynara-doctor.sh`** (check 10/10 valida que la rama actual deriva del tip de `origin/main`). Si no, primero `git checkout main && git pull --ff-only`.
+
 Detalle de cada landmine con código de bien/mal: [`docs/conventions/AI-GUIDELINES.md`](./docs/conventions/AI-GUIDELINES.md).
 
 ## Commit conventions
