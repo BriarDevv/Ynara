@@ -183,7 +183,7 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 
 ## Las 10 reglas no negociables
 
-1. **Confirmación humana** antes de `git commit`, `git push`, `git rebase`, `git tag`, `pnpm add`, `pnpm install`, `uv add`, `uv sync`, cambios en `.md` raíz, cambios en `ynara.config.json` y cambios en migraciones Alembic. **Severidad: bloqueante.**
+1. **Confirmación humana** antes de `git commit`, `git push`, `git rebase`, `git tag`, `pnpm add`, `pnpm install`, `uv add`, `uv sync`, cambios en `.md` raíz, cambios en `ynara.config.json` y cambios en migraciones Alembic. **Toda actualización de `main` ocurre exclusivamente vía PR mergeado en GitHub** — prohibido `git push origin main` directo, `git merge` local hacia `main` y su push, force-push a `main`, o borrar `main`, aunque haya OK humano para los comandos individuales. Flujo completo en [`CONTRIBUTING.md`](./CONTRIBUTING.md#flujo-de-trabajo). **Severidad: bloqueante.**
 
 2. **Nunca tocar secrets.** Prohibido leer, copiar, mover o commitear `.env`, claves API, tokens, certificados. Si detectás un secret expuesto, alertá inmediatamente y no toques nada. **Severidad: bloqueante.**
 
