@@ -4,8 +4,13 @@ Convención: los enums que aparecen en columnas de DB y en payloads de API
 (o en routing LLM) viven acá, no duplicados por dominio. Pydantic schemas
 y modelos SQLAlchemy importan desde este archivo.
 
-Naming en Postgres: el nombre del tipo PostgreSQL queda definido en el
-``Enum`` de SQLAlchemy del modelo que lo usa primero (ver ``app/models/``).
+Ownership de tipos PostgreSQL: cada enum se materializa como tipo PG
+nativo (``native_enum=True``). El nombre del tipo + su creación van
+asignados a **una sola** declaración SQLAlchemy "dueña" (con
+``create_type=True``, default). Cualquier otro modelo que reuse el
+mismo enum debe pasar ``create_type=False`` para evitar duplicar la
+creación en Alembic. La asignación dueño está documentada en cada
+clase abajo.
 """
 
 from __future__ import annotations
@@ -14,7 +19,14 @@ from enum import StrEnum
 
 
 class Mode(StrEnum):
-    """Modos de Ynara. Ver ``ynara.config.json[modes]`` y ADR-002."""
+    """Modos de Ynara. Ver ``ynara.config.json[modes]`` y ADR-002.
+
+    Tipo PG ``mode_enum`` — dueño: ``ChatSession.mode`` en
+    ``app/models/session.py`` (``create_type=True``). Otros consumidores
+    (``AuditLog.origin_mode`` en ``app/models/audit.py``) usan
+    ``create_type=False``. Para que la migración inicial funcione,
+    Alembic debe crear ``sessions`` antes que ``audit_log``.
+    """
 
     PRODUCTIVIDAD = "productividad"
     ESTUDIO = "estudio"
@@ -24,7 +36,12 @@ class Mode(StrEnum):
 
 
 class MemoryLayer(StrEnum):
-    """Capa de memoria. Ver ``docs/product/MEMORY.md`` y ADR-003."""
+    """Capa de memoria. Ver ``docs/product/MEMORY.md`` y ADR-003.
+
+    Tipo PG ``memory_layer_enum`` — dueño: ``AuditLog.target_layer`` en
+    ``app/models/audit.py`` (único consumidor por ahora,
+    ``create_type=True``).
+    """
 
     SEMANTIC = "semantic"
     EPISODIC = "episodic"
@@ -32,14 +49,22 @@ class MemoryLayer(StrEnum):
 
 
 class LlmModel(StrEnum):
-    """Modelo LLM que actuó como origen de una operación. Ver ADR-002."""
+    """Modelo LLM que actuó como origen de una operación. Ver ADR-002.
+
+    Tipo PG ``llm_model_enum`` — dueño: ``AuditLog.origin_model``
+    (único consumidor por ahora, ``create_type=True``).
+    """
 
     GEMMA = "gemma"
     QWEN = "qwen"
 
 
 class AuditOperation(StrEnum):
-    """Operaciones registradas en audit_log."""
+    """Operaciones registradas en audit_log.
+
+    Tipo PG ``audit_operation_enum`` — dueño: ``AuditLog.operation``
+    (único consumidor por ahora, ``create_type=True``).
+    """
 
     READ = "read"
     WRITE = "write"
