@@ -1,13 +1,28 @@
 """Modelo SQLAlchemy de audit log de operaciones sobre memoria.
 
 Toda operación read/write/update/delete sobre las 3 capas queda
-registrada. Retention: 24 meses (MEMORY.md). Worker periódico borra
-entradas más viejas. ``sensitive=true`` para operaciones sobre entradas
-``is_sensitive=true`` de memoria episódica — permite queries
-diferenciadas y exports separados.
+registrada. Retention: 24 meses por worker periódico (MEMORY.md).
+``sensitive=true`` para operaciones sobre entradas ``is_sensitive=true``
+de memoria episódica — permite queries diferenciadas y exports
+separados.
 
 No usa ``TimestampMixin``: una vez creada, una entrada de audit no se
 modifica (solo ``created_at``).
+
+**Lifecycle del audit log** — dos vías de eliminación:
+
+1. **Temporal (worker)**: el worker periódico de Celery borra entradas
+   más viejas que 24 meses. Es la vía normal de retention para
+   usuarios activos.
+
+2. **Cascada al borrar usuario (`ON DELETE CASCADE`)**: al ejecutar
+   ``DELETE /v1/memory`` o eliminar la cuenta del usuario, las
+   entradas de audit del usuario se borran junto con su huella
+   completa. **Decisión de producto: privacidad > compliance forense**.
+   Cumple "derecho al olvido" alineado con regla #4 de AGENTS.md
+   (datos del usuario nunca quedan colgados). Si en V2 hace falta
+   preservar audit anonimizado por compliance, evaluar
+   ``ON DELETE SET NULL`` + ``user_id NULL``.
 """
 
 from __future__ import annotations
