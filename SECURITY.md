@@ -53,8 +53,8 @@ agenda, recordatorios). La política de seguridad refleja eso:
    en la API (regla #5 de `AGENTS.md`).
 
 4. **Tablas de memoria son sagradas.** `semantic_memory`,
-   `episodic_memory`, `procedural_memory` requieren review humano +
-   2 aprobaciones para cualquier migración (regla #3 de `AGENTS.md`).
+   `episodic_memory`, `procedural_memory` requieren tests + 1 aprobación
+   humana explícita para cualquier migración (regla #3 de `AGENTS.md`).
 
 5. **JWT firmado con secret rotable.** Token expira en 7 días por
    defecto (configurable). Refresh requiere re-autenticación si pasó
