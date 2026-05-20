@@ -39,7 +39,15 @@ class SemanticMemoryUpdate(YnaraBaseModel):
 
 
 class SemanticMemoryOut(YnaraBaseModel):
-    """Respuesta con ``content`` descifrado. El embedding no se expone."""
+    """Respuesta con ``content`` descifrado. El embedding no se expone.
+
+    PRECONDICIÓN DEL WRAPPER: el wrapper de memoria
+    (``app/memory/semantic.py``) debe pasar ``content`` ya descifrado
+    como ``str``. ``YnaraBaseModel.strict=True`` rechaza ``bytes``
+    casteado a ``str`` con ``ValidationError`` (defensa en
+    profundidad), pero el wrapper es responsable de no construir
+    este schema con el BYTEA crudo de la tabla.
+    """
 
     id: UUID
     user_id: UUID
@@ -82,7 +90,15 @@ class EpisodicMemoryCreate(YnaraBaseModel):
 
 
 class EpisodicMemoryOut(YnaraBaseModel):
-    """Respuesta con ``summary`` descifrado."""
+    """Respuesta con ``summary`` descifrado.
+
+    PRECONDICIÓN DEL WRAPPER: el wrapper de memoria
+    (``app/memory/episodic.py``) debe pasar ``summary`` ya descifrado
+    como ``str``. ``YnaraBaseModel.strict=True`` rechaza ``bytes``
+    casteado a ``str`` con ``ValidationError`` (defensa en
+    profundidad), pero el wrapper es responsable de no construir
+    este schema con el BYTEA crudo de la tabla.
+    """
 
     id: UUID
     user_id: UUID
