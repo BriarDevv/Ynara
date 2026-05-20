@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from app.schemas.base import YnaraBaseModel
 
@@ -56,7 +56,13 @@ class SemanticMemoryOut(YnaraBaseModel):
 class EpisodicMemoryCreate(YnaraBaseModel):
     """Payload generado por el worker de Celery al cerrar una sesión.
     ``is_sensitive`` se infiere del modo de la sesión (true para
-    Bienestar)."""
+    Bienestar).
+
+    Validación cross-field: si ``is_sensitive=True``, ``retention_days``
+    queda capeado a 365 (ver ADR-007 D2 — máximo 12 meses para
+    entradas sensibles). Espejo de la CHECK constraint
+    ``retention_days_sensitive_cap`` en ``app/models/memory.py``.
+    """
 
     session_id: UUID
     summary: str = Field(min_length=1, max_length=8192)
@@ -64,6 +70,15 @@ class EpisodicMemoryCreate(YnaraBaseModel):
     is_sensitive: bool = False
     retention_days: int = Field(default=365, ge=1, le=3650)
     topics: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _cap_sensitive_retention(self) -> "EpisodicMemoryCreate":
+        if self.is_sensitive and self.retention_days > 365:
+            raise ValueError(
+                "retention_days no puede exceder 365 cuando is_sensitive=True "
+                "(ADR-007 D2)"
+            )
+        return self
 
 
 class EpisodicMemoryOut(YnaraBaseModel):
