@@ -21,8 +21,9 @@ docstring + agregar el riesgo al PR.
 
 ## Tablas sagradas 🔴
 
-Las siguientes tablas requieren **review humano + 2 aprobaciones**
-para cualquier migración que las afecte:
+Las siguientes tablas requieren **tests pasando + 1 aprobación humana
+explícita** (review formal en el PR, además del operador autor) para
+cualquier migración que las afecte (regla #3 de `AGENTS.md`):
 
 - `semantic_memory`
 - `episodic_memory`
