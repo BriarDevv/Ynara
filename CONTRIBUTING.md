@@ -58,8 +58,8 @@
      primer PR no trivial.
    - Trigger: si tu PR pasa de ~200 líneas o de 3 archivos en áreas
      distintas, parar y splitear antes de pushear.
-   - Tablas sagradas (regla #3): commit propio aislado para que las
-     2 aprobaciones humanas inspeccionen un commit específico.
+   - Tablas sagradas (regla #3): commit propio aislado para que la
+     aprobación humana de la regla #3 inspeccione un commit específico.
 
 3. **Tests**: antes de pedir review.
    - `pnpm test` en el root corre todo.

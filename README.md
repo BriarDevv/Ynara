@@ -175,8 +175,8 @@ Ambos corren cuantizados (Q4/Q5) en una RTX 4080 Super 16GB vía vLLM.
 | **Episódica** | Resúmenes de sesiones pasadas con embedding | Postgres + pgvector + JSONB metadata | Qwen al cerrar sesión |
 | **Procedural** | Preferencias y patrones | Postgres + JSONB | Qwen + heurísticas |
 
-Tablas sagradas — cualquier migración requiere tests + 2 aprobaciones
-humanas (regla #3 de [`AGENTS.md`](./AGENTS.md)). Derechos del usuario
+Tablas sagradas — cualquier migración requiere tests + 1 aprobación
+humana explícita (regla #3 de [`AGENTS.md`](./AGENTS.md)). Derechos del usuario
 (export, borrado, pausa, audit log) en
 [`docs/product/MEMORY.md`](./docs/product/MEMORY.md).
 
@@ -288,7 +288,7 @@ Copilot, etc.) trabajando en este repo:
 - Cliente JavaScript de Supabase prohibido desde el frontend. Todo
   acceso a datos pasa por la API de FastAPI.
 - Tablas `semantic_memory`, `episodic_memory`, `procedural_memory` son
-  sagradas: tests + 2 aprobaciones humanas para cualquier migración.
+  sagradas: tests + 1 aprobación humana explícita para cualquier migración.
 - Conventional Commits en español imperativo:
   `feat(web): agregar modo bienestar`,
   `fix(backend): corregir extracción episódica`.
