@@ -164,8 +164,9 @@ uno corresponde a una regla del repo.
    ```bash
    grep -E '^(apps/backend/app/memory/|apps/backend/alembic/versions/)' /tmp/pr-<N>.files
    ```
-   Cualquier hit requiere 2 aprobaciones humanas explícitas +
-   tests. Flagear como blocker hasta que ambas estén visibles.
+   Cualquier hit requiere 1 aprobación humana explícita (review formal
+   en el PR, además del operador autor) + tests. Flagear como blocker
+   hasta que esté visible.
 
 6. **Regla #4 — APIs externas de IA en backend:**
    ```bash
@@ -338,7 +339,7 @@ separado, pero no bloquean este merge.
 |---|---|
 | #1 OK humano para deps / md root / config | OK / WARN / FAIL |
 | #2 sin secrets | OK / FAIL |
-| #3 tablas sagradas | OK / 2 aprobaciones requeridas |
+| #3 tablas sagradas | OK / 1 aprobación humana explícita requerida |
 | #4 sin APIs externas de IA en backend | OK / FAIL |
 | #5 sin `@supabase/supabase-js` en frontend | OK / FAIL |
 | #6 Conventional Commits en español | OK / FAIL |
@@ -362,9 +363,9 @@ comentar.
 
 - **blocker** — rompe regla no negociable. Filtración de
   secret, dato de usuario a API externa, `@supabase/supabase-js`
-  en frontend, modificación a tabla sagrada sin 2 aprobaciones,
-  install de dep sin OK humano, falla del doctor.
-  **Bloquea el merge.**
+  en frontend, modificación a tabla sagrada sin la aprobación humana
+  explícita (regla #3), install de dep sin OK humano, falla del
+  doctor. **Bloquea el merge.**
 
 - **mayor** — viola regla extendida o decisión arquitectónica
   documentada. Tipos `any` injustificados en código central,

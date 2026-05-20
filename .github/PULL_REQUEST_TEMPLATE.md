@@ -51,7 +51,7 @@ marcar o eliminar la línea. No marcar a la ligera.
 -->
 
 - [ ] Sin secrets commiteados (regla #2)
-- [ ] No toca tablas sagradas (regla #3) — o tiene 2 aprobaciones humanas confirmadas
+- [ ] No toca tablas sagradas (regla #3) — o tiene 1 aprobación humana explícita confirmada en el PR (review formal, además del operador autor)
 - [ ] Sin imports de APIs externas de IA en backend (regla #4)
 - [ ] Sin `@supabase/supabase-js` en frontend (regla #5)
 - [ ] Conventional Commits en español, imperativo (regla #9)

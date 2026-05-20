@@ -34,7 +34,7 @@ labels: enhancement
 
 - [ ] No toca memoria
 - [ ] Lee de memoria (semántica / episódica / procedural)
-- [ ] Escribe en memoria — atención: regla #3 (2 aprobaciones humanas para migrations)
+- [ ] Escribe en memoria — atención: regla #3 (1 aprobación humana explícita para migrations)
 
 ## Reviewer ask (opcional)
 

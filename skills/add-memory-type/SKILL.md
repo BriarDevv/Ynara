@@ -23,7 +23,8 @@ encaja en una capa existente primero.
    - Cómo interactúa con las otras capas (¿se duplican datos?).
    - Plan de backfill / retrocompatibilidad.
 2. **Migración Alembic**. La migración crea la nueva tabla. Tabla
-   nueva = tabla sagrada (regla #3) — requiere tests + 2 aprobaciones.
+   nueva = tabla sagrada (regla #3) — requiere tests + 1 aprobación
+   humana explícita.
 3. **Modelo SQLAlchemy** en `apps/backend/app/models/`.
 4. **Wrapper** en `apps/backend/app/memory/<nombre>.py` con
    funciones `add`, `search`, `update`, `delete` (mismo shape que
@@ -37,7 +38,8 @@ encaja en una capa existente primero.
    `apps/backend/app/workflows/`.
 9. **Tests**: integración completa con DB real, incluyendo migración
    up + down.
-10. **PR**: 2 aprobaciones humanas obligatorias.
+10. **PR**: 1 aprobación humana explícita obligatoria (review formal
+    en el PR, además del operador autor).
 
 ## Checklist
 
@@ -49,4 +51,4 @@ encaja en una capa existente primero.
 - [ ] `docs/product/MEMORY.md` actualizado.
 - [ ] `docs/MODELS.md` actualizado con 🔴.
 - [ ] Tests pasando.
-- [ ] **2 aprobaciones humanas** en el PR.
+- [ ] **1 aprobación humana explícita** en el PR (regla #3).
