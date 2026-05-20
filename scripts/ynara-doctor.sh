@@ -134,7 +134,7 @@ if git rev-parse --verify HEAD >/dev/null 2>&1; then
   base_ref=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null || echo "")
   if [ -n "$base_ref" ]; then
     sagrado_changes=$(git diff --name-only "$base_ref"..HEAD 2>/dev/null \
-      | grep -E '^(apps/backend/app/memory/|apps/backend/alembic/versions/)' || true)
+      | grep -E '^(apps/backend/app/memory/|apps/backend/alembic/versions/|apps/backend/app/models/(memory|audit)\.py|apps/backend/app/schemas/(memory|audit)\.py)' || true)
   fi
 fi
 if [ -n "$sagrado_changes" ]; then
