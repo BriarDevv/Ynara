@@ -24,8 +24,8 @@ con un PR.
   nueva, deduplica y persiste.
 - **Recall** — operación de búsqueda en memoria.
 - **Tabla sagrada** — `semantic_memory`, `episodic_memory`,
-  `procedural_memory`. Requieren tests + 2 aprobaciones para
-  cualquier migración.
+  `procedural_memory`. Requieren tests + 1 aprobación humana
+  explícita para cualquier migración (regla #3).
 
 ## Modelos
 
@@ -62,8 +62,9 @@ con un PR.
 
 - **CODEOWNER** — persona del equipo responsable de aprobar PRs que
   tocan ciertos paths. Definidos en `.github/CODEOWNERS`.
-- **Tabla sagrada review** — review humano + 2 aprobaciones
-  requeridas para migraciones que tocan capas de memoria.
+- **Tabla sagrada review** — review humano explícito (1 aprobación
+  formal en el PR, además del operador autor) + tests pasando,
+  requerido para migraciones que tocan capas de memoria.
 
 ## IA / agentes
 

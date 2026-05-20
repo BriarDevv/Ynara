@@ -14,7 +14,7 @@ Aceptado
 2. **Retention diferenciada en Bienestar**: si la memoria episódica generada en modo Bienestar debe tener TTL más corto que los 12 meses default por privacidad emocional.
 3. **Encriptación a nivel campo**: si el contenido textual de memoria debe cifrarse en columna (no solo a nivel disco) para defensa contra leaks de DB.
 
-Las tres tocan campos concretos que van a aparecer en la migración Alembic inicial. Resolverlas ahora — antes de crear los modelos SQLAlchemy concretos — evita migraciones extras y se ahorra el costo de tablas sagradas (regla #3 de [`AGENTS.md`](../../../AGENTS.md): 2 aprobaciones humanas por cada cambio de schema).
+Las tres tocan campos concretos que van a aparecer en la migración Alembic inicial. Resolverlas ahora — antes de crear los modelos SQLAlchemy concretos — evita migraciones extras y se ahorra el costo de tablas sagradas (regla #3 de [`AGENTS.md`](../../../AGENTS.md): 1 aprobación humana explícita por cada cambio de schema).
 
 ## Decisión
 

@@ -36,8 +36,8 @@ Detalle de tablas en `apps/backend/docs/MODELS.md`.
 2. **Consolidación asíncrona.** La extracción/escritura nunca está en
    el path de respuesta al usuario.
 3. **Tablas sagradas.** `semantic_memory`, `episodic_memory`,
-   `procedural_memory` solo se tocan con tests + 2 aprobaciones
-   humanas (regla #3 de `AGENTS.md`).
+   `procedural_memory` solo se tocan con tests + 1 aprobación humana
+   explícita (regla #3 de `AGENTS.md`).
 4. **Data del usuario nunca sale del perímetro** (regla #4 de
    `AGENTS.md`).
 

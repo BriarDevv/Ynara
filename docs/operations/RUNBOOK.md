@@ -63,8 +63,9 @@
 
 1. Snapshot inmediato: `pg_dump --table=semantic_memory --table=episodic_memory --table=procedural_memory $DATABASE_URL > snapshot.sql`.
 2. Identificar el `user_id` afectado.
-3. **NO** tocar las tablas sin review humano + 2 aprobaciones (regla
-   #3). Crear ticket de seguridad inmediato.
+3. **NO** tocar las tablas sin review humano explícito (regla #3:
+   1 aprobación humana además del operador). Crear ticket de
+   seguridad inmediato.
 
 ### Secret expuesto en commit
 
