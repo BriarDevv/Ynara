@@ -153,9 +153,20 @@ Al cerrar la sesión, un worker Celery genera la entrada episódica.
 
 ### audit_log
 
-Registro inmutable de operaciones sobre memoria. Retention: 24 meses
-(`docs/product/MEMORY.md`). No usa `TimestampMixin` — una vez creada,
-una entrada no se modifica.
+Registro inmutable de operaciones sobre memoria. Dos vías de
+eliminación:
+
+1. **Temporal (worker)**: 24 meses por worker periódico de Celery —
+   retention normal para usuarios activos (`docs/product/MEMORY.md`).
+2. **Cascada al borrar usuario** (`ON DELETE CASCADE` en
+   `user_id`): cuando un usuario ejecuta `DELETE /v1/memory` o
+   elimina su cuenta, su audit log también se borra. Decisión de
+   producto: **privacidad > compliance forense**. Cumple "derecho
+   al olvido" alineado con regla #4 (datos del usuario nunca quedan
+   colgados). Si en V2 hace falta audit anonimizado por compliance,
+   evaluar `ON DELETE SET NULL` + `user_id NULL`.
+
+No usa `TimestampMixin` — una vez creada, una entrada no se modifica.
 
 | Columna | Tipo | Notas |
 |---|---|---|
