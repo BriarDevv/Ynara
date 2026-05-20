@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,6 +31,12 @@ class AuditLog(UUIDPKMixin, Base):
     """Registro inmutable de una operación sobre memoria."""
 
     __tablename__ = "audit_log"
+    __table_args__ = (
+        CheckConstraint(
+            "record_hash ~ '^[0-9a-f]{64}$'",
+            name="record_hash_sha256_hex",
+        ),
+    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

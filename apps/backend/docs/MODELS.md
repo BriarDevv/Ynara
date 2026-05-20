@@ -167,7 +167,7 @@ una entrada no se modifica.
 | `origin_model` | `llm_model_enum` | gemma / qwen, nullable (operación del usuario directo) |
 | `origin_mode` | `mode_enum` | Modo activo cuando ocurrió, nullable |
 | `origin_tool` | VARCHAR(80) | Nombre de la tool si la operación vino de tool-call, nullable |
-| `record_hash` | CHAR(64) NOT NULL | SHA-256 hex del contenido afectado (texto plano antes de cifrar) |
+| `record_hash` | VARCHAR(64) NOT NULL | SHA-256 hex del contenido afectado (texto plano antes de cifrar). CHECK constraint `record_hash ~ '^[0-9a-f]{64}$'` enforce el formato a nivel DB |
 | `sensitive` | BOOLEAN NOT NULL DEFAULT false | `true` para ops sobre episódica con `is_sensitive=true` |
 | `created_at` | TIMESTAMPTZ NOT NULL DEFAULT now() | Indexed (queries por rango temporal) |
 
