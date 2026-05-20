@@ -49,7 +49,7 @@ usar los sub-agents nativos (`explore`, `executor`, `verifier`,
   mergeado en GitHub (regla #1 ampliada en `AGENTS.md`; flujo
   completo en [`CONTRIBUTING.md`](./CONTRIBUTING.md#flujo-de-trabajo)).
 - Tocar `apps/backend/app/memory/` o `apps/backend/alembic/versions/`
-  sin doble confirmación.
+  sin 1 aprobación humana explícita en el PR (regla #3).
 - Auto-aprobarte en el mismo contexto: la pasada de review siempre
   va en un agente separado (`code-reviewer` o `verifier`).
 

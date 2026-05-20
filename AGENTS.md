@@ -13,7 +13,7 @@
 1. OK humano antes de commit / push / install / migraciones.
 2. Datos del usuario nunca fuera del perímetro.
 3. Cliente Supabase prohibido en frontend.
-4. Tablas de memoria sagradas (2 aprobaciones humanas).
+4. Tablas de memoria sagradas (1 aprobación humana + tests).
 
 **Antes de cada PR**: `bash scripts/ynara-doctor.sh` debe `exit 0`.
 
@@ -66,7 +66,7 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 2. [`ADR-004`](./docs/architecture/adrs/ADR-004-postgres-pgvector-vs-pinecone.md)
 3. [`apps/backend/docs/MODELS.md`](./apps/backend/docs/MODELS.md)
 4. [`apps/backend/docs/MIGRATIONS.md`](./apps/backend/docs/MIGRATIONS.md)
-5. **2 aprobaciones humanas obligatorias** (regla #3).
+5. **1 aprobación humana obligatoria** (regla #3).
 
 **Endpoint HTTP nuevo**
 
@@ -189,7 +189,7 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 
 2. **Nunca tocar secrets.** Prohibido leer, copiar, mover o commitear `.env`, claves API, tokens, certificados. Si detectás un secret expuesto, alertá inmediatamente y no toques nada. **Severidad: bloqueante.**
 
-3. **Tablas de memoria sagradas.** `semantic_memory`, `episodic_memory`, `procedural_memory` no se modifican sin tests pasando y **2 aprobaciones humanas**. Idem para migraciones Alembic que las afecten. **Severidad: bloqueante.**
+3. **Tablas de memoria sagradas.** `semantic_memory`, `episodic_memory`, `procedural_memory` no se modifican sin tests pasando y **1 aprobación humana explícita** (review formal aprobada en el PR, no solo el OK del operador que abrió el PR). Idem para migraciones Alembic que las afecten. **Severidad: bloqueante.**
 
 4. **Datos de usuario nunca fuera del perímetro.** Prohibido enviar mensajes, memoria, metadata o cualquier dato a APIs externas (OpenAI, Anthropic, Google, Cohere, Mistral). Toda inferencia es on-prem (vLLM en prod, Ollama en dev). **Severidad: bloqueante.**
 
@@ -308,7 +308,7 @@ uv run alembic downgrade -1
 uv run alembic upgrade head
 ```
 
-**Toca tablas sagradas**: lo anterior + tests específicos de la capa + **2 aprobaciones humanas** (regla #3).
+**Toca tablas sagradas**: lo anterior + tests específicos de la capa + **1 aprobación humana explícita** (regla #3).
 
 **Solo docs**: verificar que los links internos no estén rotos.
 
