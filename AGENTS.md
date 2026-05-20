@@ -197,7 +197,7 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 
 6. **Conventional Commits en español imperativo.** Formato `tipo(scope): descripción`. Ejemplo: `feat(web): agregar modo bienestar`. **PR rechazado si no se cumple.** Ver [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md).
 
-7. **Commits atómicos.** Un commit = un cambio lógico. No mezclar refactor con feature ni feature con docs. Si tu PR tiene más de ~200 líneas o toca más de 3 archivos de áreas distintas, **splitealo en commits chicos antes de pushear** — uno por cambio lógico. Tablas sagradas (regla #3) siempre en commit propio para que la revisión de las 2 aprobaciones tenga un commit específico a inspeccionar. Detalle en [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md). **Severidad: bloqueante. PR rechazado si llega como commit monolítico.**
+7. **Commits atómicos.** Un commit = un cambio lógico. No mezclar refactor con feature ni feature con docs. Si tu PR tiene más de ~200 líneas o toca más de 3 archivos de áreas distintas, **splitealo en commits chicos antes de pushear** — uno por cambio lógico. Tablas sagradas (regla #3) siempre en commit propio para que la aprobación humana de la regla #3 tenga un commit específico a inspeccionar. Detalle en [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md). **Severidad: bloqueante. PR rechazado si llega como commit monolítico.**
 
 8. **Scope obligatorio** para cambios en apps o packages (`feat(web):`, `fix(backend):`, etc.). Sin scope solo en cambios cross-cutting reales. **PR rechazado si falta.**
 
