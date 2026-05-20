@@ -4,7 +4,8 @@
 # Default — todo el equipo aprueba cualquier path no listado abajo
 *                                    @MateoGs013 @BriarDevv @querques20
 
-# Tablas sagradas de memoria (regla #3) — requiere doble aprobación
+# Tablas sagradas de memoria (regla #3) — requiere 1 aprobación humana
+# explícita (review formal en el PR, además del operador autor)
 apps/backend/app/memory/             @MateoGs013 @BriarDevv @querques20
 apps/backend/alembic/versions/       @MateoGs013 @BriarDevv @querques20
 
