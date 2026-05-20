@@ -99,9 +99,8 @@ Si tu PR cumple **alguna** de estas:
   docs + refactor en un solo commit = NO).
 - Toca tablas sagradas (`semantic_memory`, `episodic_memory`,
   `procedural_memory`): el commit que las define **siempre** va
-  aislado, para que las 2 aprobaciones humanas de la regla #3
-  inspeccionen un commit específico, no busquen el cambio enterrado
-  en uno grande.
+  aislado, para que la aprobación humana de la regla #3 inspeccione
+  un commit específico, no busque el cambio enterrado en uno grande.
 - Mezcla `feat` + `refactor` + `docs` + `test`: cada tipo es un
   cambio lógico distinto, va en commit propio.
 
@@ -164,7 +163,7 @@ feat(backend): agregar enums compartidos cross-domain
 ```
 
 8 commits, cada uno con un porqué claro. Commit de tablas sagradas
-aislado para las 2 aprobaciones humanas (regla #3). Blame útil, revert
+aislado para la aprobación humana de la regla #3. Blame útil, revert
 quirúrgico, review por grupos lógicos.
 
 ### Squashear vs no squashear

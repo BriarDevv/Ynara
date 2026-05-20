@@ -70,7 +70,7 @@
 - Naming de migraciones: `YYYYMMDD_HHMM_descripcion_corta.py`.
 - Una migración = un cambio lógico atómico.
 - Siempre implementar `downgrade()`.
-- Tablas sagradas: review humano + 2 aprobaciones.
+- Tablas sagradas: tests + 1 aprobación humana explícita (regla #3).
 - Detalle: `apps/backend/docs/MIGRATIONS.md`.
 
 ## JSON / YAML

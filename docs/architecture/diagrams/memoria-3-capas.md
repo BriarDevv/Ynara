@@ -57,4 +57,4 @@ Preferencias y patrones de comportamiento.
 - **Consolidación siempre async** vía Celery, fuera del path de
   respuesta.
 - Las tres tablas son **sagradas** (regla #3 de `AGENTS.md`):
-  migraciones requieren tests + 2 aprobaciones humanas.
+  migraciones requieren tests + 1 aprobación humana explícita.
