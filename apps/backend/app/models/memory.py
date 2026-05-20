@@ -99,6 +99,10 @@ class EpisodicMemory(UUIDPKMixin, TimestampMixin, Base):
             "retention_days BETWEEN 1 AND 3650",
             name="retention_days_range",
         ),
+        CheckConstraint(
+            "(is_sensitive = false) OR (retention_days BETWEEN 1 AND 365)",
+            name="retention_days_sensitive_cap",
+        ),
         Index(
             "ix_episodic_memory_summary_embedding_hnsw",
             "summary_embedding",
