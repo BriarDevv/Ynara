@@ -62,7 +62,7 @@ producto). Lectura por ambos modelos vía `search()` por similitud.
 | `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
 
 **Índices**:
-- `ix_users_id` (btree, por `user_id`) — queries por usuario.
+- `ix_semantic_memory_user_id` (btree, por `user_id`) — queries por usuario. Naming convention: `ix_%(column_0_label)s` de `Base.metadata` → `ix_<tabla>_<columna>`.
 - `ix_semantic_memory_content_embedding_hnsw` (HNSW, `vector_cosine_ops`) — búsqueda por similitud.
 
 ### 🔴 episodic_memory
@@ -84,10 +84,12 @@ sesión**: Qwen toma los mensajes de la sesión + embedding del resumen.
 | `topics` | JSONB NOT NULL DEFAULT '{}' | Metadata: tópicos, duración, modo |
 | `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
 
-**Constraint**: `retention_days BETWEEN 1 AND 3650`.
+**Constraints**:
+- `retention_days_range`: `retention_days BETWEEN 1 AND 3650`.
+- `retention_days_sensitive_cap`: `(is_sensitive = false) OR (retention_days BETWEEN 1 AND 365)` — cap a 12 meses cuando `is_sensitive=true` (ADR-007 D2).
 
 **Índices**:
-- `ix_users_id` (por `user_id`).
+- `ix_episodic_memory_user_id` (btree, por `user_id`).
 - `ix_episodic_memory_summary_embedding_hnsw` (HNSW sobre embedding).
 
 ### 🔴 procedural_memory
