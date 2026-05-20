@@ -6,8 +6,8 @@
 
 1. **Tablas sagradas de memoria** (regla #3). Cualquier toque a
    `semantic_memory`, `episodic_memory`, `procedural_memory` requiere
-   tests + 2 aprobaciones humanas. Migraciones que las afecten
-   también.
+   tests + 1 aprobación humana explícita (review formal aprobada en el
+   PR, además del operador autor). Migraciones que las afecten también.
 2. **Datos de usuario nunca salen del perímetro** (regla #4). Sin
    llamadas a OpenAI, Anthropic, Google APIs. Toda inferencia en
    vLLM/Ollama local.
@@ -38,7 +38,7 @@ Ver [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md).
 - Naming: `YYYYMMDD_HHMM_descripcion.py`.
 - Una migración = un cambio lógico.
 - `downgrade()` siempre.
-- Tablas sagradas → review humano + 2 aprobaciones.
+- Tablas sagradas → tests + 1 aprobación humana explícita (regla #3).
 
 ## Tests
 

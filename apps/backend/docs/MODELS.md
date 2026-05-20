@@ -14,8 +14,9 @@
 
 ## Tablas sagradas 🔴
 
-Cualquier cambio aquí requiere tests + 2 aprobaciones humanas
-(regla #3 de AGENTS.md).
+Cualquier cambio aquí requiere tests + 1 aprobación humana explícita
+(review formal en el PR, además del operador autor — regla #3 de
+AGENTS.md).
 
 ### 🔴 semantic_memory
 
