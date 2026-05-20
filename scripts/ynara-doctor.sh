@@ -138,7 +138,7 @@ if git rev-parse --verify HEAD >/dev/null 2>&1; then
   fi
 fi
 if [ -n "$sagrado_changes" ]; then
-  bad "el PR toca tablas sagradas — requiere tests + 2 aprobaciones humanas"
+  bad "el PR toca tablas sagradas — requiere tests + 1 aprobación humana explícita (regla #3)"
   echo "$sagrado_changes" | sed 's/^/        /'
 else
   ok "PR no toca tablas sagradas (o no se pudo comparar con main)"
