@@ -35,7 +35,7 @@ from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Str
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode
+from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode, enum_values
 from app.models.base import Base, UUIDPKMixin
 
 if TYPE_CHECKING:
@@ -60,22 +60,43 @@ class AuditLog(UUIDPKMixin, Base):
         index=True,
     )
     operation: Mapped[AuditOperation] = mapped_column(
-        Enum(AuditOperation, name="audit_operation_enum", native_enum=True),
+        Enum(
+            AuditOperation,
+            name="audit_operation_enum",
+            native_enum=True,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     target_layer: Mapped[MemoryLayer] = mapped_column(
-        Enum(MemoryLayer, name="memory_layer_enum", native_enum=True),
+        Enum(
+            MemoryLayer,
+            name="memory_layer_enum",
+            native_enum=True,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     target_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
     origin_model: Mapped[LlmModel | None] = mapped_column(
-        Enum(LlmModel, name="llm_model_enum", native_enum=True),
+        Enum(
+            LlmModel,
+            name="llm_model_enum",
+            native_enum=True,
+            values_callable=enum_values,
+        ),
         nullable=True,
     )
     origin_mode: Mapped[Mode | None] = mapped_column(
-        Enum(Mode, name="mode_enum", native_enum=True, create_type=False),
+        Enum(
+            Mode,
+            name="mode_enum",
+            native_enum=True,
+            create_type=False,
+            values_callable=enum_values,
+        ),
         nullable=True,
     )
     origin_tool: Mapped[str | None] = mapped_column(String(80), nullable=True)
