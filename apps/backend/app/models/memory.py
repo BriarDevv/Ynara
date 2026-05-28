@@ -1,7 +1,7 @@
 """Modelos SQLAlchemy de las 3 capas de memoria. TABLAS SAGRADAS.
 
-Cualquier cambio acá requiere tests + 2 aprobaciones humanas (regla #3
-de ``AGENTS.md``). Schema definido en ADR-007 (decay, retention
+Cualquier cambio acá requiere tests + 1 aprobación humana explícita
+(regla #3 de ``AGENTS.md``). Schema definido en ADR-007 (decay, retention
 diferenciada, encriptación a nivel campo).
 
 - ``SemanticMemory``: hechos persistentes sobre el usuario. ``content``
