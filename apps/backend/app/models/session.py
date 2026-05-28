@@ -14,7 +14,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.enums import Mode
+from app.enums import Mode, enum_values
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
 
 if TYPE_CHECKING:
@@ -40,7 +40,8 @@ class ChatSession(UUIDPKMixin, TimestampMixin, Base):
         index=True,
     )
     mode: Mapped[Mode] = mapped_column(
-        Enum(Mode, name="mode_enum", native_enum=True), nullable=False
+        Enum(Mode, name="mode_enum", native_enum=True, values_callable=enum_values),
+        nullable=False,
     )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

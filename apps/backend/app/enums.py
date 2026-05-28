@@ -18,6 +18,18 @@ from __future__ import annotations
 from enum import StrEnum
 
 
+def enum_values(enum_cls: type[StrEnum]) -> list[str]:
+    """``values_callable`` para las columnas ``Enum`` nativas de Postgres.
+
+    Sin esto SQLAlchemy materializa el tipo PG usando los *nombres* de los
+    miembros (``PRODUCTIVIDAD``), no sus ``.value`` (``productividad``). Eso
+    rompería los inserts del ORM y divergiría de lo que habla la API (Pydantic
+    serializa StrEnum por ``.value``) y de la tabla de ``docs/MODELS.md``.
+    Cada ``Enum(...)`` del modelo pasa ``values_callable=enum_values``.
+    """
+    return [member.value for member in enum_cls]
+
+
 class Mode(StrEnum):
     """Modos de Ynara. Ver ``ynara.config.json[modes]`` y ADR-002.
 
