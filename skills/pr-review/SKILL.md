@@ -162,11 +162,13 @@ uno corresponde a una regla del repo.
 
 5. **Regla #3 — Tablas sagradas:**
    ```bash
-   grep -E '^(apps/backend/app/memory/|apps/backend/alembic/versions/)' /tmp/pr-<N>.files
+   grep -E '^(apps/backend/app/memory/|apps/backend/alembic/versions/|apps/backend/app/models/(memory|audit)\.py|apps/backend/app/schemas/(memory|audit)\.py)' /tmp/pr-<N>.files
    ```
    Cualquier hit requiere 1 aprobación humana explícita (review formal
    en el PR, además del operador autor) + tests. Flagear como blocker
-   hasta que esté visible.
+   hasta que esté visible. El regex matchea el del check #7 de
+   `scripts/ynara-doctor.sh`: tablas de memoria + `audit_log`, sus
+   modelos, schemas, wrappers y migraciones Alembic (regla #3).
 
 6. **Regla #4 — APIs externas de IA en backend:**
    ```bash
