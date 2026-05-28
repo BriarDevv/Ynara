@@ -101,8 +101,9 @@
 
 ## Code review
 
-- Cualquier PR que toque migraciones o tablas de memoria requiere **2
-  aprobaciones humanas**.
+- Cualquier PR que toque migraciones o tablas de memoria requiere **1
+  aprobación humana explícita** (review formal en el PR, además del
+  operador autor — regla #3 de [`AGENTS.md`](./AGENTS.md)).
 - Cualquier PR que toque archivos `.md` raíz, `ynara.config.json`, o
   `DESIGN.md` requiere aprobación de @MateoGs013.
 - IAs pueden hacer pasadas de review (sub-agent `code-reviewer` /
