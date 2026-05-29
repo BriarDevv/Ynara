@@ -24,6 +24,7 @@ from app.llm.errors import (
     LlmTimeoutError,
     LlmUnavailableError,
     ModelNotServedError,
+    ToolParsingError,
 )
 from app.llm.schemas import ChatMessage, ToolSpec
 
@@ -120,6 +121,15 @@ async def test_complete_with_tools_in_payload() -> None:
         "units": "celsius",
     }
     assert result.finish_reason == "tool_calls"
+
+
+@pytest.mark.asyncio
+async def test_complete_propagates_tool_parsing_error() -> None:
+    # arguments malformado en la respuesta -> ToolParsingError sale por complete().
+    body = _load("completion_bad_arguments.json")
+    client = _client(lambda req: httpx.Response(200, json=body))
+    with pytest.raises(ToolParsingError):
+        await client.complete(model=_MODEL, messages=_messages())
 
 
 # ---------- mapeo de errores HTTP ----------
