@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ynara.app/schemas/ynara-config.schema.json",
+  "title": "Ynara config",
+  "description": "Configuracion canonica de Ynara: modos, modelos, serving LLM, memoria e infraestructura. Fuente unica de verdad del contrato de producto (ADR-009 D4).",
+  "type": "object",
+  "required": ["version", "name", "modes", "models", "llm", "memory", "infrastructure"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "modes": {
+      "type": "object",
+      "description": "Un modo por clave. El modelo referenciado debe existir en `models`.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["model", "memory_layers", "tools_enabled", "tone"],
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "memory_layers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["semantic", "episodic", "procedural"]
+            }
+          },
+          "tools_enabled": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tone": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "models": {
+      "type": "object",
+      "description": "Un modelo por clave. `served_name` es el `--served-model-name` que expone vLLM; ya no hay `endpoint` (vive en settings, ADR-009 D4).",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["role", "writes_memory", "served_name", "context_window"],
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["conversational", "agent"]
+          },
+          "writes_memory": {
+            "type": "boolean"
+          },
+          "served_name": {
+            "type": "string",
+            "description": "Nombre con el que el proceso vLLM publica el modelo (--served-model-name)."
+          },
+          "context_window": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "llm": {
+      "type": "object",
+      "description": "Contrato de serving del dual-stack (ADR-009). Valores provisionales hasta medir VRAM real en la 4080 Super.",
+      "required": ["serving"],
+      "additionalProperties": false,
+      "properties": {
+        "serving": {
+          "type": "object",
+          "required": [
+            "tool_parsers",
+            "quantization",
+            "kv_cache_dtype",
+            "max_model_len",
+            "request_timeout_s"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "tool_parsers": {
+              "type": "object",
+              "description": "`--tool-call-parser` por modelo: hermes (Qwen) / gemma4 (Gemma). Documenta el flag del SERVER vLLM, no el parseo en Python (ADR-009 D2).",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "quantization": {
+              "type": "string",
+              "description": "Cuantizacion viable en Ada Lovelace. Provisional (ADR-009 D3)."
+            },
+            "kv_cache_dtype": {
+              "type": "string",
+              "description": "dtype del KV cache. Provisional, se ajusta al medir (ADR-009 D3)."
+            },
+            "max_model_len": {
+              "type": "object",
+              "description": "Longitud de contexto por modelo. Provisional hasta medir VRAM (ADR-009 D3).",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "request_timeout_s": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Timeout de request HTTP al servidor vLLM, en segundos."
+            }
+          }
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "infrastructure": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

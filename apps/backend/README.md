@@ -48,6 +48,6 @@ Copiar `.env.example` a `.env`. Crítico:
 
 - `DATABASE_URL` — Postgres (Supabase en MVP).
 - `REDIS_URL` — broker + result backend de Celery.
-- `GEMMA_ENDPOINT`, `QWEN_ENDPOINT` — vLLM u Ollama.
+- `LLM_PRIMARY_BASE_URL`, `LLM_SECONDARY_BASE_URL`, `LLM_TOPOLOGY` — serving vLLM (ADR-009).
 
 Detalle: `.env.example`.

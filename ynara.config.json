@@ -39,14 +39,29 @@
     "gemma-4-26b-a4b": {
       "role": "conversational",
       "writes_memory": false,
-      "endpoint": "http://localhost:8000/v1",
+      "served_name": "gemma4",
       "context_window": 128000
     },
     "qwen-3.5-9b": {
       "role": "agent",
       "writes_memory": true,
-      "endpoint": "http://localhost:8001/v1",
+      "served_name": "qwen",
       "context_window": 262144
+    }
+  },
+  "llm": {
+    "serving": {
+      "tool_parsers": {
+        "gemma-4-26b-a4b": "gemma4",
+        "qwen-3.5-9b": "hermes"
+      },
+      "quantization": "awq_marlin",
+      "kv_cache_dtype": "fp8",
+      "max_model_len": {
+        "gemma-4-26b-a4b": 4096,
+        "qwen-3.5-9b": 32768
+      },
+      "request_timeout_s": 120
     }
   },
   "memory": {
