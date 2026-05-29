@@ -1,0 +1,39 @@
+{
+  "id": "chatcmpl-tool-2",
+  "object": "chat.completion",
+  "created": 1730000002,
+  "model": "qwen-3.5-9b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "arguments": "{\"city\": \"Cordoba\"}"
+            }
+          },
+          {
+            "id": "call_2",
+            "type": "function",
+            "function": {
+              "name": "create_reminder",
+              "arguments": "{\"text\": \"comprar pan\", \"when\": \"2026-06-01T09:00:00\"}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 50,
+    "completion_tokens": 40,
+    "total_tokens": 90
+  }
+}
