@@ -16,23 +16,9 @@ esqueleto.
 
 from __future__ import annotations
 
-from typing import Any
+from app.llm.schemas import ChatRequest, ChatResponse
 
-from pydantic import BaseModel
-
-from app.enums import Mode
-
-
-class ChatRequest(BaseModel):
-    text: str
-    mode: Mode
-    session_id: str | None = None
-
-
-class ChatResponse(BaseModel):
-    text: str
-    actions: list[dict[str, Any]] = []
-    session_id: str
+__all__ = ["ChatRequest", "ChatResponse", "route"]
 
 
 async def route(request: ChatRequest) -> ChatResponse:
