@@ -56,6 +56,14 @@ class VllmClient:
         http_client: httpx.AsyncClient,
         parser: ToolCallParser,
     ) -> None:
+        """Un ``VllmClient`` = un proceso vLLM.
+
+        ``served_models`` normalmente tiene un solo ``served_name``: vLLM
+        sirve un modelo por proceso (ADR-009 D1). Se modela como
+        ``frozenset`` para que el pool rutee con ``serves_model()`` de
+        forma uniforme; ``health()`` reporta un served_name de forma
+        determinista.
+        """
         self._base_url = base_url.rstrip("/")
         self._served_models = served_models
         self._http = http_client
@@ -122,7 +130,8 @@ class VllmClient:
             raise LlmUnavailableError(str(exc)) from exc
 
     async def health(self) -> ModelHealth:
-        model_name = next(iter(self._served_models), "")
+        # ``min`` da un nombre estable aunque el set tuviera >1 (ver __init__).
+        model_name = min(self._served_models, default="")
         url = f"{self._base_url}{_MODELS_PATH}"
         try:
             response = await self._http.get(url, timeout=5.0)
