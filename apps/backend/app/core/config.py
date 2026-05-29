@@ -32,9 +32,13 @@ class Settings(BaseSettings):
     celery_broker_url: str = Field("", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field("", alias="CELERY_RESULT_BACKEND")
 
-    # LLM endpoints
-    gemma_endpoint: str = Field("http://localhost:8000/v1", alias="GEMMA_ENDPOINT")
-    qwen_endpoint: str = Field("http://localhost:8001/v1", alias="QWEN_ENDPOINT")
+    # LLM serving (ADR-009 D4): los base_url + topologia viven en settings;
+    # served_name, parsers y quantization viven en ynara.config.json.
+    llm_primary_base_url: str = Field("http://localhost:8001/v1", alias="LLM_PRIMARY_BASE_URL")
+    llm_secondary_base_url: str = Field("http://localhost:8002/v1", alias="LLM_SECONDARY_BASE_URL")
+    llm_topology: Literal["split_process", "single_process", "swap_lru"] = Field(
+        "split_process", alias="LLM_TOPOLOGY"
+    )
 
     # Embeddings
     embedding_model: str = Field("bge-m3", alias="EMBEDDING_MODEL")
