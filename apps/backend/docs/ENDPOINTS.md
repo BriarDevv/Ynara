@@ -5,12 +5,16 @@
 
 ## /v1/health
 
-- **GET** `/v1/health`
-- Liveness + readiness chequeable público.
-- Request: ninguno.
-- Response: `{ "status": "ok", "version": "0.1.0" }`.
-- Permisos: público.
-- Rate limit: 60/min.
+- **GET** `/v1/health` — **liveness**: el proceso está vivo. No toca dependencias.
+  - Request: ninguno.
+  - Response: `{ "status": "ok", "version": "0.1.0" }` (siempre 200 si responde).
+  - Permisos: público. Rate limit: 60/min.
+- **GET** `/v1/health/ready` — **readiness**: pinga DB y Redis.
+  - Request: ninguno.
+  - Response 200: `{ "status": "ready", "version": "0.1.0", "checks": { "database": { "ok": true }, "redis": { "ok": true } } }`.
+  - Response 503 (degraded): mismo shape, `status: "degraded"` y la dependencia caída con `{ "ok": false, "error": "<ClaseDeExcepción>" }`. El error es **solo el nombre de la clase**, nunca el connection string (regla #2 / #4).
+  - Permisos: público. Rate limit: 60/min.
+  - Uso: el orquestador no rutea tráfico mientras devuelva 503.
 
 ## /v1/auth (TODO)
 
