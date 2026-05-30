@@ -12,6 +12,8 @@ credenciales (regla #2 / #4).
 
 from __future__ import annotations
 
+import asyncio
+
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel
@@ -22,6 +24,10 @@ from app.core.config import get_settings
 from app.core.deps import engine
 
 router = APIRouter()
+
+# Un readiness probe nunca debe colgar: si una dependencia no responde rápido,
+# es 'degraded'. Acota cada ping (y el connect) a este budget.
+_CHECK_TIMEOUT_SECONDS = 2.0
 
 
 class HealthResponse(BaseModel):
@@ -49,7 +55,7 @@ async def health() -> HealthResponse:
 async def check_database() -> DependencyCheck:
     """Pinga la DB con ``SELECT 1``. Reporta solo el tipo de error (no el DSN)."""
     try:
-        async with engine.connect() as conn:
+        async with asyncio.timeout(_CHECK_TIMEOUT_SECONDS), engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         return DependencyCheck(ok=True)
     except Exception as exc:
@@ -60,9 +66,14 @@ async def check_database() -> DependencyCheck:
 async def check_redis() -> DependencyCheck:
     """Pinga Redis con PING. Reporta solo el tipo de error (no el DSN)."""
     settings = get_settings()
-    client = aioredis.from_url(settings.redis_url)
+    client = aioredis.from_url(
+        settings.redis_url,
+        socket_connect_timeout=_CHECK_TIMEOUT_SECONDS,
+        socket_timeout=_CHECK_TIMEOUT_SECONDS,
+    )
     try:
-        await client.ping()
+        async with asyncio.timeout(_CHECK_TIMEOUT_SECONDS):
+            await client.ping()
         return DependencyCheck(ok=True)
     except Exception as exc:
         # readiness no debe propagar: reporta solo el tipo, nunca str(exc) (DSN).
@@ -73,11 +84,12 @@ async def check_redis() -> DependencyCheck:
 
 @router.get("/health/ready", response_model=ReadinessResponse)
 async def readiness(response: Response) -> ReadinessResponse:
-    """Readiness: 200 si DB y Redis responden, 503 (degraded) si alguna falla."""
-    checks = {
-        "database": await check_database(),
-        "redis": await check_redis(),
-    }
+    """Readiness: 200 si DB y Redis responden, 503 (degraded) si alguna falla.
+
+    Los checks corren en paralelo para acotar la latencia del probe al más lento.
+    """
+    db_check, redis_check = await asyncio.gather(check_database(), check_redis())
+    checks = {"database": db_check, "redis": redis_check}
     ready = all(check.ok for check in checks.values())
     if not ready:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
