@@ -21,7 +21,11 @@ from typing import Protocol, runtime_checkable
 
 from app.llm.schemas import ModelHealth
 
-EMBEDDING_DIM = 1024  # bge-m3 dense, ADR-008. Espejo de models.memory.EMBEDDING_DIM.
+# bge-m3 dense, ADR-008. Constante local a propósito (no se importa de
+# models.memory): la capa de clientes LLM no debe arrastrar SQLAlchemy/los
+# modelos sagrados al importarse (ni sus tests). El valor 1024 es estable hasta
+# un ADR nuevo; si cambia, cambia en ambos lados con su gate sagrado.
+EMBEDDING_DIM = 1024
 
 
 @runtime_checkable
