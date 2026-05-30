@@ -41,25 +41,21 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(40), nullable=True)
     is_ephemeral: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    onboarding_completed: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
-    retention_sensitive_days: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=180
-    )
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    retention_sensitive_days: Mapped[int] = mapped_column(Integer, nullable=False, default=180)
 
-    sessions: Mapped[list["ChatSession"]] = relationship(
+    sessions: Mapped[list[ChatSession]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    semantic_memories: Mapped[list["SemanticMemory"]] = relationship(
+    semantic_memories: Mapped[list[SemanticMemory]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    episodic_memories: Mapped[list["EpisodicMemory"]] = relationship(
+    episodic_memories: Mapped[list[EpisodicMemory]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    procedural_memories: Mapped[list["ProceduralMemory"]] = relationship(
+    procedural_memories: Mapped[list[ProceduralMemory]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    audit_logs: Mapped[list["AuditLog"]] = relationship(
+    audit_logs: Mapped[list[AuditLog]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

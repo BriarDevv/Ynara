@@ -7,7 +7,7 @@ verifican el strict typing y la coherencia con los enums.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -29,7 +29,7 @@ def _base_payload() -> dict[str, object]:
         "origin_tool": "memory.add",
         "record_hash": "a" * 64,
         "sensitive": False,
-        "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
+        "created_at": datetime(2026, 1, 1, tzinfo=UTC),
     }
 
 
@@ -62,9 +62,7 @@ class TestAuditLogOut:
         assert m.operation == op
 
     @pytest.mark.parametrize("layer", list(MemoryLayer))
-    def test_target_layer_accepts_all_enum_values(
-        self, layer: MemoryLayer
-    ) -> None:
+    def test_target_layer_accepts_all_enum_values(self, layer: MemoryLayer) -> None:
         payload = _base_payload()
         payload["target_layer"] = layer
         m = AuditLogOut(**payload)

@@ -18,7 +18,7 @@ Mapeo a los constraints del modelo:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
@@ -31,7 +31,6 @@ from app.schemas.memory import (
     SemanticMemoryCreate,
     SemanticMemoryUpdate,
 )
-
 
 # ---------- Semantic ----------
 
@@ -85,7 +84,7 @@ class TestSemanticMemoryUpdate:
 
 
 def _occurred_at() -> datetime:
-    return datetime(2026, 1, 1, tzinfo=timezone.utc)
+    return datetime(2026, 1, 1, tzinfo=UTC)
 
 
 class TestEpisodicMemoryCreate:
