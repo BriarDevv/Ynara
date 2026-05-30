@@ -8,8 +8,9 @@ usuario**.
 
 ### Semántica
 - Qué: hechos persistentes sobre el usuario.
-- Cómo se guarda: registros de Mem0 OSS v2 en `semantic_memory`,
-  con embedding bge-m3 (1024-dim) sobre pgvector.
+- Cómo se guarda: storage propio (engine in-house, [ADR-010](../architecture/adrs/ADR-010-memory-architecture-v2.md))
+  en `semantic_memory` — `content` cifrado AES-256-GCM + embedding
+  bge-m3 (1024-dim) en claro sobre pgvector.
 - Cuánto vive: indefinido hasta que el usuario lo borre.
 - Quién la actualiza: solo Qwen 3.5-9B (modos Productividad +
   Memoria), siempre vía Celery async.
