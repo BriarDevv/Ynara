@@ -26,6 +26,14 @@ async def test_embed_is_deterministic() -> None:
     assert first == second
 
 
+async def test_embed_is_deterministic_across_instances() -> None:
+    # La garantía que consumen los wrappers de M7: mismo texto → mismo vector
+    # aunque sea otra instancia (el vector no depende de estado de instancia).
+    a = await FakeEmbeddingClient().embed(["mismo texto"])
+    b = await FakeEmbeddingClient().embed(["mismo texto"])
+    assert a == b
+
+
 async def test_distinct_texts_give_distinct_vectors() -> None:
     fake = FakeEmbeddingClient()
     [a], [b] = await fake.embed(["texto A"]), await fake.embed(["texto B"])
@@ -72,4 +80,6 @@ async def test_health_can_be_forced_unhealthy() -> None:
 async def test_embed_calls_are_recorded() -> None:
     fake = FakeEmbeddingClient()
     await fake.embed(["a", "b"])
-    assert fake.embed_calls == [["a", "b"]]
+    await fake.embed(["c"])
+    # Acumula por llamada (los tests de M7 cuentan cuántas veces se embebió).
+    assert fake.embed_calls == [["a", "b"], ["c"]]

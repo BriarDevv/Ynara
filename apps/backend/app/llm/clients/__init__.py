@@ -10,6 +10,8 @@
   ``RoutingStrategy``).
 - ``resilient`` envuelve el pool con retry + breaker + fallback on-prem
   (``ResilientClient``).
+- ``embedding`` define el Protocol ``EmbeddingClient`` y el
+  ``FakeEmbeddingClient`` determinista que consumen los wrappers de memoria (M7).
 
 El router (``router.py``) solo conoce el Protocol ``LLMClient``, nunca la
 implementacion concreta (ADR-009 D1).
