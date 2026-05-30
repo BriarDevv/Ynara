@@ -149,6 +149,34 @@ class TestExecuteErrors:
         assert "secreto-del-usuario" not in message
 
 
+class TestDatetimeValidation:
+    async def test_create_event_rejects_numeric_epoch(self) -> None:
+        # strict=False coerceria un epoch int a fecha; IsoDatetime lo rechaza (#38).
+        registry = default_registry()
+        result = await registry.execute(
+            "calendar.create_event",
+            {"title": "x", "start": 1716000000, "end": _VALID_END},
+        )
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+
+    async def test_set_reminder_rejects_numeric_epoch(self) -> None:
+        registry = default_registry()
+        result = await registry.execute(
+            "reminder.set",
+            {"text": "x", "when": 1716000000.0},
+        )
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+
+    async def test_iso_string_still_accepted(self) -> None:
+        # Sanity: el ISO 8601 string sigue pasando la validacion endurecida.
+        registry = default_registry()
+        result = await registry.execute(
+            "calendar.create_event",
+            {"title": "x", "start": _VALID_START, "end": _VALID_END},
+        )
+        assert "error" not in result
+
+
 class TestNamingAndNamespaces:
     def test_names_are_snake_case_namespace_action(self) -> None:
         registry = default_registry()

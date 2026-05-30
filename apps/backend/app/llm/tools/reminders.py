@@ -14,11 +14,9 @@ del prefijo del ``name``.
 
 from __future__ import annotations
 
-from datetime import datetime
+from pydantic import BaseModel, ConfigDict, ValidationError
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
-
-from app.llm.tools.base import tool_error
+from app.llm.tools.base import IsoDatetime, tool_error
 
 _NAMESPACE = "reminders"
 
@@ -36,15 +34,15 @@ def _stub_result(action: str, arguments: dict[str, object]) -> dict[str, object]
 class _SetReminderArgs(BaseModel):
     """Argumentos de ``reminder.set`` (Pydantic v2 strict).
 
-    Las tool calls llegan como JSON: ``when`` se manda como string ISO 8601,
-    asi que va ``strict=False`` para coercer la string; ``text`` mantiene la
+    Las tool calls llegan como JSON: ``when`` se manda como string ISO 8601
+    (tipo ``IsoDatetime``, que rechaza epoch numerico); ``text`` mantiene la
     validacion strict.
     """
 
     model_config = ConfigDict(strict=True, extra="forbid")
 
     text: str
-    when: datetime = Field(strict=False)
+    when: IsoDatetime
 
 
 class _ListRemindersArgs(BaseModel):
@@ -56,8 +54,8 @@ class _ListRemindersArgs(BaseModel):
 
     model_config = ConfigDict(strict=True, extra="forbid")
 
-    from_dt: datetime | None = Field(default=None, strict=False)
-    to_dt: datetime | None = Field(default=None, strict=False)
+    from_dt: IsoDatetime | None = None
+    to_dt: IsoDatetime | None = None
 
 
 class SetReminderTool:
