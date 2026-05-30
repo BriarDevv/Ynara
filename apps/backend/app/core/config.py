@@ -40,8 +40,12 @@ class Settings(BaseSettings):
         "split_process", alias="LLM_TOPOLOGY"
     )
 
-    # Embeddings
+    # Embeddings (ADR-008: bge-m3 1024-dim on-prem). `embedding_backend` elige
+    # entre el Fake determinista (default, sin GPU) y el cliente vLLM real
+    # (cuando el servidor de embeddings esté levantado, ADR-009).
     embedding_model: str = Field("bge-m3", alias="EMBEDDING_MODEL")
+    embedding_base_url: str = Field("http://localhost:8003/v1", alias="EMBEDDING_BASE_URL")
+    embedding_backend: Literal["fake", "vllm"] = Field("fake", alias="EMBEDDING_BACKEND")
 
     # Cifrado de memoria a nivel campo (ADR-007 D3). Base64 de 32 bytes random
     # (`openssl rand -base64 32`). Vacío => el helper de crypto falla al primer
