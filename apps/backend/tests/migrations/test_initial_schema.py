@@ -1,9 +1,7 @@
 """Tests de la migracion inicial (PR B) — TABLAS SAGRADAS (regla #3).
 
 Las pruebas que tocan la DB estan marcadas ``integration`` y se excluyen
-del ``pytest`` default. Correrlas en AISLAMIENTO (la deuda de settings
-no-lazy, issue #26, puede inyectar env dummy si se corre junto al suite
-completo)::
+del ``pytest`` default::
 
     cd apps/backend && python -m pytest tests/migrations -m integration
 
@@ -54,8 +52,9 @@ def _alembic_cfg() -> Config:
 
 
 async def _schema_snapshot() -> tuple[set[str], set[str], int]:
-    from app.core.config import settings
+    from app.core.config import get_settings
 
+    settings = get_settings()
     conn = await asyncpg.connect(dsn=settings.database_url.replace("+asyncpg", ""))
     try:
         tables = {

@@ -12,7 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api.v1 import health
-from app.core.config import settings
+from app.core.config import get_settings
+
+settings = get_settings()
 
 
 @asynccontextmanager

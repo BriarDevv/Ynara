@@ -11,7 +11,9 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.config import settings
+from app.core.config import get_settings
+
+settings = get_settings()
 
 # Engine async (Postgres con asyncpg). Se asume que `database_url` viene
 # en formato sync (postgresql://...); para SQLAlchemy async hace falta
