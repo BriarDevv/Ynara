@@ -20,7 +20,7 @@ from app.llm.errors import (
     LlmTimeoutError,
     LlmUnavailableError,
 )
-from app.llm.schemas import ChatMessage, CompletionResult
+from app.llm.schemas import ChatMessage, CompletionResult, ModelHealth
 
 _MODEL = "qwen-3.5-9b"
 
@@ -81,6 +81,32 @@ def _resilient(
     if breaker_factory is not None:
         kwargs["breaker_factory"] = breaker_factory
     return ResilientClient(pool, **kwargs)  # type: ignore[arg-type]
+
+
+# ---------- health agregado ----------
+
+
+class _HealthExploding:
+    """Cliente cuyo health() revienta (no se programa con FakeLlmClient)."""
+
+    async def health(self) -> ModelHealth:
+        raise RuntimeError("health boom")
+
+
+async def test_health_skips_client_that_raises() -> None:
+    """Un cliente que rompe en health() no debe tumbar el chequeo agregado."""
+    pool = ClientPool([_HealthExploding(), _fake()], FirstHealthy())  # type: ignore[list-item]
+    resilient = ResilientClient(pool)
+    health = await resilient.health()
+    assert health.healthy is True
+
+
+async def test_health_all_raise_returns_unhealthy_not_exception() -> None:
+    """Si todos rompen en health(), devuelve no-sano (nunca propaga)."""
+    pool = ClientPool([_HealthExploding(), _HealthExploding()], FirstHealthy())  # type: ignore[list-item]
+    resilient = ResilientClient(pool)
+    health = await resilient.health()
+    assert health.healthy is False
 
 
 # ---------- exito directo ----------
