@@ -104,7 +104,12 @@ class ResilientClient:
         """
         first_name = ""
         for client in self._pool.clients:
-            health = await client.health()
+            try:
+                health = await client.health()
+            except Exception:  # noqa: S112 -- health() roto = no-sano; el logging real es M4
+                # Un cliente que rompe en health() se trata como no-sano: no
+                # debe tumbar el chequeo agregado. Probamos el siguiente.
+                continue
             if not first_name:
                 first_name = health.model_name
             if health.healthy:
