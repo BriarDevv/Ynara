@@ -13,8 +13,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.api.v1 import health
 from app.core.config import get_settings
+from app.core.observability import init_sentry
 
 settings = get_settings()
+
+# Error tracking: no-op si no hay SENTRY_DSN. Antes de crear la app para
+# capturar errores de startup. El before_send limpia PII (regla #4).
+init_sentry()
 
 
 @asynccontextmanager
