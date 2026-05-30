@@ -94,6 +94,21 @@ def test_parse_tool_calls_not_list_raises(parser: OpenAIToolCallParser) -> None:
         parser.parse({"tool_calls": "nope"})
 
 
+def test_parse_tool_calls_none_or_absent_returns_empty(parser: OpenAIToolCallParser) -> None:
+    assert parser.parse({"tool_calls": None}) == []
+    assert parser.parse({}) == []
+
+
+def test_parse_tool_calls_empty_list_returns_empty(parser: OpenAIToolCallParser) -> None:
+    assert parser.parse({"tool_calls": []}) == []
+
+
+def test_parse_tool_calls_falsy_non_list_raises(parser: OpenAIToolCallParser) -> None:
+    # Shape malformado falsy-no-lista (0): no debe colapsar silencioso a [].
+    with pytest.raises(ToolParsingError, match="lista"):
+        parser.parse({"tool_calls": 0})
+
+
 # ---------- accumulate (streaming) ----------
 
 
