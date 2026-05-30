@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import { ChatMockSmoke } from "./ChatMockSmoke";
 import { TestMockClient } from "./TestMockClient";
+
+export const metadata: Metadata = {
+  title: "Mock sandbox",
+  description: "Verificación de que MSW intercepta y el fetcher tipado parsea.",
+  robots: { index: false, follow: false },
+};
 
 export default function TestMockPage() {
   return (

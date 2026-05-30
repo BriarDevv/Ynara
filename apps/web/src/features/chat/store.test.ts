@@ -46,28 +46,46 @@ describe("useChatStore", () => {
     expect(msg?.errorCode).toBe("LlmTimeoutError");
   });
 
-  it("applyChatResponse agrega la respuesta del assistant con sus actions", () => {
+  it("applyChatResponse cierra el optimistic del user y agrega el assistant con actions", () => {
     const sid = useChatStore.getState().createSession("productividad");
-    useChatStore.getState().appendUserMessage(sid, "agendá algo");
+    const userMsgId = useChatStore.getState().appendUserMessage(sid, "agendá algo");
 
-    useChatStore.getState().applyChatResponse(sid, {
+    useChatStore.getState().applyChatResponse(sid, userMsgId, {
       text: "listo",
       session_id: sid,
       actions: [{ id: "a1", name: "calendar.create_event", arguments: {}, result: {} }],
     });
 
     const list = useChatStore.getState().messages[sid] ?? [];
-    const assistant = list.at(-1);
     expect(list).toHaveLength(2);
+    expect(list[0]?.role).toBe("user");
+    expect(list[0]?.status).toBe("done");
+    const assistant = list.at(-1);
     expect(assistant?.role).toBe("assistant");
     expect(assistant?.text).toBe("listo");
     expect(assistant?.status).toBe("done");
     expect(assistant?.actions).toHaveLength(1);
   });
 
+  it("flujo optimistic completo: sin mensajes colgados en sending", () => {
+    const sid = useChatStore.getState().createSession("vida");
+    const userMsgId = useChatStore.getState().appendUserMessage(sid, "hola");
+    expect(useChatStore.getState().messages[sid]?.[0]?.status).toBe("sending");
+
+    useChatStore.getState().applyChatResponse(sid, userMsgId, {
+      text: "buenas",
+      session_id: sid,
+      actions: [],
+    });
+
+    const list = useChatStore.getState().messages[sid] ?? [];
+    expect(list.some((m) => m.status === "sending")).toBe(false);
+  });
+
   it("applyChatResponse deja actions undefined cuando viene vacío (Gemma)", () => {
     const sid = useChatStore.getState().createSession("estudio");
-    useChatStore.getState().applyChatResponse(sid, {
+    const userMsgId = useChatStore.getState().appendUserMessage(sid, "explicame algo");
+    useChatStore.getState().applyChatResponse(sid, userMsgId, {
       text: "respuesta",
       session_id: sid,
       actions: [],
