@@ -42,9 +42,10 @@
      en la sección "Sync con remote: usá rebase, no merge" de
      `AI-GUIDELINES.md`.
 
-2. **Commits**: Conventional Commits en español, imperativo, y
-   **atómicos** (un commit = un cambio lógico — regla #7 de
-   `AGENTS.md`, bloqueante).
+2. **Commits**: Conventional Commits en español (descripción
+   imperativa o noun-phrase del artefacto, nunca gerundio/pasado —
+   regla #6) y **atómicos** (un commit = un cambio lógico — regla #7
+   de `AGENTS.md`, bloqueante).
    - `feat(web): agregar modo bienestar`
    - `fix(backend): corregir extracción episódica`
    - `docs(architecture): agregar ADR-006`
