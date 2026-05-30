@@ -1,11 +1,14 @@
 import {
   type ApiErrorBody,
   type AuthResponse,
+  ChatRequestSchema,
+  type ChatResponse,
   LoginRequestSchema,
   OnboardRequestSchema,
   SignupRequestSchema,
 } from "@ynara/shared-schemas";
 import { HttpResponse, http } from "msw";
+import { cannedActions, cannedReply, isAgentMode } from "@/features/chat/constants";
 import { env } from "./env";
 
 /**
@@ -91,5 +94,33 @@ export const handlers = [
       );
     }
     return HttpResponse.json({ ok: true, onboardedAt: Date.now() });
+  }),
+
+  // POST /v1/chat (no-streaming). El streaming va aparte en /v1/chat/stream (W3).
+  // Respuesta canned por modo; `actions` solo en modos Qwen (productividad,
+  // memoria). El backend real es M9 — esto espeja el contrato cerrado en #61.
+  http.post(apiUrl("/v1/chat"), async ({ request }) => {
+    const json = await request.json().catch(() => null);
+    const parsed = ChatRequestSchema.safeParse(json);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      // El backend (FastAPI) responde 422 a validación de request.
+      return errorResponse(
+        {
+          error: "validation",
+          detail: first?.message ?? "body inválido",
+          field: first?.path[0] !== undefined ? String(first.path[0]) : undefined,
+        },
+        422,
+      );
+    }
+
+    const { text, mode, session_id } = parsed.data;
+    const response: ChatResponse = {
+      text: cannedReply(mode, text),
+      actions: isAgentMode(mode) ? cannedActions(mode) : [],
+      session_id: session_id ?? crypto.randomUUID(),
+    };
+    return HttpResponse.json(response);
   }),
 ];
