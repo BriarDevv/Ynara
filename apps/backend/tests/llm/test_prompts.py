@@ -72,7 +72,7 @@ def test_prompt_carries_shared_invariants(mode: Mode) -> None:
     assert "rioplatense" in prompt
     assert "voseo" in prompt
     # Seguridad: perimetro de datos + honestidad ante la falta de info.
-    assert "perimetro" in prompt
+    assert "perímetro" in prompt
     assert "inventar" in prompt
 
 
@@ -91,7 +91,7 @@ def test_gemma_modes_do_not_enable_tools_or_memory_writes(mode: Mode) -> None:
     # Refuerzo: estos modos se declaran como conversacion cerrada. Normalizamos
     # el whitespace porque el wrap de linea parte la frase ("...y no\nejecutas").
     normalized = " ".join(mode_prompt.split())
-    assert "no ejecutas acciones externas" in normalized
+    assert "no ejecutás acciones externas" in normalized
 
 
 @pytest.mark.parametrize("mode", _QWEN_MODES)
