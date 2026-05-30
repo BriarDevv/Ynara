@@ -22,9 +22,18 @@
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@biomejs/biome": "^2.0.0",
+    "@playwright/test": "^1.60.0",
+    "msw": "^2.14.6",
     "turbo": "^2.0.0",
     "typescript": "^5.6.0"
+  },
+  "//pnpm-overrides": "react-dom pineado a 19.0.0 para igualar a react@19.0.0: pnpm resolvía react-dom 19.2.x y el mismatch rompía vitest/RTL (Incompatible React versions). Quitar cuando react y react-dom converjan solos en la misma minor.",
+  "pnpm": {
+    "overrides": {
+      "react-dom": "19.0.0"
+    }
   },
   "license": "UNLICENSED"
 }
