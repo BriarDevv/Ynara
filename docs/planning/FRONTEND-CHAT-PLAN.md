@@ -73,17 +73,28 @@ Del slice de onboarding ya mergeado, reusamos sin reconstruir:
 
 ## 2. El contrato del chat (mirror del backend)
 
-Fuente de verdad: [`apps/backend/app/llm/schemas.py`](../../apps/backend/app/llm/schemas.py) (Pydantic, ya existe) + [`apps/backend/docs/ENDPOINTS.md`](../../apps/backend/docs/ENDPOINTS.md). Los Zod de este plan son **mirror manual** — si el backend cambia, se corrige Zod en el mismo PR.
+Fuente de verdad: [`apps/backend/app/llm/schemas.py`](../../apps/backend/app/llm/schemas.py) (Pydantic) + [`apps/backend/docs/ENDPOINTS.md`](../../apps/backend/docs/ENDPOINTS.md) + las respuestas de contrato de @BriarDevv en [`RESPUESTAS-CONTRATO-CHAT.md`](./RESPUESTAS-CONTRATO-CHAT.md) (las preguntas de la §7.1 quedaron **cerradas** ahí). Los Zod de este plan son **mirror manual** — si el backend cambia, se corrige Zod en el mismo PR.
 
-### 2.1 Endpoint
+### 2.1 Endpoints
+
+Son **dos** endpoints (decisión cerrada: el streaming va aparte, no por content-negotiation):
 
 ```
-POST /v1/chat
-  Request:  { text: string, mode: Mode, session_id?: string }
+POST /v1/chat            (JSON, no-streaming)
+  Request:  { text: string (≤ ~4000 chars), mode: Mode, session_id?: string }
   Response: { text: string, actions: Action[], session_id: string }
+
+POST /v1/chat/stream     (SSE, text/event-stream)
+  Request:  igual que /v1/chat
+  Eventos:  event: token  data: { delta: string }
+            event: done   data: { session_id, actions: Action[], finish_reason }
+            event: error  data: { code, message }      // sin datos de usuario
+
   Auth:     usuario autenticado (hoy NO existe → mock no lo exige)
   Modos:    todos
 ```
+
+> **Sin fallback mid-stream**: el `ResilientClient` (M3) solo hace fallback en `complete()`, no en `stream()`. La infra caída se sirve como **respuesta degradada** (texto degradado vía `token` + `done`), **no** como evento `error`.
 
 ### 2.2 Shapes a espejar en Zod (`packages/shared-schemas/src/chat.ts`)
 
@@ -96,18 +107,21 @@ ChatResponseSchema  = { text: string, actions: ActionSchema[], session_id: strin
 ChatMessageSchema   = { role: "system"|"user"|"assistant"|"tool",
                         content?: string, tool_call_id?: string, name?: string }
 
-// mirror de ToolCall (arguments ya parseado a objeto, no string)
-ToolCallSchema      = { id: string, name: string, arguments: Record<string, unknown> }
+// Action = tool ejecutada por el agente Qwen. CON result (decisión cerrada).
+// result = { status, ... } cuando salió OK, o { error: { code, message } } si falló.
+ActionSchema        = { id: string, name: string,
+                        arguments: Record<string, unknown>,
+                        result: Record<string, unknown> }
 
-// streaming — mirror de CompletionChunk (SSE estilo OpenAI)
-CompletionChunkSchema = { delta_text: string,
-                          tool_call_delta?: Record<string, unknown>,
-                          finish_reason?: string | null }
+// eventos del stream SSE (con nombre; ver §2.4)
+StreamTokenSchema   = { delta: string }
+StreamDoneSchema    = { session_id: string, actions: ActionSchema[], finish_reason: string }
+StreamErrorSchema   = { code: string, message: string }
 ```
 
-> **`actions[]`**: el backend lo tipa como `list[dict[str, Any]]` (genérico) en `ChatResponse`, con **default `[]`** (siempre presente). En Zod, espejarlo como `z.array(ActionSchema).default([])` — **no** opcional — para matchear el default de Pydantic. (Ojo: `ENDPOINTS.md` lo escribe como `actions?` opcional; es una inconsistencia del doc del backend, ver pregunta para @BriarDevv en §7.)
+> **`actions[]`**: **siempre presente** (`actions: Action[]`, vacío si no hubo). En Zod, `z.array(ActionSchema).default([])` — no opcional — para matchear el default de Pydantic. (BriarDevv ya corrigió el `actions?` engañoso en `ENDPOINTS.md`.)
 >
-> El shape de cada item: las tool-calls normalizadas son `ToolCall` (`{ id, name, arguments }`). El mock emite `actions` con ese shape para que la UI tenga algo estable. **No asumir un campo `result`**: `ToolCall` hoy no lo tiene; si el backend agrega el resultado ejecutado, se define en §7 (pregunta abierta), no acá.
+> Cada `Action` lleva **`result`** (el resultado ejecutado de la tool, no solo lo pedido): así la UI renderiza *lo que pasó* (chip "evento agendado", card de recordatorio). `result` es el dict que devuelve `ToolRegistry.execute` (hoy stub `{ status: "not_wired" }`; el real cuando se cableen las tools) o `{ error: { code, message } }`. Solo los modos Qwen (productividad, memoria) producen `actions`; Gemma → `[]`.
 
 ### 2.3 Sesión (mirror de `apps/backend/app/schemas/session.py`)
 
@@ -120,17 +134,28 @@ SessionSchema = { id: string /* UUID */, user_id: string /* UUID */, mode: ModeS
 
 > Una **sesión tiene un solo modo** (`SessionOut.mode`). Consecuencia de producto: **cambiar de modo = nueva sesión**, no re-etiquetar la actual.
 
-### 2.4 Streaming — transporte
+### 2.4 Streaming — transporte (cerrado)
 
-El `CompletionChunk` es el shape interno del cliente vLLM (SSE estilo OpenAI). La **exposición HTTP del streaming en `/v1/chat`** todavía no está spec'eada (M9 documenta la respuesta no-streaming). Para la UX de chat necesitamos streaming sí o sí.
+**Decisión cerrada** (BriarDevv, [`RESPUESTAS-CONTRATO-CHAT.md`](./RESPUESTAS-CONTRATO-CHAT.md)): el streaming va en un **endpoint aparte** `POST /v1/chat/stream`, NO por content-negotiation sobre `/v1/chat`. Razón: semánticas distintas (el no-streaming devuelve un `ChatResponse` con `actions` ya ejecutadas; el stream tiene otro contrato y **sin fallback mid-stream**), y una URL explícita es más clara para el cliente y más fácil de testear.
 
-**Decisión del plan (a validar con backend)**: el mock soporta `POST /v1/chat` en dos modos por content-negotiation —
-- `Accept: application/json` → `ChatResponse` completo (no-streaming).
-- `Accept: text/event-stream` → secuencia de eventos SSE, cada uno un `CompletionChunk` (`{ delta_text, tool_call_delta?, finish_reason? }`), cerrando con un **evento terminal** de tipo distinto que carga lo que `CompletionChunk` no tiene: `{ session_id, actions }`. Definir ese evento terminal explícitamente en el mock (ej. `event: done\ndata: { session_id, actions }`), porque `CompletionChunk` **no** tiene `session_id` ni `actions`.
+El stream emite **eventos SSE con nombre** (el `event:` de SSE como discriminador):
 
-> **Cuidado con los fixtures**: `apps/backend/tests/llm/fixtures/stream_tool_call_deltas.json` está en **formato wire OpenAI** (`choices[].delta.tool_calls[]`), que es lo que el cliente vLLM del backend *parsea*. El frontend NO consume eso: consume el `CompletionChunk` ya **normalizado** del backend. Usar los fixtures solo como referencia del wire, no como el shape que emite el mock.
+```text
+event: token
+data: {"delta": "Hola"}
 
-Es la forma más natural dado que el backend ya streamea SSE internamente. **Flag**: confirmar con @BriarDevv (a) si la exposición real será SSE en `/v1/chat` o un endpoint aparte (`/v1/chat/stream`), y (b) el shape exacto del evento terminal. El shape del chunk no cambia; solo el transporte y el cierre.
+event: token
+data: {"delta": " mundo"}
+
+event: done
+data: {"session_id": "0193...", "actions": [ ... ], "finish_reason": "stop"}
+```
+
+- **`token`** → `{ delta }`: un fragmento de texto. El front concatena.
+- **`done`** → `{ session_id, actions, finish_reason }`: **evento terminal**, el análogo del `ChatResponse` no-streaming (el `text` el front ya lo acumuló de los `token`).
+- **`error`** → `{ code, message }`: solo si algo revienta mid-stream, sin datos de usuario (regla #4). La infra caída NO es `error`: se sirve como respuesta **degradada** (texto degradado vía `token` + `done`).
+
+> El frontend consume estos eventos, **no** el `CompletionChunk` crudo ni el wire OpenAI. (`CompletionChunk` y los fixtures `stream_tool_call_deltas.json` son shape *interno* del cliente vLLM del backend; el endpoint los re-emite como los eventos `token`/`done` de arriba.)
 
 ### 2.5 Errores (mirror de `apps/backend/app/llm/errors.py`)
 
@@ -182,7 +207,7 @@ home  ──(escribir / elegir recomendación)──▶  crea sesión en el modo
 - **Enter** envía; **Shift+Enter** newline; autosize hasta N líneas.
 - Mientras la respuesta streamea: input **disabled** + botón pasa a "Detener" (cancela el stream).
 - Vacío → botón enviar disabled. No mandar mensajes vacíos.
-- **Longitud máxima** práctica del lado del cliente (ej. 4.000 chars) con contador al acercarse al límite; el `ChatRequest.text` del backend no tiene `max_length`, pero el frontend evita pegar 100KB.
+- **Longitud máxima** del mensaje: **~4.000 chars** (decisión cerrada, fundada en el `max_model_len = 4096` de Gemma — el modelo más chico). El backend la enforça (`max_length=4000` → 422); el frontend la valida antes de enviar, con contador al acercarse al límite.
 - **Foco**: al enviar, el composer se limpia y el **foco vuelve al textarea** (para encadenar mensajes con teclado).
 - Prefill: cuando se llega desde una recomendación de la home, el composer arranca con el `prefillPrompt`.
 
@@ -191,7 +216,7 @@ home  ──(escribir / elegir recomendación)──▶  crea sesión en el modo
 - **Usuario**: burbuja a la derecha, fondo ink suave. **Optimistic UI**: el mensaje del usuario aparece al instante (al enviar), antes de la respuesta del backend; si la request falla, se marca el mensaje como no-enviado con opción de reintentar.
 - **Assistant**: burbuja a la izquierda, con un acento del **tint del modo** (hairline o barra). Mientras streamea, cursor parpadeante; al cerrar (`finish_reason`), se fija.
 - **Auto-scroll**: la lista se scrollea sola al fondo mientras llega texto. Si el usuario scrollea hacia arriba manualmente, el auto-scroll **se pausa** (para leer mensajes previos) y aparece un botón "↓ Ir al final"; vuelve a auto-scrollear cuando el usuario baja al fondo.
-- **Markdown** (decisión de producto, ver §7): por defecto el MVP renderiza **texto plano** (con saltos de línea). Si el modo estudio necesita listas/código/links, markdown sanitizado entra como fast-follow (sesión aparte), no en este plan, para no inflar el scope.
+- **Markdown** (decisión cerrada: **sí, en el MVP**): las respuestas se renderizan con un subset seguro de markdown (bold, listas, inline code, code blocks, links), **sanitizado** (`react-markdown` + `rehype-sanitize`, sin HTML crudo, links con `rel="noopener"`). Motivo: los modelos ya emiten markdown (sobre todo modo Estudio), así que en texto plano se vería `**negrita**` y bloques de código literales. Va en la Sesión 2 (ver §5). **Requiere instalar deps** (`react-markdown`, `rehype-sanitize` — con OK humano, regla #1).
 - **Tool / actions** (solo modos Qwen): tras (o dentro de) la respuesta del assistant, `ActionCard`s:
   - `calendar` / `reminder` → "📅 Agendé …" / "⏰ Te recuerdo …" con los `arguments`.
   - `memory` → confirmación de recall/escritura con el **diamante violeta** (símbolo de memoria del onboarding).
@@ -242,7 +267,7 @@ apps/web/src/
 │       │   └── EmptyConversation.tsx
 │       ├── hooks/
 │       │   ├── useChatSession.ts    ← carga/crea sesión
-│       │   └── useChatStream.ts     ← SSE reader + parse de CompletionChunk
+│       │   └── useChatStream.ts     ← lee /v1/chat/stream: SSE events token/done/error
 │       ├── store.ts                 ← sesiones + mensajes + status (Zustand)
 │       ├── schemas.ts               ← re-export de @ynara/shared-schemas + form-only
 │       └── tests/
@@ -252,7 +277,7 @@ apps/web/src/
     ├── ChatInputDocked.tsx          ← MODIFICAR (delega en ChatComposer o navega)
     └── EmptySessions.tsx            ← MODIFICAR (lista real de sesiones)
 
-apps/web/src/lib/api.mocks.ts        ← MODIFICAR (handler POST /v1/chat: json + SSE)
+apps/web/src/lib/api.mocks.ts        ← MODIFICAR (handlers: POST /v1/chat JSON + POST /v1/chat/stream SSE)
 
 tests/e2e/
 └── chat.spec.ts                     ← NUEVO
@@ -262,20 +287,20 @@ tests/e2e/
 
 - **`features/chat/store.ts`** (Zustand): mapa de sesiones, mensajes por sesión, estado de streaming (`idle | streaming | error`), buffer del chunk en curso. Persistencia local (mock) en `localStorage` con guard SSR (mismo patrón que los stores del onboarding — **storage no-op en server**, ver landmine de zustand 5.0.13). El backend real persiste; el mock guarda local.
 - **No-streaming**: TanStack Query mutation que usa `api.post()` de `lib/api.ts` (que ya setea `Accept: application/json`).
-- **Streaming**: `useChatStream` con `fetch` **crudo** + `ReadableStream` + parser SSE, **bypasseando `lib/api.ts`** a propósito. Razón: `api.ts` (líneas 40-51) fuerza `Accept: application/json` y consume el body entero con `.json()/.text()` — no sabe de streams. Las dos rutas (no-streaming vía `api.ts`, streaming vía fetch crudo) **no comparten función**. Cancelable vía `AbortController`.
+- **Streaming**: `useChatStream` pega a `POST /v1/chat/stream` con `fetch` **crudo** + `ReadableStream` + parser de eventos SSE con nombre (`token`/`done`/`error`), **bypasseando `lib/api.ts`** a propósito. Razón: `api.ts` (líneas 40-51) fuerza `Accept: application/json` y consume el body entero con `.json()/.text()` — no sabe de streams. Las dos rutas (no-streaming vía `api.ts` a `/v1/chat`, streaming vía fetch crudo a `/v1/chat/stream`) **no comparten función**. Cancelable vía `AbortController`.
 - **IDs de sesión**: `crypto.randomUUID()` en el cliente para el mock (SSR-safe: generar en handler de envío, no en render).
 
-### 4.3 MSW — handler `/v1/chat`
+### 4.3 MSW — handlers `/v1/chat` y `/v1/chat/stream`
 
-- Valida el request con `ChatRequestSchema`.
-- `Accept: application/json` → arma una respuesta canned **según el modo** (tono del modo, ver `docs/product/MODES.md`), con `actions[]` no vacío solo en modos Qwen.
-- `Accept: text/event-stream` → emite `CompletionChunk`s troceando el texto, con delays simulados, y un evento de cierre con `session_id` + `actions[]`. Reusa los fixtures del backend (`apps/backend/tests/llm/fixtures/stream_tool_call_deltas.json`) como referencia del shape.
-- Toggle de dev para simular `timeout` / `unavailable` (probar los estados de error).
+- **`POST /v1/chat`** (JSON): valida con `ChatRequestSchema` y arma una respuesta canned **según el modo** (tono del modo, ver `docs/product/MODES.md`), con `actions[]` (shape `Action`, con `result`) no vacío solo en modos Qwen.
+- **`POST /v1/chat/stream`** (SSE): emite eventos con nombre — varios `event: token` `{ delta }` troceando el texto con delays simulados, y un `event: done` `{ session_id, actions, finish_reason }` al cerrar. En modos Qwen, el `done` lleva `actions` con `result`.
+- Toggle de dev para simular errores: `429` (rate limit), `timeout`, `unavailable`, `overloaded`, y un `event: error` mid-stream.
+- Copy canned por modo en un `features/chat/constants.ts`, no inline.
 
 ### 4.4 Reglas que respeta (de `apps/web/AGENTS.md`)
 
-- **Sin cliente Supabase / sin IA externa** — todo va por `/v1/chat` (FastAPI). El streaming SSE es contra nuestro backend, nunca contra OpenAI/vLLM directo.
-- **TS strict, sin `any`** — los `Record<string, unknown>` de `arguments`/`tool_call_delta` se tipan, no `any`.
+- **Sin cliente Supabase / sin IA externa** — todo va por `/v1/chat` y `/v1/chat/stream` (FastAPI). El streaming SSE es contra nuestro backend, nunca contra OpenAI/vLLM directo.
+- **TS strict, sin `any`** — los `Record<string, unknown>` de `arguments`/`result` se tipan, no `any`. El markdown se renderiza **sanitizado** (`rehype-sanitize`), nunca `dangerouslySetInnerHTML`.
 - **Tokens vía CSS variables** — burbujas y acentos usan los tints de modo existentes, nada hardcodeado.
 - **TanStack Query** para no-streaming; el streaming es la excepción justificada (un stream no es una query).
 - **`prefers-reduced-motion`** respetado en cursor + animaciones.
@@ -288,10 +313,10 @@ tests/e2e/
 
 ### 5.1 Sesión 1 — Contrato + infra de chat (mock)
 **Branch**: `feat/chat-foundations` · **PR**: `feat(chat): contrato + MSW + store`
-1. `packages/shared-schemas/src/chat.ts`: Zod mirror de `ChatRequest/Response`, `ChatMessage`, `ToolCall`, `CompletionChunk`, `Session`. Export en el barrel.
+1. `packages/shared-schemas/src/chat.ts`: Zod mirror de `ChatRequest`, `ChatResponse`, `ChatMessage`, `Action` (con `result`), `Session`, y los eventos del stream (`StreamToken`/`StreamDone`/`StreamError`). Export en el barrel.
 2. `features/chat/store.ts` (sesiones + mensajes + status, persist local con storage no-op en SSR).
-3. `lib/chat.ts`: cliente no-streaming (`POST /v1/chat`, `Accept: application/json`).
-4. `api.mocks.ts`: handler `/v1/chat` no-streaming, respuesta canned por modo.
+3. `lib/chat.ts`: cliente no-streaming (`POST /v1/chat`, vía `api.post`).
+4. `api.mocks.ts`: handler `/v1/chat` no-streaming, respuesta canned por modo (con `actions` solo en Qwen).
 5. Smoke en `/test-mock` (o equivalente).
 
 **Done**: `/v1/chat` mock devuelve un `ChatResponse` válido por modo; el store guarda la conversación.
@@ -302,16 +327,17 @@ tests/e2e/
    - si `!onboardingCompleted` → redirect a `/onboarding`.
    - si el `sessionId` de la URL no existe en el store → redirect a `/home` con toast "Conversación no encontrada".
 2. `ChatScreen`, `ChatHeader` (ModeChip), `MessageList`, `MessageBubble`, `EmptyConversation`.
-3. `ChatComposer` (textarea vivo: Enter envía, Shift+Enter newline, autosize, disabled-states, foco vuelve al enviar, límite de chars).
+3. `ChatComposer` (textarea vivo: Enter envía, Shift+Enter newline, autosize, disabled-states, foco vuelve al enviar, límite de ~4000 chars).
 4. Enviar → **optimistic** (el mensaje del user aparece al instante) → `POST /v1/chat` → render de la respuesta (sin streaming todavía); si falla, marcar el mensaje como no-enviado + reintentar.
-5. Copy canned y de estados vacíos en un `features/chat/constants.ts` (no inline), con el tono de cada modo según `docs/product/MODES.md` — facilita i18n futuro.
+5. **Markdown sanitizado** en `MessageBubble` (instalar `react-markdown` + `rehype-sanitize` **con OK humano**; subset seguro, sin HTML crudo, links `rel="noopener"`).
+6. Copy canned y de estados vacíos en un `features/chat/constants.ts` (no inline), con el tono de cada modo según `docs/product/MODES.md` — facilita i18n futuro.
 
 **Done**: se manda un mensaje y se ve la respuesta del modo; estado vacío correcto; URL inválida y user no-onboardeado redirigen bien.
 
 ### 5.3 Sesión 3 — Streaming (SSE)
 **Branch**: `feat/chat-streaming` · **PR**: `feat(chat): streaming de respuestas`
-1. `api.mocks.ts`: variante SSE de `/v1/chat` (emite `CompletionChunk`s con delays).
-2. `useChatStream` (fetch crudo + ReadableStream + parse SSE + evento terminal `{ session_id, actions }` + `AbortController`).
+1. `api.mocks.ts`: handler `POST /v1/chat/stream` (SSE) que emite `event: token` `{ delta }` con delays + `event: done` `{ session_id, actions, finish_reason }` al cerrar.
+2. `useChatStream` (fetch crudo a `/v1/chat/stream` + ReadableStream + parser de eventos SSE con nombre `token`/`done`/`error` + `AbortController`).
 3. Render token-a-token con cursor; "Detener" cancela y conserva lo recibido (marcado incompleto).
 4. **Auto-scroll** al fondo mientras llega texto; se pausa si el user scrollea arriba (+ botón "↓ Ir al final").
 5. `aria-live="polite"` en la burbuja que streamea; reduced-motion respetado.
@@ -320,9 +346,9 @@ tests/e2e/
 
 ### 5.4 Sesión 4 — Tool-calls / actions (modos Qwen)
 **Branch**: `feat/chat-actions` · **PR**: `feat(chat): acciones de tools en modos Qwen`
-1. `ActionCard` (calendar/reminder/memory; memory con diamante violeta).
-2. Mock: en modos Qwen (productividad, memoria) emitir `actions[]` con shape `ToolCall`; en Gemma, vacío.
-3. Render de `actions[]` (y, si streaming, del `tool_call_delta` acumulado).
+1. `ActionCard` (calendar/reminder/memory; memory con diamante violeta), renderiza `name` + `arguments` + **`result`** (estado ejecutado o error).
+2. Mock: en modos Qwen (productividad, memoria) emitir `actions[]` con shape `Action` (con `result`); en Gemma, vacío.
+3. Render de `actions[]` desde el `ChatResponse` (no-streaming) y desde el `event: done` (streaming).
 
 **Done**: productividad/memoria muestran acciones; estudio/bienestar/vida no.
 
@@ -368,10 +394,11 @@ tests/e2e/
 - [ ] Zod del chat = mirror de `app/llm/schemas.py` (sin divergencia silenciosa).
 
 ### Chat funcional
-- [ ] Mandar un mensaje y recibir respuesta del modo activo.
-- [ ] Streaming token-a-token con cursor; cancelable.
-- [ ] Modos Qwen (productividad, memoria) muestran `actions[]`; modos Gemma no.
-- [ ] Estados de error humanos por tipo (timeout/unavailable), con reintento.
+- [ ] Mandar un mensaje (`POST /v1/chat`) y recibir respuesta del modo activo.
+- [ ] Streaming (`POST /v1/chat/stream`, eventos `token`/`done`/`error`) token-a-token con cursor; cancelable.
+- [ ] Respuestas con **markdown sanitizado** (bold, listas, code, links), sin HTML crudo.
+- [ ] Modos Qwen (productividad, memoria) muestran `actions[]` con `result`; modos Gemma no.
+- [ ] Estados de error humanos por tipo (timeout/unavailable/overloaded/429), con reintento.
 - [ ] Cambiar de modo arranca sesión nueva.
 
 ### Sesiones
@@ -389,9 +416,9 @@ tests/e2e/
 
 ---
 
-## 7. Decisiones a validar, riesgos y landmines
+## 7. Riesgos y landmines
 
-**Transporte del streaming** (a confirmar con @BriarDevv): el `/v1/chat` documentado es no-streaming; el `CompletionChunk` existe pero su exposición HTTP (SSE en `/v1/chat` vs `/v1/chat/stream`) no está cerrada. El plan asume SSE por content-negotiation. El shape del chunk no cambia; solo el transporte.
+> El contrato del chat quedó **cerrado** por @BriarDevv en [`RESPUESTAS-CONTRATO-CHAT.md`](./RESPUESTAS-CONTRATO-CHAT.md) (PR #61): streaming en `/v1/chat/stream` con eventos `token`/`done`/`error`, `Action` con `result`, `actions` siempre presente, markdown sí, límite ~4000 chars. Las preguntas de la antigua §7.1 ya no están abiertas (ver §7.1 abajo).
 
 **Auth es prerequisito del backend real, no del mock.** El `/v1/chat` real pide usuario autenticado, pero `core/security.py` está en `NotImplementedError`. El mock no exige auth. Cuando se conecte al backend real, hace falta: (a) el PR de auth del backend, (b) la inyección de `Authorization: Bearer <token>` en `lib/api.ts` (hoy un TODO). Sin eso, el chat real devuelve 401.
 
@@ -411,19 +438,18 @@ tests/e2e/
 
 **Rate limiting.** `ENDPOINTS.md` prevé ~30/min por usuario (TODO del backend). El mock debe poder simular un `429` para probar la UX de cooldown (ej. deshabilitar el envío con copy "Esperá unos segundos"). No construir un rate-limiter real en el cliente.
 
-**Storage de zustand**: persist con `createJSONStorage(() => localStorage)` + el patrón de storage **no-op en server** (`StateStorage`), nunca `undefined` (la factory de zustand 5.0.13 no lo acepta — landmine del onboarding). Evita hydration mismatch.
+### 7.1 Decisiones cerradas (eran preguntas abiertas)
 
-### 7.1 Preguntas abiertas
+Cerradas por @BriarDevv en [`RESPUESTAS-CONTRATO-CHAT.md`](./RESPUESTAS-CONTRATO-CHAT.md) (PR #61) + decisión del owner:
 
-**Para @BriarDevv (contrato del backend)**:
-1. Streaming: ¿SSE sobre `/v1/chat` por content-negotiation, o un endpoint aparte (`/v1/chat/stream`)?
-2. ¿Cuál es el shape del **evento terminal** del stream que carga `session_id` + `actions`? (`CompletionChunk` no los tiene.)
-3. ¿Los items de `actions[]` van a tener un campo `result` (resultado ejecutado de la tool), o es solo `ToolCall` (`{ id, name, arguments }`)?
-4. `ENDPOINTS.md` escribe `actions?` (opcional) pero el Pydantic es `actions = []` (siempre presente). ¿Corregimos el doc a `actions: Action[]`?
-
-**Para el owner (producto)**:
-1. ¿El chat renderiza **markdown** en las respuestas (código, listas, links, bold)? Hoy el plan asume texto plano y deja markdown como fast-follow.
-2. ¿Hay un **máximo de longitud** del mensaje del usuario desde el lado de producto? (El plan propone ~4.000 chars como límite práctico.)
+| # | Pregunta | Decisión |
+|---|---|---|
+| 1 | ¿Streaming por content-negotiation o endpoint aparte? | **Endpoint aparte `POST /v1/chat/stream`** (SSE). `/v1/chat` queda no-streaming. |
+| 2 | ¿Shape del evento terminal? | **Eventos SSE con nombre**: `token {delta}`, `done {session_id, actions, finish_reason}`, `error {code, message}`. |
+| 3 | ¿`actions[]` con `result`? | **Sí**: `Action = { id, name, arguments, result }`. |
+| 4 | ¿`actions?` o `actions: Action[]`? | **`actions: Action[]`** (siempre presente). Ya corregido en `ENDPOINTS.md`. |
+| 5 | ¿Markdown en las respuestas? | **Sí**, subset seguro sanitizado desde el MVP (owner). |
+| 6 | ¿Máximo de longitud del mensaje? | **~4.000 chars** (techo seguro contra el `max_model_len` de Gemma). |
 
 ---
 
@@ -432,7 +458,8 @@ tests/e2e/
 - [`AGENTS.md`](../../AGENTS.md) — 10 reglas no negociables (#4 sin IA externa, #5 sin Supabase en frontend).
 - [`apps/web/AGENTS.md`](../../apps/web/AGENTS.md) — reglas duras del frontend web.
 - [`apps/backend/app/llm/schemas.py`](../../apps/backend/app/llm/schemas.py) — **contrato fuente** (ChatRequest/Response, ChatMessage, ToolCall, CompletionChunk).
-- [`apps/backend/docs/ENDPOINTS.md`](../../apps/backend/docs/ENDPOINTS.md) — spec de `POST /v1/chat` (M9).
+- [`docs/planning/RESPUESTAS-CONTRATO-CHAT.md`](./RESPUESTAS-CONTRATO-CHAT.md) — **respuestas de contrato cerradas** (@BriarDevv, PR #61): streaming, eventos, `Action.result`, markdown, límite.
+- [`apps/backend/docs/ENDPOINTS.md`](../../apps/backend/docs/ENDPOINTS.md) — spec de `POST /v1/chat` + `POST /v1/chat/stream` (M9).
 - [`docs/planning/LLM-INFERENCE-INTEGRATION.md`](./LLM-INFERENCE-INTEGRATION.md) — milestones del backend LLM (M8 router, M9 endpoint).
 - [`docs/product/MODES.md`](../product/MODES.md) — definición + tono de los 5 modos.
 - [`docs/architecture/adrs/ADR-002-gemma-qwen-dual-stack.md`](../architecture/adrs/ADR-002-gemma-qwen-dual-stack.md) — Gemma lee / Qwen escribe + tools.
