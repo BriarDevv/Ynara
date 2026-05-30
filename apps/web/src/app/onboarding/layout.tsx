@@ -10,10 +10,9 @@ import { useUserStore } from "@/stores/user";
 /**
  * Layout del flujo de onboarding.
  *
- * - Si el user ya completó onboarding → redirect a `/` (que vuelve a
- *   bounciar a `/onboarding`). TODO(Sesión 5): cambiar a `/home` cuando
- *   exista. Sin esto, un user con `onboardingCompleted=true` que tipea
- *   `/onboarding/*` cae en un 404 muerto.
+ * - Si el user ya completó onboarding → redirect a `/home`. Sin esto, un
+ *   user con `onboardingCompleted=true` que tipea `/onboarding/*` cae en
+ *   un 404 muerto.
  * - Header sticky con ProgressDots + skip-all.
  * - El [step]/page renderiza el step actual; la prop `total/current`
  *   del ProgressDots las pasa cada step que usa StepShell (no las
@@ -25,8 +24,7 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
   const completed = useUserStore((s) => s.onboardingCompleted);
 
   useEffect(() => {
-    // TODO(Sesión 5): cambiar a "/home" cuando exista.
-    if (completed) router.replace("/");
+    if (completed) router.replace("/home");
   }, [completed, router]);
 
   if (completed) return null;
@@ -52,16 +50,16 @@ function OnboardingHeaderWithProgress() {
   const index = STEP_INDEX[current] ?? 0;
 
   const handleSkipAll = () => {
+    // "Saltar onboarding" es una decisión deliberada de no completarlo
+    // ahora (se retoma desde Ajustes). Marcamos `completed` para no
+    // re-entrar al flujo en cada visita: sin esto, un skip antes del
+    // Step de auth deja al user sin userId y la /home nunca flipea el flag.
     reset();
-    // TODO(Sesión 5): cambiar a "/home" cuando exista.
-    router.replace("/");
+    useUserStore.getState().completeOnboarding();
+    router.replace("/home");
   };
 
   return (
-    <OnboardingHeader
-      total={ONBOARDING_STEPS.length}
-      current={index}
-      onSkipAll={handleSkipAll}
-    />
+    <OnboardingHeader total={ONBOARDING_STEPS.length} current={index} onSkipAll={handleSkipAll} />
   );
 }
