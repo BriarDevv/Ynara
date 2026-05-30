@@ -72,6 +72,12 @@ class TestSpecsFor:
             assert spec.parameters["type"] == "object"
             assert "properties" in spec.parameters
 
+    def test_schema_omits_model_docstring_description(self) -> None:
+        # #15: el docstring del modelo Pydantic NO debe filtrarse como
+        # 'description' top-level del JSON Schema (ruido para el modelo).
+        for spec in default_registry().specs_for(["calendar", "reminder"]):
+            assert "description" not in spec.parameters
+
     def test_empty_namespaces_no_tools(self) -> None:
         assert default_registry().specs_for([]) == []
 
