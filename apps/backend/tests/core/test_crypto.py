@@ -132,3 +132,31 @@ def test_wrong_length_master_key_raises(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr("app.core.crypto.get_settings", lambda: _settings(short))
     with pytest.raises(RuntimeError, match="32 bytes"):
         encrypt_for_user(_USER_A, "x")
+
+
+# ---------- regresión (sugeridos por el security review) ----------
+
+
+def test_tampered_nonce_rejected(patched_key: None) -> None:
+    # El nonce (primeros 12B) también está autenticado por GCM: flippearlo da InvalidTag.
+    blob = bytearray(encrypt_for_user(_USER_A, "intacto"))
+    blob[0] ^= 0x01
+    with pytest.raises(InvalidTag):
+        decrypt_for_user(_USER_A, bytes(blob))
+
+
+def test_exact_overhead_garbage_rejected(patched_key: None) -> None:
+    # 28 bytes (largo mínimo válido) de basura: pasa el check de largo pero GCM
+    # lo rechaza con InvalidTag, no lo acepta como ct vacío.
+    garbage = bytes(range(_OVERHEAD))
+    with pytest.raises(InvalidTag):
+        decrypt_for_user(_USER_A, garbage)
+
+
+def test_error_does_not_leak_plaintext(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regla #4: ante un error, el plaintext del usuario no debe aparecer en el mensaje.
+    monkeypatch.setattr("app.core.crypto.get_settings", lambda: _settings(""))
+    secret = "dato-super-secreto-del-usuario"
+    with pytest.raises(RuntimeError) as exc:
+        encrypt_for_user(_USER_A, secret)
+    assert secret not in str(exc.value)
