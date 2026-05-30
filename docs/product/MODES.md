@@ -8,7 +8,7 @@ vive en [`ynara.config.json`](../../ynara.config.json).
 
 | Modo | Modelo | Capas de memoria | Tools | Tono |
 |------|--------|------------------|-------|------|
-| Productividad | Qwen 3.5-9B | semantic, episodic | calendar, reminders, memory | neutro-eficaz |
+| Productividad | Qwen 3.5-9B | semantic, episodic | calendar, reminder, memory | neutro-eficaz |
 | Estudio | Gemma 4 26B-A4B | episodic, procedural | — | encouragement |
 | Bienestar | Gemma 4 26B-A4B | procedural, semantic | — | casual-empatico |
 | Vida | Gemma 4 26B-A4B | procedural | — | casual-rioplatense |

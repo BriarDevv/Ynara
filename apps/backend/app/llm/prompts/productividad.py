@@ -2,7 +2,7 @@
 
 Modelo Qwen 3.5-9B (agente): lee y escribe memoria, llama tools. Tono
 neutro-eficaz. Capas de memoria: semantic + episodic. Tools: calendar,
-reminders, memory. Ver ``ynara.config.json[modes][productividad]`` y MODES.md.
+reminder, memory. Ver ``ynara.config.json[modes][productividad]`` y MODES.md.
 """
 
 from __future__ import annotations

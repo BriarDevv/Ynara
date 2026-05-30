@@ -50,10 +50,9 @@ class Tool(Protocol):
     """Una tool invocable por el agente Qwen.
 
     El ``name`` sigue ``namespace.action`` (ambos snake_case). El
-    ``namespace`` se declara por separado porque no siempre coincide con el
-    prefijo del ``name`` (ej: namespace ``reminders`` con name
-    ``reminder.set``, segun ``ynara.config.json`` y ``docs/TOOLS.md``), y es
-    el que el registry usa para filtrar por modo.
+    ``namespace`` se declara por separado: es la clave de habilitacion por
+    modo en ``ynara.config.json[modes][*].tools_enabled`` y la que el
+    registry usa para filtrar que tools ve cada modo.
     """
 
     @property
@@ -63,7 +62,7 @@ class Tool(Protocol):
 
     @property
     def namespace(self) -> str:
-        """Namespace de habilitacion por modo (``calendar``, ``reminders``)."""
+        """Namespace de habilitacion por modo (``calendar``, ``reminder``)."""
         ...
 
     @property

@@ -56,9 +56,12 @@
   - `when: datetime` (ISO 8601 con tz)
 - **Habilitada en modos**: productividad.
 
-### reminder.cancel
+### reminder.list
 
-- **Parámetros**: `id: UUID`.
+- **Descripción**: listar los recordatorios del usuario.
+- **Parámetros**:
+  - `from_dt: datetime | None` (ISO 8601)
+  - `to_dt: datetime | None`
 - **Habilitada en modos**: productividad.
 
 ### memory.add

@@ -1,6 +1,6 @@
 """Tools que Qwen 3.5-9B (modo agente) puede llamar.
 
-Convención: un módulo por namespace (``calendar.py``, ``reminders.py``,
+Convención: un módulo por namespace (``calendar.py``, ``reminder.py``,
 ``memory.py``, ``mode.py``). Cada tool implementa el Protocol ``Tool``
 (``base.py``): expone ``name`` (``namespace.action`` snake_case),
 ``namespace``, ``description``, ``parameters`` (JSON Schema OpenAI) y un

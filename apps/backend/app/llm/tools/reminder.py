@@ -1,15 +1,14 @@
-"""Tools del namespace ``reminders`` (M6).
+"""Tools del namespace ``reminder`` (M6).
 
 ``SetReminderTool`` (``reminder.set``) y ``ListRemindersTool``
 (``reminder.list``). Mismo patron que ``calendar.py``: validan con Pydantic
-v2 strict y devuelven un stub honesto, porque todavia no existe la tabla
-``reminders`` ni un backend real.
+v2 strict y devuelven un stub honesto, porque todavia no existe la tabla de
+recordatorios ni un backend real.
 
-Nota de naming: el namespace de habilitacion por modo es ``reminders``
-(plural, como en ``ynara.config.json``), pero el ``name`` de cada tool usa
-el prefijo ``reminder`` (singular, como en ``docs/TOOLS.md``:
-``reminder.set``). Por eso ``namespace`` se declara aparte y no se deriva
-del prefijo del ``name``.
+Naming unificado en singular ``reminder`` (alineado con ``calendar`` y
+``docs/TOOLS.md``): el namespace de habilitacion por modo
+(``ynara.config.json[modes][*].tools_enabled``), el prefijo de los ``name``
+(``reminder.set`` / ``reminder.list``) y este modulo son todos singulares.
 """
 
 from __future__ import annotations
@@ -18,14 +17,14 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.llm.tools.base import IsoDatetime, tool_error
 
-_NAMESPACE = "reminders"
+_NAMESPACE = "reminder"
 
 
 def _stub_result(action: str, arguments: dict[str, object]) -> dict[str, object]:
     """Resultado stub uniforme: honesto sobre que no hay backend real."""
     return {
         "status": "not_wired",
-        "detail": "reminders backend pendiente",
+        "detail": "reminder backend pendiente",
         "action": action,
         "echo": arguments,
     }
