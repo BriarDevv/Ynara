@@ -14,10 +14,11 @@ Maquina de estados clasica:
   ``CLOSED``; si falla, vuelve a ``OPEN`` (reinicia el temporizador).
 
 El breaker no sabe de ``async``: ``allow()`` / ``record_*`` son sincronos
-y el ``ResilientClient`` los orquesta. No es task-safe: bajo requests
-concurrentes que comparten el mismo breaker, ``HALF_OPEN`` puede dejar pasar
-mas de una prueba. Aceptable en el modelo de uso actual (1-2 procesos, baja
-carga); revisitar si hace falta exclusion estricta.
+y el ``ResilientClient`` los orquesta. En ``HALF_OPEN`` admite UNA sola
+prueba a la vez (flag ``_probe_in_flight``): como ``allow()`` es sincrono,
+entre coroutines de asyncio que comparten el breaker no hay carrera (nada se
+intercala en medio del metodo). NO es thread-safe (sin lock): el modelo de
+uso es asyncio en 1-2 procesos, no threads.
 """
 
 from __future__ import annotations
@@ -58,6 +59,7 @@ class CircuitBreaker:
         self._state = CircuitState.CLOSED
         self._failures = 0
         self._opened_at = 0.0
+        self._probe_in_flight = False
 
     @property
     def state(self) -> CircuitState:
@@ -75,15 +77,18 @@ class CircuitBreaker:
         if self._state is CircuitState.OPEN:
             if self._clock() - self._opened_at >= self._recovery_timeout_s:
                 self._state = CircuitState.HALF_OPEN
+                self._probe_in_flight = True
                 return True
             return False
-        # HALF_OPEN: la prueba ya esta en curso, se permite.
-        return True
+        # HALF_OPEN: solo UNA prueba a la vez. Si ya hay una en curso (caso
+        # concurrente), se bloquea hasta que cierre via record_success/failure.
+        return not self._probe_in_flight
 
     def record_success(self) -> None:
         """Registra un exito: cierra el circuito y resetea el contador."""
         self._state = CircuitState.CLOSED
         self._failures = 0
+        self._probe_in_flight = False
 
     def record_failure(self) -> None:
         """Registra un fallo y abre el circuito si corresponde.
@@ -102,3 +107,4 @@ class CircuitBreaker:
         """Transiciona a ``OPEN`` y arranca el temporizador de recuperacion."""
         self._state = CircuitState.OPEN
         self._opened_at = self._clock()
+        self._probe_in_flight = False
