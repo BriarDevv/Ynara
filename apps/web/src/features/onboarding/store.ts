@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import type { OnboardingStep } from "./constants";
 
 /**
@@ -78,11 +78,18 @@ const initialState: OnboardingDraft = {
 
 /**
  * createJSONStorage(() => sessionStorage) con guard para SSR: en
- * server-side `sessionStorage` no existe. `createJSONStorage` acepta
- * `undefined` y Zustand v5 lo trata como "no persistir".
+ * server-side `sessionStorage` no existe. La factory de zustand 5.0.13
+ * tipa el retorno como `StateStorage` (no acepta `undefined`), así que
+ * devolvemos un storage no-op en server en vez de `undefined`.
  */
+const noopStorage: StateStorage = {
+  getItem: () => null,
+  removeItem: () => undefined,
+  setItem: () => undefined,
+};
+
 const sessionJsonStorage = createJSONStorage(() =>
-  typeof window === "undefined" ? undefined : sessionStorage,
+  typeof window === "undefined" ? noopStorage : sessionStorage,
 );
 
 export const useOnboardingStore = create<OnboardingDraft & OnboardingActions>()(
