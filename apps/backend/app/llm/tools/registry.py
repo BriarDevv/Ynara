@@ -8,8 +8,8 @@ mandar al modelo; cuando el modelo pide una tool, el registry la ejecuta y
 modelo nunca ve un traceback.
 
 El registry no filtra por modelo: que solo los modos Qwen reciban tools lo
-decide el router via ``tools_enabled`` (Gemma tiene la lista vacia salvo
-``vida`` con ``calendar`` de lectura; el routing real es M8).
+decide el router via ``tools_enabled`` (los modos Gemma tienen la lista
+vacia: son solo conversacionales, ADR-002; el routing real es M8).
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from __future__ import annotations
 from app.llm.schemas import ToolSpec
 from app.llm.tools.base import Tool, to_spec, tool_error
 from app.llm.tools.calendar import CreateEventTool, ListEventsTool
-from app.llm.tools.reminders import ListRemindersTool, SetReminderTool
+from app.llm.tools.reminder import ListRemindersTool, SetReminderTool
 
 
 class ToolRegistry:
@@ -61,7 +61,7 @@ class ToolRegistry:
 
 
 def default_registry() -> ToolRegistry:
-    """Registry por defecto: calendar + reminders (NO memory).
+    """Registry por defecto: calendar + reminder (NO memory).
 
     Memory es M7 (tabla sagrada, regla #3) y se registra aparte cuando
     exista. Aca solo van las 4 tools stub de M6.

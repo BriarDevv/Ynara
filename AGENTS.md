@@ -211,7 +211,7 @@ Reglas extendidas (15 más + landmines del scaffold): [`docs/conventions/AI-GUID
 
 | Modo | Modelo | Capas de memoria | Tools |
 | --- | --- | --- | --- |
-| productividad | Qwen 3.5-9B (agente) | semantic + episodic | calendar, reminders, memory |
+| productividad | Qwen 3.5-9B (agente) | semantic + episodic | calendar, reminder, memory |
 | estudio | Gemma 4 26B-A4B | episodic + procedural | — |
 | bienestar | Gemma 4 26B-A4B | procedural + semantic | — |
 | vida | Gemma 4 26B-A4B | procedural | — |

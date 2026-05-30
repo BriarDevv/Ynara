@@ -34,7 +34,7 @@ de usuario saliendo del perímetro, sin lock-in a big tech.
 | Modos del producto | 5 (productividad, estudio, bienestar, vida, memoria) |
 | Modelos LLM | 2 (Gemma 4 26B-A4B conversacional + Qwen 3.5-9B agente) |
 | Capas de memoria | 3 (semántica, episódica, procedural) |
-| Tools del agente Qwen | 9 (calendar, reminders, memory, mode.switch) |
+| Tools del agente Qwen | 9 (calendar, reminder, memory, mode.switch) |
 | Apps | 3 (web Next.js 16, mobile Expo 53+, backend FastAPI) |
 | Packages compartidos | 4 (shared-types, shared-schemas, ui, config) |
 | ADRs aprobados | 5 |
@@ -46,10 +46,10 @@ de usuario saliendo del perímetro, sin lock-in a big tech.
 
 | Modo | Para qué sirve | Modelo | Tools | Capas de memoria |
 | --- | --- | --- | --- | --- |
-| **Productividad** | Agendar, recordar, ejecutar | Qwen 3.5-9B (agente) | calendar, reminders, memory | semántica, episódica |
+| **Productividad** | Agendar, recordar, ejecutar | Qwen 3.5-9B (agente) | calendar, reminder, memory | semántica, episódica |
 | **Estudio** | Tutoría, explicar, procesar textos | Gemma 4 26B-A4B | — | episódica, procedural |
 | **Bienestar** | Descarga emocional, acompañar | Gemma 4 26B-A4B | — | procedural, semántica |
-| **Vida** | Charla casual, recomendaciones | Gemma 4 26B-A4B | calendar (read) | procedural |
+| **Vida** | Charla casual, recomendaciones | Gemma 4 26B-A4B | — | procedural |
 | **Memoria** | Recall explícito de conversaciones | Qwen 3.5-9B (agente) | memory | las 3 capas |
 
 Detalle de cada modo en [`docs/product/MODES.md`](./docs/product/MODES.md).

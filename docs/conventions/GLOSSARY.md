@@ -42,7 +42,7 @@ con un PR.
 - **Router LLM** — `apps/backend/app/llm/router.py`. Decide modelo
   según modo activo.
 - **Tool** — función que el agente Qwen puede invocar (calendar,
-  reminders, memory, etc.). Definidas en
+  reminder, memory, etc.). Definidas en
   `apps/backend/docs/TOOLS.md`.
 - **Tabla operativa** — cualquier tabla que no sea de memoria
   sagrada (users, sessions, audit_log, etc.).

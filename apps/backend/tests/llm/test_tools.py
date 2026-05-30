@@ -29,12 +29,27 @@ _VALID_END = "2026-05-20T16:00:00-03:00"
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 
 # Namespaces tal como aparecen en ``ynara.config.json[modes][*].tools_enabled``.
-_CONFIG_NAMESPACES = {"calendar", "reminders", "memory"}
+_CONFIG_NAMESPACES = {"calendar", "reminder", "memory"}
+
+
+class _ExplodingTool:
+    """Tool de prueba cuyo execute revienta: ejercita el blindaje del registry."""
+
+    name = "boom.explode"
+    namespace = "boom"
+    description = "siempre falla"
+
+    @property
+    def parameters(self) -> dict[str, object]:
+        return {"type": "object", "properties": {}}
+
+    async def execute(self, arguments: dict[str, object]) -> dict[str, object]:
+        raise RuntimeError("kaboom interno con dato sensible")
 
 
 class TestSpecsFor:
     def test_all_four_tools_for_calendar_and_reminders(self) -> None:
-        specs = default_registry().specs_for(["calendar", "reminders"])
+        specs = default_registry().specs_for(["calendar", "reminder"])
         assert len(specs) == 4
         names = {s.name for s in specs}
         assert names == {
@@ -47,7 +62,7 @@ class TestSpecsFor:
     def test_specs_are_openai_shaped(self) -> None:
         # ``specs_for`` devuelve ``ToolSpec`` con la identidad plana; el
         # cliente vLLM la envuelve en ``{"type": "function", "function": ...}``.
-        specs = default_registry().specs_for(["calendar", "reminders"])
+        specs = default_registry().specs_for(["calendar", "reminder"])
         for spec in specs:
             assert isinstance(spec, ToolSpec)
             assert spec.name
@@ -66,7 +81,7 @@ class TestSpecsFor:
         assert names == {"calendar.create_event", "calendar.list_events"}
 
     def test_only_reminders_returns_two(self) -> None:
-        specs = default_registry().specs_for(["reminders"])
+        specs = default_registry().specs_for(["reminder"])
         names = {s.name for s in specs}
         assert names == {"reminder.set", "reminder.list"}
 
@@ -148,6 +163,14 @@ class TestExecuteErrors:
         message = result["error"]["message"]  # type: ignore[index]
         assert "secreto-del-usuario" not in message
 
+    async def test_execution_error_is_wrapped_not_raised(self) -> None:
+        # Blindaje generico `except Exception` del registry: una tool que raise
+        # nunca debe escapar; vuelve como execution_error sin filtrar el detalle.
+        registry = ToolRegistry([_ExplodingTool()])
+        result = await registry.execute("boom.explode", {})
+        assert result["error"]["code"] == "execution_error"  # type: ignore[index]
+        assert "kaboom" not in result["error"]["message"]  # type: ignore[index]
+
 
 class TestDatetimeValidation:
     async def test_create_event_rejects_numeric_epoch(self) -> None:
@@ -178,9 +201,15 @@ class TestDatetimeValidation:
 
 
 class TestNamingAndNamespaces:
+    def test_reminder_namespace_maps_to_reminder_names(self) -> None:
+        # namespace singular 'reminder' (config) <-> names 'reminder.*' (TOOLS.md).
+        names = {s.name for s in default_registry().specs_for(["reminder"])}
+        assert names == {"reminder.set", "reminder.list"}
+        assert all(n.startswith("reminder.") for n in names)
+
     def test_names_are_snake_case_namespace_action(self) -> None:
         registry = default_registry()
-        for spec in registry.specs_for(["calendar", "reminders"]):
+        for spec in registry.specs_for(["calendar", "reminder"]):
             assert _NAME_RE.match(spec.name), spec.name
 
     def test_namespaces_match_config(self) -> None:
@@ -194,7 +223,7 @@ class TestNamingAndNamespaces:
         registry = default_registry()
         # Recolectamos los namespaces via las tools registradas.
         specs_cal = registry.specs_for(["calendar"])
-        specs_rem = registry.specs_for(["reminders"])
+        specs_rem = registry.specs_for(["reminder"])
         assert specs_cal and specs_rem  # ambos namespaces estan en config
 
 
