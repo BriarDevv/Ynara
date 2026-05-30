@@ -10,10 +10,13 @@ docs/
 ├── architecture/      # Decisiones técnicas, diagramas, ADRs
 │   ├── adrs/          # Architecture Decision Records (uno por decisión)
 │   ├── diagrams/      # Diagramas del sistema (markdown + mermaid)
-│   └── informe-tecnico.pdf  # Informe técnico fundacional (Mayo 2026) con bitácora de versiones
+│   ├── informe-tecnico.pdf   # Informe técnico fundacional (Mayo 2026) con bitácora de versiones
+│   └── fine-tuning-plan.pdf  # Plan de fine-tuning de los modelos (Gemma/Qwen)
 ├── product/           # Visión, modos, memoria, voz
 ├── operations/        # Instalación, deploy, runbook, migraciones
-└── conventions/       # Commits, glosario, AI guidelines, code style
+├── conventions/       # Commits, glosario, AI guidelines, code style
+├── planning/          # Roadmaps, planes operativos y bitácoras de sesión
+└── compliance/        # Cumplimiento: privacidad, protección de datos
 ```
 
 ## Por audiencia
