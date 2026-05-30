@@ -24,7 +24,7 @@ Other releases include: beta: 5.0.0-beta.31
 
 next-auth v5 (rebranded como **Auth.js**) sigue en beta channel. El rango semver `^5.0.0` **no matchea pre-releases** salvo opt-in explícito. El install completo del monorepo queda bloqueado.
 
-Este blocker se descubrió al arrancar la Sesión 1 del [plan de frontend MVP](../../planning/FRONTEND-ONBOARDING-PLAN.md), donde la Sesión 3 explícitamente prevé usar Auth.js v5 mockeado para el step de Auth del onboarding.
+Este blocker se descubrió al arrancar la Sesión 1 del [plan de frontend MVP](../../planning/archive/FRONTEND-ONBOARDING-PLAN.md), donde la Sesión 3 explícitamente prevé usar Auth.js v5 mockeado para el step de Auth del onboarding.
 
 ## Decisión
 
@@ -105,7 +105,7 @@ Este pin destrabó `pnpm install` que requiere OK humano explícito por regla #1
 ## Referencias
 
 - [Auth.js v5 migration guide](https://authjs.dev/getting-started/migrating-to-v5) — patrones que vamos a usar.
-- [`docs/planning/FRONTEND-ONBOARDING-PLAN.md`](../../planning/FRONTEND-ONBOARDING-PLAN.md) — Sesión 3 implementa el step de Auth con esta lib.
+- [`docs/planning/archive/FRONTEND-ONBOARDING-PLAN.md`](../../planning/archive/FRONTEND-ONBOARDING-PLAN.md) — Sesión 3 implementa el step de Auth con esta lib.
 - [`apps/web/AGENTS.md`](../../../apps/web/AGENTS.md) — reglas del frontend web.
 
 ## Aprobación

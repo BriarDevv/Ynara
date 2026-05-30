@@ -1,7 +1,10 @@
 # Frontend MVP · Onboarding + Home vacío — Plan completo
 
-> **Estado**: v2 — feedback de @BriarDevv (review de PR #1) incorporado
-> **Fecha**: 2026-05-18
+> **Estado**: ✅ EJECUTADO — todas las sesiones cerradas. S1–S3 mergeadas
+> previamente; S4 (mood/modos/a11y/outro) + S5 (home vacía) + S6 (tests)
+> mergeadas en [PR #48](https://github.com/BriarDevv/Ynara/pull/48) el
+> 2026-05-30. Documento archivado.
+> **Fecha**: 2026-05-18 (plan) · 2026-05-30 (ejecución)
 > **Owner**: @MateoGs013
 > **Reviewers sugeridos**: @BriarDevv (foundations / infra), @querques20 (UX / UI)
 > **Alcance**: `apps/web` (incluye primitives web-only en `apps/web/src/components/ui/`). Mobile (Expo) y `packages/ui` (reservado para RN-compatibles) quedan fuera.
