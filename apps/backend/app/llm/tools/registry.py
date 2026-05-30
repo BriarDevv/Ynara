@@ -34,6 +34,10 @@ class ToolRegistry:
             raise ValueError(f"tool duplicada: {tool.name}")
         self._tools[tool.name] = tool
 
+    def has(self, name: str) -> bool:
+        """True si el ``name`` esta registrado en este registry."""
+        return name in self._tools
+
     def specs_for(self, enabled_namespaces: list[str]) -> list[ToolSpec]:
         """``ToolSpec`` de las tools cuyo namespace este habilitado.
 
