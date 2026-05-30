@@ -17,15 +17,26 @@
 - TODO: completar cuando esté el módulo de auth.
 - POST `/v1/auth/login`, `/v1/auth/refresh`, `/v1/auth/logout`.
 
-## /v1/chat (TODO)
+## /v1/chat (TODO — M9)
 
-- TODO: completar cuando esté el router LLM expuesto.
-- POST `/v1/chat`:
-  - Request: `{ text: string, mode: Mode, session_id?: UUID }`
-  - Response: `{ text: string, actions?: Action[], session_id: UUID }`
-  - Permisos: usuario autenticado.
-  - Rate limit: TODO (probablemente 30/min por usuario).
-  - Modos: todos.
+Dos endpoints: uno no-streaming (JSON) y uno SSE. Contrato + justificación en
+[`../../../docs/planning/RESPUESTAS-CONTRATO-CHAT.md`](../../../docs/planning/RESPUESTAS-CONTRATO-CHAT.md).
+
+- **POST** `/v1/chat` (no-streaming):
+  - Request: `{ text: string (límite ~4000 chars), mode: Mode, session_id?: UUID }`
+  - Response: `{ text: string, actions: Action[], session_id: UUID }`
+    - `actions` **siempre presente** (lista vacía si no hubo acciones; los modos
+      Gemma nunca ejecutan tools). El Pydantic es `actions = []`, no opcional.
+    - `Action = { id, name, arguments, result }` — `result` es el resultado
+      ejecutado de la tool (o `{ error: { code, message } }`).
+- **POST** `/v1/chat/stream` (SSE, `text/event-stream`):
+  - Mismo request. Eventos con nombre: `token` `{ delta }`, `done`
+    `{ session_id, actions, finish_reason }`, `error` `{ code, message }`.
+  - Sin fallback mid-stream (M3); la infra caída se sirve como respuesta
+    degradada (texto degradado por `token` + `done`), no como `error`.
+- Permisos: usuario autenticado.
+- Rate limit: TODO (probablemente 30/min por usuario).
+- Modos: todos.
 
 ## /v1/memory (TODO)
 
