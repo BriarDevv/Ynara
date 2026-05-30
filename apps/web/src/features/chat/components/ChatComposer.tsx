@@ -1,7 +1,7 @@
 "use client";
 
 import { CHAT_TEXT_MAX_LENGTH } from "@ynara/shared-schemas";
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
 /**
@@ -35,14 +35,23 @@ export function ChatComposer({ onSend, busy, initialText = "" }: Props) {
   const [text, setText] = useState(initialText);
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  // Autosize: re-ajustar la altura al contenido (hasta MAX_ROWS) cada vez que
-  // cambia el texto; después scrollea internamente.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+  // Autosize hasta MAX_ROWS; después scrollea internamente. Se corre en el
+  // onChange (el textarea ya tiene el contenido nuevo, así que scrollHeight es
+  // correcto y sin flicker) en vez de en un efecto — y una vez al montar para
+  // el caso de `initialText` (prefill desde la home, W5).
+  const resize = (el: HTMLTextAreaElement) => {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT_PX)}px`;
-  }, [text]);
+  };
+
+  useEffect(() => {
+    if (ref.current) resize(ref.current);
+  }, []);
+
+  const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    setText(e.target.value);
+    resize(e.target);
+  };
 
   const trimmed = text.trim();
   const tooLong = text.length > CHAT_TEXT_MAX_LENGTH;
@@ -52,8 +61,13 @@ export function ChatComposer({ onSend, busy, initialText = "" }: Props) {
     if (!canSend) return;
     onSend(trimmed);
     setText("");
-    // Devolver el foco para encadenar mensajes con teclado.
-    requestAnimationFrame(() => ref.current?.focus());
+    // Devolver el foco y resetear la altura al limpiar.
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      resize(el);
+    });
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -71,7 +85,7 @@ export function ChatComposer({ onSend, busy, initialText = "" }: Props) {
         <textarea
           ref={ref}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           disabled={busy}
           rows={1}
