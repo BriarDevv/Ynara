@@ -195,7 +195,7 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 
 5. **Cliente Supabase prohibido en el frontend.** En fase MVP, Supabase es solo Postgres gestionado. Prohibido `@supabase/supabase-js` en `apps/web/` o `apps/mobile/`. Prohibido Supabase Auth, Storage, Realtime, Edge Functions, RLS como autorización primaria. Todo dato pasa por FastAPI. **Severidad: bloqueante.** Ver [`ADR-005`](./docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md).
 
-6. **Conventional Commits en español imperativo.** Formato `tipo(scope): descripción`. Ejemplo: `feat(web): agregar modo bienestar`. **PR rechazado si no se cumple.** Ver [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md).
+6. **Conventional Commits en español.** Formato `tipo(scope): descripción`. La descripción va en **imperativo** (`agregar`, `corregir`, `actualizar`) **o noun-phrase** que nombra el artefacto agregado (`modelo SQLAlchemy User`, `schemas Pydantic de auth`): cualquiera de las dos es válida, incluso mezcladas en un mismo PR si cada commit es coherente con su cambio. **Nunca gerundio** (`agregando`) **ni pasado** (`agregado`). Ejemplo: `feat(web): agregar modo bienestar`. **PR rechazado si no se cumple.** Ver [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md).
 
 7. **Commits atómicos.** Un commit = un cambio lógico. No mezclar refactor con feature ni feature con docs. Si tu PR tiene más de ~200 líneas o toca más de 3 archivos de áreas distintas, **splitealo en commits chicos antes de pushear** — uno por cambio lógico. Tablas sagradas (regla #3) siempre en commit propio para que la aprobación humana de la regla #3 tenga un commit específico a inspeccionar. Detalle en [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md). **Severidad: bloqueante. PR rechazado si llega como commit monolítico.**
 
@@ -248,7 +248,7 @@ Detalle de cada landmine con código de bien/mal: [`docs/conventions/AI-GUIDELIN
 
 ## Commit conventions
 
-Conventional Commits en español imperativo. Tipo en inglés, descripción en español.
+Conventional Commits en español. Tipo en inglés; descripción en español, imperativa o noun-phrase del artefacto (ver regla #6).
 
 ```text
 feat(web): agregar layout del modo bienestar
@@ -263,7 +263,7 @@ Reglas duras:
 
 - Tipos válidos: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `perf`, `style`, `build`, `ci`, `revert`.
 - Scope obligatorio para cambios en apps o packages. Sin scope solo en cambios cross-cutting reales.
-- Imperativo, sin punto final.
+- Imperativo o noun-phrase del artefacto, sin gerundio ni pasado, sin punto final (regla #6).
 - Cuerpo explica **por qué**, no qué (el diff ya dice qué).
 - 72 columnas máximo por línea del cuerpo.
 - `Co-Authored-By:` trailer cuando hay co-autor humano o IA.
