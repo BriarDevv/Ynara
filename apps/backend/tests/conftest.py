@@ -11,6 +11,8 @@ pgvector y exportar la URL antes de pytest::
 
     TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/ynara_test \\
         python -m pytest -m integration
+
+El Postgres de tests necesita pgvector >= 0.5.0 (indices HNSW de la migracion).
 """
 
 from __future__ import annotations
@@ -54,9 +56,15 @@ def db_url() -> str:
     return url
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def db_engine(db_url: str) -> AsyncIterator[AsyncEngine]:
-    """Engine async contra la DB de tests. NullPool: sin conexiones colgadas."""
+    """Engine async contra la DB de tests (function-scoped).
+
+    Function scope + NullPool: cada test crea el engine en su PROPIO event loop
+    y abre una conexion fresca por checkout. Evita el footgun de un engine
+    session-scoped atado a un loop distinto al del test (pytest-asyncio crea un
+    loop por test por defecto); recrear el engine con NullPool es trivial.
+    """
     engine = create_async_engine(db_url, poolclass=NullPool)
     try:
         yield engine
