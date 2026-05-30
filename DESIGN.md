@@ -239,5 +239,5 @@ Cada componente vive en su propio archivo, exporta named export, sin barrel mons
 - [`apps/web/src/components/ui/`](./apps/web/src/components/ui/) — primitives.
 - [`IDENTITY.md`](./IDENTITY.md) — ADN de marca (los 4 pilares).
 - [`docs/product/TONE-OF-VOICE.md`](./docs/product/TONE-OF-VOICE.md) — voz operativa modo-por-modo.
-- [`docs/planning/FRONTEND-ONBOARDING-PLAN.md`](./docs/planning/FRONTEND-ONBOARDING-PLAN.md) — plan de implementación del primer slice.
+- [`docs/planning/archive/FRONTEND-ONBOARDING-PLAN.md`](./docs/planning/archive/FRONTEND-ONBOARDING-PLAN.md) — plan de implementación del primer slice (ejecutado y archivado).
 - Prototipo de referencia: [querques20/ynara](https://github.com/querques20/ynara).
