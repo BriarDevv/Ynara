@@ -33,12 +33,19 @@ class OpenAIToolCallParser:
     def parse(self, raw_message: dict[str, Any]) -> list[ToolCall]:
         """Normaliza ``message.tool_calls`` a una lista de ``ToolCall``.
 
-        Lanza ``ToolParsingError`` si ``arguments`` no es JSON valido o si
-        falta ``function.name``. No tumba el turno por si mismo: el caller
+        ``tool_calls`` ausente o ``None`` -> lista vacia. Un ``tool_calls``
+        presente pero que NO es una lista (p.ej. ``0`` por un shape
+        malformado) -> ``ToolParsingError``: distinguimos ausencia de tipo
+        invalido en vez de colapsar ambos a ``[]`` con un truthy-check.
+
+        Tambien lanza ``ToolParsingError`` si ``function.arguments`` no es
+        JSON valido o si falta ``function.name``. ``arguments`` ausente,
+        ``None`` o ``""`` se normaliza a ``{}`` sin error (ver
+        ``_decode_arguments``). No tumba el turno por si mismo: el caller
         decide que hacer.
         """
         raw_calls = raw_message.get("tool_calls")
-        if not raw_calls:
+        if raw_calls is None:
             return []
         if not isinstance(raw_calls, list):
             raise ToolParsingError("tool_calls no es una lista")
