@@ -99,6 +99,7 @@ export function ModeSwitcher({ interestedModes, activeMode, onChange, className 
                   key={mode.id}
                   type="button"
                   aria-disabled="true"
+                  tabIndex={-1}
                   title="Activá este modo desde Ajustes"
                   onClick={(e) => e.preventDefault()}
                   className="flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-2 text-left opacity-50"
