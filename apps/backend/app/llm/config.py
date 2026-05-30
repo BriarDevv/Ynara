@@ -182,6 +182,11 @@ def _validate_coherence(
             raise LlmConfigError(
                 f"falta max_model_len para el modelo {key!r} en llm.serving.max_model_len"
             )
+        if serving.max_model_len[key] > model.context_window:
+            raise LlmConfigError(
+                f"max_model_len para {key!r} ({serving.max_model_len[key]}) supera el "
+                f"context_window del modelo ({model.context_window})"
+            )
 
 
 def load_llm_config(
