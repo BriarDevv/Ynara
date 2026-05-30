@@ -190,6 +190,16 @@ class TestDatetimeValidation:
         )
         assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
 
+    async def test_create_event_rejects_numeric_string_epoch(self) -> None:
+        # Epoch como STRING tambien se rechaza: Pydantic lo parsearia como
+        # timestamp; fromisoformat exige ISO real (#38, hallazgo del review).
+        registry = default_registry()
+        result = await registry.execute(
+            "calendar.create_event",
+            {"title": "x", "start": "1716000000", "end": _VALID_END},
+        )
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+
     async def test_iso_string_still_accepted(self) -> None:
         # Sanity: el ISO 8601 string sigue pasando la validacion endurecida.
         registry = default_registry()

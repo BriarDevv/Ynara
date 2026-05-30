@@ -22,27 +22,34 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Protocol, runtime_checkable
 
-from pydantic import BeforeValidator, Field
+from pydantic import BeforeValidator
 
 from app.llm.schemas import ToolSpec
 
 
-def _reject_numeric_datetime(value: object) -> object:
-    """Rechaza timestamps numericos en los campos datetime de las tool calls.
+def _coerce_iso_datetime(value: object) -> object:
+    """Acepta ``datetime`` nativo o string ISO 8601; rechaza epoch numerico.
 
     Las tool calls mandan fechas como string ISO 8601 (contrato
-    ``docs/TOOLS.md``). Con ``strict=False`` Pydantic coerceria un epoch
-    int/float a una fecha plausible-pero-incorrecta; si el modelo alucina un
-    numero preferimos ``invalid_arguments`` antes que agendar en la fecha
-    equivocada.
+    ``docs/TOOLS.md``). Con ``strict=False`` Pydantic coerceria tanto un epoch
+    crudo (``int``/``float``) como una string puramente numerica
+    (``"1716000000"``) a una fecha plausible-pero-incorrecta. Parseamos la
+    string con ``datetime.fromisoformat`` (ISO estricto): asi un epoch
+    alucinado -> ``invalid_arguments`` en vez de agendar en la fecha
+    equivocada. Devolver un ``datetime`` deja que el modelo strict lo acepte.
     """
-    if isinstance(value, (int, float)):
-        raise ValueError("se espera un string ISO 8601, no un timestamp numerico")
-    return value
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError("se espera un string ISO 8601 valido") from exc
+    raise ValueError("se espera un string ISO 8601, no un timestamp numerico")
 
 
-# ``IsoDatetime``: datetime de tool call — acepta string ISO 8601, rechaza epoch numerico.
-IsoDatetime = Annotated[datetime, BeforeValidator(_reject_numeric_datetime), Field(strict=False)]
+# ``IsoDatetime``: datetime de tool call — solo string ISO 8601 (o datetime nativo).
+IsoDatetime = Annotated[datetime, BeforeValidator(_coerce_iso_datetime)]
 
 
 @runtime_checkable
