@@ -1,8 +1,9 @@
 """Helpers de seguridad: hashing de contraseñas y JWT.
 
 JWT firmado con el secret de la app (``settings.jwt_secret``, HS256 por
-default). Las contraseñas se hashean con bcrypt vía passlib. El módulo de auth
-(rutas ``/v1/auth``, ``get_current_user``) se arma encima de estos helpers.
+default). Las contraseñas se hashean con bcrypt directo (no passlib: 1.7.4 no
+es compatible con bcrypt 4.x). El módulo de auth (rutas ``/v1/auth``,
+``get_current_user``) se arma encima de estos helpers.
 
 Ningún mensaje de error filtra datos del usuario (regla #4): ``verify_access_token``
 levanta ``InvalidTokenError`` sin distinguir expirado-vs-firma-inválida (no dar
@@ -67,7 +68,15 @@ def verify_access_token(token: str) -> dict[str, Any]:
     """
     settings = get_settings()
     try:
-        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        return jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+            # Defensa en profundidad: exigir exp (jose no lo requiere por
+            # default) para que ningún token sin expiración sea válido.
+            # python-jose usa `require_exp`, no el `require: [...]` de PyJWT.
+            options={"require_exp": True, "verify_exp": True},
+        )
     except JWTError as exc:
         raise InvalidTokenError("token inválido") from exc
 

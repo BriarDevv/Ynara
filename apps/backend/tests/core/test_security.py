@@ -90,6 +90,13 @@ def test_garbage_token_rejected(patched_settings: Settings) -> None:
         verify_access_token("no-es-un-jwt")
 
 
+def test_token_without_exp_rejected(patched_settings: Settings) -> None:
+    # Defensa en profundidad: verify exige exp aunque jose no lo requiera.
+    no_exp = jwt.encode({"sub": "x"}, _SECRET, algorithm=_ALG)
+    with pytest.raises(InvalidTokenError):
+        verify_access_token(no_exp)
+
+
 # ---------- password hashing ----------
 
 
