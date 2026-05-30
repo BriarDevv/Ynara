@@ -87,6 +87,20 @@ def test_half_open_failure_reopens() -> None:
     assert breaker.allow() is True
 
 
+def test_half_open_allows_only_one_probe() -> None:
+    """En HALF_OPEN solo pasa UNA prueba; las concurrentes se bloquean hasta
+    que la primera cierre (record_success/failure)."""
+    clock = _Clock()
+    breaker = _breaker(clock, threshold=1, recovery=30.0)
+    breaker.record_failure()
+    clock.now = 30.0
+    assert breaker.allow() is True  # primera prueba -> HALF_OPEN
+    assert breaker.allow() is False  # segunda prueba concurrente: bloqueada
+    assert breaker.allow() is False
+    breaker.record_success()  # la prueba cerro con exito -> CLOSED
+    assert breaker.allow() is True
+
+
 def test_success_resets_failure_count() -> None:
     breaker = _breaker(_Clock(), threshold=3)
     breaker.record_failure()
