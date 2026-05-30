@@ -11,6 +11,14 @@
 > críticos** (rotar credenciales, ADR-008, master key de cifrado,
 > revisión de la voz de los prompts). Con esto, cualquiera —humano o
 > agente— retoma el trabajo sabiendo exactamente dónde está parado todo.
+>
+> **Actualización (parte 2, mismo día — 2026-05-30).** Se cerraron los **10
+> issues de deuda** (#20, #23, #26, #27, #30–#33, #38, #39) en 5 PRs
+> revisados; se reescribió la doc de `apps/backend` (AGENTS.md + README)
+> para que sea AI-friendly; se saldó la deuda de `ruff` (incluidos 3
+> archivos sagrados, con aprobación humana explícita); y se **verificaron
+> los tests de integración contra un Postgres+pgvector real** (docker), lo
+> que destapó y arregló un bug. Detalle en §1b.
 
 ---
 
@@ -37,6 +45,34 @@ lineal, **doctor OK, 175 tests verdes** en `tests/llm`.
 **PRs mergeados esta sesión:** #28, #29, #34, #35, #36, #37 (todos rebase
 merge, historial lineal).
 
+## 1b. Continuación (2026-05-30, parte 2): cierre de issues + docs + cleanup
+
+Segunda tanda del mismo día. Se cerraron **los 10 issues de deuda** que
+quedaban abiertos, se llevó la doc de `apps/backend` a estado AI-friendly,
+se saldó la deuda de `ruff` y se **verificaron los tests de integración
+contra un Postgres real**. Todo mergeado a `main` (rebase), **cada PR
+revisado por un `code-reviewer` en agente aparte**.
+
+| PR | Cierra | Highlights |
+|---|---|---|
+| #45 | #26 #27 #30 #31 #32 | settings lazy · `max_model_len ≤ context_window` · parser endurecido (None vs tipo inválido) · `default_timeout_s` desde config · test e2e `stream()→accumulate()` |
+| #46 | #38 #39 | datetime **solo ISO 8601** (`IsoDatetime`, rechaza epoch incluso como string) · namespace unificado a singular `reminder` (rename `reminders.py`→`reminder.py`) · test del blindaje `execution_error` · `TOOLS.md` `reminder.cancel`→`reminder.list` |
+| #47 | #23 #33 | test AST de la migración (6 tablas + 4 enums, sin DB) · fixtures `db_session` + round-trip de enums · `env.py` acepta `TEST_DATABASE_URL` |
+| #49 | #20 | regla #6 acepta **imperativo o noun-phrase** (Opción A) |
+| #50 | — | reescritura de `apps/backend/AGENTS.md` (66→148 líneas) + `README` + `docs/README`: gates, mapa de `app/llm/`, invariantes, playbooks |
+| #51 | — | **fix** `MissingGreenlet` en el round-trip de audit (lo destapó el run real) + `ruff` en archivos no sagrados |
+| #52 | — | `ruff` en 3 archivos **sagrados** (lint cosmético; **aprobación humana explícita** del operador, regla #3) |
+
+**Verificación contra Postgres real (docker pgvector):** los 3 tests de
+integración de #23/#33 pasan; el run destapó un `MissingGreenlet` (acceso a
+un atributo expirado dentro de un `.where()`) que se arregló con
+`db_session.refresh()`. La infra de tests de integración quedó **verificada
+end-to-end**, no solo escrita a ciegas.
+
+**Issues abiertos ahora:** solo **#6** (contrato de auth del frontend, de
+otro autor). PRs abiertos: ninguno propio (el #48 de onboarding del front lo
+mergeó su autor).
+
 ## 2. Estado de `main`
 
 - Capa LLM funcional hasta el **cliente resiliente + prompts + tools**.
@@ -44,29 +80,20 @@ merge, historial lineal).
 - Base de datos **conectada** y con el **schema de memoria aplicado**.
 - `core/security.py` (auth) sigue en `NotImplementedError` — bloquea el
   router real.
-- Doctor 15–16/10 según rama (0 fallas). Tests `tests/llm`: 175 passed.
+- Doctor 16/16 (0 fallas). Tests: **241 passed** en la suite + **3 de
+  integración verdes contra Postgres real** (docker); `tests/llm` en 187.
+  ⚠️ 1 test rojo **pre-existente ajeno a la capa LLM**:
+  `tests/schemas/test_memory.py::test_uuid_round_trip_str_to_uuid` (Pydantic
+  v2 strict rechaza UUID como string) — ya fallaba en `main` antes de esta
+  sesión; conviene abrir issue.
 
-## 3. Issues abiertos
+## 3. Issues — todos cerrados ✅
 
-**De esta sesión (deuda de los reviews):**
-
-| # | Tema |
-|---|---|
-| #26 | Refactor `settings` lazy en `core/config.py` (hoy el conftest parchea env dummy). |
-| #27 | Cablear `request_timeout_s` del config al cliente (hoy usa el default 30s). |
-| #30 | Endurecer `OpenAIToolCallParser.parse()` ante `tool_calls` malformado no-lista. |
-| #31 | Cubrir el streaming de tool-calls end-to-end (`accumulate()` no tiene consumer hasta M8). |
-| #32 | Validar `max_model_len <= context_window` en `load_llm_config`. |
-| #33 | Test de migración contra una DB efímera/transaccional (no la MVP). |
-| #38 | Validación de datetime en tools acepta epoch numérico (debería ser solo ISO 8601). |
-| #39 | Testear el path `execution_error` del registry + test namespace↔name + unificar `reminders`/`reminder` en TOOLS.md/config. |
-
-**Pre-existentes (del equipo, no de esta sesión):** #20 (commit imperativo
-vs noun-phrase), #23 (test round-trip de enums contra Postgres real +
-fixture `db_session`).
-
-> Nota: #23 y #33 se solapan (ambos piden infra de tests contra DB real);
-> conviene resolverlos juntos.
+Los 10 issues de deuda (8 de los reviews de esta sesión + 2 pre-existentes
+del equipo: #20 y #23) se cerraron en la **parte 2** (ver §1b): **#20, #23,
+#26, #27, #30, #31, #32, #33, #38, #39**. El único issue abierto del repo es
+**#6** (contrato de auth del frontend MVP, de otro autor — no es de la capa
+LLM).
 
 ## 4. Lo que queda por hacer (roadmap + gates)
 
@@ -114,7 +141,9 @@ fixture `db_session`).
 
 ## 5. Deudas técnicas y cosas menores
 
-**Con issue** (ver §3): #26–#33, #38, #39.
+**Ya cerradas** (parte 2, §1b): #26–#33, #38, #39. La **deuda de `ruff`**
+del backend quedó **saldada** (PRs #51 no sagrado / #52 sagrado, lint
+cosmético con aprobación humana).
 
 **Sin issue (notas de los reviews):**
 
@@ -126,9 +155,10 @@ fixture `db_session`).
   Documentado; aceptable para 1-2 procesos.
 - Tools: el `description` del JSON Schema arrastra el docstring RST del
   modelo Pydantic (ruido en el prompt); `_stub_result`/`_first_error`
-  están duplicados entre `calendar.py` y `reminders.py` (DRY).
-- `TOOLS.md` lista `reminder.cancel` pero se implementó `reminder.list` →
-  alinear el catálogo (parte de #39).
+  siguen duplicados entre `calendar.py` y `reminder.py` (DRY — la validación
+  de fechas sí se centralizó en `IsoDatetime`). ✅ El namespace
+  `reminders`→`reminder` y `TOOLS.md` (`reminder.cancel`→`reminder.list`) ya
+  se unificaron (#39).
 - **CI** sigue en `workflow_dispatch` solamente. Ya existen `uv.lock` y
   `pnpm-lock.yaml`, así que se podría reactivar `push`/`pull_request`
   (ver landmine en `AI-GUIDELINES.md`).
@@ -157,10 +187,10 @@ fixture `db_session`).
 
 ## 7. Pendientes humanos (críticos)
 
-1. 🔐 **Rotar el password de la DB y el PAT de Supabase** — quedaron en el
-   chat de esta sesión → comprometidos. Settings → Database → Reset
-   password; account/tokens para el PAT. Después actualizar `.env` y la
-   env var `SUPABASE_ACCESS_TOKEN`.
+1. ✅ **Credenciales rotadas (2026-05-30).** El password de la DB y el PAT
+   de Supabase que quedaron expuestos en el chat fueron **rotados por el
+   operador**. (Si cambió el password, recordar actualizar `apps/backend/.env`
+   con la nueva URL del session pooler.)
 2. **ADR-008 (bge-m3)** — escribir/aprobar la decisión de embedding.
    Desbloquea PR C.
 3. **`MEMORY_ENCRYPTION_MASTER_KEY`** — generar con `openssl rand -base64 32`
