@@ -141,6 +141,15 @@ def test_missing_max_model_len(tmp_path: Path) -> None:
         load_llm_config(config_path=path, settings=_settings())
 
 
+def test_max_model_len_exceeds_context_window(tmp_path: Path) -> None:
+    data = _base_config()
+    # context_window del modelo es 262144; pedir mas debe disparar fail-fast.
+    data["llm"]["serving"]["max_model_len"]["qwen-3.5-9b"] = 262145
+    path = _write(tmp_path, data)
+    with pytest.raises(LlmConfigError, match="context_window"):
+        load_llm_config(config_path=path, settings=_settings())
+
+
 def test_missing_serving_block(tmp_path: Path) -> None:
     data = _base_config()
     del data["llm"]
