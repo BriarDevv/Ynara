@@ -24,6 +24,10 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   const applyChatResponse = useChatStore((s) => s.applyChatResponse);
   const setMessageStatus = useChatStore((s) => s.setMessageStatus);
 
+  // Un solo mensaje en vuelo a la vez: el composer queda `busy` mientras la
+  // mutation corre, así no se puede disparar un segundo `mutate()` que
+  // cancelaría los callbacks del primero (TanStack Query no encola). El envío
+  // concurrente recién importa con streaming (W3), que usa otro mecanismo.
   const mutation = useMutation({
     mutationFn: ({ text }: { text: string; userMessageId: string }) =>
       sendChatMessage({ text, mode: session?.mode ?? "vida", session_id: sessionId }),

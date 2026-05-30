@@ -27,16 +27,19 @@ type Props = {
 export function MessageList({ messages, mode, onRetry }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll al fondo cuando llega contenido nuevo. El auto-scroll
+  // inteligente (pausar si el user scrollea arriba + botón "↓ ir al final")
+  // llega en W3, donde el texto crece token a token.
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-  }, []);
+  }, [messages.length]);
 
   if (messages.length === 0) {
     return <EmptyConversation mode={mode} />;
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 overflow-y-auto py-4" aria-live="polite">
+    <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4" aria-live="polite">
       {messages.map((message) => (
         <MessageBubble
           key={message.id}

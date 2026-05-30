@@ -25,6 +25,9 @@ type Props = {
 };
 
 const MAX_ROWS = 8;
+/** Alto de línea en px — debe matchear el line-height de `text-body`. */
+const LINE_HEIGHT_PX = 24;
+const MAX_HEIGHT_PX = LINE_HEIGHT_PX * MAX_ROWS;
 /** A cuántos chars del límite empezamos a mostrar el contador. */
 const COUNTER_THRESHOLD = CHAT_TEXT_MAX_LENGTH - 300;
 
@@ -32,15 +35,14 @@ export function ChatComposer({ onSend, busy, initialText = "" }: Props) {
   const [text, setText] = useState(initialText);
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  // Autosize: ajustar la altura al contenido hasta MAX_ROWS.
+  // Autosize: re-ajustar la altura al contenido (hasta MAX_ROWS) cada vez que
+  // cambia el texto; después scrollea internamente.
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    const lineHeight = 24;
-    const maxHeight = lineHeight * MAX_ROWS;
-    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
-  }, []);
+    el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT_PX)}px`;
+  }, [text]);
 
   const trimmed = text.trim();
   const tooLong = text.length > CHAT_TEXT_MAX_LENGTH;
@@ -75,7 +77,8 @@ export function ChatComposer({ onSend, busy, initialText = "" }: Props) {
           rows={1}
           aria-label="Escribí tu mensaje"
           placeholder="Escribí algo…"
-          className="text-body max-h-[192px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] outline-none disabled:opacity-60"
+          style={{ maxHeight: `${MAX_HEIGHT_PX}px` }}
+          className="text-body flex-1 resize-none bg-transparent px-2 py-1.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] outline-none disabled:opacity-60"
         />
         <button
           type="button"
