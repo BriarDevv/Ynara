@@ -202,9 +202,16 @@ def test_uuid_fields_strict_typing() -> None:
         SemanticMemoryCreate(content="x", source_session_id="not-a-uuid")  # type: ignore[arg-type]
 
 
-def test_uuid_round_trip_str_to_uuid() -> None:
-    """String UUID válido se acepta y se castea a UUID (modo strict ok con
-    string si es un UUID válido bajo Pydantic v2)."""
-    sid_str = "01234567-89ab-cdef-0123-456789abcdef"
-    m = SemanticMemoryCreate(content="x", source_session_id=sid_str)
-    assert m.source_session_id == UUID(sid_str)
+def test_uuid_field_requires_uuid_object() -> None:
+    """strict=True exige un objeto UUID: NO coerciona desde str, ni siquiera
+    uno valido (Pydantic v2 strict no hace str->UUID). Los callers internos
+    (worker de Celery, wrappers de memoria) construyen estos schemas con
+    ``uuid.UUID``, no con strings de JSON. Ver ``YnaraBaseModel``.
+    """
+    sid = UUID("01234567-89ab-cdef-0123-456789abcdef")
+    m = SemanticMemoryCreate(content="x", source_session_id=sid)
+    assert m.source_session_id == sid
+
+    # Un string UUID *valido* tambien se rechaza (strict no coerciona str->UUID).
+    with pytest.raises(ValidationError):
+        SemanticMemoryCreate(content="x", source_session_id=str(sid))  # type: ignore[arg-type]
