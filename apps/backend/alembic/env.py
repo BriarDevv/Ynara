@@ -19,8 +19,10 @@ from alembic import context
 # Importar settings y metadata. Importamos el paquete ``app.models`` (no
 # solo ``app.models.base``) para que todos los modelos se registren en
 # ``Base.metadata`` y autogenerate / ``alembic check`` los detecten.
-from app.core.config import settings
+from app.core.config import get_settings
 from app.models import Base
+
+settings = get_settings()
 
 config = context.config
 

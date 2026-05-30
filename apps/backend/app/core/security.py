@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from app.core.config import settings
+from app.core.config import get_settings
 
 
 def create_access_token(subject: str, extra_claims: dict[str, Any] | None = None) -> str:
@@ -17,6 +17,7 @@ def create_access_token(subject: str, extra_claims: dict[str, Any] | None = None
 
     TODO: implementar con python-jose. Acá queda el shape esperado.
     """
+    settings = get_settings()
     _now = datetime.now(timezone.utc)
     _exp = _now + timedelta(minutes=settings.jwt_expire_minutes)
     _payload = {"sub": subject, "iat": _now, "exp": _exp, **(extra_claims or {})}
