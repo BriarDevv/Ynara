@@ -119,7 +119,7 @@ class ResilientClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
-        timeout_s: float = 30.0,
+        timeout_s: float | None = None,
     ) -> CompletionResult:
         """Completa con retry + fallback on-prem; degrada si todo falla."""
         for client in self._pool.candidates(model):
@@ -150,7 +150,7 @@ class ResilientClient:
         tools: list[ToolSpec] | None,
         max_tokens: int,
         temperature: float,
-        timeout_s: float,
+        timeout_s: float | None,
     ) -> CompletionResult | None:
         """Reintenta un candidato; ``None`` si se agota (toca fallback).
 
@@ -201,7 +201,7 @@ class ResilientClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
-        timeout_s: float = 30.0,
+        timeout_s: float | None = None,
     ) -> AsyncIterator[CompletionChunk]:
         """Streamea desde un candidato sano.
 
@@ -228,7 +228,7 @@ class ResilientClient:
         tools: list[ToolSpec] | None,
         max_tokens: int,
         temperature: float,
-        timeout_s: float,
+        timeout_s: float | None,
     ) -> AsyncIterator[CompletionChunk]:
         client = self._pick_for_stream(model)
         async for chunk in client.stream(
