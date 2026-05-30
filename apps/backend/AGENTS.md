@@ -1,66 +1,148 @@
-# apps/backend/AGENTS.md — Reglas del backend
+# apps/backend/AGENTS.md — Reglas y mapa del backend
 
-> Fuente canónica del repo: [`../../AGENTS.md`](../../AGENTS.md).
+> Fuente canónica del repo: [`../../AGENTS.md`](../../AGENTS.md) (10 reglas
+> no negociables). Este archivo es el **contrato + mapa operativo** del
+> backend: si vas a tocar `apps/backend`, leelo entero antes de editar.
 
-## Reglas duras (resumen)
+---
 
-1. **Tablas sagradas de memoria** (regla #3). Cualquier toque a
-   `semantic_memory`, `episodic_memory`, `procedural_memory` requiere
-   tests + 1 aprobación humana explícita (review formal aprobada en el
-   PR, además del operador autor). Migraciones que las afecten también.
-2. **Datos de usuario nunca salen del perímetro** (regla #4). Sin
-   llamadas a OpenAI, Anthropic, Google APIs. Toda inferencia en
-   vLLM/Ollama local.
-3. **Autorización en FastAPI** (regla #5). RLS de Supabase no se
-   usa como mecanismo primario.
-4. **Confirmación humana** para `uv add`, `alembic upgrade head` en
-   producción, cambios a `pyproject.toml` mayores.
+## 0. Gates bloqueantes — parar y pedir humano
 
-## Patrones
+| Gate | Qué lo dispara | Qué hacer |
+|---|---|---|
+| **Tablas sagradas** (regla #3) | Tocar `app/memory/`, `app/models/{memory,audit}.py`, `app/schemas/{memory,audit}.py` o `alembic/versions/` (tablas `semantic_memory`, `episodic_memory`, `procedural_memory`, `audit_log`) | Tests + **1 aprobación humana explícita** en el PR, distinta del operador que lo abrió. Commit aislado para que la review inspeccione un diff específico. |
+| **Secrets** (regla #2) | `.env`, tokens, claves, certificados | Nunca leer, copiar, mover ni commitear. Si ves uno expuesto, alertá y no toques nada. |
+| **Perímetro de datos** (regla #4) | Inferencia o logging de contenido de usuario | Cero APIs externas de IA (OpenAI/Anthropic/Google/etc.). Nada de texto de usuario en logs, mensajes de error o Sentry. |
+| **Instalación / prod** (regla #1) | `uv add`, `alembic upgrade head` en prod, cambios mayores a `pyproject.toml` | Confirmación humana explícita antes. |
 
-- **Async-first**: `async def` en rutas y servicios. SQLAlchemy 2
-  async (`AsyncSession`).
-- **Pydantic v2 strict** en schemas. Sin `Any` salvo justificación
-  puntual.
-- **Type hints completos**.
-- **Services sin framework**: la lógica de negocio en `app/services/`
-  no importa nada de FastAPI ni de SQLAlchemy directamente — recibe
-  dependencias por argumento. Esto facilita test.
-- **Consolidación de memoria siempre async** (Celery). Nunca en el
-  path de respuesta.
-- **Router LLM** (`app/llm/router.py`) decide modelo según modo.
-  Gemma solo lee memoria; Qwen lee+escribe (ADR-002).
+---
 
-## Migraciones
+## 1. Stack y estado actual
 
-Ver [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md).
+- **FastAPI + Pydantic v2 strict + SQLAlchemy 2 async + Alembic + Celery + uv.** Python ≥ 3.12.
+- **DB**: Postgres + pgvector. MVP en Supabase vía **session pooler** (puerto 5432, IPv4; la conexión directa es IPv6-only). V2 self-hosted (ADR-005).
+- **LLM**: stack dual vLLM — **Gemma 4 26B-A4B** (conversacional, solo lee memoria) + **Qwen 3.5-9B** (agente, lee+escribe, llama tools). Ver ADR-002 (roles) y ADR-009 (serving + parsers).
 
-- Naming: `YYYYMMDD_HHMM_descripcion.py`.
-- Una migración = un cambio lógico.
-- `downgrade()` siempre.
-- Tablas sagradas → tests + 1 aprobación humana explícita (regla #3).
+**Construido y mergeado** (capa de inferencia LLM M0–M6 + migración inicial):
 
-## Tests
+- Config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs). Migración inicial (6 tablas, 4 enums, pgvector).
 
-- Pytest async (`pytest-asyncio`).
-- **Integración con DB real**, sin mocks (regla del equipo: mocks de
-  DB ocultan bugs de migración).
-- `tests/conftest.py` arma fixtures con DB de tests separada.
+**Pendiente** (no empezar sin leer el plan):
 
-## Layout
+- **M7** — tool `memory.*` 🔴 sagrado · **M8** — `router.py` (orquestación) · **M9** — endpoint `/v1/chat` · `core/security.py` (auth JWT) · workers Celery (consolidación). Plan: [`../../docs/planning/LLM-INFERENCE-INTEGRATION.md`](../../docs/planning/LLM-INFERENCE-INTEGRATION.md). Roadmap de memoria: [`../../docs/planning/BACKEND-MEMORY-ROADMAP.md`](../../docs/planning/BACKEND-MEMORY-ROADMAP.md).
 
-- `app/api/v1/*.py` — un archivo por dominio (`health.py`,
-  `chat.py`, `memory.py`, ...).
-- `app/services/*.py` — lógica de negocio.
-- `app/llm/router.py` — único punto de entrada al LLM.
-- `app/memory/{semantic,episodic,procedural}.py` — wrappers de cada
-  capa.
+---
 
-## Cuando agregar un endpoint
+## 2. Mapa del código (`app/`)
 
-1. Schema Pydantic en `app/schemas/`.
-2. Modelo SQLAlchemy si es nuevo (en `app/models/`).
-3. Service en `app/services/` con la lógica.
-4. Ruta en `app/api/v1/`.
-5. Test de integración en `tests/`.
-6. Documentar en `docs/ENDPOINTS.md`.
+```
+app/
+├── main.py            # entrypoint FastAPI (lifespan, CORS, routers v1)
+├── enums.py           # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation)
+├── core/
+│   ├── config.py      # Settings (pydantic-settings); get_settings() cacheado y lazy
+│   ├── deps.py        # engine async + get_db (AsyncSession por request)
+│   └── security.py    # JWT/hashing — TODO (NotImplementedError)
+├── api/v1/            # rutas, un archivo por dominio (health.py, ... chat/memory pendientes)
+├── models/            # SQLAlchemy 2 (user, session, memory, audit) — base.py: mixins UUIDPK/Timestamp
+├── schemas/           # Pydantic v2 mirror de models + payloads de API
+├── services/          # lógica de negocio SIN framework (recibe deps por argumento)
+├── llm/               # capa de inferencia — ver §3
+├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, mayormente TODO)
+├── workers/           # Celery (celery_app.py + tasks) — autodiscovery en app.workflows
+└── workflows/         # consolidación async, decay procedural, retención episódica (TODO)
+```
+
+---
+
+## 3. La capa LLM (`app/llm/`) — cómo está armada
+
+```
+llm/
+├── config.py          # LlmRuntimeConfig + load_llm_config() — fusiona ynara.config.json + Settings, fail-fast
+├── schemas.py         # ChatRequest/Response, ChatMessage, ToolSpec/ToolCall, CompletionResult/Chunk, ModelHealth
+├── errors.py          # taxonomía LlmError (transient/permanent/semantic) + degraded_response(); NUNCA filtra texto de usuario
+├── clients/
+│   ├── base.py        # Protocols LLMClient + ToolCallParser
+│   ├── vllm.py        # VllmClient (httpx inyectado; default_timeout_s desde config; SSE streaming)
+│   ├── parsers.py     # OpenAIToolCallParser (parse + accumulate de tool calls OpenAI)
+│   ├── fakes.py       # FakeLlmClient programable (tests del pool/router, sin red)
+│   ├── circuit.py     # CircuitBreaker (stdlib, sin libs)
+│   ├── pool.py        # ClientPool + RoutingStrategy + build_pool (topología → clientes)
+│   └── resilient.py   # ResilientClient: retry+backoff → fallback on-prem → respuesta degradada
+├── prompts/           # shared.py (identidad/voz/seguridad) + loader.py (load_prompt(mode)) + 1 SYSTEM_PROMPT por modo
+├── tools/             # base.py (Tool Protocol, to_spec, tool_error, IsoDatetime) + registry.py + calendar.py + reminder.py
+└── router.py          # M8 — orquesta modo→modelo→memoria→tools. TODO (NotImplementedError)
+```
+
+**Invariantes que NO se rompen:**
+
+- **Serving** (ADR-009): un modelo por proceso vLLM; topología configurable por `LLM_TOPOLOGY` (`split_process`/`single_process`/`swap_lru`) detrás del `ClientPool`. Parsers de tool-calling: `hermes` (Qwen) / `gemma4` (Gemma).
+- **Resiliencia**: cadena **primario → secundario on-prem → respuesta degradada**. El fallback es SIEMPRE on-prem (regla #4): cero APIs externas. Nunca propaga una excepción de infra al caller.
+- **Errores** (`errors.py`): la taxonomía nunca expone contenido del usuario en `__str__`/logs (regla #4).
+- **Tools**: los errores vuelven SIEMPRE como dict estructurado `{"error": {"code", "message"}}` — el modelo **jamás** ve un traceback (el `ToolRegistry` blinda con `except Exception`). Fechas vía el tipo `IsoDatetime` (solo ISO 8601, rechaza epoch). **Gemma no llama tools** (solo Qwen); el registry por defecto NO incluye `memory.*` (es M7).
+- **Config single-source**: los `base_url` + topología viven en `Settings`/`.env`; `served_name` vive en `ynara.config.json[models]`, y parsers / `quantization` / `max_model_len` en `[llm.serving]`. `load_llm_config()` valida coherencia (fail-fast).
+
+---
+
+## 4. Convenciones
+
+- **Async-first**: `async def` en rutas y servicios; SQLAlchemy 2 async (`AsyncSession`).
+- **Pydantic v2 strict** en schemas. Sin `Any` salvo justificación puntual.
+- **Type hints completos.** Ruff con `E/W/F/I/B/C4/UP/ASYNC/S/RUF`, line-length 100 (config en `pyproject.toml`).
+- **Services sin framework**: la lógica en `app/services/` no importa FastAPI ni SQLAlchemy directo — recibe dependencias por argumento (testeable).
+- **`get_settings()`** es el acceso a config (cacheado con `lru_cache`); no se instancia `Settings` a nivel de módulo (así los imports no exigen `.env`).
+- **Consolidación de memoria siempre async** (Celery). Nunca en el path de respuesta.
+- **Commits**: Conventional Commits en español, descripción imperativa o noun-phrase del artefacto (regla #6), **atómicos** (regla #7). Tablas sagradas en commit aislado.
+
+---
+
+## 5. Tests
+
+- **pytest async** (`asyncio_mode = "auto"`). Runner canónico: `uv run pytest`. Si `uv` no está en PATH (p.ej. Windows), usar el venv: `.venv\Scripts\python.exe -m pytest`.
+- **Markers**: el run default excluye integración (`addopts = -m 'not integration'`). Los tests `@pytest.mark.integration` tocan **DB real** y se corren aparte.
+- **DB real, sin mocks de DB** (los mocks de DB ocultan bugs de migración). Los unit tests de la capa LLM sí usan test doubles de **red** (`FakeLlmClient`, `httpx.MockTransport`) — eso está OK, no es un mock de DB.
+- **Fixtures de DB** (`tests/conftest.py`): `db_url` / `db_engine` / `db_session` contra `TEST_DATABASE_URL` — una DB de tests **dedicada**, NUNCA prod ni la Supabase real. Sin esa env var, los tests de DB **skipean**. CI necesita un Postgres con pgvector ≥ 0.5.0 (índices HNSW).
+
+```sh
+uv run pytest                                  # run default (sin integration)
+uv run pytest -m integration                   # solo integración (necesita TEST_DATABASE_URL)
+uv run ruff check . && uv run ruff format .    # lint + format
+```
+
+---
+
+## 6. Migraciones
+
+Política completa: [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md).
+
+- Naming: `YYYYMMDD_HHMM_descripcion.py`. Una migración = un cambio lógico. `downgrade()` siempre.
+- `alembic/env.py` importa `app.models` (paquete completo) para que autogenerate / `alembic check` detecten todos los modelos. Acepta `TEST_DATABASE_URL` para correr contra una DB de tests.
+- **Tablas sagradas** → tests + 1 aprobación humana explícita (regla #3).
+
+---
+
+## 7. Playbooks
+
+**Agregar un endpoint:** schema Pydantic en `app/schemas/` → modelo en `app/models/` (si es nuevo) → lógica en `app/services/` → ruta en `app/api/v1/` → test de integración → documentar en [`docs/ENDPOINTS.md`](./docs/ENDPOINTS.md).
+
+**Agregar una tool LLM:** modelo Pydantic de args en `app/llm/tools/<namespace>.py` (fechas con `IsoDatetime`) → `execute` que devuelve resultado o `tool_error(...)`, nunca `raise` → registrar en `default_registry()` → habilitar el namespace en `ynara.config.json[modes][*].tools_enabled` → [`docs/TOOLS.md`](./docs/TOOLS.md) → tests. (Namespace y `name` en singular, como `calendar`/`reminder`.)
+
+**Agregar un modo LLM:** ADR aprobado → entrada en `ynara.config.json[modes]` → `SYSTEM_PROMPT` en `app/llm/prompts/<modo>.py` (registrar en `loader.py`) → [`../../docs/product/MODES.md`](../../docs/product/MODES.md) → tests de invariantes (voz, perímetro, tools).
+
+**Agregar un modelo:** clase en `app/models/` (mixins de `base.py`) → schema mirror en `app/schemas/` → migración Alembic → [`docs/MODELS.md`](./docs/MODELS.md). Si es tabla de memoria → gate regla #3.
+
+---
+
+## 8. Docs del backend
+
+| Doc | Para qué |
+|---|---|
+| [`docs/MODELS.md`](./docs/MODELS.md) | Catálogo de modelos SQLAlchemy. |
+| [`docs/ENDPOINTS.md`](./docs/ENDPOINTS.md) | Catálogo de endpoints HTTP. |
+| [`docs/TOOLS.md`](./docs/TOOLS.md) | Catálogo de tools que Qwen puede llamar. |
+| [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md) | Política de migraciones Alembic. |
+
+**Regla de los catálogos**: si agregás un modelo, endpoint, tool o migración, **actualizás el catálogo correspondiente en el mismo PR**. La review humana lo verifica (CI todavía no).
+
+ADRs relevantes: [ADR-002](../../docs/architecture/adrs/ADR-002-gemma-qwen-dual-stack.md) (dual stack), [ADR-005](../../docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md) (Supabase MVP), [ADR-009](../../docs/architecture/adrs/ADR-009-vllm-serving-topology-tool-parsers.md) (serving + parsers).
