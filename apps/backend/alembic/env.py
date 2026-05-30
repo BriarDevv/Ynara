@@ -8,6 +8,7 @@ async. Importa el metadata de SQLAlchemy desde app.models para que
 from __future__ import annotations
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -29,8 +30,13 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Inyectar URL desde settings (no desde alembic.ini)
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Inyectar URL desde settings (no desde alembic.ini). En tests de integracion
+# se apunta a una DB dedicada con TEST_DATABASE_URL (NUNCA la de prod: el
+# roundtrip de la migracion corre downgrade(base), que DESTRUYE datos).
+_db_url = os.environ.get("TEST_DATABASE_URL") or settings.database_url
+if _db_url.startswith("postgresql://"):
+    _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+config.set_main_option("sqlalchemy.url", _db_url)
 
 target_metadata = Base.metadata
 
