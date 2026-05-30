@@ -11,7 +11,7 @@ vive en [`ynara.config.json`](../../ynara.config.json).
 | Productividad | Qwen 3.5-9B | semantic, episodic | calendar, reminders, memory | neutro-eficaz |
 | Estudio | Gemma 4 26B-A4B | episodic, procedural | — | encouragement |
 | Bienestar | Gemma 4 26B-A4B | procedural, semantic | — | casual-empatico |
-| Vida | Gemma 4 26B-A4B | procedural | calendar | casual-rioplatense |
+| Vida | Gemma 4 26B-A4B | procedural | — | casual-rioplatense |
 | Memoria | Qwen 3.5-9B | episodic, semantic, procedural | memory | neutro-eficaz |
 
 ## Productividad
@@ -64,7 +64,8 @@ Reglas duras:
 
 - Modelo: Gemma 4 26B-A4B.
 - Lee memoria procedural. No escribe.
-- Tool: `calendar` (solo lectura, "¿qué tengo hoy?").
+- Sin tools: Gemma es conversacional y solo lee memoria; las acciones
+  (calendar incluido) las maneja Qwen en Productividad (ADR-002).
 - Tono: casual rioplatense. Voseo, modismos, sin afectación.
 
 Ejemplos:

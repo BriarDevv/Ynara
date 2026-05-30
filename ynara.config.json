@@ -25,7 +25,7 @@
     "vida": {
       "model": "gemma-4-26b-a4b",
       "memory_layers": ["procedural"],
-      "tools_enabled": ["calendar"],
+      "tools_enabled": [],
       "tone": "casual-rioplatense"
     },
     "memoria": {
