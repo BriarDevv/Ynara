@@ -54,9 +54,13 @@ class LLMClient(Protocol):
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
-        timeout_s: float = 30.0,
+        timeout_s: float | None = None,
     ) -> CompletionResult:
-        """Genera una completion no-streaming."""
+        """Genera una completion no-streaming.
+
+        ``timeout_s=None`` deja que la implementacion use su default (el
+        ``VllmClient`` lo toma de ``config.serving.request_timeout_s``).
+        """
         ...
 
     def stream(
@@ -67,9 +71,12 @@ class LLMClient(Protocol):
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
-        timeout_s: float = 30.0,
+        timeout_s: float | None = None,
     ) -> AsyncIterator[CompletionChunk]:
-        """Genera una completion en streaming (yield de chunks)."""
+        """Genera una completion en streaming (yield de chunks).
+
+        ``timeout_s=None`` -> default de la implementacion (ver ``complete``).
+        """
         ...
 
     async def health(self) -> ModelHealth:

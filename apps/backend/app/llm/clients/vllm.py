@@ -55,6 +55,7 @@ class VllmClient:
         served_models: frozenset[str],
         http_client: httpx.AsyncClient,
         parser: ToolCallParser,
+        default_timeout_s: float = 30.0,
     ) -> None:
         """Un ``VllmClient`` = un proceso vLLM.
 
@@ -63,11 +64,16 @@ class VllmClient:
         ``frozenset`` para que el pool rutee con ``serves_model()`` de
         forma uniforme; ``health()`` reporta un served_name de forma
         determinista.
+
+        ``default_timeout_s`` es el timeout por request cuando el caller no
+        pasa uno explicito; el router (M8) construye el cliente con
+        ``config.serving.request_timeout_s`` (ver ynara.config.json).
         """
         self._base_url = base_url.rstrip("/")
         self._served_models = served_models
         self._http = http_client
         self._parser = parser
+        self._default_timeout_s = default_timeout_s
 
     def serves_model(self, model: str) -> bool:
         return model in self._served_models
@@ -80,7 +86,7 @@ class VllmClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
-        timeout_s: float = 30.0,
+        timeout_s: float | None = None,
     ) -> CompletionResult:
         self._ensure_served(model)
         payload = self._build_payload(
@@ -92,7 +98,7 @@ class VllmClient:
             stream=False,
         )
         started = time.perf_counter()
-        response = await self._post(payload, timeout_s)
+        response = await self._post(payload, self._resolve_timeout(timeout_s))
         latency_ms = (time.perf_counter() - started) * 1000.0
         self._raise_for_status(response)
         return self._parse_completion(response.json(), model, latency_ms)
@@ -105,7 +111,7 @@ class VllmClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
-        timeout_s: float = 30.0,
+        timeout_s: float | None = None,
     ) -> AsyncIterator[CompletionChunk]:
         self._ensure_served(model)
         payload = self._build_payload(
@@ -117,8 +123,11 @@ class VllmClient:
             stream=True,
         )
         url = f"{self._base_url}{_CHAT_PATH}"
+        effective_timeout = self._resolve_timeout(timeout_s)
         try:
-            async with self._http.stream("POST", url, json=payload, timeout=timeout_s) as response:
+            async with self._http.stream(
+                "POST", url, json=payload, timeout=effective_timeout
+            ) as response:
                 self._raise_for_status(response)
                 async for line in response.aiter_lines():
                     chunk = self._parse_sse_line(line)
@@ -147,6 +156,15 @@ class VllmClient:
     def _ensure_served(self, model: str) -> None:
         if not self.serves_model(model):
             raise ModelNotServedError(model)
+
+    def _resolve_timeout(self, timeout_s: float | None) -> float:
+        """Timeout por request: el explicito del caller o el default del cliente.
+
+        El router (M8) construye el cliente con
+        ``default_timeout_s=config.serving.request_timeout_s``; cada llamada
+        puede hacer un override puntual con ``timeout_s``.
+        """
+        return timeout_s if timeout_s is not None else self._default_timeout_s
 
     def _build_payload(
         self,

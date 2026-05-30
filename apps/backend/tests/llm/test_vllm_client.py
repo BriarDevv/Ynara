@@ -132,6 +132,51 @@ async def test_complete_propagates_tool_parsing_error() -> None:
         await client.complete(model=_MODEL, messages=_messages())
 
 
+# ---------- timeout configurable (#27) ----------
+
+
+@pytest.mark.asyncio
+async def test_complete_uses_configured_default_timeout() -> None:
+    # Sin timeout_s explicito el cliente usa default_timeout_s; el router M8
+    # lo construye con config.serving.request_timeout_s.
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["timeout"] = request.extensions["timeout"]
+        return httpx.Response(200, json=_load("completion_text.json"))
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    client = VllmClient(
+        base_url=_BASE_URL,
+        served_models=frozenset({_MODEL}),
+        http_client=http,
+        parser=OpenAIToolCallParser(),
+        default_timeout_s=120.0,
+    )
+    await client.complete(model=_MODEL, messages=_messages())
+    assert captured["timeout"]["read"] == 120.0
+
+
+@pytest.mark.asyncio
+async def test_complete_explicit_timeout_overrides_default() -> None:
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["timeout"] = request.extensions["timeout"]
+        return httpx.Response(200, json=_load("completion_text.json"))
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    client = VllmClient(
+        base_url=_BASE_URL,
+        served_models=frozenset({_MODEL}),
+        http_client=http,
+        parser=OpenAIToolCallParser(),
+        default_timeout_s=120.0,
+    )
+    await client.complete(model=_MODEL, messages=_messages(), timeout_s=5.0)
+    assert captured["timeout"]["read"] == 5.0
+
+
 # ---------- mapeo de errores HTTP ----------
 
 
@@ -202,6 +247,31 @@ async def test_stream_timeout_mapped() -> None:
     with pytest.raises(LlmTimeoutError):
         async for _ in client.stream(model=_MODEL, messages=_messages()):
             pass
+
+
+@pytest.mark.asyncio
+async def test_stream_tool_call_deltas_accumulate() -> None:
+    # E2E del streaming de tool calls: stream() emite tool_call_delta crudo y
+    # el caller (router M8) lo junta con parser.accumulate(). test_stream_text
+    # solo cubre texto; este cierra el shape {"choices": [choice]} con consumer.
+    sse = (_FIXTURES / "stream_tool_calls.sse").read_text(encoding="utf-8")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, content=sse.encode("utf-8"), headers={"content-type": "text/event-stream"}
+        )
+
+    client = _client(handler)
+    deltas = [
+        chunk.tool_call_delta
+        async for chunk in client.stream(model=_MODEL, messages=_messages())
+        if chunk.tool_call_delta is not None
+    ]
+    calls = OpenAIToolCallParser().accumulate(deltas)
+    assert len(calls) == 1
+    assert calls[0].id == "call_stream_1"
+    assert calls[0].name == "get_weather"
+    assert calls[0].arguments == {"city": "Rosario"}
 
 
 # ---------- health ----------

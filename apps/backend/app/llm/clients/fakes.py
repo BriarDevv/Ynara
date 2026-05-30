@@ -75,7 +75,7 @@ class FakeLlmClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
-        timeout_s: float = 30.0,
+        timeout_s: float | None = None,
     ) -> CompletionResult:
         self.complete_calls.append({"model": model, "messages": messages, "tools": tools})
         if not self._results:
@@ -93,7 +93,7 @@ class FakeLlmClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
-        timeout_s: float = 30.0,
+        timeout_s: float | None = None,
     ) -> AsyncIterator[CompletionChunk]:
         self.stream_calls.append({"model": model, "messages": messages, "tools": tools})
         if not self._chunks:
