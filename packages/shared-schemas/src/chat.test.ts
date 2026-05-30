@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { CHAT_TEXT_MAX_LENGTH, ChatRequestSchema, ChatResponseSchema, SessionSchema } from "./chat";
+import {
+  CHAT_TEXT_MAX_LENGTH,
+  ChatMessageSchema,
+  ChatRequestSchema,
+  ChatResponseSchema,
+  SessionSchema,
+} from "./chat";
 import { CHAT_ERROR_FALLBACK, chatErrorCopy } from "./chat-copy";
 
 describe("ChatRequestSchema", () => {
@@ -10,6 +16,19 @@ describe("ChatRequestSchema", () => {
       mode: "productividad",
     });
     expect(parsed.session_id).toBeUndefined();
+  });
+
+  it("acepta session_id null (sesion nueva) y un UUID valido", () => {
+    expect(ChatRequestSchema.safeParse({ text: "x", mode: "vida", session_id: null }).success).toBe(
+      true,
+    );
+    expect(
+      ChatRequestSchema.safeParse({
+        text: "x",
+        mode: "vida",
+        session_id: "0193aaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      }).success,
+    ).toBe(true);
   });
 
   it("rechaza texto vacio", () => {
@@ -23,6 +42,33 @@ describe("ChatRequestSchema", () => {
 
   it("rechaza un modo invalido", () => {
     expect(ChatRequestSchema.safeParse({ text: "hola", mode: "inexistente" }).success).toBe(false);
+  });
+});
+
+describe("ChatMessageSchema", () => {
+  it("acepta content null (assistant que solo emite tool_calls)", () => {
+    const parsed = ChatMessageSchema.parse({ role: "assistant", content: null });
+    expect(parsed.content).toBeNull();
+  });
+
+  it("acepta content ausente", () => {
+    const parsed = ChatMessageSchema.parse({ role: "user" });
+    expect(parsed.content).toBeUndefined();
+  });
+
+  it("acepta tool_call_id y name nulos (mirror de str | None)", () => {
+    const parsed = ChatMessageSchema.parse({
+      role: "tool",
+      content: "resultado",
+      tool_call_id: null,
+      name: null,
+    });
+    expect(parsed.tool_call_id).toBeNull();
+    expect(parsed.name).toBeNull();
+  });
+
+  it("rechaza un role invalido", () => {
+    expect(ChatMessageSchema.safeParse({ role: "robot" }).success).toBe(false);
   });
 });
 
