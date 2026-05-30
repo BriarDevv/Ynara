@@ -19,9 +19,30 @@ en la capa de serializacion del cliente; aca ``ToolSpec`` guarda
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from datetime import datetime
+from typing import Annotated, Protocol, runtime_checkable
+
+from pydantic import BeforeValidator, Field
 
 from app.llm.schemas import ToolSpec
+
+
+def _reject_numeric_datetime(value: object) -> object:
+    """Rechaza timestamps numericos en los campos datetime de las tool calls.
+
+    Las tool calls mandan fechas como string ISO 8601 (contrato
+    ``docs/TOOLS.md``). Con ``strict=False`` Pydantic coerceria un epoch
+    int/float a una fecha plausible-pero-incorrecta; si el modelo alucina un
+    numero preferimos ``invalid_arguments`` antes que agendar en la fecha
+    equivocada.
+    """
+    if isinstance(value, (int, float)):
+        raise ValueError("se espera un string ISO 8601, no un timestamp numerico")
+    return value
+
+
+# ``IsoDatetime``: datetime de tool call — acepta string ISO 8601, rechaza epoch numerico.
+IsoDatetime = Annotated[datetime, BeforeValidator(_reject_numeric_datetime), Field(strict=False)]
 
 
 @runtime_checkable

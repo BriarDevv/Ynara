@@ -13,11 +13,9 @@ para lo que ve el modelo.
 
 from __future__ import annotations
 
-from datetime import datetime
+from pydantic import BaseModel, ConfigDict, ValidationError
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
-
-from app.llm.tools.base import tool_error
+from app.llm.tools.base import IsoDatetime, tool_error
 
 _NAMESPACE = "calendar"
 
@@ -36,15 +34,15 @@ class _CreateEventArgs(BaseModel):
     """Argumentos de ``calendar.create_event`` (Pydantic v2 strict).
 
     Las tool calls llegan como JSON: los ``datetime`` se mandan como strings
-    ISO 8601, asi que esos campos van ``strict=False`` para coercer la string;
-    el resto (``str``, ``list``) mantiene la validacion strict del modelo.
+    ISO 8601 (tipo ``IsoDatetime``, que rechaza epoch numerico); el resto
+    (``str``, ``list``) mantiene la validacion strict del modelo.
     """
 
     model_config = ConfigDict(strict=True, extra="forbid")
 
     title: str
-    start: datetime = Field(strict=False)
-    end: datetime = Field(strict=False)
+    start: IsoDatetime
+    end: IsoDatetime
     attendees: list[str] | None = None
 
 
@@ -56,8 +54,8 @@ class _ListEventsArgs(BaseModel):
 
     model_config = ConfigDict(strict=True, extra="forbid")
 
-    from_dt: datetime = Field(strict=False)
-    to_dt: datetime = Field(strict=False)
+    from_dt: IsoDatetime
+    to_dt: IsoDatetime
 
 
 class CreateEventTool:
