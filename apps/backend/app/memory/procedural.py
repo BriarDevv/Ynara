@@ -1,31 +1,100 @@
 """Memoria procedural: preferencias y patrones del usuario.
 
-JSONB estructurado, sin embeddings. Lookup directo por key.
-Las entradas pueden tener un ``confidence`` (0-1) que decae si el
-patrón deja de observarse.
+Storage propio sobre la tabla sagrada ``procedural_memory`` (engine in-house,
+ADR-010). JSONB estructurado en ``value``, **sin** cifrado y **sin** embeddings
+(no es contenido íntimo de texto libre: es preferencia estructurada). Lookup
+directo por ``(user_id, key)``.
+
+``ProceduralMemoryStore`` se construye **por request** ligando ``user_id`` en el
+``__init__``: el ``user_id`` nunca viaja en los argumentos de los métodos, así
+todo query queda forzosamente filtrado por el usuario del store (aislamiento por
+construcción, ADR-010 / regla #3). El upsert resetea el decay (``confidence=1.0``,
+``last_reinforced_at=now()``, ``stale=false``) al reforzar, según ADR-007 D1.
 """
 
 from __future__ import annotations
 
-from typing import Any
 from uuid import UUID
 
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-async def upsert(user_id: UUID, key: str, value: dict[str, Any], confidence: float = 1.0) -> None:
-    """Inserta o actualiza una entrada procedural por key."""
-    raise NotImplementedError("procedural.upsert TODO")
-
-
-async def get(user_id: UUID, key: str) -> dict[str, Any] | None:
-    """Lee una entrada procedural por key."""
-    raise NotImplementedError("procedural.get TODO")
+from app.models.memory import ProceduralMemory
+from app.schemas.memory import ProceduralMemoryOut, ProceduralMemoryUpsert
 
 
-async def list_all(user_id: UUID) -> list[dict[str, Any]]:
-    """Lista todas las entradas procedurales del usuario."""
-    raise NotImplementedError("procedural.list_all TODO")
+class ProceduralMemoryStore:
+    """Store por-request de la capa procedural, ligado a un ``user_id``.
 
+    Todo método filtra por ``self._user_id``: el aislamiento entre usuarios es
+    estructural (el ``user_id`` no es un argumento que el caller pueda variar).
+    """
 
-async def delete(user_id: UUID, key: str) -> None:
-    """Borra físicamente una entrada procedural."""
-    raise NotImplementedError("procedural.delete TODO")
+    def __init__(self, session: AsyncSession, user_id: UUID) -> None:
+        self._session = session
+        self._user_id = user_id
+
+    async def upsert(self, payload: ProceduralMemoryUpsert) -> ProceduralMemoryOut:
+        """Inserta o refuerza una entrada por ``(user_id, key)``.
+
+        ON CONFLICT ``(user_id, key)`` DO UPDATE: reemplaza ``value`` y **resetea
+        el decay** (``confidence=1.0``, ``last_reinforced_at=now()``,
+        ``stale=false``) — reforzar una preferencia la revive (ADR-007 D1).
+        """
+        stmt = (
+            pg_insert(ProceduralMemory)
+            .values(
+                user_id=self._user_id,
+                key=payload.key,
+                value=payload.value,
+            )
+            .on_conflict_do_update(
+                constraint="user_id_key_unique",
+                set_={
+                    "value": payload.value,
+                    "confidence": 1.0,
+                    "last_reinforced_at": func.now(),
+                    "stale": False,
+                },
+            )
+            .returning(ProceduralMemory)
+        )
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        row = result.scalar_one()
+        return ProceduralMemoryOut.model_validate(row)
+
+    async def get(self, key: str) -> ProceduralMemoryOut | None:
+        """Lee una entrada por ``key`` del usuario del store. ``None`` si no existe."""
+        stmt = select(ProceduralMemory).where(
+            ProceduralMemory.user_id == self._user_id,
+            ProceduralMemory.key == key,
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return ProceduralMemoryOut.model_validate(row) if row is not None else None
+
+    async def list_all(self) -> list[ProceduralMemoryOut]:
+        """Lista todas las entradas procedurales del usuario, ordenadas por ``key``."""
+        stmt = (
+            select(ProceduralMemory)
+            .where(ProceduralMemory.user_id == self._user_id)
+            .order_by(ProceduralMemory.key)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [ProceduralMemoryOut.model_validate(row) for row in rows]
+
+    async def delete(self, key: str) -> bool:
+        """Borra físicamente una entrada por ``key``. ``True`` si borró una fila."""
+        stmt = (
+            sa_delete(ProceduralMemory)
+            .where(
+                ProceduralMemory.user_id == self._user_id,
+                ProceduralMemory.key == key,
+            )
+            .returning(ProceduralMemory.id)
+        )
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        return result.scalar_one_or_none() is not None
