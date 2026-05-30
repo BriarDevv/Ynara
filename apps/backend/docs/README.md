@@ -11,6 +11,14 @@ correspondiente.
 - [`MIGRATIONS.md`](./MIGRATIONS.md) — política de migraciones
   Alembic.
 
+## Arquitectura y planes
+
+Estos catálogos son el **qué**; el **cómo** vive en otro lado:
+
+- Mapa del código, capa LLM (`app/llm/`) y gates: [`../AGENTS.md`](../AGENTS.md).
+- Decisiones: [ADRs](../../../docs/architecture/adrs/) — ADR-002 (dual stack Gemma/Qwen), ADR-005 (Supabase MVP), ADR-009 (serving vLLM + parsers).
+- Plan de la capa de inferencia: [`LLM-INFERENCE-INTEGRATION.md`](../../../docs/planning/LLM-INFERENCE-INTEGRATION.md).
+
 ## Regla
 
 Si agregás un modelo, endpoint, tool o migración, **actualizás el
