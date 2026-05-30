@@ -15,19 +15,16 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from app.llm.tools.base import IsoDatetime, tool_error
+from app.llm.tools.base import (
+    IsoDatetime,
+    first_validation_error,
+    not_wired_result,
+    tool_error,
+    tool_schema,
+)
 
 _NAMESPACE = "reminder"
-
-
-def _stub_result(action: str, arguments: dict[str, object]) -> dict[str, object]:
-    """Resultado stub uniforme: honesto sobre que no hay backend real."""
-    return {
-        "status": "not_wired",
-        "detail": "reminder backend pendiente",
-        "action": action,
-        "echo": arguments,
-    }
+_DETAIL = "reminder backend pendiente"
 
 
 class _SetReminderArgs(BaseModel):
@@ -70,14 +67,14 @@ class SetReminderTool:
 
     @property
     def parameters(self) -> dict[str, object]:
-        return _SetReminderArgs.model_json_schema()
+        return tool_schema(_SetReminderArgs)
 
     async def execute(self, arguments: dict[str, object]) -> dict[str, object]:
         try:
             validated = _SetReminderArgs.model_validate(arguments)
         except ValidationError as exc:
-            return tool_error("invalid_arguments", _first_error(exc))
-        return _stub_result(self.name, validated.model_dump(mode="json"))
+            return tool_error("invalid_arguments", first_validation_error(exc))
+        return not_wired_result(self.name, validated.model_dump(mode="json"), detail=_DETAIL)
 
 
 class ListRemindersTool:
@@ -93,22 +90,11 @@ class ListRemindersTool:
 
     @property
     def parameters(self) -> dict[str, object]:
-        return _ListRemindersArgs.model_json_schema()
+        return tool_schema(_ListRemindersArgs)
 
     async def execute(self, arguments: dict[str, object]) -> dict[str, object]:
         try:
             validated = _ListRemindersArgs.model_validate(arguments)
         except ValidationError as exc:
-            return tool_error("invalid_arguments", _first_error(exc))
-        return _stub_result(self.name, validated.model_dump(mode="json"))
-
-
-def _first_error(exc: ValidationError) -> str:
-    """Etiqueta tecnica corta del primer error, sin volcar el input.
-
-    No incluimos el valor recibido (regla #4: nada de datos del usuario en
-    el texto): solo la ubicacion del campo y el tipo de error.
-    """
-    err = exc.errors()[0]
-    loc = ".".join(str(p) for p in err["loc"]) or "(root)"
-    return f"argumento invalido en '{loc}': {err['type']}"
+            return tool_error("invalid_arguments", first_validation_error(exc))
+        return not_wired_result(self.name, validated.model_dump(mode="json"), detail=_DETAIL)

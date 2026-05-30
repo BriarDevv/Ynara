@@ -7,27 +7,24 @@ calendario cableado. Los errores de validacion vuelven como dict
 estructurado (``tool_error``), nunca como excepcion.
 
 El JSON Schema OpenAI de cada tool se deriva del propio modelo Pydantic
-(``model_json_schema``), asi hay una sola fuente de verdad para validacion y
-para lo que ve el modelo.
+(``tool_schema``), asi hay una sola fuente de verdad para validacion y para
+lo que ve el modelo.
 """
 
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from app.llm.tools.base import IsoDatetime, tool_error
+from app.llm.tools.base import (
+    IsoDatetime,
+    first_validation_error,
+    not_wired_result,
+    tool_error,
+    tool_schema,
+)
 
 _NAMESPACE = "calendar"
-
-
-def _stub_result(action: str, arguments: dict[str, object]) -> dict[str, object]:
-    """Resultado stub uniforme: honesto sobre que no hay backend real."""
-    return {
-        "status": "not_wired",
-        "detail": "calendar backend pendiente",
-        "action": action,
-        "echo": arguments,
-    }
+_DETAIL = "calendar backend pendiente"
 
 
 class _CreateEventArgs(BaseModel):
@@ -71,14 +68,14 @@ class CreateEventTool:
 
     @property
     def parameters(self) -> dict[str, object]:
-        return _CreateEventArgs.model_json_schema()
+        return tool_schema(_CreateEventArgs)
 
     async def execute(self, arguments: dict[str, object]) -> dict[str, object]:
         try:
             validated = _CreateEventArgs.model_validate(arguments)
         except ValidationError as exc:
-            return tool_error("invalid_arguments", _first_error(exc))
-        return _stub_result(self.name, validated.model_dump(mode="json"))
+            return tool_error("invalid_arguments", first_validation_error(exc))
+        return not_wired_result(self.name, validated.model_dump(mode="json"), detail=_DETAIL)
 
 
 class ListEventsTool:
@@ -94,22 +91,11 @@ class ListEventsTool:
 
     @property
     def parameters(self) -> dict[str, object]:
-        return _ListEventsArgs.model_json_schema()
+        return tool_schema(_ListEventsArgs)
 
     async def execute(self, arguments: dict[str, object]) -> dict[str, object]:
         try:
             validated = _ListEventsArgs.model_validate(arguments)
         except ValidationError as exc:
-            return tool_error("invalid_arguments", _first_error(exc))
-        return _stub_result(self.name, validated.model_dump(mode="json"))
-
-
-def _first_error(exc: ValidationError) -> str:
-    """Etiqueta tecnica corta del primer error, sin volcar el input.
-
-    No incluimos el valor recibido (regla #4: nada de datos del usuario en
-    el texto): solo la ubicacion del campo y el tipo de error.
-    """
-    err = exc.errors()[0]
-    loc = ".".join(str(p) for p in err["loc"]) or "(root)"
-    return f"argumento invalido en '{loc}': {err['type']}"
+            return tool_error("invalid_arguments", first_validation_error(exc))
+        return not_wired_result(self.name, validated.model_dump(mode="json"), detail=_DETAIL)

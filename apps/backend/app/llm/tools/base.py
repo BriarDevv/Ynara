@@ -22,7 +22,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Protocol, runtime_checkable
 
-from pydantic import BeforeValidator
+from pydantic import BaseModel, BeforeValidator, ValidationError
 
 from app.llm.schemas import ToolSpec
 
@@ -114,3 +114,34 @@ def tool_error(code: str, message: str) -> dict[str, object]:
     usuario (regla #4).
     """
     return {"error": {"code": code, "message": message}}
+
+
+def tool_schema(model: type[BaseModel]) -> dict[str, object]:
+    """JSON Schema OpenAI de los argumentos de una tool.
+
+    Quita la ``description`` top-level: el docstring del modelo Pydantic es
+    ruido interno para el modelo (la descripcion util de la tool va en
+    ``Tool.description``). Las descripciones por-campo (``Field(description=)``)
+    se conservan.
+    """
+    schema = model.model_json_schema()
+    schema.pop("description", None)
+    return schema
+
+
+def not_wired_result(
+    action: str, arguments: dict[str, object], *, detail: str
+) -> dict[str, object]:
+    """Resultado stub uniforme para una tool sin backend real cableado."""
+    return {"status": "not_wired", "detail": detail, "action": action, "echo": arguments}
+
+
+def first_validation_error(exc: ValidationError) -> str:
+    """Etiqueta tecnica corta del primer error de validacion.
+
+    No vuelca el valor recibido (regla #4: nada de datos del usuario en el
+    texto): solo la ubicacion del campo y el tipo de error.
+    """
+    err = exc.errors()[0]
+    loc = ".".join(str(p) for p in err["loc"]) or "(root)"
+    return f"argumento invalido en '{loc}': {err['type']}"
