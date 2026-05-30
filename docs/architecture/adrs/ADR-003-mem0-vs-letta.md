@@ -1,7 +1,14 @@
 # ADR-003: Mem0 OSS v2 como engine de memoria
 
 ## Estado
-Aceptado
+**Superseded por [ADR-010](./ADR-010-memory-architecture-v2.md)** (engine de
+storage de la capa semántica). Mem0 resultó incompatible con el cifrado a nivel
+campo (ADR-007 D3): fija su DDL en texto plano y necesita plaintext persistido
+para extracción/dedup, sin hook pre-store para cifrar. ADR-010 decide owneear el
+storage + la inteligencia in-house detrás de Protocols. **Lo que se mantiene de
+este ADR**: el espíritu de "custom hooks propios" para episódica y procedural —
+ADR-010 lo generaliza a las tres capas. Mem0 queda relegado, a lo sumo, a
+referencia de algoritmo / extractor in-memory (nunca storage).
 
 ## Fecha
 2026-05-XX  <!-- TODO: fecha exacta cuando se apruebe en PR -->

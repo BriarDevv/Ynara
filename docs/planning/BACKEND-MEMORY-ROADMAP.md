@@ -257,7 +257,9 @@ Crear con:
 
 - Trigger: post-respuesta del modelo (cualquiera).
 - Input: `(user_msg, model_response, session_id)`.
-- Lógica: pedirle a Qwen extracción de hechos en formato Mem0 (ADD/UPDATE/DELETE/NOOP).
+- Lógica: pedirle a Qwen extracción de hechos en el patrón ADD/UPDATE/DELETE/NOOP
+  (contrato del extractor in-house, [ADR-010](../architecture/adrs/ADR-010-memory-architecture-v2.md);
+  Mem0 a lo sumo como referencia de algoritmo, nunca storage).
 - Output: escribir en `semantic_memory` + actualizar `procedural_memory`.
 
 ### 5.2 Decay procedural
@@ -371,7 +373,8 @@ El roadmap se considera **completo** cuando:
 - [`AGENTS.md`](../../AGENTS.md) — 10 reglas no negociables.
 - [`docs/architecture/informe-tecnico.pdf`](../architecture/informe-tecnico.pdf) §1.5 (flow turn-por-turn) y §2.4 (capa LLM).
 - [`docs/architecture/adrs/ADR-002-gemma-qwen-dual-stack.md`](../architecture/adrs/ADR-002-gemma-qwen-dual-stack.md) — dual-stack.
-- [`docs/architecture/adrs/ADR-003-mem0-vs-letta.md`](../architecture/adrs/ADR-003-mem0-vs-letta.md) — Mem0 OSS v2.
+- [`docs/architecture/adrs/ADR-010-memory-architecture-v2.md`](../architecture/adrs/ADR-010-memory-architecture-v2.md) — arquitectura de memoria v2 (engine in-house, supersede ADR-003).
+- [`docs/architecture/adrs/ADR-003-mem0-vs-letta.md`](../architecture/adrs/ADR-003-mem0-vs-letta.md) — Mem0 OSS v2 (superseded por ADR-010).
 - [`docs/architecture/adrs/ADR-004-postgres-pgvector-vs-pinecone.md`](../architecture/adrs/ADR-004-postgres-pgvector-vs-pinecone.md) — Postgres + pgvector.
 - [`docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md`](../architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md) — Supabase MVP → self-hosted V2.
 - [`docs/architecture/adrs/ADR-007-memory-decay-retention-encryption.md`](../architecture/adrs/ADR-007-memory-decay-retention-encryption.md) — decay, retention, cifrado.
