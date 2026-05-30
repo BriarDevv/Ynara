@@ -61,7 +61,9 @@ class Settings(BaseSettings):
 
     # Observabilidad
     sentry_dsn: str = Field("", alias="SENTRY_DSN")
-    sentry_traces_sample_rate: float = Field(0.0, alias="SENTRY_TRACES_SAMPLE_RATE")
+    sentry_traces_sample_rate: float = Field(
+        0.0, ge=0.0, le=1.0, alias="SENTRY_TRACES_SAMPLE_RATE"
+    )
     posthog_key: str = Field("", alias="POSTHOG_KEY")
 
     # CORS — TODO: ajustar a dominios reales al desplegar

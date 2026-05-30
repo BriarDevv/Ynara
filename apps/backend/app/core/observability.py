@@ -17,6 +17,8 @@ from __future__ import annotations
 from typing import Any
 
 import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from app.core.config import get_settings
 
@@ -48,14 +50,24 @@ def _scrub_event(event: dict[str, Any], hint: dict[str, Any]) -> dict[str, Any]:
 
     # Contexto de usuario: lo dropeamos entero (IP, email, id no deben salir).
     event.pop("user", None)
+    # Hostname del nodo on-prem: dato de infra del cliente, fuera.
+    event.pop("server_name", None)
     return event
 
 
 def init_sentry() -> None:
     """Inicializa Sentry si hay DSN. No-op si ``SENTRY_DSN`` está vacío.
 
-    Idempotente a nivel boot: se llama una vez desde ``app.main``. Sin DSN
-    (default en dev) no hace nada — no se manda nada a ningún lado.
+    Se llama una vez desde ``app.main`` (import-time, antes de crear la app, para
+    capturar errores de startup). Sin DSN (default en dev) no hace nada — no se
+    manda nada a ningún lado.
+
+    El scrubbing de PII (regla #4) aplica a **errores y transacciones**:
+    ``before_send`` cubre errores y ``before_send_transaction`` las trazas
+    (cuando ``SENTRY_TRACES_SAMPLE_RATE > 0``); sin el segundo, los eventos de
+    transacción viajarían sin limpiar. ``transaction_style="endpoint"`` hace que
+    el nombre de la transacción sea el patrón de ruta (``/v1/users/{id}``) y no
+    la URL resuelta con valores reales.
     """
     settings = get_settings()
     if not settings.sentry_dsn:
@@ -66,4 +78,9 @@ def init_sentry() -> None:
         traces_sample_rate=settings.sentry_traces_sample_rate,
         send_default_pii=False,
         before_send=_scrub_event,
+        before_send_transaction=_scrub_event,
+        integrations=[
+            StarletteIntegration(transaction_style="endpoint"),
+            FastApiIntegration(transaction_style="endpoint"),
+        ],
     )

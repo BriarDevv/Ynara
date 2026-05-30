@@ -66,6 +66,29 @@ def test_scrub_drops_user_context() -> None:
     assert "user" not in _scrub_event(event, {})
 
 
+def test_scrub_drops_server_name() -> None:
+    # Hostname del nodo on-prem: dato de infra, no debe salir.
+    event = {"server_name": "ynara-prod-node-01"}
+    assert "server_name" not in _scrub_event(event, {})
+
+
+def test_scrub_works_on_transaction_event() -> None:
+    # Los eventos de transacción (tracing) también pasan por el scrubber
+    # (before_send_transaction): mismo limpiado de PII.
+    event = {
+        "type": "transaction",
+        "transaction": "/v1/users/{id}",
+        "request": {"data": {"x": 1}, "query_string": "token=secreto"},
+        "user": {"id": "u1"},
+        "server_name": "node-01",
+    }
+    scrubbed = _scrub_event(event, {})
+    assert "data" not in scrubbed["request"]
+    assert scrubbed["request"]["query_string"] == "[scrubbed]"
+    assert "user" not in scrubbed
+    assert "server_name" not in scrubbed
+
+
 def test_scrub_tolerates_missing_request() -> None:
     event = {"level": "error", "message": "boom"}
     assert _scrub_event(event, {}) == {"level": "error", "message": "boom"}
@@ -102,5 +125,6 @@ def test_init_sentry_configures_scrubber_with_dsn(monkeypatch: pytest.MonkeyPatc
     assert len(calls) == 1
     kwargs = calls[0]
     assert kwargs["before_send"] is _scrub_event
+    assert kwargs["before_send_transaction"] is _scrub_event  # también scrubea trazas
     assert kwargs["send_default_pii"] is False
     assert kwargs["environment"] == "staging"
