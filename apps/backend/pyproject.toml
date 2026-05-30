@@ -85,6 +85,9 @@ quote-style = "double"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -m 'not integration'"
+markers = [
+    "integration: requiere servicios externos (DB real, etc.); excluido del run default",
+]
 
 # TODO: agregar coverage threshold cuando estabilicemos el code base.
