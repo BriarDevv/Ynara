@@ -49,6 +49,9 @@
   --color-error: #c0392b;
   --color-error-soft: rgb(192 57 43 / 0.12);
 
+  /* Overlay para modales / dialogs (alpha del ink). */
+  --color-overlay: rgb(36 44 63 / 0.4);
+
   /* Gradientes — uso semántico */
   --gradient-blue-base: linear-gradient(
     135deg,

@@ -2,12 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import {
-  type ApiErrorBody,
-  AuthResponseSchema,
-  LoginRequestSchema,
-  SignupRequestSchema,
-} from "@ynara/shared-schemas";
 import { useState } from "react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import type { z } from "zod";
@@ -18,6 +12,12 @@ import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
 import { STEP_COPY } from "../constants";
 import { useOnboardingNav } from "../hooks/useOnboardingNav";
+import {
+  type ApiErrorBody,
+  AuthResponseSchema,
+  LoginRequestSchema,
+  SignupRequestSchema,
+} from "../schemas";
 import { useOnboardingStore } from "../store";
 
 type AuthMode = "signup" | "login";
@@ -27,6 +27,16 @@ const LoginFormSchema = LoginRequestSchema;
 
 type SignupValues = z.infer<typeof SignupFormSchema>;
 type LoginValues = z.infer<typeof LoginFormSchema>;
+
+/**
+ * Copy del modo "login". El plan §4.2 sólo declara copy para signup
+ * (que vive en `STEP_COPY.auth`); login es un sub-modo derivado que
+ * compartimos en este archivo para mantener un único punto de cambio.
+ */
+const LOGIN_COPY = {
+  title: "Bienvenido de vuelta",
+  subtitle: "Ingresá con tu cuenta existente.",
+} as const;
 
 export function AuthStep() {
   const [mode, setMode] = useState<AuthMode>("signup");
@@ -131,7 +141,6 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
 // ============================================================
 
 function LoginForm({ onSwitch }: { onSwitch: () => void }) {
-  const copy = STEP_COPY.auth;
   const { next } = useOnboardingNav("auth");
   const setAuth = useOnboardingStore((s) => s.setAuth);
 
@@ -157,8 +166,8 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
 
   return (
     <StepShell
-      title="Bienvenido de vuelta"
-      subtitle="Ingresá con tu cuenta existente."
+      title={LOGIN_COPY.title}
+      subtitle={LOGIN_COPY.subtitle}
       footer={
         <StepFooter
           customNext={
@@ -200,7 +209,6 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
           {...form.register("password")}
         />
       </form>
-      {copy ? null : null /* keep import used */}
     </StepShell>
   );
 }

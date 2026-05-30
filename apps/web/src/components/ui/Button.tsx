@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { type ButtonHTMLAttributes, forwardRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "ghost";
@@ -21,16 +21,13 @@ const VARIANTS: Record<Variant, string> = {
     "text-[var(--color-ink-soft)] bg-transparent hover:text-[var(--color-ink)] hover:bg-[var(--color-bg-soft)]",
 };
 
-export function Button({
-  variant = "primary",
-  fullWidth = false,
-  children,
-  className,
-  type = "button",
-  ...rest
-}: Props) {
+export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
+  { variant = "primary", fullWidth = false, children, className, type = "button", ...rest },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type}
       className={cn(BASE, VARIANTS[variant], fullWidth && "w-full", className)}
       {...rest}
@@ -38,4 +35,4 @@ export function Button({
       {children}
     </button>
   );
-}
+});
