@@ -6,6 +6,11 @@ import type { ModeId } from "@/components/ui/modes";
  * para no duplicar texto y facilitar i18n futuro (plan §4.3).
  *
  * El copy refleja el tono de cada modo (ver `docs/product/MODES.md`).
+ *
+ * TODO(M0): el plan §3.3 pide que el copy canned viva en
+ * `packages/shared-schemas` para que el mock de mobile devuelva lo mismo.
+ * Se difiere hasta que arranque el track mobile (hoy no hay consumidor);
+ * cuando se mueva, el handler MSW y el smoke importan desde el package.
  */
 
 /**
@@ -35,20 +40,20 @@ export const MODE_INTRO: Record<ModeId, string> = {
  * real (M9) responda; mantiene el tono de cada modo para que la UI se vea
  * coherente mientras tanto. No pretende ser una respuesta "inteligente".
  */
+// Plantilla por modo. Record keyed por ModeId → exhaustivo por tipo:
+// si se agrega un modo a ModeId, esto deja de compilar hasta cubrirlo
+// (consistente con cannedActions y MODE_INTRO).
+const CANNED_REPLY: Record<ModeId, (echo: string) => string> = {
+  productividad: (echo) => `Dale, me ocupo de "${echo}". Te dejo la acción anotada acá abajo.`,
+  estudio: (echo) => `Buena. Arranquemos por "${echo}": primero la idea base y después un ejemplo.`,
+  bienestar: (echo) => `Te leo. Lo de "${echo}" pesa; contame un poco más si querés.`,
+  vida: (echo) => `Mirá, sobre "${echo}" se me ocurren un par de cosas. ¿Vamos viendo?`,
+  memoria: (echo) => `Anotado lo de "${echo}". Lo guardo para traértelo cuando lo necesites.`,
+};
+
 export function cannedReply(mode: ModeId, userText: string): string {
   const echo = userText.trim().slice(0, 80);
-  switch (mode) {
-    case "productividad":
-      return `Dale, me ocupo de "${echo}". Te dejo la acción anotada acá abajo.`;
-    case "estudio":
-      return `Buena. Arranquemos por "${echo}": primero la idea base y después un ejemplo.`;
-    case "bienestar":
-      return `Te leo. Lo de "${echo}" pesa; contame un poco más si querés.`;
-    case "vida":
-      return `Mirá, sobre "${echo}" se me ocurren un par de cosas. ¿Vamos viendo?`;
-    case "memoria":
-      return `Anotado lo de "${echo}". Lo guardo para traértelo cuando lo necesites.`;
-  }
+  return CANNED_REPLY[mode](echo);
 }
 
 /**

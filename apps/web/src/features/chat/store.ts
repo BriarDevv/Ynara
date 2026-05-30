@@ -61,8 +61,13 @@ type ChatActions = {
     status: ChatMessageStatus,
     errorCode?: string,
   ) => void;
-  /** Vuelca un `ChatResponse` no-streaming a la sesión como mensaje assistant. */
-  applyChatResponse: (sessionId: string, response: ChatResponse) => void;
+  /**
+   * Cierra el ciclo optimistic no-streaming en una sola transición: marca el
+   * mensaje del usuario (`userMessageId`, hoy "sending") como "done" y agrega
+   * la respuesta del assistant. Atómico para que la UI no vea estados
+   * intermedios ni mensajes colgados en "sending".
+   */
+  applyChatResponse: (sessionId: string, userMessageId: string, response: ChatResponse) => void;
   setStreamStatus: (status: ChatStreamStatus) => void;
   reset: () => void;
 };
@@ -105,6 +110,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
         set((s) => ({
           sessions: { ...s.sessions, [id]: { id, mode, createdAt: now, updatedAt: now } },
           messages: { ...s.messages, [id]: [] },
+          // Sesión nueva arranca sin stream en curso (relevante en W3, cuando
+          // un stream anterior podría quedar "streaming").
+          streamStatus: "idle",
         }));
         return id;
       },
@@ -141,16 +149,29 @@ export const useChatStore = create<ChatState & ChatActions>()(
           };
         }),
 
-      applyChatResponse: (sessionId, response) =>
+      applyChatResponse: (sessionId, userMessageId, response) =>
         set((s) => {
-          const withReply = appendMessage(s, sessionId, {
+          const list = s.messages[sessionId];
+          if (!list) return s;
+          // 1) Cerrar el mensaje optimistic del usuario (sending → done).
+          const userClosed = list.map((m) =>
+            m.id === userMessageId ? { ...m, status: "done" as const } : m,
+          );
+          // 2) Agregar la respuesta del assistant.
+          const assistant: ChatUiMessage = {
             id: newId(),
             role: "assistant",
             text: response.text,
             status: "done",
             actions: response.actions.length > 0 ? response.actions : undefined,
-          });
-          return withReply;
+          };
+          const session = s.sessions[sessionId];
+          return {
+            messages: { ...s.messages, [sessionId]: [...userClosed, assistant] },
+            sessions: session
+              ? { ...s.sessions, [sessionId]: { ...session, updatedAt: Date.now() } }
+              : s.sessions,
+          };
         }),
 
       setStreamStatus: (streamStatus) => set({ streamStatus }),
@@ -160,17 +181,14 @@ export const useChatStore = create<ChatState & ChatActions>()(
     {
       name: "ynara.chat",
       storage: localJsonStorage,
-      // streamStatus es efímero: no tiene sentido rehidratarlo.
-      partialize: (s) => ({
-        sessions: s.sessions,
-        messages: s.messages,
-        streamStatus: "idle" as const,
-      }),
+      // streamStatus es efímero: se omite de la persistencia (al rehidratar
+      // toma su valor inicial "idle" de initialState), no se escribe a disco.
+      partialize: (s) => ({ sessions: s.sessions, messages: s.messages }),
     },
   ),
 );
 
-/** Helper puro: agrega un mensaje a una sesión y toca su `updatedAt`. */
+/** Agrega un mensaje a una sesión y toca su `updatedAt` (usa `Date.now()`). */
 function appendMessage(
   state: ChatState,
   sessionId: string,
