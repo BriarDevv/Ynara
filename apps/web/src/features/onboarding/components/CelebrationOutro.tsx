@@ -22,14 +22,16 @@ export function CelebrationOutro() {
   const router = useRouter();
   const { complete, isPending, isError, isSuccess, clearDraft } = useCompleteOnboarding();
   const [minElapsed, setMinElapsed] = useState(false);
-  const firedOnMountRef = useRef(false);
   const navigatedRef = useRef(false);
 
-  // Dispara la mutation una sola vez al montar. `complete` es estable
-  // (useCallback en el hook), así que este effect no se re-ejecuta.
+  // Dispara la mutation al montar. NO usamos un ref-guard "fire once": en
+  // StrictMode (dev) el efecto corre dos veces y react-query crea un
+  // observer nuevo en el segundo mount; un ref que sobreviva al remount
+  // bloquearía el mutate() del observer vivo y la mutation quedaría pending
+  // para siempre (isSuccess nunca true → nunca navega). `complete` es
+  // estable (useCallback), así que en prod este efecto corre una sola vez;
+  // el doble disparo en dev es inofensivo (el onboard mockeado es idempotente).
   useEffect(() => {
-    if (firedOnMountRef.current) return;
-    firedOnMountRef.current = true;
     complete();
   }, [complete]);
 
@@ -59,8 +61,8 @@ export function CelebrationOutro() {
         </p>
         <Button
           onClick={() => {
-            // Sólo reseteamos navigatedRef: firedOnMountRef guarda el
-            // disparo de mount, acá llamamos complete() directo.
+            // Reseteamos navigatedRef para permitir navegar tras el reintento
+            // exitoso, y volvemos a disparar la mutation.
             navigatedRef.current = false;
             complete();
           }}

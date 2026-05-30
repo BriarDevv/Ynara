@@ -65,9 +65,12 @@ export function useCompleteOnboarding() {
     },
   });
 
-  // `mutation.mutate` es referencialmente estable en TanStack Query, así
-  // que `complete` también lo es: el effect del outro que lo dispara no
-  // se re-ejecuta en cada render (y no reinicia el timer de la animación).
+  // `mutation.mutate` es referencialmente estable en TanStack Query v5, así
+  // que `complete` también lo es. Esta estabilidad es LOAD-BEARING: el
+  // CelebrationOutro dispara `complete()` en un useEffect con dep [complete]
+  // y sin ref-guard; en prod (sin StrictMode) eso debe correr UNA sola vez.
+  // Si una versión futura de react-query rompiera la estabilidad de `mutate`,
+  // el efecto re-dispararía el onboard en cada render. No quitar el useCallback.
   const complete = useCallback(() => mutation.mutate(), [mutation.mutate]);
 
   return {
