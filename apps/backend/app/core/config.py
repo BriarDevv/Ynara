@@ -9,7 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -73,6 +73,22 @@ class Settings(BaseSettings):
             self.celery_broker_url = self.redis_url
         if not self.celery_result_backend:
             self.celery_result_backend = self.redis_url
+
+    @model_validator(mode="after")
+    def _reject_weak_jwt_secret_in_prod(self) -> Settings:
+        """Fail-fast: en production el JWT_SECRET no puede ser débil ni placeholder.
+
+        Un secret débil o conocido permite forjar tokens y suplantar a cualquier
+        usuario. En development/staging se permite para no meter fricción.
+        """
+        if self.environment == "production":
+            weak = {"", "cambiar-en-produccion", "secret", "changeme"}
+            if self.jwt_secret in weak or len(self.jwt_secret) < 32:
+                raise ValueError(
+                    "JWT_SECRET débil o placeholder en production: mínimo 32 chars; "
+                    "generar con `openssl rand -base64 48`"
+                )
+        return self
 
 
 @lru_cache
