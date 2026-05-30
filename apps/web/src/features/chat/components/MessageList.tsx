@@ -26,13 +26,17 @@ type Props = {
 
 export function MessageList({ messages, mode, onRetry }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
+  // El último mensaje dispara el auto-scroll: su identidad cambia al llegar un
+  // mensaje nuevo o al cambiar de status (objeto nuevo del store).
+  const lastMessage = messages.at(-1);
 
   // Auto-scroll al fondo cuando llega contenido nuevo. El auto-scroll
   // inteligente (pausar si el user scrollea arriba + botón "↓ ir al final")
   // llega en W3, donde el texto crece token a token.
   useEffect(() => {
+    if (!lastMessage) return;
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length]);
+  }, [lastMessage]);
 
   if (messages.length === 0) {
     return <EmptyConversation mode={mode} />;
