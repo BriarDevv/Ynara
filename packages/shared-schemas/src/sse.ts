@@ -44,7 +44,11 @@ export type ChatStreamEvent =
 
 /** Excepción de parseo: wire malformado o que no matchea el contrato. */
 export class SseParseError extends Error {
-  /** El bloque crudo que no se pudo parsear (sin datos de usuario garantido). */
+  /**
+   * El bloque crudo que causó el error. **PUEDE contener datos sensibles** —
+   * usar solo para debugging local, nunca logearlo en producción (regla #4).
+   * El `message` de la excepción sí es seguro (no incluye el contenido).
+   */
   readonly raw: string;
 
   constructor(message: string, raw: string) {

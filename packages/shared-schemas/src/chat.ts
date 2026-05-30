@@ -18,20 +18,35 @@ import { ModeSchema } from "./modes";
 /** Límite de longitud del mensaje (techo seguro vs `max_model_len` de Gemma). */
 export const CHAT_TEXT_MAX_LENGTH = 4000;
 
-/** Request a `POST /v1/chat` y `POST /v1/chat/stream`. */
+/**
+ * Request a `POST /v1/chat` y `POST /v1/chat/stream`.
+ *
+ * `min(1)` y `max(CHAT_TEXT_MAX_LENGTH)` se adelantan al backend: el Pydantic
+ * `ChatRequest.text` hoy es `str` pelado; el `max_length=4000` se cablea en M9
+ * (accion #3 de RESPUESTAS-CONTRATO-CHAT). Validar client-side no tiene
+ * contra: no mandamos texto vacio ni por encima del techo de Gemma.
+ */
 export const ChatRequestSchema = z.object({
   text: z.string().min(1).max(CHAT_TEXT_MAX_LENGTH),
   mode: ModeSchema,
-  session_id: z.string().uuid().optional(),
+  // Pydantic: `str | None = None`. Aceptamos ausente o null (= sesion nueva).
+  session_id: z.string().uuid().nullable().optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 
-/** Un mensaje del historial (formato OpenAI-like, mirror de `ChatMessage`). */
+/**
+ * Un mensaje del historial (formato OpenAI-like, mirror de `ChatMessage`).
+ *
+ * Pydantic define `content`/`tool_call_id`/`name` como `str | None = None`.
+ * Pydantic v2 los serializa como `null` (no los omite), asi que el mirror usa
+ * `.nullable().optional()`: acepta el campo ausente, presente con string, o
+ * presente con `null` (p. ej. assistant que solo emite tool_calls).
+ */
 export const ChatMessageSchema = z.object({
   role: z.enum(["system", "user", "assistant", "tool"]),
-  content: z.string().optional(),
-  tool_call_id: z.string().optional(),
-  name: z.string().optional(),
+  content: z.string().nullable().optional(),
+  tool_call_id: z.string().nullable().optional(),
+  name: z.string().nullable().optional(),
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
