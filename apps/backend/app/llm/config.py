@@ -170,6 +170,15 @@ def _validate_coherence(
     for name, mode in modes.items():
         if mode.model not in models:
             raise LlmConfigError(f"modo {name!r} apunta a un modelo inexistente: {mode.model!r}")
+        # Si el modo tiene 'memory' en tools_enabled, debe tener 'semantic' en
+        # memory_layers: sin semantic_store no se puede construir memory_registry
+        # y memory.search quedaria silenciosamente sin backend (decision #4 M8).
+        if "memory" in mode.tools_enabled and "semantic" not in mode.memory_layers:
+            raise LlmConfigError(
+                f"modo {name!r} tiene 'memory' en tools_enabled pero le falta "
+                f"'semantic' en memory_layers (sin semantic store, memory.search "
+                f"no tiene backend)"
+            )
 
     for key, model in models.items():
         if not model.served_name:
