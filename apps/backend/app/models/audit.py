@@ -77,9 +77,7 @@ class AuditLog(UUIDPKMixin, Base):
         ),
         nullable=False,
     )
-    target_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    target_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     origin_model: Mapped[LlmModel | None] = mapped_column(
         Enum(
             LlmModel,
@@ -109,4 +107,4 @@ class AuditLog(UUIDPKMixin, Base):
         index=True,
     )
 
-    user: Mapped["User"] = relationship(back_populates="audit_logs")
+    user: Mapped[User] = relationship(back_populates="audit_logs")

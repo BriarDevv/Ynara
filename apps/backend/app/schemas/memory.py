@@ -18,7 +18,6 @@ from pydantic import Field, model_validator
 
 from app.schemas.base import YnaraBaseModel
 
-
 # ---------- Semantic ----------
 
 
@@ -80,11 +79,10 @@ class EpisodicMemoryCreate(YnaraBaseModel):
     topics: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _cap_sensitive_retention(self) -> "EpisodicMemoryCreate":
+    def _cap_sensitive_retention(self) -> EpisodicMemoryCreate:
         if self.is_sensitive and self.retention_days > 365:
             raise ValueError(
-                "retention_days no puede exceder 365 cuando is_sensitive=True "
-                "(ADR-007 D2)"
+                "retention_days no puede exceder 365 cuando is_sensitive=True (ADR-007 D2)"
             )
         return self
 

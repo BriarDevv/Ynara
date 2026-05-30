@@ -72,9 +72,7 @@ class SemanticMemory(UUIDPKMixin, TimestampMixin, Base):
         index=True,
     )
     content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    content_embedding: Mapped[list[float]] = mapped_column(
-        Vector(EMBEDDING_DIM), nullable=False
-    )
+    content_embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
     importance: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_session_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -82,7 +80,7 @@ class SemanticMemory(UUIDPKMixin, TimestampMixin, Base):
         nullable=True,
     )
 
-    user: Mapped["User"] = relationship(back_populates="semantic_memories")
+    user: Mapped[User] = relationship(back_populates="semantic_memories")
 
 
 class EpisodicMemory(UUIDPKMixin, TimestampMixin, Base):
@@ -124,18 +122,14 @@ class EpisodicMemory(UUIDPKMixin, TimestampMixin, Base):
         unique=True,
     )
     summary: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    summary_embedding: Mapped[list[float]] = mapped_column(
-        Vector(EMBEDDING_DIM), nullable=False
-    )
+    summary_embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
     is_sensitive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     retention_days: Mapped[int] = mapped_column(Integer, nullable=False, default=365)
-    occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     topics: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
-    user: Mapped["User"] = relationship(back_populates="episodic_memories")
-    session: Mapped["ChatSession"] = relationship(back_populates="episodic_memory")
+    user: Mapped[User] = relationship(back_populates="episodic_memories")
+    session: Mapped[ChatSession] = relationship(back_populates="episodic_memory")
 
 
 class ProceduralMemory(UUIDPKMixin, TimestampMixin, Base):
@@ -169,4 +163,4 @@ class ProceduralMemory(UUIDPKMixin, TimestampMixin, Base):
     )
     stale: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    user: Mapped["User"] = relationship(back_populates="procedural_memories")
+    user: Mapped[User] = relationship(back_populates="procedural_memories")
