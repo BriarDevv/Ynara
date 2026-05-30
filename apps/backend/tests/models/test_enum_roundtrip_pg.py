@@ -33,8 +33,8 @@ async def test_session_mode_roundtrip(db_session: AsyncSession) -> None:
     for mode in Mode:
         db_session.add(ChatSession(user_id=user.id, mode=mode))
     await db_session.flush()
-    db_session.expire_all()  # fuerza un SELECT real, no el identity-map
 
+    # select de columna -> SELECT real contra PG (round-trip del tipo enum)
     stored = set((await db_session.execute(select(ChatSession.mode))).scalars().all())
     assert stored == set(Mode)
 
@@ -55,10 +55,10 @@ async def test_audit_enums_roundtrip(db_session: AsyncSession) -> None:
     )
     db_session.add(entry)
     await db_session.flush()
-    db_session.expire_all()
+    # refresh -> SELECT real contra PG, repuebla los enums desde el tipo nativo
+    await db_session.refresh(entry)
 
-    row = (await db_session.execute(select(AuditLog).where(AuditLog.id == entry.id))).scalar_one()
-    assert row.operation is AuditOperation.WRITE
-    assert row.target_layer is MemoryLayer.SEMANTIC
-    assert row.origin_model is LlmModel.QWEN
-    assert row.origin_mode is Mode.PRODUCTIVIDAD
+    assert entry.operation is AuditOperation.WRITE
+    assert entry.target_layer is MemoryLayer.SEMANTIC
+    assert entry.origin_model is LlmModel.QWEN
+    assert entry.origin_mode is Mode.PRODUCTIVIDAD
