@@ -46,7 +46,13 @@ function OnboardingHeaderWithProgress() {
   const index = STEP_INDEX[current] ?? 0;
 
   const handleSkipAll = () => {
+    // "Saltar onboarding" es una decisión deliberada de no completarlo
+    // ahora (se retoma desde Ajustes). Marcamos `completed` para no
+    // re-entrar al flujo en cada visita: sin esto, un skip antes del
+    // Step de auth deja al user sin userId y la /home nunca flipea el
+    // flag (queda en loop).
     reset();
+    useUserStore.getState().completeOnboarding();
     router.replace("/home");
   };
 

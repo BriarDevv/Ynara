@@ -31,10 +31,8 @@ export type OnboardingDraft = {
   // Step 4 — Modos (Sesión 4)
   interestedModes: string[];
 
-  // Step 5 — A11y (Sesión 4)
-  a11yTextSize: "sm" | "md" | "lg";
-  a11yHighContrast: boolean;
-  a11yMotion: "auto" | "reduce" | "normal";
+  // Step 5 — A11y: las preferencias visuales viven en `useA11yStore`
+  // (localStorage + clases en <html>), no en el draft. No se duplican acá.
 };
 
 type OnboardingActions = {
@@ -47,13 +45,6 @@ type OnboardingActions = {
   setDisplayName: (name: string) => void;
   setMood: (mood: string[], freeText: string) => void;
   setInterestedModes: (modes: string[]) => void;
-  setA11y: (
-    prefs: Partial<{
-      textSize: OnboardingDraft["a11yTextSize"];
-      highContrast: boolean;
-      motion: OnboardingDraft["a11yMotion"];
-    }>,
-  ) => void;
   reset: () => void;
 };
 
@@ -66,9 +57,6 @@ const initialState: OnboardingDraft = {
   mood: [],
   moodFreeText: "",
   interestedModes: [],
-  a11yTextSize: "md",
-  a11yHighContrast: false,
-  a11yMotion: "auto",
 };
 
 /**
@@ -99,12 +87,6 @@ export const useOnboardingStore = create<OnboardingDraft & OnboardingActions>()(
       setDisplayName: (displayName) => set({ displayName }),
       setMood: (mood, moodFreeText) => set({ mood, moodFreeText }),
       setInterestedModes: (interestedModes) => set({ interestedModes }),
-      setA11y: (prefs) =>
-        set((s) => ({
-          a11yTextSize: prefs.textSize ?? s.a11yTextSize,
-          a11yHighContrast: prefs.highContrast ?? s.a11yHighContrast,
-          a11yMotion: prefs.motion ?? s.a11yMotion,
-        })),
       reset: () => set(initialState),
     }),
     {
