@@ -46,11 +46,9 @@ class ChatSession(UUIDPKMixin, TimestampMixin, Base):
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    ended_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    user: Mapped["User"] = relationship(back_populates="sessions")
-    episodic_memory: Mapped["EpisodicMemory | None"] = relationship(
+    user: Mapped[User] = relationship(back_populates="sessions")
+    episodic_memory: Mapped[EpisodicMemory | None] = relationship(
         back_populates="session", uselist=False
     )

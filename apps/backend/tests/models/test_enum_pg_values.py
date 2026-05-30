@@ -9,7 +9,8 @@ con "invalid input value for enum". Ver ``app/enums.py`` y ``docs/MODELS.md``.
 
 from __future__ import annotations
 
-from sqlalchemy import Enum as SAEnum, Table
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy import Table
 
 from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode
 from app.models.audit import AuditLog
@@ -27,15 +28,11 @@ def test_session_mode_uses_enum_values() -> None:
 
 
 def test_audit_operation_uses_enum_values() -> None:
-    assert _pg_labels(AuditLog.__table__, "operation") == [
-        m.value for m in AuditOperation
-    ]
+    assert _pg_labels(AuditLog.__table__, "operation") == [m.value for m in AuditOperation]
 
 
 def test_audit_target_layer_uses_enum_values() -> None:
-    assert _pg_labels(AuditLog.__table__, "target_layer") == [
-        m.value for m in MemoryLayer
-    ]
+    assert _pg_labels(AuditLog.__table__, "target_layer") == [m.value for m in MemoryLayer]
 
 
 def test_audit_origin_model_uses_enum_values() -> None:

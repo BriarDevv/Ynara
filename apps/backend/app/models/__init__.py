@@ -25,6 +25,6 @@ __all__ = [
     "ProceduralMemory",
     "SemanticMemory",
     "TimestampMixin",
-    "User",
     "UUIDPKMixin",
+    "User",
 ]
