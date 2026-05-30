@@ -36,8 +36,11 @@ class Mode(StrEnum):
     Tipo PG ``mode_enum`` — dueño: ``ChatSession.mode`` en
     ``app/models/session.py`` (``create_type=True``). Otros consumidores
     (``AuditLog.origin_mode`` en ``app/models/audit.py``) usan
-    ``create_type=False``. Para que la migración inicial funcione,
-    Alembic debe crear ``sessions`` antes que ``audit_log``.
+    ``create_type=False``. La migración inicial crea los 4 tipos enum
+    explícitamente antes de cualquier tabla (``create_type=False`` en
+    todas las columnas), así que el orden de las tablas no condiciona la
+    creación del enum; las FK sí imponen ``users`` -> ``sessions`` ->
+    ``episodic``/``semantic``.
     """
 
     PRODUCTIVIDAD = "productividad"
