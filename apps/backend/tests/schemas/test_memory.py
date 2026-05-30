@@ -215,3 +215,23 @@ def test_uuid_field_requires_uuid_object() -> None:
     # Un string UUID *valido* tambien se rechaza (strict no coerciona str->UUID).
     with pytest.raises(ValidationError):
         SemanticMemoryCreate(content="x", source_session_id=str(sid))  # type: ignore[arg-type]
+
+
+def test_uuid_field_lax_from_json() -> None:
+    """Via JSON (``model_validate_json``) un str UUID *valido* SI se acepta y
+    castea a UUID: Pydantic v2 aplica strict en construccion Python pero modo
+    lax al deserializar JSON. Es el comportamiento correcto para un input de
+    API (en JSON los UUID llegan como string); un str invalido igual se rechaza.
+
+    Nota para M8/M9: cuando los endpoints deserialicen JSON hacia estos
+    schemas, el strict NO bloquea el str-UUID por este path (y esta bien). El
+    contrato Python (objeto UUID) y el contrato wire (JSON string) conviven.
+    """
+    expected = UUID("01234567-89ab-cdef-0123-456789abcdef")
+    payload = '{"content": "x", "source_session_id": "01234567-89ab-cdef-0123-456789abcdef"}'
+    m = SemanticMemoryCreate.model_validate_json(payload)
+    assert m.source_session_id == expected
+
+    bad = '{"content": "x", "source_session_id": "not-a-uuid"}'
+    with pytest.raises(ValidationError):
+        SemanticMemoryCreate.model_validate_json(bad)
