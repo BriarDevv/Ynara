@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # Embeddings
     embedding_model: str = Field("bge-m3", alias="EMBEDDING_MODEL")
 
+    # Cifrado de memoria a nivel campo (ADR-007 D3). Base64 de 32 bytes random
+    # (`openssl rand -base64 32`). Vacío => el helper de crypto falla al primer
+    # uso (no se importa la key al boot). NUNCA commitear (regla #2).
+    memory_encryption_master_key: str = Field("", alias="MEMORY_ENCRYPTION_MASTER_KEY")
+
     # Auth
     jwt_secret: str = Field(..., alias="JWT_SECRET")
     jwt_algorithm: str = Field("HS256", alias="JWT_ALGORITHM")
