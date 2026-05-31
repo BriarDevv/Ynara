@@ -6,14 +6,19 @@ de los schemas de dominio LLM (``app/llm/schemas.py``). Hereda
 
 Mirror Zod: ``packages/shared-schemas/src/chat.ts``.
 
-Nota de strict mode + JSON:
-    ``strict=True`` aplica en construccion Python (``Model(**kwargs)``).
-    Cuando FastAPI deserializa el body JSON usa ``model_validate`` con
-    mode='json' (lax para tipos wire como str->UUID, str->Mode), por lo
-    que el front puede mandar ``session_id`` como string UUID y ``mode``
-    como string sin que strict los rechace. Los tests documentan este
-    comportamiento con ``model_validate(..., context={'mode': 'json'})``
-    o ``model_validate_json``.
+Nota de strict mode + el body de FastAPI (M9):
+    El resto de los schemas hereda ``strict=True`` (``YnaraBaseModel``): no
+    coerciona tipos en construccion Python. Pero el **request** que entra por
+    HTTP es distinto: FastAPI parsea el body JSON a un ``dict`` de Python y
+    valida con ``model_validate(dict)`` (NO ``model_validate_json`` sobre los
+    bytes crudos). Bajo ``strict=True``, ese path RECHAZA ``mode`` y
+    ``session_id`` como strings (un ``str`` no es instancia de ``Mode``/``UUID``)
+    -> el front recibiria un 422 por mandar el wire documentado (mode y
+    session_id como strings JSON). Por eso ``ChatHttpRequest`` relaja
+    ``strict=False``: acepta la coercion de tipos wire (str->Mode, str->UUID)
+    igual que lo haria ``model_validate_json``, manteniendo las constraints
+    (``min_length``/``max_length``) y ``extra='forbid'``. Las responses
+    (``Action`` / ``ChatHttpResponse``) siguen strict.
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from app.enums import Mode
 from app.schemas.base import YnaraBaseModel
@@ -32,10 +37,22 @@ CHAT_TEXT_MAX_LENGTH = 4000
 class ChatHttpRequest(YnaraBaseModel):
     """Payload de ``POST /v1/chat`` (y ``POST /v1/chat/stream``).
 
-    ``session_id`` llega como UUID string desde el front (JSON wire);
-    FastAPI / model_validate_json lo castea a UUID antes de la
-    validacion strict.
+    ``mode`` y ``session_id`` llegan como strings JSON desde el front. FastAPI
+    valida el body con ``model_validate`` sobre el ``dict`` ya parseado; bajo el
+    ``strict=True`` heredado eso rechazaria los strings wire (no son instancias
+    de ``Mode``/``UUID``). Este schema override-a ``strict=False`` para aceptar
+    la coercion de wire types (manteniendo constraints + ``extra='forbid'``);
+    ver la nota del modulo.
     """
+
+    # Override del strict heredado SOLO para el request wire: permite str->Mode /
+    # str->UUID como manda el front por HTTP. Constraints y extra=forbid siguen.
+    model_config = ConfigDict(
+        strict=False,
+        from_attributes=True,
+        populate_by_name=True,
+        extra="forbid",
+    )
 
     text: str = Field(min_length=1, max_length=CHAT_TEXT_MAX_LENGTH)
     mode: Mode

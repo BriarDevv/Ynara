@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api.v1 import health
+from app.api.v1 import chat, health
 from app.core.config import get_settings
 from app.core.observability import init_sentry
 from app.llm.clients.embedding import FakeEmbeddingClient
@@ -70,5 +70,6 @@ app.add_middleware(
 )
 
 app.include_router(health.router, prefix="/v1", tags=["health"])
+app.include_router(chat.router, prefix="/v1", tags=["chat"])
 
 # TODO: agregar routers de auth, memory, sessions cuando estén.
