@@ -1,6 +1,7 @@
 """Dependencias compartidas de FastAPI.
 
-Sesión de DB async, usuario actual a partir de JWT, etc.
+Sesión de DB async, usuario actual a partir de JWT, clientes LLM/embedder/
+reranker leídos desde ``app.state`` (singletons construidos en el lifespan).
 """
 
 from __future__ import annotations
@@ -10,13 +11,16 @@ from typing import Annotated, Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 from app.core.security import InvalidTokenError, verify_access_token
+from app.llm.clients.base import LLMClient
+from app.llm.clients.embedding import EmbeddingClient
+from app.llm.clients.reranker import Reranker
 
 settings = get_settings()
 
@@ -87,3 +91,25 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[UUID, Depends(get_current_user)]
+
+
+# ---------------------------------------------------------------------------
+# Clientes LLM / embedder / reranker — singletons del lifespan (app.state)
+# ---------------------------------------------------------------------------
+# El lifespan de app/main.py construye los singletons una vez en startup.
+# Cuando vLLM esté disponible, solo cambia el lifespan; estas deps no tocan.
+
+
+def get_llm_client(request: Request) -> LLMClient:
+    """Devuelve el cliente LLM singleton construido en el lifespan."""
+    return request.app.state.llm_client  # type: ignore[no-any-return]
+
+
+def get_embedder(request: Request) -> EmbeddingClient:
+    """Devuelve el cliente de embeddings singleton construido en el lifespan."""
+    return request.app.state.embedder  # type: ignore[no-any-return]
+
+
+def get_reranker(request: Request) -> Reranker:
+    """Devuelve el cliente de reranking singleton construido en el lifespan."""
+    return request.app.state.reranker  # type: ignore[no-any-return]

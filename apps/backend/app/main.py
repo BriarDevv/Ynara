@@ -14,6 +14,10 @@ from app import __version__
 from app.api.v1 import health
 from app.core.config import get_settings
 from app.core.observability import init_sentry
+from app.llm.clients.embedding import FakeEmbeddingClient
+from app.llm.clients.fakes import FakeLlmClient
+from app.llm.clients.reranker import FakeReranker
+from app.llm.config import load_llm_config
 
 settings = get_settings()
 
@@ -26,11 +30,25 @@ init_sentry()
 async def lifespan(app: FastAPI):
     """Hook de startup/shutdown.
 
+    Construye los clientes LLM/embedder/reranker como singletons en
+    ``app.state`` para que las deps de FastAPI los inyecten sin recrearlos
+    por request.  Usando los *served_name* del config (p.ej. 'qwen', 'gemma4'),
+    NO las keys del dict de modelos.
+
+    TODO: swap por ResilientClient / VllmEmbeddingClient cuando vLLM esté
+    disponible — solo cambia este bloque; el resto del stack no toca.
     TODO: warm-up del LLM router, conexión a Redis, etc.
     """
-    # startup
+    # startup — clientes como singletons
+    cfg = load_llm_config()
+    served_models = frozenset(m.served_name for m in cfg.models.values())
+    app.state.llm_client = FakeLlmClient(served_models=served_models)
+    app.state.embedder = FakeEmbeddingClient()
+    app.state.reranker = FakeReranker()
+
     yield
-    # shutdown
+
+    # shutdown (actualmente no-op; cerrar conexiones reales aquí cuando existan)
 
 
 app = FastAPI(
@@ -53,4 +71,4 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/v1", tags=["health"])
 
-# TODO: agregar routers de auth, chat, memory, sessions cuando estén.
+# TODO: agregar routers de auth, memory, sessions cuando estén.
