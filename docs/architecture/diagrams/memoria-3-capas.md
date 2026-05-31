@@ -35,7 +35,7 @@ flowchart LR
 ### Semántica
 Hechos persistentes sobre el usuario y su mundo.
 - "Mateo trabaja en X", "Mateo estudia Y en la UBA".
-- Engine: Mem0 OSS v2.
+- Engine: in-house (ADR-010). Cifrado AES-256-GCM per-user; embeddings bge-m3 en pgvector.
 - Store: `semantic_memory` (Postgres + pgvector).
 - Embedding: bge-m3.
 

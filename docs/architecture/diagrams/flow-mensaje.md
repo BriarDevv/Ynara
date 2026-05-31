@@ -39,3 +39,8 @@ sequenceDiagram
   `docs/conventions/AI-GUIDELINES.md`).
 - Gemma nunca escribe memoria. Solo Qwen tiene esa capacidad.
 - El router decide modelo según `ynara.config.json[modes][...].model`.
+- **Rate-limit todavía no está implementado** (el paso `Validar JWT +
+  rate limit` del diagrama es objetivo, no estado actual).
+- **Gemma/Qwen son los modelos objetivo.** Hoy el cliente LLM es un
+  Fake (`FakeLlmClient`) hasta que el track de infra vLLM esté
+  disponible.
