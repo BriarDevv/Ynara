@@ -336,6 +336,11 @@ async def update_memory(
         if sem_item is None:
             # Inexistente o ajeno: mismo 404 que un GET (sin oráculo, no mutó nada).
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+        # El store solo hace flush(): el commit del request lo da el endpoint (igual que
+        # sessions.py:163 / chat.py:185 / auth.py:91). get_db NO commitea —cierra ->
+        # rollback—, así que sin este commit la edición no persistiría en prod. Va solo
+        # en el happy path: un 404/422 no muta nada y no debe commitear.
+        await session.commit()
         return sem_item
 
     # layer is PROCEDURAL: la ref es la ``key`` (str). Exige ``value`` (dict).
@@ -349,6 +354,7 @@ async def update_memory(
     if proc_item is None:
         # Key inexistente o ajena: 404 (NUNCA se crea vía PATCH — eso sería upsert).
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+    await session.commit()  # persistir la edición (ver nota en la rama semantic).
     return proc_item
 
 
@@ -382,6 +388,7 @@ async def delete_memory(
         deleted = await procedural.delete(ref)
         if not deleted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+        await session.commit()  # persistir el borrado (ver nota en update_memory).
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     # Semantic / Episodic: la ref es un UUID (422 si no parsea).
@@ -397,4 +404,5 @@ async def delete_memory(
 
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+    await session.commit()  # persistir el borrado (ver nota en update_memory).
     return Response(status_code=status.HTTP_204_NO_CONTENT)
