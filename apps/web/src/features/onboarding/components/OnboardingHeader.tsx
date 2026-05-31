@@ -17,12 +17,21 @@ type Props = {
  * Header sticky del onboarding: YnaraMark + ProgressDots + "Saltar"
  * discreto. "Saltar onboarding" abre un modal de confirmación (no es
  * un skip por step, ver §4.8 del plan).
+ *
+ * `sticky top-0` mantiene progress/skip visibles al scrollear steps altos
+ * (forms). Lleva su propia superficie marfil/nocturna + hairline inferior
+ * para separarse del fondo ambiente (MemoryField) que corre por detrás.
  */
 export function OnboardingHeader({ total, current, onSkipAll, className }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
-    <header className={cn("flex items-center justify-between gap-4 px-6 py-4", className)}>
+    <header
+      className={cn(
+        "sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-[var(--color-border)] bg-[var(--color-bg-soft)] px-6 py-4",
+        className,
+      )}
+    >
       <YnaraMark size={32} title="Ynara" />
       <ProgressDots total={total} current={current} ariaLabel="Progreso del onboarding" />
       {onSkipAll ? (
