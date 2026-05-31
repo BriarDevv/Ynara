@@ -75,38 +75,45 @@ class TestChatHttpRequest:
         with pytest.raises(ValidationError):
             ChatHttpRequest(text="x", mode=Mode.PRODUCTIVIDAD, garbage="bad")  # type: ignore[call-arg]
 
-    # --- strict mode behavior ---
+    # --- coercion de wire types (strict=False en el request) ---
+    # ChatHttpRequest relaja strict (a diferencia del resto de schemas) porque
+    # FastAPI valida el body con model_validate(dict) -> bajo strict=True un
+    # str 'productividad' NO es instancia de Mode y el front recibiria un 422
+    # por mandar el wire documentado. Estos tests fijan la coercion correcta.
 
-    def test_strict_python_mode_str_rejected(self) -> None:
-        """strict=True: str 'productividad' no se acepta como Mode en construccion Python."""
-        with pytest.raises(ValidationError) as exc_info:
-            ChatHttpRequest(text="x", mode="productividad")  # type: ignore[arg-type]
-        errors = exc_info.value.errors()
-        assert any(e["type"] == "is_instance_of" for e in errors)
+    def test_str_mode_coerced_via_python_construction(self) -> None:
+        """strict=False: str 'productividad' se coerciona a Mode (wire del front)."""
+        req = ChatHttpRequest(text="x", mode="productividad")  # type: ignore[arg-type]
+        assert req.mode == Mode.PRODUCTIVIDAD
 
-    def test_strict_python_session_id_str_rejected(self) -> None:
-        """strict=True: str UUID valido no se acepta como UUID en construccion Python."""
-        with pytest.raises(ValidationError) as exc_info:
-            ChatHttpRequest(
-                text="x",
-                mode=Mode.PRODUCTIVIDAD,
-                session_id="01234567-89ab-cdef-0123-456789abcdef",  # type: ignore[arg-type]
-            )
-        errors = exc_info.value.errors()
-        assert any(e["type"] == "is_instance_of" for e in errors)
+    def test_str_session_id_coerced_via_python_construction(self) -> None:
+        """strict=False: str UUID valido se coerciona a UUID (wire del front)."""
+        sid = "01234567-89ab-cdef-0123-456789abcdef"
+        req = ChatHttpRequest(
+            text="x",
+            mode=Mode.PRODUCTIVIDAD,
+            session_id=sid,  # type: ignore[arg-type]
+        )
+        assert req.session_id == UUID(sid)
 
     def test_json_mode_str_mode_and_uuid_accepted(self) -> None:
-        """Via model_validate_json (path FastAPI) str->Mode y str->UUID son aceptados.
+        """Via model_validate(dict)/JSON (path FastAPI) str->Mode y str->UUID se aceptan.
 
-        El front manda JSON; FastAPI llama model_validate_json que usa modo
-        lax para wire types (str->UUID, str->StrEnum). strict=True no bloquea
-        este path.
+        El front manda JSON; FastAPI parsea a dict y valida con model_validate.
+        Con strict=False el request coerciona los wire types (str->UUID,
+        str->StrEnum) sin filtrar basura (las constraints siguen).
         """
         sid = "01234567-89ab-cdef-0123-456789abcdef"
         payload = json.dumps({"text": "hola", "mode": "productividad", "session_id": sid})
         req = ChatHttpRequest.model_validate_json(payload)
         assert req.mode == Mode.PRODUCTIVIDAD
         assert req.session_id == UUID(sid)
+        # Y por el path real de FastAPI (dict ya parseado), no solo bytes JSON.
+        req2 = ChatHttpRequest.model_validate(
+            {"text": "hola", "mode": "productividad", "session_id": sid}
+        )
+        assert req2.mode == Mode.PRODUCTIVIDAD
+        assert req2.session_id == UUID(sid)
 
     def test_json_mode_invalid_session_id_rejected(self) -> None:
         """Un session_id que no es UUID valido se rechaza incluso via JSON."""
