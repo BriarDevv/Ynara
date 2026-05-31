@@ -537,8 +537,7 @@ def test_router_module_no_longer_imports_consolidate_turn() -> None:
 
     # El router NO tiene binding a consolidate_turn (no lo importa).
     assert not hasattr(router_mod, "consolidate_turn"), (
-        "route() no debe importar consolidate_turn: el enqueue se movio al "
-        "endpoint (M10 Ola 0)"
+        "route() no debe importar consolidate_turn: el enqueue se movio al endpoint (M10 Ola 0)"
     )
     # El endpoint SI lo tiene: es la sede unica del enqueue post-commit.
     assert hasattr(chat_mod, "consolidate_turn"), (

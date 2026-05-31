@@ -62,9 +62,7 @@ def test_lifespan_llm_client_served_models_match_config() -> None:
         client: FakeLlmClient = app.state.llm_client
         # Probamos serves_model para no acoplar al atributo privado.
         for served_name in expected:
-            assert client.serves_model(served_name), (
-                f"FakeLlmClient deberia servir '{served_name}'"
-            )
+            assert client.serves_model(served_name), f"FakeLlmClient deberia servir '{served_name}'"
 
 
 # ---------------------------------------------------------------------------

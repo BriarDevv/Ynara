@@ -453,9 +453,7 @@ async def test_authenticate_user_inexistente_corre_dummy_hash(
 
     import app.services.auth as auth_service
 
-    with patch.object(
-        auth_service, "verify_password", wraps=auth_service.verify_password
-    ) as spy:
+    with patch.object(auth_service, "verify_password", wraps=auth_service.verify_password) as spy:
         result = await authenticate_user(
             db_session, email="seguro.no.existe@example.com", password="loquesea12345"
         )

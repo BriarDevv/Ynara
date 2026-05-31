@@ -253,9 +253,7 @@ class TestMemoryAdd:
         store = FakeSemanticStore()
         tool = MemoryAddTool(store)
 
-        result = await tool.execute(
-            {"content": "algo", "layer": "semantic", "importance": 200}
-        )
+        result = await tool.execute({"content": "algo", "layer": "semantic", "importance": 200})
 
         assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
 
@@ -325,9 +323,7 @@ class TestMemoryUpdate:
         store = FakeSemanticStore()
         tool = MemoryUpdateTool(store)
 
-        result = await tool.execute(
-            {"id": str(uuid4()), "content": "algo", "importance": 50}
-        )
+        result = await tool.execute({"id": str(uuid4()), "content": "algo", "importance": 50})
 
         assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
 

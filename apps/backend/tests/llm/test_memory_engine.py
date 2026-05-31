@@ -196,9 +196,7 @@ async def test_qwen_engine_delete_semantic_with_target_id() -> None:
     target = str(uuid4())
     fake_llm = FakeLlmClient(served_models=frozenset({"qwen"}))
     fake_llm.queue_result(
-        _make_result(
-            _json_ops([{"op": "DELETE", "layer": "semantic", "target_id": target}])
-        )
+        _make_result(_json_ops([{"op": "DELETE", "layer": "semantic", "target_id": target}]))
     )
     engine = QwenMemoryEngine(llm_client=fake_llm, served_name="qwen")
     ops = await engine.consolidate(
@@ -251,8 +249,7 @@ async def test_qwen_engine_free_text_returns_empty() -> None:
     fake_llm = FakeLlmClient(served_models=frozenset({"qwen"}))
     fake_llm.queue_result(
         _make_result(
-            "No encontre ningun hecho relevante en esta conversacion. "
-            "El usuario solo saludo."
+            "No encontre ningun hecho relevante en esta conversacion. El usuario solo saludo."
         )
     )
     engine = QwenMemoryEngine(llm_client=fake_llm, served_name="qwen")
@@ -404,9 +401,7 @@ async def test_apply_ops_update_procedural(db_session: Any) -> None:
     await apply_ops(ops_add, semantic_store=semantic, procedural_store=procedural)
 
     # UPDATE (upsert refuerza)
-    ops_upd = [
-        MemoryOp(op="UPDATE", layer="procedural", key="tono", value={"tono": "informal"})
-    ]
+    ops_upd = [MemoryOp(op="UPDATE", layer="procedural", key="tono", value={"tono": "informal"})]
     applied = await apply_ops(ops_upd, semantic_store=semantic, procedural_store=procedural)
     assert applied == 1
 

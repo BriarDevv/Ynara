@@ -381,9 +381,7 @@ async def apply_ops(
 
         except Exception:
             # Op individual falla: loguear (sin contenido) y seguir.
-            logger.debug(
-                "memory_engine: op %s/%s fallida, skip", op.op, op.layer
-            )
+            logger.debug("memory_engine: op %s/%s fallida, skip", op.op, op.layer)
             continue
 
     return applied

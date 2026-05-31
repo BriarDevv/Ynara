@@ -66,6 +66,7 @@ def client() -> TestClient:
 
 # ---------- helpers ----------
 
+
 def _bearer(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
@@ -86,9 +87,7 @@ def test_no_auth_header_returns_401(client: TestClient) -> None:
     assert resp.status_code == 401
 
 
-def test_expired_token_returns_401(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_expired_token_returns_401(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # Mintear con expiración -1 minuto usando un Settings con expire=-1.
     # jose permite exp en el pasado al encode; la verificación lo rechaza.
     from datetime import UTC, datetime, timedelta

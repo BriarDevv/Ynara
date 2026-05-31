@@ -150,8 +150,10 @@ class SemanticMemoryStore:
 
     async def count(self) -> int:
         """Cuenta los hechos del usuario (``total`` de la paginación). No descifra."""
-        stmt = select(func.count()).select_from(SemanticMemory).where(
-            SemanticMemory.user_id == self._user_id
+        stmt = (
+            select(func.count())
+            .select_from(SemanticMemory)
+            .where(SemanticMemory.user_id == self._user_id)
         )
         return (await self._session.execute(stmt)).scalar_one()
 
