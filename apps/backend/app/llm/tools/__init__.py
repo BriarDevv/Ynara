@@ -10,8 +10,9 @@ ejecución contra excepciones: los errores siempre vuelven como dict
 estructurado ``{"error": {"code", "message"}}`` (``tool_error``), nunca como
 traceback hacia el modelo.
 
-``memory.py`` es M7 (tabla sagrada, regla #3): NO está acá todavía y
-``default_registry`` no la incluye.
+``memory.py`` (M7, tabla sagrada, regla #3) está implementado pero
+``default_registry()`` NO la incluye; se arma con ``memory_registry(semantic_store)``
+y el router la combina por modo cuando la memoria está habilitada.
 
 Documentadas en ``apps/backend/docs/TOOLS.md`` — actualizar en el
 mismo PR cuando se agreguen.

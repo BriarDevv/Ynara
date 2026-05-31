@@ -10,7 +10,7 @@
 ## Convenciones
 
 - Tabla en snake_case plural (`semantic_memory` es singular por
-  convención de Mem0 — no plural).
+  convención de la capa de memoria — no plural).
 - PK siempre `id UUID DEFAULT gen_random_uuid()` (vía `UUIDPKMixin`).
 - Timestamps `created_at`, `updated_at` con `TIMESTAMPTZ` y default
   `now()` (vía `TimestampMixin`). `audit_log` no usa `TimestampMixin`
@@ -121,8 +121,10 @@ Decay exponencial sobre `confidence`; worker Celery diario aplica
 
 ### users
 
-Usuario de Ynara. Auth completa todavía no implementada
-(`app/core/security.py` en `NotImplementedError`).
+Usuario de Ynara. Auth JWT implementada (`app/core/security.py`:
+`create_access_token`, `verify_access_token`, `hash_password`,
+`verify_password`). Endpoints activos: `/v1/auth/register`,
+`/v1/auth/token`, `/v1/auth/me`. Refresh/logout diferidos.
 
 | Columna | Tipo | Notas |
 |---|---|---|
@@ -186,28 +188,25 @@ No usa `TimestampMixin` — una vez creada, una entrada no se modifica.
 
 ## Migración inicial
 
-Pendiente para el PR siguiente del plan T1 (PR B). Va en
-`apps/backend/alembic/versions/`. Requerirá:
+Mergeada. La migración inicial vive en `apps/backend/alembic/versions/`
+e incluye:
 
 1. Extensión `pgvector` activa.
-2. Creación de los 4 enums (`mode_enum`, `memory_layer_enum`,
-   `llm_model_enum`, `audit_operation_enum`).
+2. Los 4 enums (`mode_enum`, `memory_layer_enum`, `llm_model_enum`,
+   `audit_operation_enum`).
 3. Las 6 tablas en orden de FKs: `users` → `sessions` → `semantic_memory`,
    `episodic_memory`, `procedural_memory`, `audit_log`.
-4. Índices HNSW sobre embeddings (creación con `CONCURRENTLY` en prod).
+4. Índices HNSW sobre embeddings.
 5. Tests up/downgrade ida y vuelta.
 
-Regla #3 + tablas sagradas + Alembic = **1 aprobación humana
-explícita obligatoria** (review formal en el PR, además del operador
-autor) para PR B.
+Ver [`docs/MIGRATIONS.md`](./MIGRATIONS.md) para la política completa.
 
 ## Wrappers de memoria
 
-Implementación de `add` / `search` / `update` / `delete` en
-`apps/backend/app/memory/` es PR C del plan T1. Hoy están en
-`NotImplementedError`. Dependen de:
-
-- Helper `app/core/crypto.py` con `encrypt_for_user` / `decrypt_for_user`
-  (parte de PR B o C, ver ADR-007 D3).
-- `Mem0 OSS v2` para extracción + dedup (ADR-003).
-- Cliente Postgres async (`asyncpg`) y `pgvector.sqlalchemy.Vector`.
+Implementados en `apps/backend/app/memory/` (M7, mergeado). Las
+operaciones `search` / `add` / `update` / `delete` están activas.
+`memory.add` NO escribe de forma síncrona (la consolidación es async;
+ver `app/llm/tools/memory.py`). El engine es **in-house** (ADR-010,
+que supersede ADR-003/Mem0): no se usa Mem0. Cifrado AES-256-GCM
+per-user via `app/core/crypto.py` (`encrypt_for_user` /
+`decrypt_for_user`, ADR-007 D3, mergeado).
