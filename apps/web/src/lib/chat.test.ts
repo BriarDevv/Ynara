@@ -18,6 +18,7 @@ describe("sendChatMessage", () => {
       text: "hola",
       actions: [],
       session_id: "sess-1",
+      finish_reason: "stop",
     });
 
     const res = await sendChatMessage({ text: "hola", mode: "vida" });
@@ -28,7 +29,7 @@ describe("sendChatMessage", () => {
   });
 
   it("aplica el default actions:[] cuando el backend lo omite", async () => {
-    mockedPost.mockResolvedValueOnce({ text: "ok", session_id: "s" });
+    mockedPost.mockResolvedValueOnce({ text: "ok", session_id: "s", finish_reason: "stop" });
     const res = await sendChatMessage({ text: "x", mode: "estudio" });
     expect(res.actions).toEqual([]);
   });

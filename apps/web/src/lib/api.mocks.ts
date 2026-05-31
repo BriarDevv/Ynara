@@ -120,6 +120,7 @@ export const handlers = [
       text: cannedReply(mode, text),
       actions: isAgentMode(mode) ? cannedActions(mode) : [],
       session_id: session_id ?? crypto.randomUUID(),
+      finish_reason: "stop",
     };
     return HttpResponse.json(response);
   }),
