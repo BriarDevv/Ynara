@@ -67,6 +67,7 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
 
   return (
     <StepShell
+      variant="editorial"
       title={AUTH_STEP_COPY.signup.title}
       subtitle={AUTH_STEP_COPY.signup.subtitle}
       footer={
@@ -156,6 +157,7 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
 
   return (
     <StepShell
+      variant="editorial"
       title={AUTH_STEP_COPY.login.title}
       subtitle={AUTH_STEP_COPY.login.subtitle}
       footer={
