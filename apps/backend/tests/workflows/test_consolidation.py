@@ -20,14 +20,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
 import pytest
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.enums import Mode
 from app.llm.clients.embedding import FakeEmbeddingClient
 from app.llm.clients.fakes import FakeLlmClient
 from app.llm.clients.reranker import FakeReranker
 from app.llm.schemas import CompletionResult
 from app.memory.procedural import ProceduralMemoryStore
 from app.memory.semantic import SemanticMemoryStore
+from app.models.memory import SemanticMemory
+from app.models.session import ChatSession
 from app.models.user import User
 from app.workflows.consolidation import _async_consolidate, consolidate_turn
 
@@ -47,6 +52,33 @@ async def _seed_user(session: AsyncSession) -> str:
     await session.flush()
     await session.refresh(user)
     return str(user.id)
+
+
+async def _seed_session(session: AsyncSession, user_id: str, mode: Mode = Mode.VIDA) -> str:
+    """Inserta una ``ChatSession`` real para ``user_id`` y devuelve su UUID como str.
+
+    La FK ``semantic_memory.source_session_id`` -> ``sessions.id`` requiere una
+    fila real en ``sessions`` para que el INSERT no viole la FK (M10 Ola 1).
+    Flush sin commit: el rollback del fixture limpia al final.
+    """
+    chat_session = ChatSession(user_id=UUID(user_id), mode=mode)
+    session.add(chat_session)
+    await session.flush()
+    await session.refresh(chat_session)
+    return str(chat_session.id)
+
+
+async def _fetch_only_semantic_row(session: AsyncSession, user_id: str) -> SemanticMemory:
+    """Trae la unica fila de ``semantic_memory`` del usuario (lectura directa).
+
+    Lee el modelo crudo (no via ``store.search``, que descifra + rerankea) para
+    inspeccionar ``source_session_id`` tal cual quedo en la DB, incluido el caso
+    NULL tras el ``ondelete=SET NULL``.
+    """
+    stmt = select(SemanticMemory).where(SemanticMemory.user_id == UUID(user_id))
+    rows = list((await session.execute(stmt)).scalars().all())
+    assert len(rows) == 1, f"se esperaba 1 fila semantic, hay {len(rows)}"
+    return rows[0]
 
 
 # ---------------------------------------------------------------------------
@@ -219,8 +251,8 @@ class TestAsyncConsolidateUnit:
         assert result == 1
         mock_sem.add.assert_called_once()
 
-    async def test_does_not_pass_source_session_id(self) -> None:
-        """La op ADD semantic NO incluye source_session_id (session OPACO)."""
+    async def test_passes_source_session_id_to_add_op(self) -> None:
+        """La op ADD semantic incluye source_session_id == UUID(session_id) (M10 Ola 1)."""
         ops_json = json.dumps(
             [{"op": "ADD", "layer": "semantic", "content": "El usuario vive en Buenos Aires."}]
         )
@@ -253,7 +285,45 @@ class TestAsyncConsolidateUnit:
             )
 
         assert len(captured_payloads) == 1
-        # source_session_id debe ser None (OPACO — no es FK real)
+        # source_session_id == el UUID del session_id real (provenance, M10 Ola 1).
+        assert captured_payloads[0].source_session_id == UUID(SESSION_ID)
+
+    async def test_garbage_session_id_passes_none_without_crash(self) -> None:
+        """Un session_id no-UUID degrada a None sin crashear (parse defensivo)."""
+        ops_json = json.dumps(
+            [{"op": "ADD", "layer": "semantic", "content": "El usuario juega al tenis."}]
+        )
+        client = _make_llm_with_ops(ops_json)
+
+        captured_payloads: list = []
+
+        async def capture_add(payload):
+            captured_payloads.append(payload)
+            return MagicMock(id=uuid.uuid4())
+
+        mock_sem = AsyncMock()
+        mock_sem.add = capture_add
+        session = MagicMock(spec=AsyncSession)
+
+        with (
+            patch("app.workflows.consolidation.SemanticMemoryStore", return_value=mock_sem),
+            patch("app.workflows.consolidation.ProceduralMemoryStore", return_value=AsyncMock()),
+        ):
+            result = await _async_consolidate(
+                user_id=USER_ID,
+                session_id="no-soy-un-uuid",
+                user_msg="juego tenis",
+                model_response="ok",
+                mode=MODE,
+                llm_client=client,
+                embedder=FakeEmbeddingClient(),
+                reranker=FakeReranker(),
+                session=session,
+            )
+
+        # La op igual se aplica; el parse fallido NO tumba la consolidacion.
+        assert result == 1
+        assert len(captured_payloads) == 1
         assert captured_payloads[0].source_session_id is None
 
     async def test_invalid_json_from_llm_returns_zero(self) -> None:
@@ -414,6 +484,7 @@ class TestAsyncConsolidateIntegration:
     ) -> None:
         """Un ADD semantic se persiste y se puede buscar con ``search``."""
         user_id = await _seed_user(db_session)
+        session_id = await _seed_session(db_session, user_id)
         ops_json = json.dumps(
             [{"op": "ADD", "layer": "semantic", "content": "El usuario es vegetariano."}]
         )
@@ -423,7 +494,7 @@ class TestAsyncConsolidateIntegration:
 
         applied = await _async_consolidate(
             user_id=user_id,
-            session_id=SESSION_ID,
+            session_id=session_id,
             user_msg="no como carne",
             model_response="anotado que sos vegetariano",
             mode=MODE,
@@ -485,6 +556,7 @@ class TestAsyncConsolidateIntegration:
     ) -> None:
         """ADD semantic + ADD procedural en el mismo turno: ambos se persisten."""
         user_id = await _seed_user(db_session)
+        session_id = await _seed_session(db_session, user_id)
         ops_json = json.dumps(
             [
                 {"op": "ADD", "layer": "semantic", "content": "El usuario trabaja como disenador."},
@@ -502,7 +574,7 @@ class TestAsyncConsolidateIntegration:
 
         applied = await _async_consolidate(
             user_id=user_id,
-            session_id=SESSION_ID,
+            session_id=session_id,
             user_msg="trabajo como disenador UX",
             model_response="ok",
             mode=MODE,
@@ -545,9 +617,12 @@ class TestAsyncConsolidateIntegration:
 
         assert applied == 0
 
-    async def test_source_session_id_is_never_set(self, db_session: AsyncSession) -> None:
-        """El hecho semantico persistido tiene source_session_id=None (session OPACO)."""
+    async def test_source_session_id_set_to_chat_session_id(
+        self, db_session: AsyncSession
+    ) -> None:
+        """El ADD semantic persiste source_session_id == ChatSession.id (M10 Ola 1, FK)."""
         user_id = await _seed_user(db_session)
+        session_id = await _seed_session(db_session, user_id)
         ops_json = json.dumps(
             [
                 {
@@ -561,9 +636,9 @@ class TestAsyncConsolidateIntegration:
         embedder = FakeEmbeddingClient()
         reranker = FakeReranker()
 
-        await _async_consolidate(
+        applied = await _async_consolidate(
             user_id=user_id,
-            session_id=SESSION_ID,
+            session_id=session_id,
             user_msg="mi perro se llama Luna",
             model_response="que nombre lindo",
             mode=MODE,
@@ -573,12 +648,89 @@ class TestAsyncConsolidateIntegration:
             session=db_session,
         )
 
+        assert applied == 1
+        # La provenance quedo seteada a la FK real (sessions.id).
+        row = await _fetch_only_semantic_row(db_session, user_id)
+        assert row.source_session_id == UUID(session_id)
+
+        # Y se expone tambien en el Out de search (mismo valor).
         store = SemanticMemoryStore(db_session, UUID(user_id), embedder, reranker)
         results = await store.search("perro", limit=5)
         assert len(results) >= 1
-        # Nunca debe tener un source_session_id (el SESSION_ID es opaco, no FK)
-        for r in results:
-            assert r.source_session_id is None
+        assert all(r.source_session_id == UUID(session_id) for r in results)
+
+    async def test_source_session_id_nulled_on_session_delete(
+        self, db_session: AsyncSession
+    ) -> None:
+        """Borrar la ChatSession deja source_session_id NULL (ondelete=SET NULL)."""
+        user_id = await _seed_user(db_session)
+        session_id = await _seed_session(db_session, user_id)
+        ops_json = json.dumps(
+            [{"op": "ADD", "layer": "semantic", "content": "El usuario nacio en Cordoba."}]
+        )
+        client = _make_llm_with_ops(ops_json)
+        embedder = FakeEmbeddingClient()
+        reranker = FakeReranker()
+
+        applied = await _async_consolidate(
+            user_id=user_id,
+            session_id=session_id,
+            user_msg="naci en Cordoba",
+            model_response="que lindo",
+            mode=MODE,
+            llm_client=client,
+            embedder=embedder,
+            reranker=reranker,
+            session=db_session,
+        )
+        assert applied == 1
+
+        # Precondicion: la provenance apunta a la sesion.
+        row = await _fetch_only_semantic_row(db_session, user_id)
+        assert row.source_session_id == UUID(session_id)
+
+        # Borrar la ChatSession: el FK ondelete=SET NULL debe anular la provenance
+        # SIN borrar el hecho (la memoria sobrevive a la sesion que la origino).
+        await db_session.execute(
+            sa_delete(ChatSession).where(ChatSession.id == UUID(session_id))
+        )
+        await db_session.flush()
+        # Invalidar el estado cacheado del ORM para releer la fila desde la DB.
+        db_session.expire_all()
+
+        row_after = await _fetch_only_semantic_row(db_session, user_id)
+        assert row_after.source_session_id is None
+        # El hecho sigue existiendo (no se borro en cascada).
+        assert row_after.id == row.id
+
+    async def test_garbage_session_id_persists_with_null_provenance(
+        self, db_session: AsyncSession
+    ) -> None:
+        """Un session_id no-UUID persiste el hecho con source_session_id NULL, sin crash."""
+        user_id = await _seed_user(db_session)
+        ops_json = json.dumps(
+            [{"op": "ADD", "layer": "semantic", "content": "El usuario toca la guitarra."}]
+        )
+        client = _make_llm_with_ops(ops_json)
+        embedder = FakeEmbeddingClient()
+        reranker = FakeReranker()
+
+        # session_id basura: el parse defensivo degrada a None y NO crashea.
+        applied = await _async_consolidate(
+            user_id=user_id,
+            session_id="esto-no-es-un-uuid-valido",
+            user_msg="toco la guitarra",
+            model_response="genial",
+            mode=MODE,
+            llm_client=client,
+            embedder=embedder,
+            reranker=reranker,
+            session=db_session,
+        )
+
+        assert applied == 1
+        row = await _fetch_only_semantic_row(db_session, user_id)
+        assert row.source_session_id is None
 
     async def test_invalid_json_no_db_writes(self, db_session: AsyncSession) -> None:
         """JSON invalido del LLM no escribe nada en la DB (parseo defensivo)."""
@@ -620,6 +772,7 @@ class TestAsyncConsolidateIntegration:
         """Cada user_id solo ve sus propios datos (aislamiento por construccion)."""
         user_a = await _seed_user(db_session)
         user_b = await _seed_user(db_session)
+        session_a = await _seed_session(db_session, user_a)
         embedder = FakeEmbeddingClient()
         reranker = FakeReranker()
 
@@ -630,7 +783,7 @@ class TestAsyncConsolidateIntegration:
         client_a = _make_llm_with_ops(ops_a)
         await _async_consolidate(
             user_id=user_a,
-            session_id=SESSION_ID,
+            session_id=session_a,
             user_msg="tengo 25",
             model_response="ok",
             mode=MODE,

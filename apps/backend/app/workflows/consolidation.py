@@ -8,8 +8,10 @@ Reglas no negociables (ADR-010 + critica adversarial M8):
    ``.delay()`` DESPUES del commit (M10 Ola 0); la escritura ocurre aqui,
    en el worker Celery, de forma async.
 3. NUNCA episodica: ``layer`` = ``semantic`` | ``procedural`` solamente.
-   NUNCA ``source_session_id`` (el ``session_id`` de Ola 2 es OPACO, no es
-   una FK real de ``sessions.id``).
+   El ``session_id`` ES el ``ChatSession.id`` real (M9 + M10 Ola 0): se parsea
+   a ``UUID`` y se propaga como ``source_session_id`` (FK a ``sessions.id``,
+   ``ondelete=SET NULL``) en el ADD semantic (M10 Ola 1). El enqueue es
+   post-commit (Ola 0), asi que la fila de ``sessions`` ya existe -> sin race FK.
 4. Serializacion 100% JSON: la firma de la task es solo strings/primitivos.
    El worker RECONSTRUYE todas sus deps in-process desde ``get_settings()``.
    El engine de DB usa ``NullPool`` obligatorio (sin el, reusar conexiones
@@ -100,6 +102,29 @@ def _build_reranker() -> Reranker:
     return FakeReranker()
 
 
+def _parse_source_session_id(session_id: str) -> UUID | None:
+    """Parsea ``session_id`` (str) a ``UUID`` de forma DEFENSIVA (M10 Ola 1).
+
+    El ``session_id`` que llega al worker es ``str(ChatSession.id)`` (el id real
+    de la sesion persistida; ver ``_run_chat_turn`` en ``app.api.v1.chat``), asi
+    que en el camino feliz es siempre un UUID valido. Pero el worker NUNCA debe
+    caerse por un payload corrupto en la cola: si el parse falla, se loguea un
+    mensaje tecnico SIN contenido del usuario (regla #4 — el ``session_id`` es un
+    identificador, no PII) y se devuelve ``None`` para que el hecho se persista
+    con ``source_session_id`` NULL en vez de tumbar la consolidacion.
+
+    Returns:
+        El ``UUID`` parseado, o ``None`` si ``session_id`` no es un UUID valido.
+    """
+    try:
+        return UUID(session_id)
+    except (ValueError, AttributeError, TypeError):
+        # session_id corrupto/no-UUID: degradar a None sin crashear el worker.
+        # No se loguea el valor (defensa en profundidad sobre regla #4).
+        logger.warning("consolidation: session_id no es un UUID valido, source_session_id=None")
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Cuerpo async de la consolidacion (separado para inyeccion en tests)
 # ---------------------------------------------------------------------------
@@ -108,7 +133,7 @@ def _build_reranker() -> Reranker:
 async def _async_consolidate(
     *,
     user_id: str,
-    session_id: str,  # OPACO: no se usa como FK
+    session_id: str,  # str(ChatSession.id): se parsea a UUID y se usa como FK
     user_msg: str,
     model_response: str,
     mode: str,
@@ -128,8 +153,13 @@ async def _async_consolidate(
     construye el engine con ``NullPool`` (decision #4 M8), se abre la sesion,
     se commitea y se dispone el engine.
 
-    ``session_id`` es opaco: NO se pasa como ``source_session_id`` a ningun
-    store (decision #3 M8, ADR-010).
+    ``session_id`` es ``str(ChatSession.id)``: el id real de la sesion (FK a
+    ``sessions.id``). Se parsea a ``UUID`` de forma DEFENSIVA y se propaga como
+    ``source_session_id`` (provenance) a ``apply_ops`` en AMBOS branches (M10
+    Ola 1). El enqueue post-commit (M10 Ola 0) garantiza que la ``ChatSession``
+    ya este persistida cuando el worker corre, asi que la FK no tiene race. Si
+    el parse falla (payload corrupto en la cola), ``source_session_id`` queda
+    ``None`` y el hecho se persiste igual (el worker no se cae).
     """
     cfg = settings or get_settings()
 
@@ -139,6 +169,8 @@ async def _async_consolidate(
     effective_reranker = reranker or _build_reranker()
 
     uid = UUID(user_id)
+    # Parse defensivo del session_id: UUID valido -> FK; basura -> None (sin crash).
+    source_session_id = _parse_source_session_id(session_id)
     engine = None
 
     try:
@@ -153,7 +185,12 @@ async def _async_consolidate(
                 model_response=model_response,
                 mode=mode,
             )
-            applied = await apply_ops(ops, semantic_store=sem_store, procedural_store=proc_store)
+            applied = await apply_ops(
+                ops,
+                semantic_store=sem_store,
+                procedural_store=proc_store,
+                source_session_id=source_session_id,
+            )
             # NO commitear aqui: el fixture controla el rollback.
             return applied
 
@@ -174,7 +211,12 @@ async def _async_consolidate(
                 model_response=model_response,
                 mode=mode,
             )
-            applied = await apply_ops(ops, semantic_store=sem_store, procedural_store=proc_store)
+            applied = await apply_ops(
+                ops,
+                semantic_store=sem_store,
+                procedural_store=proc_store,
+                source_session_id=source_session_id,
+            )
             await db_session.commit()
 
         return applied
@@ -210,8 +252,10 @@ def consolidate_turn(
 
     Args:
         user_id: UUID del usuario como string (JSON-safe).
-        session_id: ID de sesion OPACO como string (NO es FK; no se usa como
-            ``source_session_id`` en ningun store).
+        session_id: ``str(ChatSession.id)`` (id real de la sesion, FK a
+            ``sessions.id``). El cuerpo async lo parsea a ``UUID`` de forma
+            defensiva y lo propaga como ``source_session_id`` (provenance) en el
+            ADD semantic (M10 Ola 1). Si fuera basura no-UUID, degrada a ``None``.
         user_msg: Mensaje del usuario (on-prem, NO se loguea).
         model_response: Respuesta del modelo (on-prem, NO se loguea).
         mode: Modo activo de la sesion (p.ej. 'vida', 'estudio').
