@@ -35,18 +35,24 @@ token / token invalido (``get_current_user``), 404 sesion ajena/inexistente, 409
 mode mismatch, 200 + fallback ante overflow/error del LLM (``route()`` ya lo
 captura), 500 solo ante un bug no anticipado (Sentry ``before_send`` scrubea).
 
-El trabajo transaccional de un turno (DB + router + commit) vive en
-``_run_chat_turn``, helper extraido para compartirlo con el endpoint de
-streaming (``POST /v1/chat/stream``, M9 Ola 3): ambos hacen EXACTAMENTE el mismo
-turno y solo difieren en como serializan el resultado.
+Streaming (M9 Ola 3): ``POST /v1/chat/stream`` re-emite la MISMA respuesta del
+turno como un stream SSE con eventos con nombre (``token`` / ``done`` /
+``error``) que el parser de ``packages/shared-schemas/src/sse.ts`` consume. El
+trabajo transaccional (DB + commit) es identico a ``/chat`` y ocurre ENTERO
+antes de construir el ``StreamingResponse``; el generator solo serializa
+primitivos ya snapshoteados. Ver el docstring de ``chat_stream`` para el porque
+de retornar un ``StreamingResponse`` explicito y del snapshot de primitivos.
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+import json
+from collections.abc import AsyncIterator
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -67,6 +73,16 @@ from app.models.session import ChatSession
 from app.schemas.chat import Action, ChatHttpRequest, ChatHttpResponse
 
 router = APIRouter()
+
+# Tamano de ventana (en code-points) de cada chunk ``token`` del stream SSE. El
+# texto se trocea en ventanas de N code-points; ``''.join(deltas)`` reconstruye
+# ``resp.text`` byte-a-byte (invariante dura del wire).
+_TOKEN_CHUNK_SIZE = 6
+
+# Codigo + mensaje del evento ``error`` (red de seguridad del generator). Neutro,
+# sin PII ni detalle tecnico (regla #4): el message viaja al cliente.
+_STREAM_ERROR_CODE = "stream_error"
+_STREAM_ERROR_MESSAGE = "No se pudo completar la respuesta"
 
 
 def _to_http_actions(raw: list[dict]) -> list[Action]:
@@ -190,4 +206,116 @@ async def chat(
         actions=_to_http_actions(resp.actions),
         session_id=chat_session.id,
         finish_reason=resp.finish_reason,
+    )
+
+
+def _sse_event(name: str, payload: dict[str, Any]) -> str:
+    """Serializa un evento SSE con nombre al wire que consume ``sse.ts``.
+
+    Formato: ``event: <name>\\ndata: <json>\\n\\n``. El ``data`` SIEMPRE pasa por
+    ``json.dumps(ensure_ascii=False)``: un ``'\\n'`` crudo dentro del payload
+    partiria el bloque SSE (el separador de bloques es ``'\\n\\n'``), asi que
+    nunca se interpola texto crudo. El doble ``'\\n\\n'`` final cierra el bloque.
+    """
+    return f"event: {name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    body: ChatHttpRequest,
+    session: DbSession,
+    user_id: CurrentUser,
+    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+    embedder: Annotated[EmbeddingClient, Depends(get_embedder)],
+    reranker: Annotated[Reranker, Depends(get_reranker)],
+) -> StreamingResponse:
+    """Re-emite el turno de chat como stream SSE con eventos con nombre.
+
+    Mismo contrato de turno que ``/chat`` (mismo ``_run_chat_turn``); la
+    diferencia es el wire: en vez de un JSON ``ChatHttpResponse``, emite el
+    stream SSE que consume ``packages/shared-schemas/src/sse.ts``::
+
+        event: token
+        data: {"delta": "Hola"}
+
+        event: done
+        data: {"session_id": "...", "actions": [...], "finish_reason": "stop"}
+
+    Diseno (NO re-litigar):
+
+    (1) Orden: TODO el trabajo transaccional (DB + commit) ocurre ANTES de
+        construir el ``StreamingResponse``. Si algo falla aca (incluido el
+        ``commit``), la excepcion propaga ANTES de devolver la response ->
+        ``get_db()`` hace rollback -> 500 limpio con 0 bytes SSE (el stream
+        nunca arranco). Los errores de validacion / auth / sesion
+        (422 / 401 / 404 / 409) saltan aca como HTTP normales, NO como eventos
+        SSE: el cliente los ve como status codes, no como ``event: error``.
+
+    (2) Snapshot de primitivos ANTES del generator. El closure del generator
+        cierra SOLO sobre ``str`` / ``list[dict]`` ya serializados; NUNCA sobre
+        ``chat_session`` ni atributos ORM. Despues del ``commit`` un acceso
+        lazy a un atributo ORM podria disparar I/O sobre una sesion ya cerrada
+        (lazy-load post-commit). Snapshotear los primitivos lo evita de raiz.
+
+    (3) ``StreamingResponse`` EXPLICITO, no un endpoint async-gen ni
+        ``EventSourceResponse``. NO convertir esto a SSE nativo de FastAPI: a
+        partir de 0.136 FastAPI tiene su propio soporte SSE que cambiaria tanto
+        el wire (formato de los eventos) como el lifecycle (cuando corre el
+        generator vs cuando se cierra la sesion DB). Devolver el
+        ``StreamingResponse`` a mano fija el contrato exacto que ``sse.ts``
+        espera; un refactor futuro NO debe 'modernizarlo'.
+
+    Returns:
+        ``StreamingResponse`` ``text/event-stream`` que emite N eventos
+        ``token`` (ventanas de ``_TOKEN_CHUNK_SIZE`` code-points del texto)
+        seguidos de un evento ``done``. Si el texto es vacio: 0 tokens + 1 done.
+    """
+    # (1) Mismo trabajo transaccional que /chat. Si algo falla aca (incl. commit)
+    #     propaga ANTES del StreamingResponse -> get_db rollback -> 500 limpio,
+    #     0 bytes SSE. 422/401/404/409 saltan aca como HTTP normales.
+    chat_session, resp = await _run_chat_turn(
+        session=session,
+        user_id=user_id,
+        body=body,
+        llm_client=llm_client,
+        embedder=embedder,
+        reranker=reranker,
+    )
+
+    # (2) SNAPSHOT de primitivos puros ANTES del generator. NUNCA se pasa
+    #     chat_session ni atributos ORM al closure (evita lazy-load post-commit).
+    text: str = resp.text
+    session_id_str: str = str(chat_session.id)
+    actions_payload: list[dict[str, Any]] = [
+        a.model_dump(mode="json") for a in _to_http_actions(resp.actions)
+    ]
+    # Coercion D4: finish_reason None -> 'stop'; 'degraded' se preserva tal cual.
+    finish_reason: str = resp.finish_reason or "stop"
+    done_payload: dict[str, Any] = {
+        "session_id": session_id_str,
+        "actions": actions_payload,
+        "finish_reason": finish_reason,
+    }
+
+    # (3) Generator: cierra SOLO sobre str / list[dict] ya serializados. El
+    #     try/except es una red de seguridad (regla #4, sin PII); en la practica
+    #     improbable porque todo el payload esta pre-serializado.
+    async def _gen() -> AsyncIterator[str]:
+        try:
+            for i in range(0, len(text), _TOKEN_CHUNK_SIZE):
+                yield _sse_event("token", {"delta": text[i : i + _TOKEN_CHUNK_SIZE]})
+            # text vacio -> el for no itera -> 0 tokens (D7). Igual se emite done.
+            yield _sse_event("done", done_payload)
+        except Exception:  # red de seguridad; todo esta pre-serializado.
+            yield _sse_event(
+                "error",
+                {"code": _STREAM_ERROR_CODE, "message": _STREAM_ERROR_MESSAGE},
+            )
+
+    # (4) RETORNAR StreamingResponse explicito (NO async-gen endpoint, NO
+    #     EventSourceResponse): fija el wire + lifecycle que espera sse.ts.
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
