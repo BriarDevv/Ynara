@@ -882,3 +882,411 @@ async def test_patch_delete_commit_only_on_success(
             assert commits == 2, "DELETE exitoso debe commitear"
     finally:
         app.dependency_overrides.clear()
+
+
+# ===========================================================================
+# OLA 3 — WIPE TOTAL (dry-run + confirm). DESTRUCTIVO, irreversible, SAGRADO.
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# OLA3-1. GET /memory/wipe (preview) → conteos correctos + total; NO muta
+# ---------------------------------------------------------------------------
+
+
+async def test_wipe_preview_counts_and_does_not_mutate(db_session: AsyncSession) -> None:
+    """El preview cuenta las 3 capas + total y NO muta (segundo preview igual; GET intacto)."""
+    user = await _seed_user(db_session)
+    await _seed_full_memory(db_session, user, tag="PRE")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp1 = await client.get("/v1/memory/wipe", headers=_bearer(user.id))
+            # Segundo preview: idéntico (read-only, no mutó nada).
+            resp2 = await client.get("/v1/memory/wipe", headers=_bearer(user.id))
+            # GET /memory sigue intacto (la memoria no se tocó).
+            after = await client.get("/v1/memory", headers=_bearer(user.id))
+
+        assert resp1.status_code == 200
+        body = resp1.json()
+        # _seed_full_memory siembra 1 por capa.
+        assert body == {"semantic": 1, "episodic": 1, "procedural": 1, "total": 3}
+        # Read-only: el segundo preview da exactamente lo mismo.
+        assert resp2.json() == body
+
+        # GET /memory posterior: la memoria del user sigue completa.
+        after_body = after.json()
+        assert after_body["semantic"]["total"] == 1
+        assert after_body["episodic"]["total"] == 1
+        assert after_body["procedural"]["total"] == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA3-2. POST /memory/wipe con confirm correcto → 200 receipt; GET posterior 0
+# ---------------------------------------------------------------------------
+
+
+async def test_wipe_execute_confirm_matches_wipes_all(db_session: AsyncSession) -> None:
+    """execute con confirm correcto → 200 receipt; GET posterior → todo en 0.
+
+    El receipt trae los conteos REALES borrados (== lo sembrado) y un GET /memory posterior
+    muestra las 3 capas vacías.
+    """
+    user = await _seed_user(db_session)
+    await _seed_full_memory(db_session, user, tag="WIPE")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.post(
+                "/v1/memory/wipe",
+                json={
+                    "expected_semantic": 1,
+                    "expected_episodic": 1,
+                    "expected_procedural": 1,
+                },
+                headers=_bearer(user.id),
+            )
+            after = await client.get("/v1/memory", headers=_bearer(user.id))
+
+        assert resp.status_code == 200
+        # Receipt: los conteos REALES borrados == lo sembrado.
+        assert resp.json() == {"semantic": 1, "episodic": 1, "procedural": 1, "total": 3}
+
+        # GET /memory posterior: las 3 capas vacías.
+        after_body = after.json()
+        assert after_body["semantic"]["total"] == 0
+        assert after_body["episodic"]["total"] == 0
+        assert after_body["procedural"]["total"] == 0
+        assert after_body["semantic"]["items"] == []
+        assert after_body["episodic"]["items"] == []
+        assert after_body["procedural"]["items"] == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA3-3. POST /memory/wipe con confirm que NO matchea → 409; NADA borrado
+# ---------------------------------------------------------------------------
+
+
+async def test_wipe_execute_confirm_mismatch_409_nothing_deleted(db_session: AsyncSession) -> None:
+    """execute con confirm que NO matchea → 409 (con conteos actuales) y NADA borrado."""
+    user = await _seed_user(db_session)
+    await _seed_full_memory(db_session, user, tag="MISS")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.post(
+                "/v1/memory/wipe",
+                json={
+                    # El user tiene {1,1,1}; mandamos conteos viejos/erróneos.
+                    "expected_semantic": 5,
+                    "expected_episodic": 1,
+                    "expected_procedural": 1,
+                },
+                headers=_bearer(user.id),
+            )
+            # La memoria sigue intacta tras el 409.
+            after = await client.get("/v1/memory", headers=_bearer(user.id))
+
+        assert resp.status_code == 409
+        detail = resp.json()["detail"]
+        # El 409 trae los conteos ACTUALES por capa + total (para re-confirmar fresco).
+        assert detail["semantic"] == 1
+        assert detail["episodic"] == 1
+        assert detail["procedural"] == 1
+        assert detail["total"] == 3
+        assert "message" in detail
+
+        # NADA se borró: la memoria sigue completa.
+        after_body = after.json()
+        assert after_body["semantic"]["total"] == 1
+        assert after_body["episodic"]["total"] == 1
+        assert after_body["procedural"]["total"] == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA3-4. IDEMPOTENCIA: tras wipear, preview {0,0,0} + confirm {0,0,0} → 200 {0,0,0}
+# ---------------------------------------------------------------------------
+
+
+async def test_wipe_idempotent_empty_user(db_session: AsyncSession) -> None:
+    """User vacío: preview {0,0,0,0}; confirm {0,0,0} → 200 {0,0,0,0}. Jamás 404."""
+    user = await _seed_user(db_session)
+    # NO se siembra memoria: el user está vacío.
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            preview = await client.get("/v1/memory/wipe", headers=_bearer(user.id))
+            wipe = await client.post(
+                "/v1/memory/wipe",
+                json={
+                    "expected_semantic": 0,
+                    "expected_episodic": 0,
+                    "expected_procedural": 0,
+                },
+                headers=_bearer(user.id),
+            )
+
+        # Preview de user vacío: todo en 0, 200 (jamás 404).
+        assert preview.status_code == 200
+        assert preview.json() == {"semantic": 0, "episodic": 0, "procedural": 0, "total": 0}
+
+        # Confirm {0,0,0} matchea → 200 receipt {0,0,0,0} (nada que borrar).
+        assert wipe.status_code == 200
+        assert wipe.json() == {"semantic": 0, "episodic": 0, "procedural": 0, "total": 0}
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA3-5. sin token → 401 en preview y execute
+# ---------------------------------------------------------------------------
+
+
+async def test_wipe_no_token_401(db_session: AsyncSession) -> None:
+    """Sin Authorization header → 401 en GET y POST /memory/wipe (get_current_user)."""
+    await _seed_user(db_session)
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            r_preview = await client.get("/v1/memory/wipe")
+            r_execute = await client.post(
+                "/v1/memory/wipe",
+                json={
+                    "expected_semantic": 0,
+                    "expected_episodic": 0,
+                    "expected_procedural": 0,
+                },
+            )
+        assert r_preview.status_code == 401
+        assert r_execute.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA3-6. AISLAMIENTO E2E: token A wipea; token B ve su memoria COMPLETA intacta
+# ---------------------------------------------------------------------------
+
+
+async def test_wipe_isolation_b_memory_intact(db_session: AsyncSession) -> None:
+    """A wipea su memoria; B hace GET /memory y ve su memoria COMPLETA con contenido real."""
+    user_a = await _seed_user(db_session)
+    user_b = await _seed_user(db_session)
+    await _seed_full_memory(db_session, user_a, tag="A")
+    refs_b = await _seed_full_memory(db_session, user_b, tag="B")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            # A wipea todo lo suyo.
+            wipe_a = await client.post(
+                "/v1/memory/wipe",
+                json={
+                    "expected_semantic": 1,
+                    "expected_episodic": 1,
+                    "expected_procedural": 1,
+                },
+                headers=_bearer(user_a.id),
+            )
+            # B relee: su memoria sigue COMPLETA, con contenido real descifrado.
+            b_list = await client.get("/v1/memory", headers=_bearer(user_b.id))
+            b_sem = await client.get(
+                f"/v1/memory/semantic/{refs_b['semantic_id']}", headers=_bearer(user_b.id)
+            )
+            # A relee: la suya quedó vacía.
+            a_list = await client.get("/v1/memory", headers=_bearer(user_a.id))
+
+        assert wipe_a.status_code == 200
+        assert wipe_a.json()["total"] == 3
+
+        # B intacto: las 3 capas con su total + contenido real releído.
+        b_body = b_list.json()
+        assert b_body["semantic"]["total"] == 1
+        assert b_body["episodic"]["total"] == 1
+        assert b_body["procedural"]["total"] == 1
+        assert b_body["semantic"]["items"][0]["content"] == "hecho semantico de B"
+        assert b_body["episodic"]["items"][0]["summary"] == "resumen episodico de B"
+        assert b_body["procedural"]["items"][0]["key"] == "pref.B"
+
+        assert b_sem.status_code == 200
+        assert b_sem.json()["content"] == "hecho semantico de B"
+
+        # A quedó vacío.
+        a_body = a_list.json()
+        assert a_body["semantic"]["total"] == 0
+        assert a_body["episodic"]["total"] == 0
+        assert a_body["procedural"]["total"] == 0
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA3-7. TOCTOU: worker inserta entre preview y execute → confirm viejo 409,
+#          confirm fresco 200
+# ---------------------------------------------------------------------------
+
+
+async def test_wipe_toctou_stale_confirm_409_then_fresh_200(db_session: AsyncSession) -> None:
+    """Worker inserta una episódica nueva tras el preview: confirm viejo (N) → 409; luego
+    confirm fresco (N+1) → 200 borra todo.
+
+    Simula la carrera: se siembra, el preview da total=N; se INSERTA una episódica nueva con
+    el store (simulando el worker); un execute con el confirm VIEJO da 409 (cero borrado,
+    releer N+1 intactas); recién un execute con el confirm FRESCO (N+1) borra todo.
+    """
+    user = await _seed_user(db_session)
+    cs = await _seed_chat_session(db_session, user.id)
+    # Estado inicial: {1,1,1} (total 3).
+    await _seed_full_memory(db_session, user, tag="TOC")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            preview = await client.get("/v1/memory/wipe", headers=_bearer(user.id))
+            assert preview.status_code == 200
+            assert preview.json()["total"] == 3
+            assert preview.json()["episodic"] == 1
+
+        # El "worker" inserta una episódica NUEVA entre el preview y el execute (con el store,
+        # sobre la MISMA db_session que ve el endpoint).
+        _, episodic_store, _ = _stores(db_session, user.id)
+        await episodic_store.add(
+            EpisodicMemoryCreate(
+                session_id=cs.id,
+                summary="episodio insertado por el worker",
+                occurred_at=cs.started_at,
+                is_sensitive=False,
+                retention_days=90,
+                topics={"src": "worker"},
+            )
+        )
+        await db_session.flush()
+
+        client2 = await _client(db_session)
+        async with client2:
+            # Confirm VIEJO (episodic=1) ya no matchea (ahora hay 2) → 409, cero borrado.
+            stale = await client2.post(
+                "/v1/memory/wipe",
+                json={
+                    "expected_semantic": 1,
+                    "expected_episodic": 1,
+                    "expected_procedural": 1,
+                },
+                headers=_bearer(user.id),
+            )
+            # Releer: la memoria sigue intacta (N+1 episódicas).
+            mid = await client2.get("/v1/memory/wipe", headers=_bearer(user.id))
+            # Confirm FRESCO (episodic=2) matchea → 200 borra todo.
+            fresh = await client2.post(
+                "/v1/memory/wipe",
+                json={
+                    "expected_semantic": 1,
+                    "expected_episodic": 2,
+                    "expected_procedural": 1,
+                },
+                headers=_bearer(user.id),
+            )
+            after = await client2.get("/v1/memory/wipe", headers=_bearer(user.id))
+
+        # El confirm viejo dio 409 con los conteos ACTUALES (episodic ahora 2).
+        assert stale.status_code == 409
+        assert stale.json()["detail"]["episodic"] == 2
+        assert stale.json()["detail"]["total"] == 4
+
+        # Nada se borró: el preview intermedio sigue mostrando N+1.
+        assert mid.json() == {"semantic": 1, "episodic": 2, "procedural": 1, "total": 4}
+
+        # El confirm fresco borró todo (rowcount real == 4).
+        assert fresh.status_code == 200
+        assert fresh.json() == {"semantic": 1, "episodic": 2, "procedural": 1, "total": 4}
+
+        # Tras el wipe fresco, todo en 0.
+        assert after.json() == {"semantic": 0, "episodic": 0, "procedural": 0, "total": 0}
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA3-8. regla #4: respuestas SOLO enteros (sin content/summary); extra → 422
+# ---------------------------------------------------------------------------
+
+
+async def test_wipe_responses_only_ints_and_extra_field_422(db_session: AsyncSession) -> None:
+    """Preview/result/409-detail son SOLO enteros (sin content/summary); un campo de más → 422."""
+    user = await _seed_user(db_session)
+    await _seed_full_memory(db_session, user, tag="R4")
+
+    only_int_keys = {"semantic", "episodic", "procedural", "total"}
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            preview = await client.get("/v1/memory/wipe", headers=_bearer(user.id))
+            # 409 (confirm que no matchea) para inspeccionar el detail.
+            conflict = await client.post(
+                "/v1/memory/wipe",
+                json={
+                    "expected_semantic": 999,
+                    "expected_episodic": 1,
+                    "expected_procedural": 1,
+                },
+                headers=_bearer(user.id),
+            )
+            # Un campo de más en el confirm → 422 (extra=forbid).
+            extra = await client.post(
+                "/v1/memory/wipe",
+                json={
+                    "expected_semantic": 1,
+                    "expected_episodic": 1,
+                    "expected_procedural": 1,
+                    "expected_extra": 7,
+                },
+                headers=_bearer(user.id),
+            )
+            # Recién acá el wipe real (tras los chequeos read-only / 409 / 422).
+            result = await client.post(
+                "/v1/memory/wipe",
+                json={
+                    "expected_semantic": 1,
+                    "expected_episodic": 1,
+                    "expected_procedural": 1,
+                },
+                headers=_bearer(user.id),
+            )
+
+        # Preview: solo enteros, ninguna key de contenido.
+        preview_body = preview.json()
+        assert set(preview_body.keys()) == only_int_keys
+        assert all(isinstance(v, int) for v in preview_body.values())
+        assert "content" not in preview.text
+        assert "summary" not in preview.text
+
+        # 409 detail: solo enteros + message (ningún content/summary).
+        assert conflict.status_code == 409
+        detail = conflict.json()["detail"]
+        assert set(detail.keys()) == only_int_keys | {"message"}
+        for k in only_int_keys:
+            assert isinstance(detail[k], int)
+
+        # Extra field → 422 (extra=forbid del MemoryWipeConfirm).
+        assert extra.status_code == 422
+
+        # Result: solo enteros, ninguna key de contenido.
+        result_body = result.json()
+        assert set(result_body.keys()) == only_int_keys
+        assert all(isinstance(v, int) for v in result_body.values())
+        assert "content" not in result.text
+        assert "summary" not in result.text
+    finally:
+        app.dependency_overrides.clear()
