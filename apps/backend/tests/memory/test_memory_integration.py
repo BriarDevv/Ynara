@@ -521,3 +521,94 @@ async def test_episodic_list_all_and_get_by_id_post_ownership(db_session: AsyncS
     assert got.summary == "episodio de A"
     assert await epi_a.get_by_id(out_b.id) is None
     assert await epi_a.get_by_id(uuid.uuid4()) is None
+
+
+# ---------------------------------------------------------------------------
+# 9. Ola 2 — episodic.delete: borra solo del user (ajeno/inexistente → False)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_episodic_delete_isolation(db_session: AsyncSession) -> None:
+    """episodic.delete borra solo la fila del user; un id ajeno/inexistente → False.
+
+    Espejo de la disciplina de ``semantic.delete``: el WHERE filtra por ``id`` **y**
+    ``user_id``, así que el episodio de B nunca se borra desde el store de A (ni se
+    toca su ``summary``). El episodio de A sí se borra (True) y deja de existir.
+    """
+    user_a = await _seed_user(db_session)
+    user_b = await _seed_user(db_session)
+    chat_a = await _seed_session(db_session, user_a)
+    chat_b = await _seed_session(db_session, user_b)
+    _, epi_a, _ = _fake_stores(db_session, user_a.id)
+    _, epi_b, _ = _fake_stores(db_session, user_b.id)
+
+    out_a = await epi_a.add(
+        EpisodicMemoryCreate(
+            session_id=chat_a.id,
+            summary="episodio de A",
+            occurred_at=_now(),
+            retention_days=90,
+        )
+    )
+    out_b = await epi_b.add(
+        EpisodicMemoryCreate(
+            session_id=chat_b.id,
+            summary="episodio de B",
+            occurred_at=_now(),
+            retention_days=90,
+        )
+    )
+
+    # A intenta borrar el episodio de B → False, sin borrar la fila ajena.
+    assert await epi_a.delete(out_b.id) is False
+    # Un id inexistente también → False.
+    assert await epi_a.delete(uuid.uuid4()) is False
+    # El episodio de B sigue existiendo (lo ve su propio store).
+    assert await epi_b.get_by_id(out_b.id) is not None
+
+    # A borra su propio episodio → True; deja de existir.
+    assert await epi_a.delete(out_a.id) is True
+    assert await epi_a.get_by_id(out_a.id) is None
+    # La fila ya no está en la DB (query crudo confirma el DELETE físico).
+    remaining = (
+        await db_session.execute(select(EpisodicMemory.id).where(EpisodicMemory.id == out_a.id))
+    ).scalar_one_or_none()
+    assert remaining is None
+
+
+# ---------------------------------------------------------------------------
+# 10. Ola 2 — procedural.update: UPDATE puro (no upsert), preserva el decay
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_procedural_update_pure_and_isolated(db_session: AsyncSession) -> None:
+    """procedural.update reemplaza el value de una key EXISTENTE sin crear ni tocar
+    el decay; una key inexistente o ajena → None (no inserta)."""
+    user_a = await _seed_user(db_session)
+    user_b = await _seed_user(db_session)
+    _, _, proc_a = _fake_stores(db_session, user_a.id)
+    _, _, proc_b = _fake_stores(db_session, user_b.id)
+
+    created = await proc_a.upsert(ProceduralMemoryUpsert(key="pref.tema", value={"v": 1}))
+
+    # Update puro de una key existente: el value se reemplaza, el id es el mismo.
+    updated = await proc_a.update("pref.tema", {"v": 2, "extra": True})
+    assert updated is not None
+    assert updated.id == created.id
+    assert updated.value == {"v": 2, "extra": True}
+    # No resetea el decay (no es un refuerzo): confidence/stale intactos.
+    assert updated.confidence == created.confidence
+    assert updated.stale == created.stale
+
+    # Key inexistente → None y NO crea la fila.
+    assert await proc_a.update("pref.no-existe", {"v": 9}) is None
+    assert await proc_a.get("pref.no-existe") is None
+
+    # B tiene su propia key homónima; A no la puede pisar (aislamiento).
+    await proc_b.upsert(ProceduralMemoryUpsert(key="pref.solo-de-b", value={"owner": "b"}))
+    assert await proc_a.update("pref.solo-de-b", {"owner": "a-intruder"}) is None
+    entry_b = await proc_b.get("pref.solo-de-b")
+    assert entry_b is not None
+    assert entry_b.value == {"owner": "b"}
