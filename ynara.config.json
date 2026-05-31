@@ -65,7 +65,7 @@
     }
   },
   "memory": {
-    "engine": "mem0-oss-v2",
+    "engine": "in-house",
     "store": "postgres-pgvector",
     "embedding_model": "bge-m3",
     "consolidation": "celery-async"
