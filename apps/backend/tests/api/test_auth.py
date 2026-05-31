@@ -29,7 +29,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, get_embedder, get_llm_client, get_reranker
-from app.core.security import verify_access_token
+from app.core.security import create_access_token, verify_access_token
 from app.llm.clients.embedding import FakeEmbeddingClient
 from app.llm.clients.fakes import FakeLlmClient
 from app.llm.clients.reranker import FakeReranker
@@ -432,6 +432,97 @@ async def test_no_leak_password_en_errores(db_session: AsyncSession) -> None:
         app.dependency_overrides.clear()
         await _delete_user_by_email(db_session, "leak422@example.com")
         await _delete_user_by_email(db_session, "leak401@example.com")
+
+
+# ---------------------------------------------------------------------------
+# 12. GET /auth/me → 200 con el UserOut del user logueado (sin password_hash)
+# ---------------------------------------------------------------------------
+
+
+async def test_me_returns_own_user(db_session: AsyncSession) -> None:
+    """register → token → GET /auth/me: 200 con email correcto y sin password_hash."""
+    email = "me.ok@example.com"
+    password = "supersecreta1"
+    client = await _client(db_session)
+    try:
+        async with client:
+            reg = await client.post(
+                "/v1/auth/register",
+                json={"email": email, "password": password, "display_name": "Yo"},
+            )
+            assert reg.status_code == 201
+            user_id = reg.json()["id"]
+
+            tok = await client.post(
+                "/v1/auth/token",
+                json={"email": email, "password": password},
+            )
+            assert tok.status_code == 200
+            access_token = tok.json()["access_token"]
+
+            resp = await client.get(
+                "/v1/auth/me",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+        assert resp.status_code == 200
+        body = resp.json()
+        # Es la identidad del user logueado.
+        assert body["id"] == user_id
+        assert body["email"] == "me.ok@example.com"
+        assert body["display_name"] == "Yo"
+        assert "created_at" in body
+        assert "updated_at" in body
+        # Regla #4: el hash de password NUNCA viaja (no es campo de UserOut).
+        assert "password_hash" not in body
+        assert "password" not in body
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 13. GET /auth/me con token de un user inexistente (borrado) → 401 (no 404)
+# ---------------------------------------------------------------------------
+
+
+async def test_me_token_de_user_inexistente_401(db_session: AsyncSession) -> None:
+    """Token válido cuyo sub no tiene fila (user borrado) → 401, NO 404.
+
+    Es la PROPIA identidad caduca, no un recurso ajeno: se responde 401 con
+    WWW-Authenticate: Bearer (re-autenticarse), no un 404 de recurso ausente.
+    """
+    # Token bien firmado para un id que NUNCA existió en la DB.
+    ghost_id = uuid.uuid4()
+    token = create_access_token(str(ghost_id))
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.get(
+                "/v1/auth/me",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        assert resp.status_code == 401
+        assert resp.status_code != 404
+        assert resp.headers.get("WWW-Authenticate") == "Bearer"
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# 14. GET /auth/me sin token → 401
+# ---------------------------------------------------------------------------
+
+
+async def test_me_sin_token_401(db_session: AsyncSession) -> None:
+    """Sin Authorization header → 401 (get_current_user, auto_error)."""
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.get("/v1/auth/me")
+        assert resp.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
 
 
 # ---------------------------------------------------------------------------
