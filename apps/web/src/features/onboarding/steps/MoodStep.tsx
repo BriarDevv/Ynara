@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { OptionCard } from "@/components/ui/OptionCard";
 import { Textarea } from "@/components/ui/Textarea";
 import { StepFooter } from "../components/StepFooter";
@@ -59,17 +59,25 @@ export function MoodStep() {
       <div className="flex flex-col gap-3">
         <fieldset className="grid gap-3 border-0 p-0 sm:grid-cols-2">
           <legend className="sr-only">Cómo viene tu día</legend>
-          {MOOD_OPTIONS.map((opt) => {
+          {MOOD_OPTIONS.map((opt, i) => {
             const isSelected = selected.includes(opt.value);
             return (
-              <OptionCard
+              // Stagger de entrada (§8.2): fade-up con delay por índice (cap 6).
+              // El delay sale de `--stagger-index` (número determinista) vía la
+              // utility .anim-stagger-up; reduced-motion lo neutraliza global.
+              <div
                 key={opt.value}
-                title={opt.label}
-                hint={opt.hint}
-                selected={isSelected}
-                disabled={!isSelected && atLimit}
-                onClick={() => toggle(opt.value)}
-              />
+                className="anim-stagger-up"
+                style={{ "--stagger-index": Math.min(i, 5) } as CSSProperties}
+              >
+                <OptionCard
+                  title={opt.label}
+                  hint={opt.hint}
+                  selected={isSelected}
+                  disabled={!isSelected && atLimit}
+                  onClick={() => toggle(opt.value)}
+                />
+              </div>
             );
           })}
         </fieldset>

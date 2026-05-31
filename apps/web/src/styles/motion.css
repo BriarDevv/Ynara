@@ -111,6 +111,17 @@
     animation: ynara-pulse-soft 1500ms ease-in-out infinite;
   }
 
+  /* Entrada con stagger para listas (§8.2): fade-up + delay por índice.
+     El índice llega por la CSS var `--stagger-index` (un número, no un
+     tiempo) → es determinista server/cliente (sin hydration mismatch) y la
+     cascada global de reduced-motion puede neutralizar `animation-delay`
+     porque vive en una clase, no inline. */
+  .anim-stagger-up {
+    animation: ynara-fade-up var(--duration-screen, 350ms)
+      var(--ease-out-soft, ease-out) both;
+    animation-delay: calc(var(--stagger-index, 0) * 40ms);
+  }
+
   .anim-toast-in {
     animation: ynara-toast-in var(--duration-slow, 300ms)
       var(--ease-out-soft, ease-out) both;
