@@ -16,11 +16,12 @@
   --color-ink-soft: rgb(36 44 63 / 0.65);
   --color-ink-muted: rgb(36 44 63 / 0.45);
   --color-ink-faint: rgb(36 44 63 / 0.18);
-  --color-on-dark: #ffffff;
+  /* Texto sobre superficies de marca (azul/violeta). Marfil, no blanco puro. */
+  --color-on-dark: #faf9f5;
 
-  /* Fondos */
-  --color-bg: #ffffff;
-  --color-bg-soft: #f6f6f8;
+  /* Superficies — marfil cálido (DESIGN.md §3.1). Nunca blanco puro. */
+  --color-bg: #faf9f5;
+  --color-bg-soft: #f3f0ea;
 
   /* Bordes */
   --color-border: rgb(36 44 63 / 0.12);
@@ -41,6 +42,18 @@
   --color-jade-to: #6fbfae;
   --color-amber-from: #d9a24a;
   --color-amber-to: #e8c77a;
+
+  /*
+   * Rampa de memoria (DESIGN.md §3.4) — la familia violeta real de la marca,
+   * más rica que el único violeta del logo. Usada por el gradiente de memoria,
+   * los tints del modo Memoria y (a futuro) la "Red de memoria" (§2).
+   * Nota: el logo (YnaraMark) sigue usando --color-violet-* hasta el rediseño
+   * de componentes; acá no se toca.
+   */
+  --color-memory-deep: #434a82;
+  --color-memory: #5c6fb3;
+  --color-memory-soft: #8b9ad0;
+  --color-memory-accent: #8165a3;
 
   /* Acento puntual (focus-ring, etc.). Alias del stop inicial del azul base. */
   --color-accent: var(--color-blue-base-from);
@@ -68,6 +81,11 @@
     var(--color-violet-from),
     var(--color-violet-to)
   );
+  --gradient-memory: linear-gradient(
+    135deg,
+    var(--color-memory-deep),
+    var(--color-memory-accent)
+  );
   --gradient-jade: linear-gradient(
     135deg,
     var(--color-jade-from),
@@ -84,7 +102,7 @@
   --mode-estudio: var(--gradient-blue-relief);
   --mode-bienestar: var(--gradient-jade);
   --mode-vida: var(--gradient-amber);
-  --mode-memoria: var(--gradient-violet);
+  --mode-memoria: var(--gradient-memory);
 
   /* Radius */
   --radius-sm: 0.5rem;
@@ -99,10 +117,20 @@
   --shadow-lifted: 0 8px 24px rgb(36 44 63 / 0.08),
     0 24px 48px rgb(36 44 63 / 0.06);
 
-  /* Motion */
+  /* Motion (DESIGN.md §8.1) */
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-  --duration-base: 250ms;
-  --duration-screen: 350ms;
+  --duration-instant: 100ms; /* feedback inmediato (press) */
+  --duration-fast: 150ms; /* hover, focus, microinteracciones */
+  --duration-base: 200ms; /* transiciones de UI estándar (antes 250ms) */
+  --duration-slow: 300ms; /* transiciones amplias dentro de una vista */
+  --duration-screen: 350ms; /* cambio de pantalla / navegación entre vistas */
+
+  /*
+   * Grano (DESIGN.md §3.6) — overlay de ruido monocromo para matar el banding
+   * y aportar "materia física". SVG feTurbulence inline (sin assets externos).
+   * Aplicar con sobriedad vía .bg-grain (superficies grandes, hero, nocturna).
+   */
+  --texture-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* Dark mode discreto */
@@ -112,11 +140,12 @@
     --color-ink-soft: rgb(232 236 244 / 0.7);
     --color-ink-muted: rgb(232 236 244 / 0.5);
     --color-ink-faint: rgb(232 236 244 / 0.2);
-    --color-bg: #0e1219;
-    --color-bg-soft: #161b25;
+    /* Nocturna de marca: azul-tinta, no negro (DESIGN.md §3.1). */
+    --color-bg: #242c3f;
+    --color-bg-soft: #2e3750;
     --color-border: rgb(232 236 244 / 0.12);
     --color-border-strong: rgb(232 236 244 / 0.22);
-    --color-overlay: rgb(14 18 25 / 0.6);
+    --color-overlay: rgb(20 25 38 / 0.6);
   }
 }
 
@@ -125,8 +154,8 @@
   --color-ink-soft: rgb(36 44 63 / 0.65);
   --color-ink-muted: rgb(36 44 63 / 0.45);
   --color-ink-faint: rgb(36 44 63 / 0.18);
-  --color-bg: #ffffff;
-  --color-bg-soft: #f6f6f8;
+  --color-bg: #faf9f5;
+  --color-bg-soft: #f3f0ea;
   --color-border: rgb(36 44 63 / 0.12);
   --color-border-strong: rgb(36 44 63 / 0.22);
   --color-overlay: rgb(36 44 63 / 0.4);
@@ -137,11 +166,12 @@
   --color-ink-soft: rgb(232 236 244 / 0.7);
   --color-ink-muted: rgb(232 236 244 / 0.5);
   --color-ink-faint: rgb(232 236 244 / 0.2);
-  --color-bg: #0e1219;
-  --color-bg-soft: #161b25;
+  /* Nocturna de marca: azul-tinta, no negro (DESIGN.md §3.1). */
+  --color-bg: #242c3f;
+  --color-bg-soft: #2e3750;
   --color-border: rgb(232 236 244 / 0.12);
   --color-border-strong: rgb(232 236 244 / 0.22);
-  --color-overlay: rgb(14 18 25 / 0.6);
+  --color-overlay: rgb(20 25 38 / 0.6);
 }
 
 /* ============================================================
@@ -159,6 +189,12 @@
   --color-bg-soft: var(--color-bg-soft);
   --color-border: var(--color-border);
   --color-border-strong: var(--color-border-strong);
+
+  /* Rampa de memoria — utilities text-memory-*, bg-memory-* (DESIGN.md §3.4) */
+  --color-memory-deep: var(--color-memory-deep);
+  --color-memory: var(--color-memory);
+  --color-memory-soft: var(--color-memory-soft);
+  --color-memory-accent: var(--color-memory-accent);
 
   /* Tipografía — fallback chain */
   --font-display: var(--font-display), "Space Grotesk", system-ui, sans-serif;
@@ -201,6 +237,15 @@ body {
  * ============================================================ */
 
 @layer utilities {
+  .text-display {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 700;
+    /* Hero editorial / posters in-app (DESIGN.md §4.2). */
+    font-size: clamp(2.6rem, 1.9rem + 3.5vw, 3.5rem);
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+  }
+
   .text-hero {
     font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
     font-weight: 700;
@@ -270,6 +315,9 @@ body {
   .bg-gradient-violet {
     background-image: var(--gradient-violet);
   }
+  .bg-gradient-memory {
+    background-image: var(--gradient-memory);
+  }
   .bg-gradient-jade {
     background-image: var(--gradient-jade);
   }
@@ -307,6 +355,12 @@ body {
     background-clip: text;
     color: transparent;
   }
+  .text-gradient-memory {
+    background-image: var(--gradient-memory);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 
   /* Elevation */
   .shadow-soft {
@@ -314,6 +368,25 @@ body {
   }
   .shadow-lifted {
     box-shadow: var(--shadow-lifted);
+  }
+
+  /*
+   * Grano (DESIGN.md §3.6). Overlay de ruido tenue sobre superficies grandes.
+   * Pensado para un pseudo-elemento o capa absoluta; opacidad baja y
+   * pointer-events: none para no interferir con el contenido.
+   */
+  .bg-grain {
+    position: relative;
+  }
+  .bg-grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: var(--texture-grain);
+    background-repeat: repeat;
+    opacity: 0.04;
+    pointer-events: none;
+    mix-blend-mode: overlay;
   }
 }
 
