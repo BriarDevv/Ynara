@@ -1,5 +1,7 @@
 # Respuestas al §7.1 — Contrato de `/v1/chat` (frontend ↔ backend)
 
+> **Actualización post-sesión (2026-05-31):** `core/security.py` (auth JWT) fue implementado; `/v1/chat` (sync + SSE streaming), `/v1/sessions` y `/v1/memory` completo están mergeados. Este doc es la bitácora point-in-time de la sesión original — el cuerpo no se reescribe.
+
 > **Resumen.** Responde las preguntas abiertas del plan de integración del
 > chat. Las 4 primeras son del **contrato del backend** (las contesto desde la
 > capa LLM, que es lo que se construyó: `app/llm/`): streaming en un endpoint

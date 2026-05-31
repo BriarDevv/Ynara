@@ -1,7 +1,7 @@
 # Backend · Memoria contextual + capa LLM — Roadmap
 
-> **Estado**: v1 — punto de partida después de PR A (modelos + schemas + enums) mergeado
-> **Fecha**: 2026-05-21
+> **Estado**: v2 — agente funcionando hasta M9; infra vLLM real y rate-limit pendientes
+> **Fecha**: 2026-05-21 · **Actualizado**: 2026-05-31
 > **Owner**: @BriarDevv
 > **Alcance**: `apps/backend` — desde el estado actual hasta tener el agente respondiendo con memoria viva.
 > **Fuentes**: [`AGENTS.md`](../../AGENTS.md), [`docs/architecture/informe-tecnico.pdf`](../architecture/informe-tecnico.pdf), [`docs/architecture/adrs/`](../architecture/adrs/), Trello cards *Arquitectura de memoria contextual* + *Integración con backend LLM*.
@@ -61,17 +61,35 @@ Se apoya en cuatro fuentes:
 ### En espera
 
 - **Issue #20** (deuda D1) — commits imperativo vs noun-phrase, esperando decisión.
-- **Proyecto Supabase** — pendiente de creación con los 3 toggles OFF.
+- ~~**Proyecto Supabase** — pendiente de creación.~~ **Creado y conectado** (2026-05-30, ver §2.2).
 
-### Pendiente (cubierto por este roadmap)
+### Hecho (desde v1 → mergeados a main)
 
-- PR B (migración Alembic)
-- ADR-008 (bge-m3)
-- PR C (crypto + wrappers)
-- `core/security.py` (auth)
-- Router + cliente vLLM + prompts + tools
-- Workers Celery (consolidación, decay, retention)
-- Endpoints FastAPI
+*(Actualizado 2026-05-31)*
+
+| Pieza | Detalle |
+|---|---|
+| PR B (migración Alembic) | 6 tablas, 4 enums, pgvector, HNSW, tests up/down/roundtrip |
+| PR C (crypto + wrappers) | `core/crypto.py` AES-256-GCM per-user; wrappers semantic/episodic/procedural |
+| Cliente vLLM + pool + circuit breaker + fallback | Con `FakeLlmClient`; vLLM real es infra aparte, pendiente |
+| Prompts por modo (M5) | 5 modos, loader, snapshot tests |
+| Framework de tools + calendar + reminders (M6) | `ToolRegistry`, stubs honestos |
+| Tool `memory.*` (M7) | `memory.search/add/update/delete`; `memory_registry(semantic_store)` combinado por el router |
+| Router completo + tool loop + consolidación (M8) | Clasificación modo→modelo, recuperación memoria, prompt, tool loop |
+| `core/security.py` (auth JWT) | `create_access_token`, `verify_access_token`, `hash_password`, `verify_password`; endpoints `/v1/auth/register`, `/v1/auth/token`, `/v1/auth/me` |
+| Workers Celery — consolidación + decay | Consolidación post-turno y decay procedural implementados |
+| Endpoints FastAPI | `/v1/health`, `/v1/auth` (register/token/me), `/v1/chat` (sync + SSE), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual, wipe) |
+| Supabase conectado | Session pooler (5432), schema aplicado, DB en `head` |
+
+### Pendiente
+
+- ADR-008 (bge-m3) — decisión de modelo de embedding, desbloquea VllmEmbeddingClient real
+- Infra vLLM real — track de infra aparte; hoy todo corre con Fakes
+- Rate-limit (~30/min por usuario)
+- Refresh/logout de auth — diferidos
+- Gap "persistir turnos" — la consolidación episódica necesita que los turnos se persistan antes de ser procesados
+- Retención episódica — verificar si el worker de retention ya está implementado o pendiente
+- M4 observabilidad (Sentry + métricas) — pendiente
 
 ---
 
@@ -89,13 +107,13 @@ Esperando elección entre:
 
 ### 2.2 Proyecto Supabase
 
-Crear con:
+~~Pendiente de creación.~~ **Creado y conectado** (2026-05-30):
 
-- Region: `sa-east-1` (São Paulo) — latencia LATAM.
-- Toggles: **3 OFF** (Data API, auto-expose, auto-RLS) — alineado con regla #5.
-- Anotar `DATABASE_URL` en gestor de secretos del equipo (no en repo).
-
-**Acción**: crear proyecto, anotar credentials, agregar `MEMORY_ENCRYPTION_MASTER_KEY` generada con `openssl rand -base64 32`.
+- Region: `sa-east-1` (São Paulo).
+- Toggles: **3 OFF** (Data API, auto-expose, auto-RLS) — regla #5.
+- `DATABASE_URL` en `apps/backend/.env` (gitignored); session pooler (5432, IPv4).
+- Schema aplicado, DB en `head`. PAT rotado por el operador.
+- `MEMORY_ENCRYPTION_MASTER_KEY` generada y en gestor de secretos del equipo.
 
 ### 2.3 Fix de 1 línea
 
@@ -167,16 +185,10 @@ Crear con:
 
 ### 4.1 `core/security.py` — auth mínimo
 
-**Bloquea router** (necesita `user_id` autenticado).
-
-**Scope**:
-
-- Endpoint `/auth/login` con email + password contra `users` table.
-- JWT con `user_id` + `exp`.
-- Dependency `get_current_user(token) -> User` para FastAPI.
-- Tests unitarios.
-
-**Estimación**: 1 sesión.
+**✅ Implementado** (mergeado). JWT real: `create_access_token`, `verify_access_token`,
+`hash_password`, `verify_password`. Endpoints: `/v1/auth/register`, `/v1/auth/token`,
+`/v1/auth/me`. Dependency `get_current_user(token) -> User` cableada en FastAPI.
+Refresh/logout **diferidos** (no implementados aún).
 
 ### 4.2 Cliente vLLM
 
@@ -186,10 +198,10 @@ Crear con:
 
 - Wrapper async sobre `/v1/chat/completions` (OpenAI-compatible).
 - Switch por modelo via campo `model` (Gemma vs Qwen).
-- Parser `qwen3_coder` para tool calls.
+- Parser `hermes` (`OpenAIToolCallParser`) para tool calls de Qwen (ADR-009; `qwen3_coder` no existe).
 - Streaming desde primer token.
 - Health check `/v1/models`.
-- Config en `ynara.config.json[llm]`: `endpoint`, `quantization`, `max_model_len`, `kv_cache_dtype`.
+- Config: `LLM_PRIMARY_BASE_URL` / `LLM_SECONDARY_BASE_URL` / `LLM_TOPOLOGY` en settings; `ynara.config.json[llm.serving]` para parámetros de modelo (ADR-009 D4). (`GEMMA_ENDPOINT`/`QWEN_ENDPOINT` no existen.)
 
 **Estimación**: 1-2 sesiones.
 
@@ -251,7 +263,7 @@ Crear con:
 
 ## 5. Workers Celery
 
-**Bloqueado por**: PR B + Redis configurado.
+*(Actualizado 2026-05-31: consolidación + decay implementados y mergeados.)*
 
 ### 5.1 Consolidación post-turn
 
@@ -281,17 +293,26 @@ Crear con:
 
 ## 6. Endpoints FastAPI
 
-**Bloqueado por**: router + wrappers + auth.
+*(Actualizado 2026-05-31)*
 
-| Endpoint | Método | Scope |
+| Endpoint | Método | Estado |
 |---|---|---|
-| `/v1/chat` | POST | Entrada del usuario, dispatch al router |
-| `/v1/memory/semantic` | GET / POST / PATCH / DELETE | CRUD para debug + export |
-| `/v1/memory/episodic` | GET / DELETE | Lectura + borrado manual |
-| `/v1/memory/procedural` | GET / DELETE | Lectura + reset |
-| `/v1/memory/settings` | PATCH | Update `retention_sensitive_days` |
-| `/v1/memory/export` | GET | JSON con sensible separado |
-| `/auth/login` | POST | Auth básico |
+| `/v1/health` | GET | ✅ implementado |
+| `/v1/auth/register` | POST | ✅ implementado |
+| `/v1/auth/token` | POST | ✅ implementado |
+| `/v1/auth/me` | GET | ✅ implementado |
+| `/v1/auth/refresh` | POST | ⏳ diferido |
+| `/v1/auth/logout` | POST | ⏳ diferido |
+| `/v1/chat` | POST | ✅ implementado (sync JSON) |
+| `/v1/chat/stream` | POST | ✅ implementado (SSE streaming) |
+| `/v1/sessions` | GET | ✅ implementado (lista) |
+| `/v1/sessions/{id}` | GET | ✅ implementado (detalle) |
+| `/v1/sessions/{id}/close` | POST | ✅ implementado |
+| `/v1/memory` | GET | ✅ implementado (lista) |
+| `/v1/memory/{layer}/{ref}` | GET | ✅ implementado (detalle) |
+| `/v1/memory/export` | GET | ✅ implementado |
+| `/v1/memory/{layer}/{ref}` | PATCH / DELETE | ✅ implementado |
+| `/v1/memory/wipe` | GET (preview) / POST (execute) | ✅ implementado |
 
 **Estimación**: 2-3 sesiones.
 
