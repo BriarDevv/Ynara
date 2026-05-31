@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crypto import decrypt_for_user, encrypt_for_user
@@ -109,6 +109,65 @@ class EpisodicMemoryStore:
         # Rerank passthrough (FakeReranker en M7): preserva el orden ANN.
         ranked = await self._reranker.rerank(query, plaintexts, top_n=limit)
         return [self._to_out(rows[r.index], plaintext=plaintexts[r.index]) for r in ranked]
+
+    async def list_all(
+        self, *, limit: int | None = None, offset: int = 0
+    ) -> list[EpisodicMemoryOut]:
+        """Lista los episodios del usuario sin búsqueda: ``created_at`` DESC, paginado.
+
+        Read-only para el dueño (``GET /v1/memory``). Filtra por ``self._user_id``
+        (aislamiento estructural, igual que ``search``), trae la página
+        ``[offset, offset+limit)`` ordenada por ``created_at`` DESC y descifra el
+        ``summary`` fila por fila con ``decrypt_for_user`` ANTES de construir el
+        ``Out`` strict. NO embeddea (no hay query): es un listado, no una búsqueda.
+
+        ``limit=None`` (default) trae TODAS las filas del usuario en un solo query
+        (lo usa ``GET /v1/memory/export``, que no pagina): evita el ``count()``
+        como límite y su TOCTOU (una fila escrita por el worker entre el ``count``
+        y el ``select`` se perdería del export).
+        """
+        stmt = (
+            select(EpisodicMemory)
+            .where(EpisodicMemory.user_id == self._user_id)
+            .order_by(EpisodicMemory.created_at.desc())
+            .offset(offset)
+        )
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        # Descifrar fila por fila ANTES del schema strict (todas son del user).
+        return [
+            self._to_out(row, plaintext=decrypt_for_user(self._user_id, row.summary))
+            for row in rows
+        ]
+
+    async def count(self) -> int:
+        """Cuenta los episodios del usuario (``total`` de la paginación). No descifra."""
+        stmt = select(func.count()).select_from(EpisodicMemory).where(
+            EpisodicMemory.user_id == self._user_id
+        )
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_by_id(self, memory_id: UUID) -> EpisodicMemoryOut | None:
+        """Lee un episodio por ``id`` del usuario del store. ``None`` si no es suyo.
+
+        DISCIPLINA DECRYPT-POST-OWNERSHIP: el WHERE filtra por ``id`` **y**
+        ``user_id``; si la fila no existe o pertenece a otro usuario, el query
+        devuelve ``None`` y se retorna ``None`` ANTES de tocar crypto. NUNCA se
+        invoca ``decrypt_for_user`` sobre el ``summary`` de otro usuario: ajena ==
+        inexistente. Solo si la fila es del user se descifra y se arma el ``Out``.
+        """
+        stmt = select(EpisodicMemory).where(
+            EpisodicMemory.id == memory_id,
+            EpisodicMemory.user_id == self._user_id,
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        if row is None:
+            # Inexistente o ajena: se retorna None ANTES de descifrar nada.
+            return None
+        # Recién acá, confirmada la propiedad, se descifra.
+        plaintext = decrypt_for_user(self._user_id, row.summary)
+        return self._to_out(row, plaintext=plaintext)
 
     @staticmethod
     def _to_out(row: EpisodicMemory, *, plaintext: str) -> EpisodicMemoryOut:

@@ -31,7 +31,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -116,6 +116,67 @@ class SemanticMemoryStore:
         # Rerank passthrough (FakeReranker en M7): preserva el orden ANN.
         ranked = await self._reranker.rerank(query, plaintexts, top_n=limit)
         return [self._to_out(rows[r.index], plaintext=plaintexts[r.index]) for r in ranked]
+
+    async def list_all(
+        self, *, limit: int | None = None, offset: int = 0
+    ) -> list[SemanticMemoryOut]:
+        """Lista los hechos del usuario sin búsqueda: ``created_at`` DESC, paginado.
+
+        Read-only para el dueño (``GET /v1/memory``). Filtra por ``self._user_id``
+        (aislamiento estructural, igual que ``search``), trae la página
+        ``[offset, offset+limit)`` ordenada por ``created_at`` DESC y descifra el
+        ``content`` fila por fila con ``decrypt_for_user`` ANTES de construir el
+        ``Out`` strict. NO embeddea (no hay query): es un listado, no una búsqueda.
+
+        ``limit=None`` (default) trae TODAS las filas del usuario en un solo query
+        (lo usa ``GET /v1/memory/export``, que no pagina): evita el ``count()``
+        como límite y su TOCTOU (una fila escrita por el worker entre el ``count``
+        y el ``select`` se perdería del export).
+        """
+        stmt = (
+            select(SemanticMemory)
+            .where(SemanticMemory.user_id == self._user_id)
+            .order_by(SemanticMemory.created_at.desc())
+            .offset(offset)
+        )
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        # Descifrar fila por fila ANTES del schema strict (todas son del user).
+        return [
+            self._to_out(row, plaintext=decrypt_for_user(self._user_id, row.content))
+            for row in rows
+        ]
+
+    async def count(self) -> int:
+        """Cuenta los hechos del usuario (``total`` de la paginación). No descifra."""
+        stmt = select(func.count()).select_from(SemanticMemory).where(
+            SemanticMemory.user_id == self._user_id
+        )
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_by_id(self, memory_id: UUID) -> SemanticMemoryOut | None:
+        """Lee un hecho por ``id`` del usuario del store. ``None`` si no es suyo.
+
+        DISCIPLINA DECRYPT-POST-OWNERSHIP: el WHERE filtra por ``id`` **y**
+        ``user_id``; si la fila no existe o pertenece a otro usuario, el query
+        devuelve ``None`` y se retorna ``None`` ANTES de tocar crypto. NUNCA se
+        invoca ``decrypt_for_user`` sobre el blob de otro usuario (descifrar con la
+        key derivada de ``self._user_id`` el blob ajeno tiraría ``InvalidTag``, pero
+        ni siquiera se intenta: ajena == inexistente). Solo si la fila es del user
+        se descifra y se construye el ``Out``.
+        """
+        stmt = select(SemanticMemory).where(
+            SemanticMemory.id == memory_id,
+            SemanticMemory.user_id == self._user_id,
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        if row is None:
+            # Inexistente o ajena: se retorna None ANTES de descifrar nada.
+            return None
+        # Recién acá, confirmada la propiedad, se descifra.
+        plaintext = decrypt_for_user(self._user_id, row.content)
+        return self._to_out(row, plaintext=plaintext)
 
     async def update(self, memory_id: UUID, content: str) -> SemanticMemoryOut | None:
         """Re-embeddea + re-cifra y actualiza el hecho.
