@@ -50,9 +50,11 @@ El usuario puede:
   capa).
 - **Editar entradas individuales.** `PATCH /v1/memory/{id}`.
 - **Borrar entradas individuales.** `DELETE /v1/memory/{id}`.
-- **Borrar todo.** `DELETE /v1/memory` con confirmación + dry-run.
+- **Borrar todo.** `GET /v1/memory/wipe` (preview/dry-run por capa) +
+  `POST /v1/memory/wipe` (execute con `confirm` per-layer). Ya disponible.
   Script equivalente: `scripts/reset-memory.sh`.
 - **Pausar.** Activar modo "no escribas memoria" temporalmente.
+  *(pendiente — endpoint `PATCH /v1/memory/settings` no implementado aún.)*
 - **Exportar.** `GET /v1/memory/export` devuelve JSON estructurado
   con todo. Script: `scripts/export-user-data.sh`.
 
@@ -92,7 +94,7 @@ al usuario antes de actuar. Borrado físico cuando `confidence < 0.1` Y
 ### Retention de memoria episódica
 
 Default: 12 meses. Modo **Bienestar**: 6 meses (configurable
-1-12 meses por usuario via `PATCH /v1/memory/settings`). Flag
+1-12 meses por usuario via `PATCH /v1/memory/settings` — pendiente). Flag
 `is_sensitive=true` gatilla audit log diferenciado y export anidado.
 
 ### Encriptación a nivel campo
