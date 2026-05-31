@@ -9,7 +9,7 @@ export const fontDisplay = Space_Grotesk({
 
 export const fontBody = DM_Sans({
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["400", "500", "600"],
   display: "swap",
   variable: "--font-body",
 });

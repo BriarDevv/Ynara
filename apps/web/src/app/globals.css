@@ -145,7 +145,7 @@
     --color-bg-soft: #2e3750;
     --color-border: rgb(232 236 244 / 0.12);
     --color-border-strong: rgb(232 236 244 / 0.22);
-    --color-overlay: rgb(20 25 38 / 0.6);
+    --color-overlay: rgb(14 18 25 / 0.6);
   }
 }
 
@@ -171,7 +171,7 @@
   --color-bg-soft: #2e3750;
   --color-border: rgb(232 236 244 / 0.12);
   --color-border-strong: rgb(232 236 244 / 0.22);
-  --color-overlay: rgb(20 25 38 / 0.6);
+  --color-overlay: rgb(14 18 25 / 0.6);
 }
 
 /* ============================================================
