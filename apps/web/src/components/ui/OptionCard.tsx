@@ -28,7 +28,9 @@ export function OptionCard({
       disabled={disabled}
       aria-pressed={selected}
       className={cn(
-        "relative w-full rounded-[var(--radius-md)] border p-6 text-left transition-[transform,box-shadow,background-color,border-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)] disabled:cursor-not-allowed disabled:opacity-50",
+        // Target full-width: el feedback de hover es elevación + borde (sin scale,
+        // que en full-width podría desbordar), a 150ms (§8.2 "+ leve elevación").
+        "relative w-full rounded-[var(--radius-md)] border p-6 text-left transition-[box-shadow,background-color,border-color] duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] disabled:cursor-not-allowed disabled:opacity-50",
         selected
           ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-on-dark)]"
           : "border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-ink)] hover:border-[var(--color-border-strong)] hover:shadow-soft",
