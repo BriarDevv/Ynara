@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { ModeChip } from "@/components/ui/ModeChip";
 import { MODES, type ModeId } from "@/components/ui/modes";
 import { OptionCard } from "@/components/ui/OptionCard";
@@ -55,15 +55,22 @@ export function ModesStep() {
           className="flex flex-col gap-3 border-0 p-0"
         >
           <legend className="sr-only">Modos que te interesan</legend>
-          {MODES.map((mode) => (
-            <OptionCard
+          {MODES.map((mode, i) => (
+            // Stagger de entrada (§8.2): fade-up con delay por índice (cap 6)
+            // vía --stagger-index; reduced-motion lo neutraliza global (ver MoodStep).
+            <div
               key={mode.id}
-              title={mode.label}
-              hint={mode.blurb}
-              selected={selected.includes(mode.id)}
-              onClick={() => toggle(mode.id)}
-              leading={<ModeChip modeId={mode.id} size="sm" />}
-            />
+              className="anim-stagger-up"
+              style={{ "--stagger-index": Math.min(i, 5) } as CSSProperties}
+            >
+              <OptionCard
+                title={mode.label}
+                hint={mode.blurb}
+                selected={selected.includes(mode.id)}
+                onClick={() => toggle(mode.id)}
+                leading={<ModeChip modeId={mode.id} size="sm" />}
+              />
+            </div>
           ))}
         </fieldset>
         {error ? (

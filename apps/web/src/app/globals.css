@@ -426,6 +426,7 @@ html.theme-high-contrast[data-theme="dark"] {
   html:not(.motion-on) *::before,
   html:not(.motion-on) *::after {
     animation-duration: 0.001ms;
+    animation-delay: 0s;
     animation-iteration-count: 1;
     transition-duration: 0.001ms;
     scroll-behavior: auto;
@@ -436,6 +437,7 @@ html.motion-off *,
 html.motion-off *::before,
 html.motion-off *::after {
   animation-duration: 0.001ms;
+  animation-delay: 0s;
   animation-iteration-count: 1;
   transition-duration: 0.001ms;
   scroll-behavior: auto;
