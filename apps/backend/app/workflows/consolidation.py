@@ -2,10 +2,10 @@
 
 Reglas no negociables (ADR-010 + critica adversarial M8):
 
-1. Solo encolada cuando ``model_cfg.writes_memory`` es ``True`` (Qwen). El
-   caller (``route()``) ya filtra; esta task no re-chequea.
-2. La task NUNCA esta en el path de respuesta: ``route()`` encola con
-   ``.delay()`` DESPUES de tener ``final_text``; la escritura ocurre aqui,
+1. Solo encolada cuando el modelo del modo escribe memoria (Qwen). El caller
+   (``_run_chat_turn`` en el endpoint) ya filtra; esta task no re-chequea.
+2. La task NUNCA esta en el path de respuesta: ``_run_chat_turn`` encola con
+   ``.delay()`` DESPUES del commit (M10 Ola 0); la escritura ocurre aqui,
    en el worker Celery, de forma async.
 3. NUNCA episodica: ``layer`` = ``semantic`` | ``procedural`` solamente.
    NUNCA ``source_session_id`` (el ``session_id`` de Ola 2 es OPACO, no es

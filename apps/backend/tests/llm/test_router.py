@@ -364,11 +364,10 @@ async def test_integration_qwen_tool_loop_memory_search(db_session: Any) -> None
     Vuelta 1: tool_call memory.search; vuelta 2: stop con texto. actions poblado;
     served_name='qwen' en complete_calls.
 
-    consolidate_turn.delay se parchea con no-op: este test verifica el flujo del
-    tool loop, no el encolado (Redis no corre en el entorno de tests de integracion).
+    M10 Ola 0: ``route()`` ya NO encola consolidacion (el enqueue se movio al
+    endpoint, post-commit), asi que aca no hace falta parchear nada: el router
+    no toca Redis. El encolado se cubre en los E2E de ``tests/api/``.
     """
-    from unittest.mock import MagicMock, patch
-
     from app.memory.semantic import SemanticMemoryStore
     from app.schemas.memory import SemanticMemoryCreate
 
@@ -386,17 +385,15 @@ async def test_integration_qwen_tool_loop_memory_search(db_session: Any) -> None
         _result(text="Programe la reunion corta.", finish_reason="stop", model_name="qwen")
     )
 
-    with patch("app.llm.router.consolidate_turn") as mock_task:
-        mock_task.delay = MagicMock()
-        resp = await route(
-            ChatRequest(text="agenda una reunion", mode=Mode.PRODUCTIVIDAD, session_id="s-prod"),
-            session=db_session,
-            user_id=user.id,
-            llm_client=fake,
-            embedder=FakeEmbeddingClient(),
-            reranker=FakeReranker(),
-            config=_cfg(),
-        )
+    resp = await route(
+        ChatRequest(text="agenda una reunion", mode=Mode.PRODUCTIVIDAD, session_id="s-prod"),
+        session=db_session,
+        user_id=user.id,
+        llm_client=fake,
+        embedder=FakeEmbeddingClient(),
+        reranker=FakeReranker(),
+        config=_cfg(),
+    )
 
     assert resp.text == "Programe la reunion corta."
     assert resp.session_id == "s-prod"
@@ -429,11 +426,10 @@ async def test_integration_qwen_served_name_and_context(db_session: Any) -> None
     """Qwen (productividad): el system prompt lleva el bloque de contexto con los
     hechos semanticos sembrados, y se pasa served_name='qwen'.
 
-    consolidate_turn.delay se parchea con no-op: este test verifica el contexto
-    de memoria inyectado, no el encolado (Redis no corre en tests de integracion).
+    M10 Ola 0: ``route()`` ya NO encola consolidacion (movido al endpoint,
+    post-commit), asi que este test no parchea nada: solo verifica el contexto de
+    memoria inyectado.
     """
-    from unittest.mock import MagicMock, patch
-
     from app.memory.semantic import SemanticMemoryStore
     from app.schemas.memory import SemanticMemoryCreate
 
@@ -445,17 +441,15 @@ async def test_integration_qwen_served_name_and_context(db_session: Any) -> None
     fake = FakeLlmClient(served_models=frozenset({"qwen"}))
     fake.queue_result(_result(text="listo", finish_reason="stop", model_name="qwen"))
 
-    with patch("app.llm.router.consolidate_turn") as mock_task:
-        mock_task.delay = MagicMock()
-        await route(
-            ChatRequest(text="que sabes de mi?", mode=Mode.PRODUCTIVIDAD),
-            session=db_session,
-            user_id=user.id,
-            llm_client=fake,
-            embedder=FakeEmbeddingClient(),
-            reranker=FakeReranker(),
-            config=_cfg(),
-        )
+    await route(
+        ChatRequest(text="que sabes de mi?", mode=Mode.PRODUCTIVIDAD),
+        session=db_session,
+        user_id=user.id,
+        llm_client=fake,
+        embedder=FakeEmbeddingClient(),
+        reranker=FakeReranker(),
+        config=_cfg(),
+    )
 
     messages = fake.complete_calls[0]["messages"]
     system_msg = messages[0]
@@ -517,15 +511,51 @@ async def test_integration_user_no_memory_no_context_block(db_session: Any) -> N
 
 
 # ===========================================================================
-# UNIT: encolado de consolidate_turn (Ola 2)
+# UNIT: route() NO encola consolidacion (M10 Ola 0)
 # ===========================================================================
+#
+# El enqueue de ``consolidate_turn`` se movio de ``route()`` al endpoint
+# (``_run_chat_turn`` en ``app.api.v1.chat``), DESPUES del ``session.commit()``,
+# para blindar a M10 contra un race enqueue-vs-commit cuando escriba FKs a
+# ``sessions.id`` (decision M10 Ola 0). El router ya NO importa ``consolidate_turn``
+# ni llama ``.delay()`` bajo NINGUN modo. La cobertura del encolado por modo
+# (Qwen/memoria encolan, Gemma/estudio no) vive ahora en los E2E de
+# ``tests/api/test_chat.py`` y ``tests/api/test_chat_stream.py``, que ejercitan la
+# condicion real (``writes_memory`` + turno no-degradado) post-commit.
+
+
+def test_router_module_no_longer_imports_consolidate_turn() -> None:
+    """``route()`` ya no encola: el modulo router NO expone ``consolidate_turn``.
+
+    Guardia contra una regresion del refactor M10 Ola 0: si alguien re-introduce
+    el enqueue en ``route()`` (re-importando ``consolidate_turn`` en el modulo del
+    router), este test falla. El binding canonico del enqueue es ahora
+    ``app.api.v1.chat.consolidate_turn`` (sede unica, post-commit).
+    """
+    from app.api.v1 import chat as chat_mod
+    from app.llm import router as router_mod
+
+    # El router NO tiene binding a consolidate_turn (no lo importa).
+    assert not hasattr(router_mod, "consolidate_turn"), (
+        "route() no debe importar consolidate_turn: el enqueue se movio al "
+        "endpoint (M10 Ola 0)"
+    )
+    # El endpoint SI lo tiene: es la sede unica del enqueue post-commit.
+    assert hasattr(chat_mod, "consolidate_turn"), (
+        "el enqueue debe vivir en app.api.v1.chat (sede unica, post-commit)"
+    )
 
 
 @pytest.mark.asyncio
-async def test_qwen_mode_enqueues_consolidate_turn(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Modo Qwen (productividad, writes_memory=True): route() encola
-    consolidate_turn.delay con los args correctos (user_id, session_id,
-    user_msg, model_response, mode). NO se levanta un worker real."""
+async def test_route_does_not_enqueue_under_any_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Para cualquier modo (Qwen incluido), ``route()`` NO llama ``.delay()``.
+
+    Se inyecta un ``consolidate_turn`` falso en el modulo router (atributo que
+    el codigo refactorizado YA NO tiene): si ``route()`` lo llamara, ``delay``
+    registraria la llamada. Como el refactor saco el enqueue, ``delay_calls``
+    queda vacio para Qwen (productividad, ``writes_memory=True``), que era el
+    unico camino que antes encolaba.
+    """
     from app.llm import router as router_mod
     from app.llm.context import MemoryContext
     from app.llm.tools.registry import default_registry
@@ -536,7 +566,9 @@ async def test_qwen_mode_enqueues_consolidate_turn(monkeypatch: pytest.MonkeyPat
         def delay(self, **kwargs: str) -> None:
             delay_calls.append(dict(kwargs))
 
-    monkeypatch.setattr(router_mod, "consolidate_turn", _FakeTask())
+    # setattr (no monkeypatch.setattr con raising): el atributo ya no existe en
+    # el modulo, asi que lo creamos como honeypot; route() NO debe tocarlo.
+    monkeypatch.setattr(router_mod, "consolidate_turn", _FakeTask(), raising=False)
 
     empty_ctx = MemoryContext(
         semantic_store=None,
@@ -548,7 +580,6 @@ async def test_qwen_mode_enqueues_consolidate_turn(monkeypatch: pytest.MonkeyPat
     original = router_mod.build_memory_context
     router_mod.build_memory_context = lambda **_kw: empty_ctx
 
-    uid = uuid.uuid4()
     fake = FakeLlmClient(served_models=frozenset({"qwen"}))
     fake.queue_result(_result(text="listo qwen", finish_reason="stop", model_name="qwen"))
 
@@ -556,7 +587,7 @@ async def test_qwen_mode_enqueues_consolidate_turn(monkeypatch: pytest.MonkeyPat
         resp = await route(
             ChatRequest(text="hola qwen", mode=Mode.PRODUCTIVIDAD, session_id="sess-qwen"),
             session=MagicMock(),
-            user_id=uid,
+            user_id=uuid.uuid4(),
             llm_client=fake,
             embedder=FakeEmbeddingClient(),
             reranker=FakeReranker(),
@@ -566,153 +597,4 @@ async def test_qwen_mode_enqueues_consolidate_turn(monkeypatch: pytest.MonkeyPat
         router_mod.build_memory_context = original
 
     assert resp.text == "listo qwen"
-    assert len(delay_calls) == 1
-    call = delay_calls[0]
-    assert call["user_id"] == str(uid)
-    assert call["session_id"] == "sess-qwen"
-    assert call["user_msg"] == "hola qwen"
-    assert call["model_response"] == "listo qwen"
-    assert call["mode"] == "productividad"
-
-
-@pytest.mark.asyncio
-async def test_gemma_mode_does_not_enqueue_consolidate_turn(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Modo Gemma (vida, writes_memory=False): route() NO encola
-    consolidate_turn.delay bajo ningun camino."""
-    from app.llm import router as router_mod
-    from app.llm.context import MemoryContext
-    from app.llm.tools.registry import default_registry
-
-    delay_calls: list[dict[str, str]] = []
-
-    class _FakeTask:
-        def delay(self, **kwargs: str) -> None:
-            delay_calls.append(dict(kwargs))
-
-    monkeypatch.setattr(router_mod, "consolidate_turn", _FakeTask())
-
-    empty_ctx = MemoryContext(
-        semantic_store=None,
-        episodic_store=None,
-        procedural_store=None,
-        _default_reg=default_registry(),
-        _memory_reg=None,
-    )
-    original = router_mod.build_memory_context
-    router_mod.build_memory_context = lambda **_kw: empty_ctx
-
-    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
-    fake.queue_result(_result(text="hola gemma", finish_reason="stop", model_name="gemma4"))
-
-    try:
-        resp = await route(
-            ChatRequest(text="hola", mode=Mode.VIDA, session_id="sess-gemma"),
-            session=MagicMock(),
-            user_id=uuid.uuid4(),
-            llm_client=fake,
-            embedder=FakeEmbeddingClient(),
-            reranker=FakeReranker(),
-            config=_cfg(),
-        )
-    finally:
-        router_mod.build_memory_context = original
-
-    assert resp.text == "hola gemma"
-    assert delay_calls == [], "Gemma NO debe encolar consolidacion"
-
-
-@pytest.mark.asyncio
-async def test_estudio_mode_does_not_enqueue_consolidate_turn(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Modo estudio (Gemma, writes_memory=False): igual que vida, NO encola."""
-    from app.llm import router as router_mod
-    from app.llm.context import MemoryContext
-    from app.llm.tools.registry import default_registry
-
-    delay_calls: list[dict[str, str]] = []
-
-    class _FakeTask:
-        def delay(self, **kwargs: str) -> None:
-            delay_calls.append(dict(kwargs))
-
-    monkeypatch.setattr(router_mod, "consolidate_turn", _FakeTask())
-
-    empty_ctx = MemoryContext(
-        semantic_store=None,
-        episodic_store=None,
-        procedural_store=None,
-        _default_reg=default_registry(),
-        _memory_reg=None,
-    )
-    original = router_mod.build_memory_context
-    router_mod.build_memory_context = lambda **_kw: empty_ctx
-
-    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
-    fake.queue_result(_result(text="listo estudio", finish_reason="stop", model_name="gemma4"))
-
-    try:
-        resp = await route(
-            ChatRequest(text="explica esto", mode=Mode.ESTUDIO, session_id="sess-estudio"),
-            session=MagicMock(),
-            user_id=uuid.uuid4(),
-            llm_client=fake,
-            embedder=FakeEmbeddingClient(),
-            reranker=FakeReranker(),
-            config=_cfg(),
-        )
-    finally:
-        router_mod.build_memory_context = original
-
-    assert resp.text == "listo estudio"
-    assert delay_calls == [], "Estudio (Gemma) NO debe encolar consolidacion"
-
-
-@pytest.mark.asyncio
-async def test_memoria_mode_enqueues_consolidate_turn(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Modo memoria (Qwen, writes_memory=True): route() encola consolidate_turn."""
-    from app.llm import router as router_mod
-    from app.llm.context import MemoryContext
-    from app.llm.tools.registry import default_registry
-
-    delay_calls: list[dict[str, str]] = []
-
-    class _FakeTask:
-        def delay(self, **kwargs: str) -> None:
-            delay_calls.append(dict(kwargs))
-
-    monkeypatch.setattr(router_mod, "consolidate_turn", _FakeTask())
-
-    empty_ctx = MemoryContext(
-        semantic_store=None,
-        episodic_store=None,
-        procedural_store=None,
-        _default_reg=default_registry(),
-        _memory_reg=None,
-    )
-    original = router_mod.build_memory_context
-    router_mod.build_memory_context = lambda **_kw: empty_ctx
-
-    uid = uuid.uuid4()
-    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
-    fake.queue_result(_result(text="memoria ok", finish_reason="stop", model_name="qwen"))
-
-    try:
-        resp = await route(
-            ChatRequest(text="recorda esto", mode=Mode.MEMORIA, session_id="sess-mem"),
-            session=MagicMock(),
-            user_id=uid,
-            llm_client=fake,
-            embedder=FakeEmbeddingClient(),
-            reranker=FakeReranker(),
-            config=_cfg(),
-        )
-    finally:
-        router_mod.build_memory_context = original
-
-    assert resp.text == "memoria ok"
-    assert len(delay_calls) == 1
-    assert delay_calls[0]["mode"] == "memoria"
-    assert delay_calls[0]["user_id"] == str(uid)
+    assert delay_calls == [], "route() NO debe encolar consolidacion (movido al endpoint)"
