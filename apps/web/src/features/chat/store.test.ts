@@ -54,6 +54,7 @@ describe("useChatStore", () => {
       text: "listo",
       session_id: sid,
       actions: [{ id: "a1", name: "calendar.create_event", arguments: {}, result: {} }],
+      finish_reason: "stop",
     });
 
     const list = useChatStore.getState().messages[sid] ?? [];
@@ -76,6 +77,7 @@ describe("useChatStore", () => {
       text: "buenas",
       session_id: sid,
       actions: [],
+      finish_reason: "stop",
     });
 
     const list = useChatStore.getState().messages[sid] ?? [];
@@ -89,6 +91,7 @@ describe("useChatStore", () => {
       text: "respuesta",
       session_id: sid,
       actions: [],
+      finish_reason: "stop",
     });
     expect(useChatStore.getState().messages[sid]?.at(-1)?.actions).toBeUndefined();
   });
