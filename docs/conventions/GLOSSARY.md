@@ -17,7 +17,7 @@ con un PR.
 ## Memoria
 
 - **Capa semántica** — hechos persistentes sobre el usuario.
-  Embeddings + Mem0.
+  Embeddings en pgvector; implementación in-house (ADR-010).
 - **Capa episódica** — resúmenes de conversaciones pasadas.
 - **Capa procedural** — preferencias y patrones (JSONB).
 - **Consolidación** — proceso async (Celery) que extrae memoria
@@ -34,7 +34,7 @@ con un PR.
 - **Qwen** — Qwen 3.5 9B. Modelo agente. Lee y escribe memoria,
   llama tools.
 - **bge-m3** — modelo de embeddings, 1024 dimensiones.
-- **vLLM** — servidor de inferencia que usamos en producción.
+- **vLLM** — servidor de inferencia objetivo para producción. Pendiente de deploy; en desarrollo se usan Fakes (FakeLlmClient/FakeEmbeddingClient/FakeReranker).
 - **Ollama** — servidor de inferencia alternativo para dev local.
 
 ## Stack

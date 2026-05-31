@@ -94,6 +94,15 @@ make dev-backend
 cd apps/backend && uv run uvicorn app.main:app --reload --port 8080
 ```
 
+> **Guard anti-prod:** si `DATABASE_URL` apunta a Supabase
+> (host de producción) y `ENVIRONMENT` no es `production` ni está
+> seteado `YNARA_ALLOW_PROD_DB=1`, el arranque **aborta** con un
+> `RuntimeError`. Para desarrollo local usá siempre una base Postgres
+> local (ej.: `postgresql://postgres:test@localhost:5433/ynara_dev`) y
+> reservá la URL de Supabase para el entorno de producción real.
+> Ver el escenario "App no arranca (RuntimeError del guard anti-prod)"
+> en [`RUNBOOK.md`](./RUNBOOK.md) para más detalles.
+
 ### 9. Levantar web
 
 ```sh
