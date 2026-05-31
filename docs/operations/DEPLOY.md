@@ -11,6 +11,9 @@ Ver `docs/architecture/diagrams/deploy-topology.md`.
 - **Cache / queue** → Redis (Upstash o Docker en VPS).
 - **Storage** → Cloudflare R2.
 - **GPU inference** → vLLM en máquina con RTX 4080 Super.
+  _(PENDIENTE: track de infra aparte; hoy el backend usa `FakeLlmClient`.
+  La integración ya está soportada vía `LLM_PRIMARY_BASE_URL` /
+  `LLM_SECONDARY_BASE_URL` / `LLM_TOPOLOGY`.)_
 
 ## Pipelines CI/CD
 
@@ -58,6 +61,9 @@ docker build -f infra/docker/Dockerfile.backend -t ynara-backend:latest .
 3. Verificar.
 
 ## vLLM
+
+> **(PENDIENTE — infra track aparte; el servidor de inferencia real
+> aún no está provisionado.)**
 
 `./infra/vllm/start-vllm.sh` corre Gemma y Qwen en puertos
 separados. Para producción, systemd unit que lo levante al boot.

@@ -38,13 +38,26 @@ WezTerm, ConEmu).
 
 ## Trabajar con vLLM en local
 
-Si tenés GPU NVIDIA disponible:
+> **Hoy el backend usa `FakeLlmClient` y `FakeEmbeddingClient`** por
+> defecto — no se necesita ningún servidor de inferencia para
+> desarrollar o correr los tests. Apuntar a vLLM/Ollama real es
+> **opcional** y solo aplica cuando el servidor exista.
+
+Si querés apuntar a un servidor de inferencia real (vLLM o Ollama),
+configurá las siguientes variables en `apps/backend/.env`:
 
 ```sh
-./infra/vllm/start-vllm.sh
+# Servidor primario (ej.: vLLM con Qwen en GPU local)
+LLM_PRIMARY_BASE_URL=http://localhost:8000/v1
+
+# Servidor secundario (ej.: Ollama como fallback)
+LLM_SECONDARY_BASE_URL=http://localhost:11434/v1
+
+# Topología: "single" (un server) o "split_process" (primario+secundario)
+LLM_TOPOLOGY=split_process
 ```
 
-Si no tenés GPU, usar Ollama como fallback:
+Si usás Ollama como backend:
 
 ```sh
 ollama serve
@@ -52,8 +65,11 @@ ollama pull gemma2:9b-instruct-q5_K_M  # ejemplo, no es el modelo final
 ollama pull qwen2.5:7b-instruct-q5_K_M
 ```
 
-Luego apuntar `GEMMA_ENDPOINT` y `QWEN_ENDPOINT` en
-`apps/backend/.env` a los endpoints de Ollama.
+Si tenés GPU NVIDIA y vLLM instalado:
+
+```sh
+./infra/vllm/start-vllm.sh  # PENDIENTE — infra track aparte
+```
 
 ## Hot reload
 

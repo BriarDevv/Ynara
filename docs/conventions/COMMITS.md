@@ -68,9 +68,9 @@ máximo por línea.
 ```
 feat(backend): agregar deduplicación de hechos semánticos
 
-Mem0 default permite duplicados con threshold muy laxo. Subimos el
-threshold a 0.92 y agregamos un test que evita la regresión que
-vimos en el incident del 2026-04-12.
+El comparador de embeddings in-house tenía threshold muy laxo.
+Subimos el threshold a 0.92 y agregamos un test que evita la
+regresión que vimos en el incident del 2026-04-12.
 ```
 
 ## Breaking changes

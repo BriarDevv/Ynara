@@ -40,6 +40,9 @@
 
 ### Latencia alta en inferencia
 
+> **(PENDIENTE — aplica cuando vLLM esté deployado; hoy el backend
+> usa `FakeLlmClient` y este escenario no aplica en dev/staging.)**
+
 1. `nvidia-smi` → ver utilización GPU.
 2. `journalctl -u vllm-qwen -n 200` y `journalctl -u vllm-gemma -n 200`.
 3. Si VRAM saturada: bajar batch size o reiniciar un modelo (con
@@ -50,6 +53,31 @@
 1. `docker compose logs worker | tail -200`.
 2. Inspeccionar cola: `redis-cli -u $REDIS_URL LLEN celery`.
 3. Restart: `docker compose restart worker`.
+
+### App no arranca (RuntimeError del guard anti-prod)
+
+El backend tiene un guard (`app/core/db_guard.py`) que aborta el boot
+si `DATABASE_URL` apunta a Supabase (host de producción) y no se
+cumple alguna de las condiciones de seguridad.
+
+**Síntoma:** el proceso termina en el arranque con un `RuntimeError`
+que menciona el host que disparó el guard.
+
+**Resolución según contexto:**
+
+1. **Dev local** — no usar `DATABASE_URL` de Supabase. Usar la DB
+   local de tests:
+   ```sh
+   DATABASE_URL=postgresql://postgres:test@localhost:5433/ynara_dev
+   ```
+2. **Conexión a prod intencionada** (ej.: aplicar migración manual) —
+   exportar la variable de override antes de arrancar:
+   ```sh
+   export YNARA_ALLOW_PROD_DB=1
+   ```
+   Usarlo solo en terminales efímeras y nunca commitear este valor.
+3. **Deploy real en producción** — asegurarse de que `ENVIRONMENT=production`
+   esté seteado en el entorno del contenedor/proceso.
 
 ### DB Supabase lenta o caída
 

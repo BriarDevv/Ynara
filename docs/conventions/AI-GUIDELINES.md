@@ -25,8 +25,9 @@ reglas extendidas que sirven como guía operativa adicional.
 ## Arquitectura
 
 6. **Stack definido en ADRs.** Cualquier desviación (cambiar Next por
-   Remix, agregar Mongo, cambiar Mem0 por X) requiere ADR nuevo
-   aprobado **antes** del PR de implementación.
+   Remix, agregar Mongo, reemplazar la capa de memoria in-house por
+   una librería externa) requiere ADR nuevo aprobado **antes** del PR
+   de implementación.
 7. **Modelos con roles fijos.** Gemma solo lee memoria, Qwen lee y
    escribe (ADR-002). No mezclar.
 8. **Postgres + pgvector es la única DB.** No introducir Mongo,
@@ -179,16 +180,16 @@ Si Pydantic y Zod divergen:
 
 TODO eventual: codegen Zod desde Pydantic (no es prioridad MVP).
 
-### `app/core/security.py` está sin implementar
+### `app/core/security.py` — auth implementada; pendiente refresh/logout
 
-`create_access_token`, `verify_access_token`, `hash_password`,
-`verify_password` están todas en `raise NotImplementedError`. Es
-intencional: el módulo de auth se cierra en un PR enfocado con tests
-de extremo a extremo.
+`create_access_token`, `verify_access_token`, `hash_password` y
+`verify_password` están implementadas con JWT real (PyJWT + bcrypt).
+Los endpoints `/v1/auth/register`, `/v1/auth/token` y `/v1/auth/me`
+están activos y mergeados.
 
-**No las completes parcialmente.** Si necesitás auth para tu feature,
-abrí un issue/discusión primero. Si ya hay PR de auth en curso,
-basate en esa rama, no hagas un parche local.
+**Lo que sigue pendiente**: refresh de token y logout (invalidación de
+sesión). Si tu feature depende de alguno de esos dos flujos, abrí un
+issue/discusión antes de implementar parcialmente.
 
 ### CI corre solo manual hasta que existan lockfiles
 
