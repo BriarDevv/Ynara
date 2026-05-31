@@ -16,10 +16,40 @@
   - Permisos: público. Rate limit: 60/min.
   - Uso: el orquestador no rutea tráfico mientras devuelva 503.
 
-## /v1/auth (TODO)
+## /v1/auth
 
-- TODO: completar cuando esté el módulo de auth.
-- POST `/v1/auth/login`, `/v1/auth/refresh`, `/v1/auth/logout`.
+JSON-only (sin OAuth2 form / `python-multipart`). Contrato + decisiones de
+seguridad en el docstring de [`../app/api/v1/auth.py`](../app/api/v1/auth.py).
+
+- **POST** `/v1/auth/register` — crea un usuario con email + password.
+  - Request: `RegisterRequest = { email: EmailStr, password: string (8..128), display_name?: string (<=40) }`.
+    `extra: forbid` (campos como `is_ephemeral` / `retention_sensitive_days` NO
+    son seteables desde el wire: no se reusa `UserCreate`, se evita el mass-assignment).
+  - Response 201: `UserOut` (incluye `id` / `created_at` / `updated_at`; **nunca**
+    `password_hash`). El `email` se persiste normalizado (`strip().lower()`).
+  - Response 409: email ya registrado (`{ "detail": "email ya registrado" }`).
+  - Response 422: validación (password corto, email malformado, etc.). El eco del
+    `input` de campos sensibles (`password`) se scrubea (regla #4, handler en `main.py`).
+  - El 409 **revela que el email existe**: es un trade-off de enumeración
+    **consciente y aceptado** en on-prem / mono-tenant (el alternativo —aceptar
+    siempre + mail de "ya tenés cuenta"— exige infra de mail que el MVP no tiene).
+- **POST** `/v1/auth/token` — verifica credenciales y devuelve un access token JWT.
+  - Request: `LoginRequest = { email: EmailStr, password: string }`. `password`
+    **sin** `min/max_length` a propósito: un 422 por longitud sería un oráculo de
+    formato; login solo distingue 200 / 401.
+  - Response 200: `TokenOut = { access_token: string, token_type: "bearer" }`.
+  - Response 401: credenciales inválidas. **MISMO** 401 (status + `detail` +
+    `WWW-Authenticate: Bearer`) para email inexistente y para password incorrecto
+    (anti-enumeración); además timing-safe (dummy hash en el camino "email
+    inexistente"). **NUNCA** un 404.
+- Permisos: **público** (estos endpoints son el punto de entrada de auth).
+- **Rate limit: TODO** — deuda conocida. El MVP no agrega dependencias (sin
+  `slowapi` / Redis), así que no hay rate-limit aplicativo todavía; mitigarlo
+  (slowapi / WAF / reverse-proxy) es trabajo posterior.
+- `/v1/auth/refresh` y `/v1/auth/logout` quedan **diferidos**: el JWT es stateless
+  y no hay store de revocación, así que el logout sería un no-op honesto y la
+  única ventana de revocación es el TTL del access token. Se implementan cuando
+  haya refresh tokens / blacklist, no como mentiras.
 
 ## /v1/chat (TODO — M9)
 

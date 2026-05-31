@@ -1,9 +1,10 @@
 """Modelo SQLAlchemy de usuario.
 
-Auth completa vive en ``app/core/security.py`` (todavía
-``NotImplementedError``). Este modelo expone los campos que la API y la
-memoria necesitan; ``password_hash`` queda placeholder hasta que el PR de
-auth lo conecte.
+Los helpers de auth (hashing + JWT) viven en ``app/core/security.py`` (ya
+implementados). El módulo ``/v1/auth`` (``app/api/v1/auth.py`` +
+``app/services/auth.py``) conecta ``password_hash``: ``register`` lo puebla con
+el hash bcrypt y ``token`` lo verifica. ``password_hash`` sigue siendo
+``nullable`` porque los usuarios efímeros no tienen credenciales.
 """
 
 from __future__ import annotations
