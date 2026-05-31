@@ -85,10 +85,10 @@ Dos endpoints: uno no-streaming (JSON) y uno SSE. Contrato + justificación en
 
 ## /v1/memory
 
-Superficie **privacy-first** donde el **dueño** ve y exporta su propia memoria con
-su JWT. **Ola 1** (los 3 GET: list/detail/export) + **Ola 2** (PATCH/DELETE
-individual). Contrato + decisiones en el
-docstring de [`../app/api/v1/memory.py`](../app/api/v1/memory.py).
+Superficie **privacy-first** donde el **dueño** ve, exporta y borra su propia
+memoria con su JWT. **Ola 1** (los 3 GET: list/detail/export) + **Ola 2**
+(PATCH/DELETE individual) + **Ola 3** (wipe total con dry-run + confirm). Contrato
++ decisiones en el docstring de [`../app/api/v1/memory.py`](../app/api/v1/memory.py).
 
 Invariantes (regla #3 / ADR-007 / ADR-010):
 
@@ -151,11 +151,42 @@ Invariantes (regla #3 / ADR-007 / ADR-010):
   - Response 404: ref inexistente **o** de otro usuario — **mismo** 404
     (`detail: "memoria no encontrada"`), sin oráculo ni tocar data ajena.
   - Response 422: `ref` no-UUID en semantic/episodic.
+- **GET** `/v1/memory/wipe` — **dry-run** del wipe total: conteos por capa de lo
+  que se borraría. **Read-only** (no muta, no commitea, no descifra).
+  - Request: ninguno.
+  - Response 200: `MemoryWipePreview = { "semantic": N, "episodic": N,
+    "procedural": N, "total": N }` (`total` = suma de las 3 capas). **Solo
+    enteros** (regla #4): nunca `content` / `summary`.
+  - **Siempre 200**, incluso todo en 0 (un user sin memoria es estado válido;
+    **jamás 404**). El cliente usa estos conteos como los `expected_*` del POST.
+- **POST** `/v1/memory/wipe` — **ejecuta** el wipe TOTAL de las 3 capas —
+  **DESTRUCTIVO e irreversible** (hard-delete físico). Operación SAGRADA (regla #3).
+  - Body (`MemoryWipeConfirm`, **no sagrado**): `{ "expected_semantic": int>=0,
+    "expected_episodic": int>=0, "expected_procedural": int>=0 }` — los conteos
+    per-capa que el cliente vio en el preview fresco (guarda de intención).
+  - El endpoint **reconcuenta** las 3 capas y compara con los `expected_*`:
+    - **Coinciden** → `wipe()` de las 3 capas + `commit` (recount+wipe+commit en la
+      **misma** transacción) → Response 200 `MemoryWipeResult = { "semantic": N,
+      "episodic": N, "procedural": N, "total": N }` con los **rowcounts REALES**
+      borrados (pueden diferir del preview si el worker insertó en el ínterin; ese
+      número siempre es verdad). **Solo enteros** (regla #4).
+    - **No coinciden** → Response **409** Conflict con los **conteos ACTUALES** en el
+      `detail` (para re-confirmar con un preview fresco); **nada** se borra ni
+      commitea. `detail = { "message": str, "semantic": N, "episodic": N,
+      "procedural": N, "total": N }` (solo enteros + el message).
+  - **Idempotente**: wipe de user vacío con confirm `{0,0,0}` → 200 `{0,0,0,0}`; un
+    segundo wipe seguido (preview `{0,0,0}`, confirm `{0,0,0}`) → 200 `{0,0,0,0}`.
+    **Jamás 404**. Un confirm viejo `{N,..}` tras ya haber wipeado → **409**
+    (anti-doble-click).
+  - Response 422: body mal formado (campo faltante, negativo, o uno de más —
+    `extra=forbid`).
+  - **TOCTOU / atomicidad**: el recount y el wipe van en la **misma** transacción
+    del request; el confirm es una guarda de INTENCIÓN (prueba que el humano vio el
+    plan), no cirugía exacta. El `DELETE WHERE user_id` barre el estado presente
+    completo; el receipt reporta el rowcount real. No descifra ni logea contenido.
 - Response 401 (todos): sin token / token inválido (`get_current_user`).
 - Permisos: **usuario autenticado**, solo su propia memoria.
 - Rate limit: TODO.
-- **Próxima ola** (no implementada): `DELETE /v1/memory` (wipe total con dry-run +
-  confirm).
 
 ## /v1/sessions
 
