@@ -72,16 +72,54 @@ Dos endpoints: uno no-streaming (JSON) y uno SSE. Contrato + justificación en
 - Rate limit: TODO (probablemente 30/min por usuario).
 - Modos: todos.
 
-## /v1/memory (TODO)
+## /v1/memory
 
-- TODO: completar.
-- GET `/v1/memory` — listar memoria del usuario, filtrable por capa.
-- GET `/v1/memory/{id}` — detalle.
-- PATCH `/v1/memory/{id}` — editar.
-- DELETE `/v1/memory/{id}` — borrar.
-- DELETE `/v1/memory` — borrar todo (dry-run + confirm).
-- GET `/v1/memory/export` — export JSON estructurado.
-- Permisos: usuario autenticado, solo su propia memoria.
+Superficie **privacy-first** donde el **dueño** ve y exporta su propia memoria con
+su JWT. **Ola 1: READ-ONLY** (los 3 GET de abajo). Contrato + decisiones en el
+docstring de [`../app/api/v1/memory.py`](../app/api/v1/memory.py).
+
+Invariantes (regla #3 / ADR-007 / ADR-010):
+
+- **Aislamiento**: todo query filtra por el `user_id` del JWT (ligado en el
+  `__init__` del store). Una ref de otro usuario da el **mismo** 404 que una
+  inexistente (sin oráculo de existencia ajena).
+- **Decrypt post-ownership**: `get_by_id` (semantic/episodic) filtra por
+  `id` + `user_id` y retorna `None` **antes** de tocar crypto si la fila no es del
+  user; nunca se intenta descifrar el blob de otro usuario.
+- El **blob cifrado crudo nunca viaja**: los `*Out` exponen `content` / `summary`
+  en **plaintext** (descifrados en el store).
+
+- **GET** `/v1/memory` — lista la memoria del usuario, opcionalmente por capa.
+  - Query: `layer?: {semantic, episodic, procedural}`, `limit?: int (1..100, default 50)`,
+    `offset?: int (>=0, default 0)`.
+  - Response 200 **sin** `layer`: agrupado por capa —
+    `{ "semantic": { "items": SemanticMemoryOut[], "total": N }, "episodic": {...}, "procedural": {...} }`.
+    `total` es el conteo completo del user en esa capa; `items` es la página
+    `limit`/`offset`.
+  - Response 200 **con** `?layer=<capa>`: solo la `*Page` de esa rama
+    (`{ "items": [...], "total": N }`).
+  - Response 422: `limit` fuera de `[1, 100]`, `offset < 0`, o `layer` inválida.
+  - `content` / `summary` van descifrados; el embedding no se expone.
+- **GET** `/v1/memory/{layer}/{ref}` — detalle de **un** ítem por capa + referencia.
+  - Path: `layer: {semantic, episodic, procedural}`; `ref: UUID` para
+    semantic/episodic, `key (str)` para procedural.
+  - Response 200: el `*Out` de la capa (`SemanticMemoryOut` / `EpisodicMemoryOut` /
+    `ProceduralMemoryOut`) con el contenido descifrado + metadata.
+  - Response 404: ref inexistente **o** de otro usuario — **mismo** 404 (status +
+    `detail: "memoria no encontrada"`), sin oráculo de existencia ajena.
+  - Response 422: `layer` inválida, o `ref` no-UUID en semantic/episodic.
+- **GET** `/v1/memory/export` — export JSON versionado de las 3 capas completas.
+  - Request: ninguno.
+  - Response 200: `{ "version": 1, "exported_at": <iso>, "semantic": SemanticMemoryOut[],
+    "episodic": EpisodicMemoryOut[], "procedural": ProceduralMemoryOut[] }` (las 3
+    capas **completas**, sin paginar, descifradas). Header
+    `Content-Disposition: attachment; filename="ynara-memory-export.json"`.
+- Response 401 (todos): sin token / token inválido (`get_current_user`).
+- Permisos: **usuario autenticado**, solo su propia memoria.
+- Rate limit: TODO.
+- **Próximas olas** (no implementadas en esta): `PATCH /v1/memory/{layer}/{ref}`
+  (editar), `DELETE /v1/memory/{layer}/{ref}` (borrar), `DELETE /v1/memory`
+  (wipe con dry-run + confirm).
 
 ## /v1/sessions
 

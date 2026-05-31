@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app import __version__
-from app.api.v1 import auth, chat, health, sessions
+from app.api.v1 import auth, chat, health, memory, sessions
 from app.core.config import get_settings
 from app.core.db_guard import guard_against_prod_db_in_dev
 from app.core.observability import init_sentry
@@ -123,5 +123,4 @@ app.include_router(health.router, prefix="/v1", tags=["health"])
 app.include_router(auth.router, prefix="/v1", tags=["auth"])
 app.include_router(chat.router, prefix="/v1", tags=["chat"])
 app.include_router(sessions.router, prefix="/v1", tags=["sessions"])
-
-# TODO: agregar router de memory cuando esté.
+app.include_router(memory.router, prefix="/v1", tags=["memory"])
