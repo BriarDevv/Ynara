@@ -33,10 +33,11 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         className={cn(
-          "text-body w-full resize-y rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-4 py-3 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] transition-[border-color,box-shadow] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
+          "text-body w-full resize-y rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-4 py-3 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] transition-[border-color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-out-soft)]",
+          // El borde toma la identidad al foco (complementa el anillo global de :focus-visible, §12).
           invalid
             ? "border-[var(--color-error)]"
-            : "border-[var(--color-border)] hover:border-[var(--color-border-strong)]",
+            : "border-[var(--color-border)] hover:border-[var(--color-border-strong)] focus:border-[var(--color-accent)]",
         )}
         {...rest}
       />
