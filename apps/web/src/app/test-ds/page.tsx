@@ -31,6 +31,7 @@ const GRADIENT_TOKENS = [
 ] as const;
 
 const TYPE_TOKENS = [
+  { className: "text-display", label: "Display — 42→56 fluido" },
   { className: "text-hero", label: "Hero — 48/52" },
   { className: "text-title", label: "Title — 34/38" },
   { className: "text-subtitle", label: "Subtitle — 22/28" },
@@ -65,6 +66,11 @@ export default function TestDsPage() {
               <span className={t.className}>Ynara aprende de vos.</span>
             </div>
           ))}
+        </div>
+        {/* Display en contexto editorial (DESIGN.md §4): big type para piezas
+            poster — auth, outro del onboarding, welcome del chat. */}
+        <div className="mt-10 max-w-[18ch] border-t border-[var(--color-border)] pt-8">
+          <p className="text-display text-[var(--color-ink)]">Antes que nada, hola.</p>
         </div>
       </Section>
 

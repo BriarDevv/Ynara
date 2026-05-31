@@ -9,6 +9,7 @@ import { ModeChip } from "@/components/ui/ModeChip";
 import { MODES } from "@/components/ui/modes";
 import { OptionCard } from "@/components/ui/OptionCard";
 import { ProgressDots } from "@/components/ui/ProgressDots";
+import { PromptChip } from "@/components/ui/PromptChip";
 import { SuggestionCard } from "@/components/ui/SuggestionCard";
 import { Textarea } from "@/components/ui/Textarea";
 import { TextField } from "@/components/ui/TextField";
@@ -16,6 +17,13 @@ import { Toast } from "@/components/ui/Toast";
 import { Toggle } from "@/components/ui/Toggle";
 
 type Size = "sm" | "md" | "lg";
+type ToastVariant = "info" | "success" | "error";
+
+const TOAST_MESSAGE: Record<ToastVariant, string> = {
+  info: "Guardé eso en tu memoria.",
+  success: "Listo. Bloqueé 10–12 para vos.",
+  error: "No pude conectar. Probá de nuevo.",
+};
 
 export function InteractiveShowcase() {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -26,6 +34,13 @@ export function InteractiveShowcase() {
   const [size, setSize] = useState<Size>("md");
   const [step, setStep] = useState(0);
   const [toastOpen, setToastOpen] = useState(false);
+  const [toastVariant, setToastVariant] = useState<ToastVariant>("success");
+  const [picked, setPicked] = useState<string | null>(null);
+
+  const showToast = (variant: ToastVariant) => {
+    setToastVariant(variant);
+    setToastOpen(true);
+  };
 
   return (
     <div className="flex flex-col gap-16">
@@ -187,16 +202,39 @@ export function InteractiveShowcase() {
       </section>
 
       <section>
+        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">
+          PromptChip (empty state de chat)
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          {["¿Qué hago hoy?", "Resumime el día", "Explicame un tema", "Conectá estas ideas"].map(
+            (prompt) => (
+              <PromptChip key={prompt} label={prompt} onClick={() => setPicked(prompt)} />
+            ),
+          )}
+        </div>
+        {picked ? (
+          <p className="text-body-sm mt-3 text-[var(--color-ink-soft)]">Elegiste: “{picked}”</p>
+        ) : null}
+      </section>
+
+      <section>
         <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">EmptyStateCard</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <EmptyStateCard
-            title="Vacío. Empezá una abajo ↓"
-            hint="Tus conversaciones van a aparecer acá."
+            title="Todavía no hay conversaciones"
+            hint="Las que empieces van a aparecer acá."
           />
           <EmptyStateCard
             title="Sin recordatorios todavía"
             hint="Probá pedirle al modo productividad."
             action={<Button variant="secondary">Crear uno</Button>}
+          />
+          {/* Variante con la "Red de memoria" de fondo (field) */}
+          <EmptyStateCard
+            field
+            title="Empezá tu primera conversación"
+            hint="Ynara va tejiendo lo que aprende de vos."
+            action={<Button variant="primary">Nueva conversación</Button>}
           />
         </div>
       </section>
@@ -205,13 +243,23 @@ export function InteractiveShowcase() {
         <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">Toast</h2>
         <Card>
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={() => setToastOpen(true)}>Mostrar toast</Button>
-            <p className="text-body-sm text-[var(--color-ink-soft)]">Auto-dismiss en 3s.</p>
+            <Button variant="secondary" onClick={() => showToast("info")}>
+              Info
+            </Button>
+            <Button variant="primary" onClick={() => showToast("success")}>
+              Success
+            </Button>
+            <Button variant="secondary" onClick={() => showToast("error")}>
+              Error
+            </Button>
+            <p className="text-body-sm text-[var(--color-ink-soft)]">
+              Entrada 300ms / salida 200ms · auto-dismiss en 3s.
+            </p>
           </div>
         </Card>
         <Toast
-          message="Listo. Bloqueé 10–12 para vos."
-          variant="success"
+          message={TOAST_MESSAGE[toastVariant]}
+          variant={toastVariant}
           visible={toastOpen}
           onDismiss={() => setToastOpen(false)}
         />
