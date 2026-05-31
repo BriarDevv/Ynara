@@ -72,6 +72,9 @@ from app.schemas.memory_api import (
     MemoryExport,
     MemoryGroupedResponse,
     MemoryPatchRequest,
+    MemoryWipeConfirm,
+    MemoryWipePreview,
+    MemoryWipeResult,
     ProceduralMemoryPage,
     SemanticMemoryPage,
 )
@@ -93,6 +96,12 @@ _EPISODIC_PATCH_NOT_ALLOWED = "el resumen episódico no se edita: se borra (DELE
 
 # Versión del formato de export (``MemoryExport.version``). Bump al evolucionar.
 _EXPORT_VERSION = 1
+
+# Message del 409 de ``POST /v1/memory/wipe``: el confirm no matchea el recount actual.
+# El cliente debe re-confirmar con un preview fresco (el detail trae los conteos actuales).
+_WIPE_CONFLICT_MESSAGE = (
+    "los conteos confirmados no coinciden con el estado actual; reintentá con un preview fresco"
+)
 
 EmbedderDep = Annotated[EmbeddingClient, Depends(get_embedder)]
 RerankerDep = Annotated[Reranker, Depends(get_reranker)]
@@ -228,6 +237,132 @@ async def export_memory(
     return JSONResponse(
         content=export.model_dump(mode="json"),
         headers={"Content-Disposition": 'attachment; filename="ynara-memory-export.json"'},
+    )
+
+
+@router.get("/memory/wipe", status_code=200)
+async def preview_wipe_memory(
+    session: DbSession,
+    user_id: CurrentUser,
+    embedder: EmbedderDep,
+    reranker: RerankerDep,
+) -> MemoryWipePreview:
+    """Dry-run del wipe total: cuenta las 3 capas del usuario SIN borrar nada.
+
+    Read-only: cuenta las 3 capas del user con ``count()`` por store (no muta, no commitea, no
+    descifra) y devuelve los conteos por capa + ``total`` (la suma). Es el plan que el humano
+    revisa antes de confirmar el wipe destructivo; el cliente usa estos números como los
+    ``expected_*`` del ``POST /v1/memory/wipe``.
+
+    Siempre 200, incluso todo en 0: un user sin memoria es un estado VÁLIDO, jamás 404 (un
+    preview ``{0,0,0,0}`` es una respuesta legítima, no un "no encontrado"). Todo filtra por el
+    ``user_id`` del JWT (aislamiento estructural: los stores ligan ``user_id`` en su
+    ``__init__``). Solo viajan enteros (regla #4): ningún ``content`` / ``summary``.
+
+    Esta ruta va ANTES de ``/memory/{layer}/{ref}`` en el router (igual que ``export``):
+    ``/memory/wipe`` es estática y debe matchear antes que el path param ``{layer}`` (que es un
+    ``MemoryLayer`` y no incluye ``wipe``, pero el orden explícito lo blinda y queda legible).
+
+    Returns:
+        ``MemoryWipePreview`` con los conteos por capa + ``total`` de lo que se borraría.
+    """
+    semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
+    episodic = EpisodicMemoryStore(session, user_id, embedder, reranker)
+    procedural = ProceduralMemoryStore(session, user_id)
+
+    sem_count = await semantic.count()
+    epi_count = await episodic.count()
+    proc_count = await procedural.count()
+    return MemoryWipePreview(
+        semantic=sem_count,
+        episodic=epi_count,
+        procedural=proc_count,
+        total=sem_count + epi_count + proc_count,
+    )
+
+
+@router.post("/memory/wipe", status_code=200)
+async def execute_wipe_memory(
+    body: MemoryWipeConfirm,
+    session: DbSession,
+    user_id: CurrentUser,
+    embedder: EmbedderDep,
+    reranker: RerankerDep,
+) -> MemoryWipeResult:
+    """Ejecuta el wipe TOTAL de la memoria del usuario (las 3 capas) — DESTRUCTIVO e irreversible.
+
+    Operación SAGRADA (toca ``app/memory/``, regla #3): hard-delete físico de TODO lo del user
+    en las 3 capas, con una guarda de intención (el confirm per-layer) para evitar borrados
+    accidentales / doble-click.
+
+    Flujo (atomicidad: recount + wipe + commit en la MISMA transacción del request):
+
+    1. **Reconcuenta** las 3 capas (``count()`` por store) — el estado ACTUAL.
+    2. Si ``(semantic, episodic, procedural)`` actuales **no** coinciden con los ``expected_*``
+       del body → **409 Conflict** con los conteos ACTUALES en el ``detail`` (para que el
+       cliente re-confirme con un preview fresco). **NADA** se borra ni se commitea.
+    3. Si coinciden → ``wipe()`` de las 3 capas (capturando el ``rowcount`` REAL de cada una),
+       ``await session.commit()`` y devuelve **200** ``MemoryWipeResult`` con los conteos
+       REALMENTE borrados.
+
+    TOCTOU: el confirm es una guarda de INTENCIÓN (prueba que el humano vio el plan), NO cirugía
+    exacta. El ``DELETE WHERE user_id`` barre el estado presente COMPLETO al momento del
+    ``DELETE``, así que el receipt reporta el ``rowcount`` REAL (puede diferir del preview si el
+    worker insertó entre el recount y el wipe — pero el confirm contra el recount ya habría dado
+    409 en ese caso; si pasó el guard, el rowcount es la verdad de lo borrado). READ COMMITTED
+    (default del repo) alcanza.
+
+    IDEMPOTENCIA: wipe de user vacío con confirm ``{0,0,0}`` → 200 ``{0,0,0,0}``. Un segundo
+    wipe seguido (preview ``{0,0,0}``, confirm ``{0,0,0}``) → 200 ``{0,0,0,0}``. Jamás 404. Un
+    confirm viejo ``{N,..}`` tras ya haber wipeado → 409 (anti-doble-click).
+
+    El ``commit`` va SOLO en el happy path: un 409/422/401 no muta ni commitea (``get_db`` no
+    commitea —cierra → rollback—). Todo filtra por el ``user_id`` del JWT (aislamiento). Ni el
+    recount ni el wipe descifran ni logean contenido (regla #4: solo enteros viajan).
+
+    Returns:
+        ``MemoryWipeResult`` con los conteos REALMENTE borrados por capa + ``total``.
+    """
+    semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
+    episodic = EpisodicMemoryStore(session, user_id, embedder, reranker)
+    procedural = ProceduralMemoryStore(session, user_id)
+
+    # 1. Recontar el estado ACTUAL de las 3 capas (en la misma transacción del wipe).
+    sem_count = await semantic.count()
+    epi_count = await episodic.count()
+    proc_count = await procedural.count()
+
+    # 2. Guarda de intención: el confirm per-layer debe matchear el recount o se aborta.
+    if (
+        body.expected_semantic != sem_count
+        or body.expected_episodic != epi_count
+        or body.expected_procedural != proc_count
+    ):
+        # 409 con los conteos ACTUALES (solo enteros, regla #4): el cliente re-confirma con un
+        # preview fresco. NADA se borró ni se commiteó.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": _WIPE_CONFLICT_MESSAGE,
+                "semantic": sem_count,
+                "episodic": epi_count,
+                "procedural": proc_count,
+                "total": sem_count + epi_count + proc_count,
+            },
+        )
+
+    # 3. Match: hard-delete de las 3 capas, capturando el rowcount REAL de cada una.
+    sem_wiped = await semantic.wipe()
+    epi_wiped = await episodic.wipe()
+    proc_wiped = await procedural.wipe()
+    # Persistir el wipe (los stores solo hacen flush; get_db no commitea -> sin esto el borrado
+    # no persistiría en prod). Va solo en el happy path: un 409/422 no muta y no debe commitear.
+    await session.commit()
+    return MemoryWipeResult(
+        semantic=sem_wiped,
+        episodic=epi_wiped,
+        procedural=proc_wiped,
+        total=sem_wiped + epi_wiped + proc_wiped,
     )
 
 

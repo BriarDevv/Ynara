@@ -99,3 +99,53 @@ class MemoryPatchRequest(YnaraBaseModel):
 
     content: str | None = Field(default=None, min_length=1, max_length=4096)
     value: dict[str, Any] | None = None
+
+
+class MemoryWipePreview(YnaraBaseModel):
+    """Dry-run de ``GET /v1/memory/wipe``: conteos por capa de lo que se borraría.
+
+    Read-only: el endpoint cuenta las 3 capas del user (``count()`` por store) y arma este
+    preview. ``total`` es la suma de las 3 capas. **Solo enteros** (regla #4): NUNCA un campo
+    ``content`` / ``summary`` — el dry-run no descifra ni proyecta contenido, solo conteos.
+    Siempre 200, incluso todo en 0 (un user sin memoria es estado válido; jamás 404).
+    """
+
+    semantic: int
+    episodic: int
+    procedural: int
+    total: int
+
+
+class MemoryWipeConfirm(YnaraBaseModel):
+    """Body de ``POST /v1/memory/wipe``: el confirm per-layer (guarda de intención).
+
+    El cliente manda los conteos por capa que vio en el preview fresco. El execute reconcuenta
+    las 3 capas y, si ``(semantic, episodic, procedural)`` actuales **no** coinciden con estos
+    ``expected_*``, devuelve **409** con los conteos ACTUALES (para que el cliente re-confirme
+    con un preview fresco) sin borrar nada. Es una guarda de INTENCIÓN (prueba que el humano
+    vio el plan), no cirugía exacta: si coinciden, el ``DELETE WHERE user_id`` barre el estado
+    presente completo y el receipt reporta el rowcount REAL.
+
+    Cada campo es ``ge=0`` (un conteo nunca es negativo). ``extra=forbid`` (heredado de
+    ``YnaraBaseModel``): un campo de más → 422.
+    """
+
+    expected_semantic: int = Field(ge=0)
+    expected_episodic: int = Field(ge=0)
+    expected_procedural: int = Field(ge=0)
+
+
+class MemoryWipeResult(YnaraBaseModel):
+    """Receipt de ``POST /v1/memory/wipe`` exitoso: conteos REALMENTE borrados por capa.
+
+    Gemelo de ``MemoryWipePreview`` pero con un nombre distinto a propósito: que no haya
+    ambigüedad sobre si ya se borró (``Result``) o si es el dry-run (``Preview``). Cada campo
+    es el ``rowcount`` REAL del ``wipe()`` de esa capa (lo que el ``DELETE`` borró de verdad,
+    que puede diferir del preview si el worker insertó en el ínterin). ``total`` = suma de las
+    3 capas. **Solo enteros** (regla #4): NUNCA ``content`` / ``summary``.
+    """
+
+    semantic: int
+    episodic: int
+    procedural: int
+    total: int
