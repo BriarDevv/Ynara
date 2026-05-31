@@ -6,7 +6,7 @@
 
 **Qué es Ynara**: asistente personal adaptativo on-prem con memoria propia.
 
-**Stack**: Next.js 16 (web) + Expo 53+ (mobile) + FastAPI + Pydantic v2 + SQLAlchemy 2 async (backend) + vLLM con dual stack Gemma 4 26B-A4B (conversacional) + Qwen 3.5-9B (agente) + Mem0 OSS v2 + Postgres 16 + pgvector.
+**Stack**: Next.js 16 (web) + Expo 53+ (mobile) + FastAPI + Pydantic v2 + SQLAlchemy 2 async (backend) + vLLM con dual stack Gemma 4 26B-A4B (conversacional) + Qwen 3.5-9B (agente) + memoria in-house (3 stores semantic/episodic/procedural, AES-256-GCM per-user — ADR-010) + Postgres 16 + pgvector.
 
 **Reglas más críticas**:
 
@@ -62,11 +62,12 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 
 **Tocar memoria (esquema o migración)**
 
-1. [`ADR-003`](./docs/architecture/adrs/ADR-003-mem0-vs-letta.md)
-2. [`ADR-004`](./docs/architecture/adrs/ADR-004-postgres-pgvector-vs-pinecone.md)
-3. [`apps/backend/docs/MODELS.md`](./apps/backend/docs/MODELS.md)
-4. [`apps/backend/docs/MIGRATIONS.md`](./apps/backend/docs/MIGRATIONS.md)
-5. **1 aprobación humana obligatoria** (regla #3).
+1. [`ADR-010`](./docs/architecture/adrs/ADR-010-memory-architecture-v2.md) — arquitectura vigente (supersede ADR-003)
+2. [`ADR-003`](./docs/architecture/adrs/ADR-003-mem0-vs-letta.md) — histórico
+3. [`ADR-004`](./docs/architecture/adrs/ADR-004-postgres-pgvector-vs-pinecone.md)
+4. [`apps/backend/docs/MODELS.md`](./apps/backend/docs/MODELS.md)
+5. [`apps/backend/docs/MIGRATIONS.md`](./apps/backend/docs/MIGRATIONS.md)
+6. **1 aprobación humana obligatoria** (regla #3).
 
 **Endpoint HTTP nuevo**
 
@@ -162,7 +163,7 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 | `apps/web/` | Next.js 16 + Tailwind v4 CSS-first (sin `tailwind.config.ts`) + shadcn/ui |
 | `apps/mobile/` | Expo 53+ + Expo Router + NativeWind (todavía sobre Tailwind 3) |
 | `apps/backend/app/api/v1/` | Rutas HTTP, un módulo por dominio |
-| `apps/backend/app/core/` | Settings, security (esqueleto), deps de FastAPI |
+| `apps/backend/app/core/` | Settings, security (JWT implementado), deps de FastAPI |
 | `apps/backend/app/llm/router.py` | Único punto de entrada al LLM. Decide modelo según modo |
 | `apps/backend/app/llm/tools/` | Tools que solo Qwen llama (catálogo en `docs/TOOLS.md`) |
 | `apps/backend/app/memory/` | Wrappers de las 3 capas. **Tablas sagradas** (regla #3) |
@@ -175,7 +176,7 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 | `packages/shared-schemas/` | Zod schemas — validación cliente, mirror de Pydantic |
 | `packages/ui/` | Componentes UI realmente compartibles entre web y mobile |
 | `packages/config/` | tsconfig.base estricto + biome + eslint compartidos |
-| `docs/architecture/adrs/` | 5 ADRs inmutables. Cambio arquitectónico nuevo = ADR nuevo |
+| `docs/architecture/adrs/` | 10 ADRs inmutables (ADR-001 a ADR-010). Cambio arquitectónico nuevo = ADR nuevo |
 | `docs/conventions/AI-GUIDELINES.md` | 15 reglas extendidas + landmines aprendidas |
 | `infra/vllm/` | `start-vllm.sh` para Gemma + Qwen en la RTX 4080 |
 | `infra/docker/` | docker-compose dev (solo Redis) y prod |
@@ -238,7 +239,7 @@ Cosas que ya nos hicieron tropezar (o que sabemos que van a hacerlo). No las re-
 
 **Zod divergente de Pydantic.** Pydantic es fuente de verdad. Zod (`packages/shared-schemas/`) es mirror manual. Si divergen, corregir Zod en el mismo PR.
 
-**Completar `core/security.py` a medias.** Las funciones JWT/bcrypt están en `NotImplementedError` a propósito. Se cierra en un PR enfocado con tests end-to-end. No las uses; no las completes parcialmente.
+**`core/security.py` está implementado.** JWT/bcrypt completos (`create_access_token`, `verify_access_token`, `hash_password`, `verify_password`). Los endpoints `/v1/auth/register`, `/v1/auth/token` y `/v1/auth/me` están activos. Lo que sigue pendiente: `refresh` y `logout` (diferidos a un PR futuro).
 
 **CI con `push`/`pull_request` antes de los lockfiles.** CI hoy es solo `workflow_dispatch`. Reactivar `push`/`pull_request` recién cuando existan `pnpm-lock.yaml` y `apps/backend/uv.lock`.
 
