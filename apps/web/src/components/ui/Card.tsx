@@ -13,8 +13,9 @@ const BASE =
 
 const VARIANTS: Record<Variant, string> = {
   default: "",
+  // Microinteracción §8.2: hover scale(1.02) + elevación, a 150ms (--duration-fast).
   interactive:
-    "shadow-soft cursor-pointer transition-[transform,box-shadow] duration-[var(--duration-base)] ease-[var(--ease-out-soft)] hover:shadow-lifted hover:-translate-y-[1px]",
+    "shadow-soft cursor-pointer transition-[transform,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:shadow-lifted hover:scale-[1.02]",
 };
 
 export function Card({ variant = "default", children, className, ...rest }: Props) {
