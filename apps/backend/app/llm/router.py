@@ -190,9 +190,7 @@ async def route(
         mode_cfg=mode_cfg,
     )
     budget = _context_budget(max_model_len=max_model_len, system_prompt=system_prompt)
-    context_block = await render_context_block(
-        mem_ctx, query=request.text, budget_tokens=budget
-    )
+    context_block = await render_context_block(mem_ctx, query=request.text, budget_tokens=budget)
 
     # Concatenar el bloque al system prompt en un STRING NUEVO (decision #6: no
     # mutar el prompt cacheado). Si el bloque esta vacio, el prompt queda igual.

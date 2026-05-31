@@ -437,9 +437,7 @@ class TestAsyncConsolidateUnit:
 
     async def test_store_exception_does_not_propagate(self) -> None:
         """Si un store lanza en ``apply_ops``, la task no propaga (robustez)."""
-        ops_json = json.dumps(
-            [{"op": "ADD", "layer": "semantic", "content": "dato cualquiera"}]
-        )
+        ops_json = json.dumps([{"op": "ADD", "layer": "semantic", "content": "dato cualquiera"}])
         client = _make_llm_with_ops(ops_json)
 
         mock_sem = AsyncMock()
@@ -479,9 +477,7 @@ class TestAsyncConsolidateIntegration:
     datos entre tests. Los stores usan la misma sesion que el fixture.
     """
 
-    async def test_semantic_add_persisted_and_searchable(
-        self, db_session: AsyncSession
-    ) -> None:
+    async def test_semantic_add_persisted_and_searchable(self, db_session: AsyncSession) -> None:
         """Un ADD semantic se persiste y se puede buscar con ``search``."""
         user_id = await _seed_user(db_session)
         session_id = await _seed_session(db_session, user_id)
@@ -513,9 +509,7 @@ class TestAsyncConsolidateIntegration:
         contents = [r.content for r in results]
         assert any("vegetariano" in c for c in contents)
 
-    async def test_procedural_add_persisted_and_retrievable(
-        self, db_session: AsyncSession
-    ) -> None:
+    async def test_procedural_add_persisted_and_retrievable(self, db_session: AsyncSession) -> None:
         """Un ADD procedural se persiste y se puede recuperar con ``get``."""
         user_id = await _seed_user(db_session)
         ops_json = json.dumps(
@@ -551,9 +545,7 @@ class TestAsyncConsolidateIntegration:
         assert entry.value["tipo"] == "vegana"
         assert "lacteos" in entry.value["restricciones"]
 
-    async def test_semantic_and_procedural_both_applied(
-        self, db_session: AsyncSession
-    ) -> None:
+    async def test_semantic_and_procedural_both_applied(self, db_session: AsyncSession) -> None:
         """ADD semantic + ADD procedural en el mismo turno: ambos se persisten."""
         user_id = await _seed_user(db_session)
         session_id = await _seed_session(db_session, user_id)
@@ -617,9 +609,7 @@ class TestAsyncConsolidateIntegration:
 
         assert applied == 0
 
-    async def test_source_session_id_set_to_chat_session_id(
-        self, db_session: AsyncSession
-    ) -> None:
+    async def test_source_session_id_set_to_chat_session_id(self, db_session: AsyncSession) -> None:
         """El ADD semantic persiste source_session_id == ChatSession.id (M10 Ola 1, FK)."""
         user_id = await _seed_user(db_session)
         session_id = await _seed_session(db_session, user_id)
@@ -691,9 +681,7 @@ class TestAsyncConsolidateIntegration:
 
         # Borrar la ChatSession: el FK ondelete=SET NULL debe anular la provenance
         # SIN borrar el hecho (la memoria sobrevive a la sesion que la origino).
-        await db_session.execute(
-            sa_delete(ChatSession).where(ChatSession.id == UUID(session_id))
-        )
+        await db_session.execute(sa_delete(ChatSession).where(ChatSession.id == UUID(session_id)))
         await db_session.flush()
         # Invalidar el estado cacheado del ORM para releer la fila desde la DB.
         db_session.expire_all()

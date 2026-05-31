@@ -99,9 +99,7 @@ class TestDecayProceduralWrapper:
 
     def test_calls_async_decay(self) -> None:
         """El wrapper invoca ``_async_decay`` exactamente una vez."""
-        with patch(
-            "app.workflows.decay._async_decay", new_callable=AsyncMock
-        ) as mock_async:
+        with patch("app.workflows.decay._async_decay", new_callable=AsyncMock) as mock_async:
             mock_async.return_value = DecayResult(decayed=3, staled=1, deleted=0)
             result = decay_procedural()
 
@@ -110,9 +108,7 @@ class TestDecayProceduralWrapper:
 
     def test_does_not_propagate_if_async_decay_raises(self) -> None:
         """Si ``_async_decay`` lanza, el wrapper NO propaga (worker no muere)."""
-        with patch(
-            "app.workflows.decay._async_decay", new_callable=AsyncMock
-        ) as mock_async:
+        with patch("app.workflows.decay._async_decay", new_callable=AsyncMock) as mock_async:
             mock_async.side_effect = RuntimeError("DB caida")
             # No debe lanzar.
             decay_procedural()
@@ -156,7 +152,10 @@ class TestAsyncDecayIntegration:
         user_id = await _seed_user(db_session)
         recent = datetime.now(UTC) - timedelta(days=1)
         entry = await _seed_procedural(
-            db_session, user_id=user_id, key="reciente", confidence=0.8,
+            db_session,
+            user_id=user_id,
+            key="reciente",
+            confidence=0.8,
             last_reinforced_at=recent,
         )
 
@@ -173,7 +172,10 @@ class TestAsyncDecayIntegration:
         user_id = await _seed_user(db_session)
         old = datetime.now(UTC) - timedelta(days=DECAY_INTERVAL_DAYS + 1)
         entry = await _seed_procedural(
-            db_session, user_id=user_id, key="vieja", confidence=0.8,
+            db_session,
+            user_id=user_id,
+            key="vieja",
+            confidence=0.8,
             last_reinforced_at=old,
         )
 
@@ -192,7 +194,10 @@ class TestAsyncDecayIntegration:
         old = datetime.now(UTC) - timedelta(days=DECAY_INTERVAL_DAYS + 1)
         # 0.33 * 0.9 = 0.297 < 0.3 -> stale tras el decay.
         entry = await _seed_procedural(
-            db_session, user_id=user_id, key="cae_a_stale", confidence=0.33,
+            db_session,
+            user_id=user_id,
+            key="cae_a_stale",
+            confidence=0.33,
             last_reinforced_at=old,
         )
 
@@ -211,7 +216,10 @@ class TestAsyncDecayIntegration:
         old = datetime.now(UTC) - timedelta(days=DECAY_INTERVAL_DAYS + 1)
         # 0.5 * 0.9 = 0.45 >= 0.3 -> no stale.
         entry = await _seed_procedural(
-            db_session, user_id=user_id, key="se_mantiene", confidence=0.5,
+            db_session,
+            user_id=user_id,
+            key="se_mantiene",
+            confidence=0.5,
             last_reinforced_at=old,
         )
 
@@ -222,16 +230,17 @@ class TestAsyncDecayIntegration:
         assert refreshed.confidence == pytest.approx(0.45)
         assert refreshed.stale is False
 
-    async def test_low_confidence_and_old_is_hard_deleted(
-        self, db_session: AsyncSession
-    ) -> None:
+    async def test_low_confidence_and_old_is_hard_deleted(self, db_session: AsyncSession) -> None:
         """confidence < 0.1 Y last_reinforced_at > 90d -> borrado fisico."""
         user_id = await _seed_user(db_session)
         very_old = datetime.now(UTC) - timedelta(days=HARD_DELETE_MIN_DAYS + 1)
         # 0.05 ya esta bajo 0.1; tras decaer (0.045) sigue bajo. last_reinforced
         # muy viejo -> cumple el doble criterio.
         entry = await _seed_procedural(
-            db_session, user_id=user_id, key="borrame", confidence=0.05,
+            db_session,
+            user_id=user_id,
+            key="borrame",
+            confidence=0.05,
             last_reinforced_at=very_old,
         )
 
@@ -252,7 +261,10 @@ class TestAsyncDecayIntegration:
         user_id = await _seed_user(db_session)
         recent = datetime.now(UTC) - timedelta(days=1)
         entry = await _seed_procedural(
-            db_session, user_id=user_id, key="baja_pero_fresca", confidence=0.05,
+            db_session,
+            user_id=user_id,
+            key="baja_pero_fresca",
+            confidence=0.05,
             last_reinforced_at=recent,
         )
 
@@ -275,8 +287,12 @@ class TestAsyncDecayIntegration:
         original_value = {"tipo": "vegetariana", "n": 3}
         original_lra = old
         entry = await _seed_procedural(
-            db_session, user_id=user_id, key="con_value", confidence=0.7,
-            last_reinforced_at=original_lra, value=original_value,
+            db_session,
+            user_id=user_id,
+            key="con_value",
+            confidence=0.7,
+            last_reinforced_at=original_lra,
+            value=original_value,
         )
 
         await _async_decay(session=db_session)
@@ -290,9 +306,7 @@ class TestAsyncDecayIntegration:
         assert refreshed.confidence != 1.0
         # last_reinforced_at intacto (el decay no lo toca; el upsert lo pondria
         # en now()).
-        assert refreshed.last_reinforced_at.replace(tzinfo=UTC) == original_lra.replace(
-            tzinfo=UTC
-        )
+        assert refreshed.last_reinforced_at.replace(tzinfo=UTC) == original_lra.replace(tzinfo=UTC)
 
     async def test_full_pipeline_counts(self, db_session: AsyncSession) -> None:
         """Una corrida mixta reporta conteos coherentes de los tres pasos."""
@@ -303,17 +317,26 @@ class TestAsyncDecayIntegration:
 
         # No decae.
         await _seed_procedural(
-            db_session, user_id=user_id, key="fresca", confidence=0.9,
+            db_session,
+            user_id=user_id,
+            key="fresca",
+            confidence=0.9,
             last_reinforced_at=recent,
         )
         # Decae y cae a stale (0.32*0.9=0.288).
         await _seed_procedural(
-            db_session, user_id=user_id, key="a_stale", confidence=0.32,
+            db_session,
+            user_id=user_id,
+            key="a_stale",
+            confidence=0.32,
             last_reinforced_at=old,
         )
         # Decae, baja confianza + muy vieja -> hard delete (0.05*0.9=0.045).
         await _seed_procedural(
-            db_session, user_id=user_id, key="a_borrar", confidence=0.05,
+            db_session,
+            user_id=user_id,
+            key="a_borrar",
+            confidence=0.05,
             last_reinforced_at=very_old,
         )
 

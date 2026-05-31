@@ -205,9 +205,7 @@ async def export_memory(
     )
     return JSONResponse(
         content=export.model_dump(mode="json"),
-        headers={
-            "Content-Disposition": 'attachment; filename="ynara-memory-export.json"'
-        },
+        headers={"Content-Disposition": 'attachment; filename="ynara-memory-export.json"'},
     )
 
 

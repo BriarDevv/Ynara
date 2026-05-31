@@ -118,9 +118,7 @@ def is_prod_db_host(url: str) -> bool:
     if not host:
         return False
     return (
-        host.endswith(".supabase.co")
-        or host.endswith(".supabase.com")
-        or "pooler.supabase" in host
+        host.endswith(".supabase.co") or host.endswith(".supabase.com") or "pooler.supabase" in host
     )
 
 

@@ -117,9 +117,7 @@ async def _seed_full_memory(
             topics={"tag": tag},
         )
     )
-    proc = await procedural.upsert(
-        ProceduralMemoryUpsert(key=f"pref.{tag}", value={"tag": tag})
-    )
+    proc = await procedural.upsert(ProceduralMemoryUpsert(key=f"pref.{tag}", value={"tag": tag}))
     await session.flush()
     return {"semantic_id": sem.id, "episodic_id": epi.id, "procedural_key": proc.key}
 
@@ -350,9 +348,7 @@ async def test_get_nonexistent_item_same_404(db_session: AsyncSession) -> None:
     client = await _client(db_session)
     try:
         async with client:
-            resp = await client.get(
-                f"/v1/memory/semantic/{nonexistent}", headers=_bearer(user.id)
-            )
+            resp = await client.get(f"/v1/memory/semantic/{nonexistent}", headers=_bearer(user.id))
 
         assert resp.status_code == 404
         assert resp.json()["detail"] == "memoria no encontrada"
@@ -380,8 +376,7 @@ async def test_export_only_own_versioned_attachment(db_session: AsyncSession) ->
         assert resp.status_code == 200
         # Header de descarga.
         assert (
-            resp.headers["content-disposition"]
-            == 'attachment; filename="ynara-memory-export.json"'
+            resp.headers["content-disposition"] == 'attachment; filename="ynara-memory-export.json"'
         )
         body = resp.json()
         assert body["version"] == 1
@@ -416,9 +411,7 @@ async def test_limit_out_of_range_422(db_session: AsyncSession, bad_limit: int) 
     client = await _client(db_session)
     try:
         async with client:
-            resp = await client.get(
-                f"/v1/memory?limit={bad_limit}", headers=_bearer(user.id)
-            )
+            resp = await client.get(f"/v1/memory?limit={bad_limit}", headers=_bearer(user.id))
         assert resp.status_code == 422
     finally:
         app.dependency_overrides.clear()
@@ -431,9 +424,7 @@ async def test_non_uuid_ref_in_semantic_422(db_session: AsyncSession) -> None:
     client = await _client(db_session)
     try:
         async with client:
-            resp = await client.get(
-                "/v1/memory/semantic/no-es-un-uuid", headers=_bearer(user.id)
-            )
+            resp = await client.get("/v1/memory/semantic/no-es-un-uuid", headers=_bearer(user.id))
         assert resp.status_code == 422
     finally:
         app.dependency_overrides.clear()

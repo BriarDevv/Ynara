@@ -134,9 +134,7 @@ async def run_tool_loop(
         # Ejecutar cada tool call y acumular en actions + historial.
         tool_call: ToolCall
         for tool_call in result.tool_calls:
-            tool_result = await _execute_anywhere(
-                tool_call.name, tool_call.arguments, registries
-            )
+            tool_result = await _execute_anywhere(tool_call.name, tool_call.arguments, registries)
             actions.append(
                 {
                     "id": tool_call.id,

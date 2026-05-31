@@ -229,9 +229,9 @@ def test_format_procedural_multiple_fields_compact() -> None:
     # Verificar que es JSON valido y compacto (sin espacios extra)
     prefix = "- pref.horario: "
     assert raw.startswith(prefix)
-    parsed = json.loads(raw[len(prefix):])
+    parsed = json.loads(raw[len(prefix) :])
     assert parsed == {"inicio": "09:00", "fin": "18:00"}
-    assert " " not in raw[len(prefix):]  # compacto: sin espacios
+    assert " " not in raw[len(prefix) :]  # compacto: sin espacios
 
 
 def test_format_procedural_empty() -> None:
@@ -292,7 +292,7 @@ def test_build_block_header_once() -> None:
 def test_truncate_no_op_if_fits() -> None:
     sem = ["- dato"]
     epi = ["- [2025-01-01] epi"]
-    proc = ['- k: {}']
+    proc = ["- k: {}"]
     s, e, p = _truncate_to_budget(sem, epi, proc, budget_tokens=10_000)
     assert s == sem
     assert e == epi
@@ -776,31 +776,21 @@ async def test_integration_procedural_filters_stale_and_orders_confidence(
 
     # Sembrar 3 entradas: una con confidence baja, una alta, una stale
     proc_store = ProceduralMemoryStore(db_session, user.id)
-    out_baja = await proc_store.upsert(
-        ProceduralMemoryUpsert(key="pref.baja", value={"v": "baja"})
-    )
-    out_alta = await proc_store.upsert(
-        ProceduralMemoryUpsert(key="pref.alta", value={"v": "alta"})
-    )
+    out_baja = await proc_store.upsert(ProceduralMemoryUpsert(key="pref.baja", value={"v": "baja"}))
+    out_alta = await proc_store.upsert(ProceduralMemoryUpsert(key="pref.alta", value={"v": "alta"}))
     out_stale = await proc_store.upsert(
         ProceduralMemoryUpsert(key="pref.stale", value={"v": "stale"})
     )
 
     # Ajustar confidence y stale manualmente via SQL (los stores no exponen esto)
     await db_session.execute(
-        sa_update(ProceduralMemory)
-        .where(ProceduralMemory.id == out_baja.id)
-        .values(confidence=0.2)
+        sa_update(ProceduralMemory).where(ProceduralMemory.id == out_baja.id).values(confidence=0.2)
     )
     await db_session.execute(
-        sa_update(ProceduralMemory)
-        .where(ProceduralMemory.id == out_alta.id)
-        .values(confidence=0.9)
+        sa_update(ProceduralMemory).where(ProceduralMemory.id == out_alta.id).values(confidence=0.9)
     )
     await db_session.execute(
-        sa_update(ProceduralMemory)
-        .where(ProceduralMemory.id == out_stale.id)
-        .values(stale=True)
+        sa_update(ProceduralMemory).where(ProceduralMemory.id == out_stale.id).values(stale=True)
     )
     await db_session.flush()
 

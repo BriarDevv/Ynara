@@ -104,9 +104,7 @@ async def test_qwen_1_vuelta_con_tool_call() -> None:
 
     tc = _make_tool_call("calendar.create_event", "tc-abc")
     # Primera respuesta: tool call
-    fake.queue_result(
-        _make_result(text="", finish_reason="tool_calls", tool_calls=[tc])
-    )
+    fake.queue_result(_make_result(text="", finish_reason="tool_calls", tool_calls=[tc]))
     # Segunda respuesta: stop con texto final
     fake.queue_result(_make_result(text="Listo, evento creado.", finish_reason="stop"))
 

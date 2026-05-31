@@ -536,9 +536,7 @@ async def test_mode_mismatch_409(db_session: AsyncSession) -> None:
         "你好世界",
     ],
 )
-async def test_invariante_join_igual_text(
-    db_session: AsyncSession, payload_text: str
-) -> None:
+async def test_invariante_join_igual_text(db_session: AsyncSession, payload_text: str) -> None:
     """El wire nunca se parte por newlines: ''.join(deltas) == text EXACTO."""
     user = await _seed_user(db_session)
     fake = FakeLlmClient(served_models=frozenset({"gemma4"}))

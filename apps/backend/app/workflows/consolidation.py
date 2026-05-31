@@ -200,9 +200,7 @@ async def _async_consolidate(
         maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
         async with maker() as db_session:
-            sem_store = SemanticMemoryStore(
-                db_session, uid, effective_embedder, effective_reranker
-            )
+            sem_store = SemanticMemoryStore(db_session, uid, effective_embedder, effective_reranker)
             proc_store = ProceduralMemoryStore(db_session, uid)
 
             mem_engine = QwenMemoryEngine(effective_llm)
