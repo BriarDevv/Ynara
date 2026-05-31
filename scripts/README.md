@@ -13,6 +13,8 @@ revisión.
   usuario que se le indique. Pide confirmación.
 - `export-user-data.sh` — exporta toda la memoria + sesiones de un
   usuario a JSON.
+- `ynara-doctor.sh` — validaciones pre-PR (doctor 10/10); corre antes
+  de abrir cualquier PR.
 
 ## Convención
 
