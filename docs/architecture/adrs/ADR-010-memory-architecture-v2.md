@@ -20,6 +20,8 @@ Es decir: Mem0 como **engine de storage** es incompatible con el moat (cifrado a
 
 Lo que abarata reemplazarlo: **el sunk cost de Mem0 es casi nulo**. Es una línea en `apps/backend/pyproject.toml:26` (`mem0ai>=0.1.0`) más tres docs (ADR-003, `MEMORY.md`, roadmap §5.1). **No hay storage de Mem0 escrito**: los wrappers `app/memory/{semantic,episodic,procedural}.py` son stubs `NotImplementedError` (`semantic.py:21`, etc.). Y ya tenemos la prueba de que el equipo sabe construir abstracciones limpias e inyectables: toda la capa LLM está hand-rolled detrás de Protocols `runtime_checkable` (`llm/clients/base.py`, `embedding.py`, `pool.py`, `resilient.py`), con Fakes deterministas para tests. La memoria stub es un lienzo en blanco, no deuda.
 
+> **Nota post-aprobación:** M7 completado; los wrappers tienen implementación real con storage cifrado propio; los docstrings ya no referencian Mem0.
+
 Cuatro investigaciones de SOTA 2025-2026 (frameworks de memoria, vector stores, pipeline de retrieval, modelos de embedding) más una validación arquitectónica contra el repo confirman el encuadre: **ningún framework mainstream** (Mem0, Letta/MemGPT, Zep/Graphiti, LangMem, cognee) soporta cifrado a nivel campo nativo en su capa de storage; todos asumen texto plano y delegan la seguridad al cloud o al motor de DB. Por lo tanto la decisión no es "qué framework comprar" sino "cómo construir la inteligencia propia detrás de Protocols, usando los frameworks como referencia de algoritmo, nunca como dependencia de storage".
 
 > **Nota de fuentes**: las afirmaciones de SOTA (MTEB/BEIR, LongMemEval, benchmarks pgvectorscale) provienen de research con WebSearch a mayo 2026 más conocimiento de entrenamiento a enero 2026. No se re-verificaron online al escribir este ADR; los números puntuales deben tratarse como órdenes de magnitud, no como cifras contractuales. Las afirmaciones sobre el repo (stubs, DDL, crypto, Protocols) **sí** están verificadas contra el código.
@@ -169,7 +171,7 @@ Corregir la sección "Semántica": hoy dice *"registros de Mem0 OSS v2 en `seman
 `mem0ai>=0.1.0`: remover en M8 (o aislar tras adapter de solo-extracción). **No** en el PR de este ADR.
 
 ### `apps/backend/app/memory/{semantic,episodic,procedural}.py`
-Hoy stubs `NotImplementedError`. El docstring de `semantic.py` dice *"Wrapper sobre Mem0 OSS v2"* — reescribir a "storage propio cifrado". Implementación real del storage en M7; engine en M8.
+Hoy stubs `NotImplementedError`. El docstring de `semantic.py` dice *"Wrapper sobre Mem0 OSS v2"* — reescribir a "storage propio cifrado". Implementación real del storage en M7; engine en M8. *(Nota post-aprobación: M7 completado; stubs reemplazados por implementación real con storage cifrado propio; docstrings actualizados.)*
 
 ### Nuevo: `Reranker` Protocol + `FakeReranker`
 Espejando `EmbeddingClient` (`embedding.py`), `runtime_checkable`. En M7 (contrato + Fake passthrough). El `MemoryEngine` Protocol (extract/consolidate/search) en M8.

@@ -33,6 +33,8 @@ embeddings. Restricciones del producto:
 `ynara.config.json[memory].embedding_model` ya dice `bge-m3` y Mem0 (ADR-003)
 lo toma como engine de embeddings; este ADR cierra la decisión formalmente.
 
+> **Nota post-aprobación:** ADR-010 (2026-05-30) supersede ADR-003 y removió Mem0. El consumidor de `EMBEDDING_MODEL` es el `EmbeddingClient` Protocol in-house (`app/llm/clients/embedding.py`), no Mem0.
+
 ## Decisión
 
 **`BAAI/bge-m3`** como modelo de embedding de memoria, servido **on-prem**,
@@ -53,7 +55,7 @@ usando su salida **densa de 1024 dimensiones**.
   palanca futura para hybrid search **sin cambiar de modelo**.
 
 `EMBEDDING_MODEL=bge-m3` (`.env`) + `ynara.config.json[memory].embedding_model`
-son la fuente de verdad; el código de embeddings (PR C / Mem0) lo lee de ahí.
+son la fuente de verdad; el `EmbeddingClient` Protocol in-house lo lee de ahí. *(Nota post-aprobación: la referencia original a "PR C / Mem0" ya no aplica — el consumidor es el `EmbeddingClient` in-house; Mem0 fue removido por ADR-010.)*
 
 ## Consecuencias positivas
 

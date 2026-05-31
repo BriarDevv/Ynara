@@ -19,9 +19,14 @@ Acá vive el "porqué" detrás de las decisiones técnicas del proyecto.
 |---|--------|--------|
 | 001 | Monorepo vs multirepo | Aceptado |
 | 002 | Gemma + Qwen dual stack | Aceptado |
-| 003 | Mem0 vs Letta para memoria | Aceptado |
+| 003 | Mem0 vs Letta para memoria | Superseded by ADR-010 |
 | 004 | Postgres + pgvector vs Pinecone | Aceptado |
 | 005 | Supabase en MVP, Postgres self-hosted en V2 | Aceptado |
+| 006 | Pinear next-auth a 5.0.0-beta.31 hasta release estable | Aceptado |
+| 007 | Políticas operacionales de memoria (decay, retention diferenciada, encriptación a nivel campo) | Aceptado |
+| 008 | Modelo de embedding — BAAI bge-m3 (1024-dim, on-prem) | Aceptado |
+| 009 | Topología de serving vLLM y parsers de tool-calling | Aceptado |
+| 010 | Arquitectura de memoria v2 — engine in-house sobre storage cifrado propio (supersede ADR-003) | Aceptado |
 
 ## Cómo crear un ADR nuevo
 

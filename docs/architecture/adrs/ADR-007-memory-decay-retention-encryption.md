@@ -113,7 +113,7 @@ Las tablas sagradas quedan así (campos relevantes a este ADR; columnas comunes 
 Detalle completo de FKs, índices (HNSW sobre embeddings), y constraints en [`apps/backend/docs/MODELS.md`](../../../apps/backend/docs/MODELS.md) cuando arranque el PR A del plan T1.
 
 ### `apps/backend/app/core/crypto.py`
-Helper nuevo (no existe hoy) con la API descrita en D3. Tests en `tests/core/test_crypto.py`.
+Helper nuevo (no existe hoy) con la API descrita en D3. Tests en `tests/core/test_crypto.py`. *(Nota post-aprobación: implementado y mergeado en PR C.)*
 
 ### `ynara.config.json[memory]`
 Sección nueva con:
@@ -140,6 +140,6 @@ Por regla #1 de `AGENTS.md`, el PR que agregue esta sección requiere OK humano 
 
 - [`docs/product/MEMORY.md`](../../product/MEMORY.md) — modelo de memoria.
 - [`ADR-002`](./ADR-002-gemma-qwen-dual-stack.md) — dual stack Gemma + Qwen.
-- [`ADR-003`](./ADR-003-mem0-vs-letta.md) — Mem0 OSS v2 como engine.
+- [`ADR-003`](./ADR-003-mem0-vs-letta.md) — Mem0 OSS v2 como engine. *(Superseded por ADR-010.)*
 - [`ADR-004`](./ADR-004-postgres-pgvector-vs-pinecone.md) — Postgres + pgvector.
 - [`docs/architecture/informe-tecnico.pdf`](../informe-tecnico.pdf) §1.5 (flow turn-por-turn) y §2.5 (BD).

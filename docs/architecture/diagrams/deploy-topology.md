@@ -4,6 +4,12 @@
 
 ## MVP (fase actual)
 
+> **NOTA — Estado actual:** el vLLM real todavía NO corre en ningún
+> entorno. El backend usa Fakes (`FakeLlmClient`, `FakeEmbeddingClient`,
+> `FakeReranker`) en su lugar. Los nodos `VLLM_G` y `VLLM_Q` del
+> diagrama representan el estado objetivo; su activación es un track de
+> infra aparte, pendiente.
+
 ```mermaid
 flowchart TB
     subgraph CDN[Cloudflare]
