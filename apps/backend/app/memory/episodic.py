@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -170,6 +171,27 @@ class EpisodicMemoryStore:
         # Recién acá, confirmada la propiedad, se descifra.
         plaintext = decrypt_for_user(self._user_id, row.summary)
         return self._to_out(row, plaintext=plaintext)
+
+    async def delete(self, memory_id: UUID) -> bool:
+        """Borra físicamente un episodio. ``True`` si borró una fila del usuario.
+
+        Espejo de ``SemanticMemoryStore.delete``: el WHERE filtra por ``id`` **y**
+        ``user_id`` (aislamiento estructural). Un id ajeno o inexistente no matchea
+        ninguna fila → ``RETURNING id`` vacío → ``False``: NUNCA se borra ni se toca
+        el ``summary`` de otro usuario. El dueño puede BORRAR un episodio (no
+        reescribirlo: el ``summary`` lo genera el worker de consolidación).
+        """
+        stmt = (
+            sa_delete(EpisodicMemory)
+            .where(
+                EpisodicMemory.id == memory_id,
+                EpisodicMemory.user_id == self._user_id,
+            )
+            .returning(EpisodicMemory.id)
+        )
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        return result.scalar_one_or_none() is not None
 
     @staticmethod
     def _to_out(row: EpisodicMemory, *, plaintext: str) -> EpisodicMemoryOut:

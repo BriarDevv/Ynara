@@ -14,10 +14,12 @@ construcción, ADR-010 / regla #3). El upsert resetea el decay (``confidence=1.0
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
+from sqlalchemy import update as sa_update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -74,6 +76,35 @@ class ProceduralMemoryStore:
         )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return ProceduralMemoryOut.model_validate(row) if row is not None else None
+
+    async def update(self, key: str, value: dict[str, Any]) -> ProceduralMemoryOut | None:
+        """Reemplaza el ``value`` (JSONB) de una entrada EXISTENTE por ``key``.
+
+        Update PURO (no upsert): el WHERE filtra por ``user_id`` **y** ``key``; si la
+        key no existe o pertenece a otro usuario, ``RETURNING`` viene vacío y se
+        devuelve ``None`` (el endpoint lo mapea a 404). NUNCA crea la fila — editar
+        vía ``PATCH`` algo inexistente debe ser 404, no un insert silencioso.
+
+        A diferencia de ``upsert``, **no** resetea el decay (``confidence`` /
+        ``stale`` / ``last_reinforced_at`` quedan intactos): editar a mano el valor
+        de una preferencia no es una señal de refuerzo (ADR-007 D1), así que su
+        estado de decay se preserva. El ``updated_at`` lo refresca el ORM
+        (``TimestampMixin``).
+        """
+        stmt = (
+            sa_update(ProceduralMemory)
+            .where(
+                ProceduralMemory.user_id == self._user_id,
+                ProceduralMemory.key == key,
+            )
+            .values(value=value)
+            .returning(ProceduralMemory)
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        await self._session.flush()
+        if row is None:
+            return None
+        return ProceduralMemoryOut.model_validate(row)
 
     async def list_all(self) -> list[ProceduralMemoryOut]:
         """Lista todas las entradas procedurales del usuario, ordenadas por ``key``."""
