@@ -34,6 +34,7 @@ from app.llm.tools.base import (
 )
 from app.llm.tools.registry import ToolRegistry
 from app.memory.semantic import SemanticMemoryStore
+from app.schemas.memory import SemanticMemoryOut
 
 _NAMESPACE = "memory"
 
@@ -89,11 +90,43 @@ class _DeleteArgs(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _project_memory_result(r: SemanticMemoryOut) -> dict[str, object]:
+    """Proyecta un ``SemanticMemoryOut`` al shape que el modelo puede ver.
+
+    Incluye solo ``{id, content, importance}`` (+ ``score`` si existe),
+    omitiendo ``user_id``, ``source_session_id``, ``created_at`` y
+    ``updated_at``. El ``id`` se mantiene para que memory.update/delete
+    puedan identificar el recuerdo. Los UUIDs internos y timestamps no se
+    exponen al modelo (evita regurgitacion de datos internos).
+
+    Args:
+        r: El ``SemanticMemoryOut`` a proyectar.
+
+    Returns:
+        Dict con las claves proyectadas, serializado con ``str`` para UUIDs.
+    """
+    projected: dict[str, object] = {
+        "id": str(r.id),
+        "content": r.content,
+        "importance": r.importance,
+    }
+    # ``score`` no es un campo de SemanticMemoryOut hoy; queda como forward-compat
+    # para cuando el reranker real anote relevancia (getattr defensivo).
+    score = getattr(r, "score", None)
+    if score is not None:
+        projected["score"] = score
+    return projected
+
+
 class MemorySearchTool:
     """Busca en la memoria semántica del usuario.
 
     Pipeline: embed(query) → ANN pgvector HNSW cosine → descifrar → rerank
-    (passthrough en M7) → devolver los ``SemanticMemoryOut`` serializados.
+    (passthrough en M7) → devolver resultados proyectados al modelo.
+
+    El resultado proyecta solo ``{id, content, importance}`` (+ ``score`` si
+    existe), omitiendo ``user_id``, ``source_session_id``, ``created_at`` y
+    ``updated_at`` para no exponer UUIDs internos al modelo.
     """
 
     name = f"{_NAMESPACE}.search"
@@ -115,7 +148,7 @@ class MemorySearchTool:
 
         results = await self._store.search(validated.query, limit=validated.limit)
         return {
-            "results": [r.model_dump(mode="json") for r in results],
+            "results": [_project_memory_result(r) for r in results],
         }
 
 

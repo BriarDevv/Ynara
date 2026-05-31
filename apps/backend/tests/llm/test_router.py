@@ -141,6 +141,8 @@ async def test_overflow_returns_fallback_not_exception() -> None:
     assert resp.text == _FALLBACK_TEXT
     assert resp.actions == []
     assert resp.session_id == "sess-1"
+    # Overflow se captura como LlmBadRequestError -> finish_reason='degraded'
+    assert resp.finish_reason == "degraded"
 
 
 @pytest.mark.asyncio
@@ -177,6 +179,7 @@ async def test_bad_request_error_returns_fallback() -> None:
         router_mod.build_memory_context = original
 
     assert resp.text == _FALLBACK_TEXT
+    assert resp.finish_reason == "degraded"
 
 
 @pytest.mark.asyncio
@@ -248,6 +251,7 @@ async def test_session_id_generated_when_none() -> None:
     # Es un UUID valido en formato str (opaco, pero bien formado).
     uuid.UUID(resp.session_id)
     assert resp.text == "hola!"
+    assert resp.finish_reason == "stop"
 
 
 @pytest.mark.asyncio
@@ -399,8 +403,13 @@ async def test_integration_qwen_tool_loop_memory_search(db_session: Any) -> None
 
     # actions poblado con la memory.search ejecutada.
     assert len(resp.actions) == 1
-    assert resp.actions[0]["name"] == "memory.search"
-    assert "results" in resp.actions[0]["result"]
+    action = resp.actions[0]
+    assert action["id"] == "tc-1"
+    assert action["name"] == "memory.search"
+    assert action["arguments"] == {"query": "reuniones"}
+    assert "results" in action["result"]
+    # finish_reason del loop: stop (segunda vuelta)
+    assert resp.finish_reason == "stop"
 
     # 2 vueltas al LLM.
     assert len(fake.complete_calls) == 2
@@ -479,6 +488,7 @@ async def test_integration_overflow_returns_fallback(db_session: Any) -> None:
     assert resp.text == _FALLBACK_TEXT
     assert resp.actions == []
     assert resp.session_id == "s-overflow"
+    assert resp.finish_reason == "degraded"
 
 
 @pytest.mark.integration

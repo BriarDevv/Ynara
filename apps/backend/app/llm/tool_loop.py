@@ -4,15 +4,14 @@ Ejecuta iteraciones de llamada al LLM + ejecucion de tools hasta que el
 modelo termina (finish_reason in {'stop','length','degraded'}) o se agotan
 las iteraciones del guard (MAX_TOOL_ITERATIONS).
 
-Limitaciones conocidas de M8:
-- El ``ChatMessage`` de assistant que se agrega al historial NO preserva
-  ``tool_calls`` (el schema de ChatMessage no tiene ese campo). Con
-  FakeLlmClient esto es inocuo; con Qwen real via el parser hermes la
-  correlacion de tool_calls podria requerir ese campo para multi-turn correcto.
-  Riesgo de infra-swap a verificar en M9.
+Notas y limitaciones conocidas:
+- El ``ChatMessage`` de assistant SI preserva ``tool_calls`` (M9): es el
+  prerequisito para que el parser hermes de Qwen real correlacione la respuesta
+  ``role='tool'`` con su llamada en multi-turn. Con FakeLlmClient es inocuo; la
+  correlacion contra Qwen real todavia no esta validada E2E (infra-swap).
 - No hay historial multi-turno persistido: cada llamada a ``run_tool_loop``
   parte de los mensajes que recibe (system + user). El historial vivo de la
-  sesion es M9 (ChatSession persistida).
+  sesion sigue siendo trabajo posterior (no lo entrega M9).
 """
 
 from __future__ import annotations
@@ -63,7 +62,7 @@ async def run_tool_loop(
     registries: tuple[ToolRegistry, ToolRegistry | None],
     max_iterations: int = MAX_TOOL_ITERATIONS,
     fallback_text: str,
-) -> tuple[str, list[dict[str, object]]]:
+) -> tuple[str, list[dict[str, object]], str]:
     """Loop principal de inferencia + ejecucion de tools.
 
     Por cada iteracion:
@@ -71,16 +70,14 @@ async def run_tool_loop(
        tools=specs or None)``.
     2. Termina si no hay tool_calls O si finish_reason es terminal
        (``stop`` / ``length`` / ``degraded``).
-    3. Si hay tool_calls: agrega un ChatMessage(role='assistant') al historial,
-       ejecuta cada tool via ``_execute_anywhere``, acumula en ``actions`` y
-       agrega un ChatMessage(role='tool') por cada resultado.
+    3. Si hay tool_calls: agrega un ChatMessage(role='assistant') al historial
+       con ``tool_calls`` preservado, ejecuta cada tool via
+       ``_execute_anywhere``, acumula en ``actions`` y agrega un
+       ChatMessage(role='tool') por cada resultado.
     4. Al agotar ``max_iterations`` sin converger, usa el ultimo ``result.text``
-       como texto final; si esta vacio, usa ``fallback_text``.
-
-    NOTA: el ChatMessage del assistant NO preserva ``tool_calls`` (el schema no
-    tiene ese campo). Con FakeLlmClient esto es inocuo; con Qwen real via el
-    parser hermes podria requerir correlacion -> riesgo de infra-swap a
-    verificar en M9.
+       como texto final; si esta vacio, usa ``fallback_text``. finish_reason
+       reportado sera ``'max_iterations'`` (parada forzada por el guard; un
+       sentinel honesto para telemetria, no se confunde con un ``'stop'`` real).
 
     Args:
         llm_client: Implementacion de ``LLMClient`` (real o fake).
@@ -97,15 +94,19 @@ async def run_tool_loop(
         fallback_text: Texto de fallback si el texto final esta vacio.
 
     Returns:
-        Tupla ``(text, actions)`` donde:
+        Tupla ``(text, actions, finish_reason)`` donde:
         - ``text``: Respuesta final del modelo (nunca vacia: usa fallback_text).
-        - ``actions``: Lista de dicts ``{'name': str, 'result': dict}`` de las
-          tools ejecutadas, en orden de ejecucion.
+        - ``actions``: Lista de dicts
+          ``{'id': str, 'name': str, 'arguments': dict, 'result': dict}``
+          de las tools ejecutadas, en orden de ejecucion.
+        - ``finish_reason``: El ``finish_reason`` del ultimo ``CompletionResult``
+          procesado, o ``'max_iterations'`` si se agoto el guard sin converger.
     """
     actions: list[dict[str, object]] = []
     tool_specs: list[ToolSpec] | None = specs if specs else None
 
     last_text: str = ""
+    last_finish_reason: str = "stop"
 
     for _ in range(max_iterations):
         result = await llm_client.complete(
@@ -114,14 +115,20 @@ async def run_tool_loop(
             tools=tool_specs,
         )
         last_text = result.text
+        last_finish_reason = result.finish_reason
 
         # Sin tool_calls o finish_reason terminal -> terminar
         if not result.tool_calls or result.finish_reason in _TERMINAL_REASONS:
             break
 
-        # Agregar turno del assistant al historial (SIN tool_calls: ver NOTA).
+        # Agregar turno del assistant al historial CON tool_calls preservado
+        # (necesario para multi-turno correcto con Qwen/hermes parser).
         messages.append(
-            ChatMessage(role="assistant", content=result.text or None)
+            ChatMessage(
+                role="assistant",
+                content=result.text or None,
+                tool_calls=list(result.tool_calls),
+            )
         )
 
         # Ejecutar cada tool call y acumular en actions + historial.
@@ -130,7 +137,14 @@ async def run_tool_loop(
             tool_result = await _execute_anywhere(
                 tool_call.name, tool_call.arguments, registries
             )
-            actions.append({"name": tool_call.name, "result": tool_result})
+            actions.append(
+                {
+                    "id": tool_call.id,
+                    "name": tool_call.name,
+                    "arguments": tool_call.arguments,
+                    "result": tool_result,
+                }
+            )
             messages.append(
                 ChatMessage(
                     role="tool",
@@ -140,8 +154,10 @@ async def run_tool_loop(
                 )
             )
     else:
-        # Guard agotado: last_text ya tiene el texto de la ultima iteracion.
-        pass
+        # Guard agotado sin converger: last_text tiene el texto de la ultima
+        # iteracion; finish_reason se marca 'max_iterations' (sentinel honesto
+        # para no confundir una parada forzada con un 'stop' real del modelo).
+        last_finish_reason = "max_iterations"
 
     final_text = last_text if last_text else fallback_text
-    return final_text, actions
+    return final_text, actions, last_finish_reason
