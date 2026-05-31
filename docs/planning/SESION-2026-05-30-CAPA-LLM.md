@@ -1,5 +1,7 @@
 # Bitácora de sesión — Capa de inferencia LLM (2026-05-30)
 
+> **Actualización post-sesión (2026-05-31):** `core/security.py` (auth JWT) fue implementado; `/v1/chat` (sync + SSE streaming), `/v1/sessions` y `/v1/memory` completo están mergeados. Este doc es la bitácora point-in-time de la sesión original — el cuerpo no se reescribe.
+
 > **Resumen de este documento.** Es la bitácora/handoff de la sesión del
 > 2026-05-30 sobre la **capa de inferencia LLM** del backend de Ynara.
 > Registra, en orden: (1) **lo que se implementó y mergeó a `main`**

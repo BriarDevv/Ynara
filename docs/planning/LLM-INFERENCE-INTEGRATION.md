@@ -1,7 +1,7 @@
 # Capa de inferencia LLM — Plan de integración
 
-> **Estado**: v1 — plan aprobado, ejecución del track LLM iniciada
-> **Fecha**: 2026-05-29
+> **Estado**: v2 — M0–M9 ejecutados y mergeados; infra vLLM real pendiente
+> **Fecha**: 2026-05-29 · **Actualizado**: 2026-05-31
 > **Alcance**: `apps/backend/app/llm/` — capa que sirve el dual-stack
 > (Gemma 4 26B-A4B + Qwen 3.5-9B) sobre la RTX 4080 Super, más la
 > conexión escalable a Supabase. La lógica de router + memoria + prompts
@@ -102,7 +102,9 @@ app/llm/
 
 **M0–M6 no necesitan Supabase ni auth**: se desarrollan con mocks
 (`FakeLlmClient`, DB real solo en integración). El cruce con memoria
-real ocurre en M7/M8.
+real ocurre en M7/M8. **Nota (2026-05-31): M0–M6 ya están mergeados**
+(con `FakeLlmClient` / `FakeEmbeddingClient` / `FakeReranker`; el vLLM real
+es un track de infra aparte, pendiente).
 
 ### Detalle por milestone
 
@@ -166,20 +168,19 @@ real ocurre en M7/M8.
 
 ## 3. Track Supabase (paralelo, owner: operador humano)
 
-El proyecto Supabase **ya existe** (ref `hmsfcqvnhlevfwfgatxd`); el MCP
-está configurado pero sin token. Pasos:
+El proyecto Supabase **ya existe** (ref `hmsfcqvnhlevfwfgatxd`) y está
+**conectado** (session pooler, schema aplicado, DB en `head`). Pasos:
 
-1. **Rotar el PAT** expuesto y regenerarlo
-   (`dashboard/account/tokens`).
-2. **Autenticar el MCP**: `SUPABASE_ACCESS_TOKEN` con el PAT nuevo en la
-   config del server `supabase` (`~/.claude.json`). El valor lo pega el
-   humano (regla #2).
-3. **Connection string** (≠ PAT) en `apps/backend/.env`:
-   - Runtime: **Transaction Pooler** (puerto 6543).
-   - Migraciones: **conexión directa** (puerto 5432).
+1. ✅ **PAT rotado** (2026-05-30, operador).
+2. ✅ **MCP autenticado** con el PAT nuevo.
+3. ✅ **Connection string** configurado en `apps/backend/.env`:
+   - Runtime: **session pooler** (puerto 5432, IPv4; la conexión directa
+     es IPv6-only).
+   - Migraciones: conexión directa (5432).
    - 3 toggles OFF (Data API / auto-expose / RLS) — regla #5.
-4. **Fix de `core/deps.py`** (bug de escalado): el pooler de
-   transacciones + asyncpg requiere desactivar prepared statements:
+4. **Fix de `core/deps.py`** (bug de escalado, pendiente para alta
+   concurrencia): el pooler de transacciones + asyncpg requiere desactivar
+   prepared statements:
 
    ```python
    engine = create_async_engine(
@@ -191,11 +192,10 @@ está configurado pero sin token. Pasos:
 
    Alembic (`env.py`) ya usa `NullPool` (correcto), pero debe apuntar a
    la conexión directa (5432).
-5. **PR B** — migración inicial (extensiones `vector` + `pgcrypto`, 4
-   enums, 6 tablas en orden FK, índices HNSW vía `op.execute`,
-   constraints, tests up/down/roundtrip). **Tabla sagrada → regla #3 (1
-   aprobación humana)**. Antes: trackear `apps/backend/uv.lock` (doctor
-   check #8).
+5. ✅ **PR B** — migración inicial mergeada (extensiones `vector` +
+   `pgcrypto`, 4 enums, 6 tablas en orden FK, índices HNSW,
+   constraints, tests up/down/roundtrip). **Tabla sagrada → regla #3
+   (1 aprobación humana — mergeada con override explícito)**.
 
 ---
 
@@ -219,12 +219,25 @@ está configurado pero sin token. Pasos:
 
 ## 5. Estado de ejecución
 
-- [ ] ADR-009 aprobado (humano) + actualizar card Trello.
-- [ ] M0 — config single-source.
-- [ ] M1 — Protocol + schemas + errores.
-- [ ] M2 — VllmClient + parsers + contract tests.
-- [ ] M3–M9 (ver tabla §2).
-- [ ] Track Supabase (§3) — owner humano.
+*(Actualizado 2026-05-31)*
+
+- ✅ ADR-009 aprobado (humano) + card Trello actualizada.
+- ✅ M0 — config single-source mergeado.
+- ✅ M1 — Protocol + schemas + errores mergeado.
+- ✅ M2 — VllmClient + parsers + FakeLlmClient + contract tests mergeados.
+- ✅ M3 — Pool + circuit breaker + fallback on-prem mergeado.
+- [ ] M4 — Observabilidad + health real (Sentry PII scrubbing) — pendiente.
+- ✅ M5 — Prompts por modo + loader mergeados.
+- ✅ M6 — Tools base + calendar + reminders mergeados.
+- ✅ M7 — Tool `memory.*` mergeado (depende de PR C; mergeado con aprobación humana).
+- ✅ M8 — Router completo + tool loop + consolidación mergeado.
+- ✅ M9 — Endpoint `/v1/chat` (sync + SSE streaming) mergeado; E2E con Fakes.
+- ✅ PR B — Migración Alembic inicial mergeada (6 tablas, 4 enums, pgvector).
+- ✅ Track Supabase — proyecto conectado (session pooler, schema en `head`).
+- ✅ PR C — `core/crypto.py` (AES-256-GCM per-user) + wrappers de memoria mergeados.
+- [ ] Infra vLLM real — track de infra aparte, **pendiente** (hoy todo corre con Fakes).
+- [ ] Rate-limit — pendiente.
+- [ ] Fix `core/deps.py` transaction pooler (6543) — pendiente si se quiere escalar a alta concurrencia.
 
 > Documento operativo. Cambios de decisión van por ADR. Cambios de plan
 > se editan acá con fecha + autor.
