@@ -63,6 +63,29 @@
   }
 }
 
+/* Toast: entrada 300ms / salida 200ms (DESIGN.md §8.2). */
+@keyframes ynara-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ynara-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 @layer utilities {
   .anim-fade-up {
     animation: ynara-fade-up var(--duration-screen, 350ms)
@@ -86,5 +109,15 @@
 
   .anim-pulse-soft {
     animation: ynara-pulse-soft 1500ms ease-in-out infinite;
+  }
+
+  .anim-toast-in {
+    animation: ynara-toast-in var(--duration-slow, 300ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  .anim-toast-out {
+    animation: ynara-toast-out var(--duration-base, 200ms)
+      var(--ease-out-soft, ease-out) both;
   }
 }
