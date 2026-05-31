@@ -1,9 +1,10 @@
-"""Tests E2E del endpoint READ-ONLY ``/v1/memory`` (Ola 1, M11 — TABLA SAGRADA).
+"""Tests E2E de ``/v1/memory`` (Ola 1 read-only + Ola 2 PATCH/DELETE — TABLA SAGRADA).
 
-Todos son ``integration`` (tocan el pgvector REAL vía ``db_session``). El endpoint
-es **read-only**: NO commitea, así que el rollback del fixture ``db_session`` limpia
-todo lo sembrado al final de cada test (sin ``_delete_user`` ni commit manual, a
-diferencia de ``test_sessions_close.py`` que sí commitea).
+Todos son ``integration`` (tocan el pgvector REAL vía ``db_session``). Los GET de Ola 1
+son read-only; los PATCH/DELETE de Ola 2 SÍ commitean (como en prod). El fixture
+``db_session`` aísla cada test con un savepoint sobre una transacción externa que se
+revierte al final, así que esos commits NO filtran filas entre tests y no hace falta
+limpieza manual (ver ``tests/conftest.py``).
 
 Patrón (igual que ``test_chat.py`` / ``test_sessions_close.py``):
 
@@ -819,5 +820,65 @@ async def test_patch_delete_no_token_401(db_session: AsyncSession) -> None:
             r_delete = await client.delete(f"/v1/memory/semantic/{refs['semantic_id']}")
         assert r_patch.status_code == 401
         assert r_delete.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA2-11. REGRESION: el endpoint mutante DEBE commitear (persistencia en prod)
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_delete_commit_only_on_success(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PATCH/DELETE exitoso DEBE ``await session.commit()``; un 404 NO commitea.
+
+    Regresión del bug de Ola 2: los stores solo hacen ``flush()`` y ``get_db`` no
+    commitea (cierra -> rollback), así que sin un ``commit`` explícito en el endpoint
+    la mutación NO persiste en prod. Los tests con sesión compartida no lo detectaban.
+    Acá se cuentan los ``commit`` con un spy no-op (no commitea de verdad -> el assert
+    no depende del aislamiento del fixture) y se verifica que el happy path commitea y
+    que un 404 no.
+    """
+    user = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, user, tag="CMT")
+
+    commits = 0
+
+    async def _spy_commit() -> None:
+        nonlocal commits
+        commits += 1  # no-op deliberado: solo contamos la intención de persistir.
+
+    monkeypatch.setattr(db_session, "commit", _spy_commit)
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            # PATCH semantic propio (éxito) -> 1 commit.
+            ok = await client.patch(
+                f"/v1/memory/semantic/{refs['semantic_id']}",
+                json={"content": "editado"},
+                headers=_bearer(user.id),
+            )
+            assert ok.status_code == 200
+            assert commits == 1, "PATCH exitoso debe commitear"
+
+            # PATCH a un id inexistente (404) -> NO commitea (no mutó nada).
+            miss = await client.patch(
+                f"/v1/memory/semantic/{uuid.uuid4()}",
+                json={"content": "no aplica"},
+                headers=_bearer(user.id),
+            )
+            assert miss.status_code == 404
+            assert commits == 1, "un 404 no muta nada y no debe commitear"
+
+            # DELETE procedural propio (éxito) -> 1 commit más.
+            dele = await client.delete(
+                f"/v1/memory/procedural/{refs['procedural_key']}",
+                headers=_bearer(user.id),
+            )
+            assert dele.status_code == 204
+            assert commits == 2, "DELETE exitoso debe commitear"
     finally:
         app.dependency_overrides.clear()
