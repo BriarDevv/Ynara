@@ -14,6 +14,7 @@
 | **Secrets** (regla #2) | `.env`, tokens, claves, certificados | Nunca leer, copiar, mover ni commitear. Si ves uno expuesto, alertá y no toques nada. |
 | **Perímetro de datos** (regla #4) | Inferencia o logging de contenido de usuario | Cero APIs externas de IA (OpenAI/Anthropic/Google/etc.). Nada de texto de usuario en logs, mensajes de error o Sentry. |
 | **Instalación / prod** (regla #1) | `uv add`, `alembic upgrade head` en prod, cambios mayores a `pyproject.toml` | Confirmación humana explícita antes. |
+| **DB de prod en dev** (incidente 2026-05-31) | Correr la app real (uvicorn / app real sin override de `get_db`) con `DATABASE_URL` apuntando a Supabase prod | El guard de arranque (`app/core/db_guard.py`, en el lifespan) **aborta el boot** salvo `ENVIRONMENT=production` o opt-in `YNARA_ALLOW_PROD_DB=1`. Para dev usá la DB **local** (`localhost:5433/ynara_dev`). Switch documentado en [`README.md` → "Base de datos: dev vs prod"](./README.md#base-de-datos-dev-vs-prod). |
 
 ---
 

@@ -70,3 +70,100 @@ Copiar `.env.example` a `.env` (gitignored). Críticas:
 `served_name` (en `models`), parsers, `quantization` y `max_model_len` (en
 `llm.serving`) NO van en `.env`: viven en
 [`../../ynara.config.json`](../../ynara.config.json).
+
+## Base de datos: dev vs prod
+
+> **Regla de oro:** en desarrollo apuntás a una DB **local**; a la DB de
+> **prod** (Supabase) sólo se apunta a propósito. Un guard de arranque
+> (`app/core/db_guard.py`, llamado en el lifespan de `app/main.py`) **aborta el
+> boot** si la app corre en modo NO-producción contra un host de prod conocido
+> sin opt-in explícito. Esto evitó que se repita el incidente del 2026-05-31,
+> donde una corrida en dev contra la DB de prod creó y borró un usuario real.
+
+Sólo hay **un** `DATABASE_URL` activo en `.env`. Cambiar entre dev y prod es
+cambiar ese valor (y, para prod intencional en dev, setear un flag).
+
+### DEV — DB local (default seguro)
+
+1. **Levantá el Postgres local con pgvector.** Reusá el mismo contenedor que
+   los tests de integración (puerto `5433`). Si todavía no lo tenés:
+
+   ```sh
+   docker run -d --name ynara-pg -p 5433:5432 \
+     -e POSTGRES_PASSWORD=test pgvector/pgvector:pg16
+   ```
+
+2. **Creá la DB de dev** `ynara_dev` (una sola vez):
+
+   ```sh
+   docker exec ynara-pg psql -U postgres -c "CREATE DATABASE ynara_dev;"
+   ```
+
+   Alternativa: reusá directamente la DB de tests `ynara_test` en vez de crear
+   `ynara_dev` (ojo: tu data de dev y la de tests compartirían DB).
+
+3. **Apuntá `DATABASE_URL` a la DB local** en tu `.env`:
+
+   ```sh
+   DATABASE_URL=postgresql://postgres:test@localhost:5433/ynara_dev
+   ```
+
+4. (Primera vez) aplicá las migraciones contra la DB de dev:
+
+   ```sh
+   uv run alembic upgrade head     # o: .venv\Scripts\python.exe -m alembic upgrade head
+   ```
+
+Con un host local el guard **no se dispara**: la app boota normal.
+
+Atajo de un solo comando: `scripts/run-local.ps1` (Windows) o
+`scripts/run-local.sh` (Linux/macOS) exportan ese `DATABASE_URL` de dev y
+levantan uvicorn. Ver [`scripts/`](./scripts/).
+
+### PROD — Supabase (intencional)
+
+Hay dos formas, según el caso:
+
+- **Deploy real:** `ENVIRONMENT=production`. El guard nunca aplica y la app
+  boota contra prod normalmente (también endurece `JWT_SECRET`, oculta `/docs`,
+  etc.).
+- **Corrida dev-contra-prod consciente** (debug puntual, sin cambiar
+  `ENVIRONMENT`): apuntá `DATABASE_URL` a Supabase **y** activá el opt-in:
+
+  ```sh
+  # .env  (o export en la shell)
+  DATABASE_URL=postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres
+  YNARA_ALLOW_PROD_DB=1
+  ```
+
+  Sin `YNARA_ALLOW_PROD_DB=1`, el guard aborta el arranque con este mensaje
+  (sólo muestra el **host**, nunca el connection string con credenciales):
+
+  ```text
+  RuntimeError: Guard anti-prod: la app está booteando en modo NO-producción
+  contra una base de datos que parece de PRODUCCIÓN (host: '...supabase.com').
+  Esto fue un incidente real: una corrida en dev contra esta DB creó y borró un
+  usuario en producción.
+
+  Qué hacer:
+    • Para DEV (lo habitual): apuntá DATABASE_URL a tu Postgres LOCAL, por ej.
+        DATABASE_URL=postgresql://postgres:test@localhost:5433/ynara_dev
+      (mismo contenedor pgvector de los tests; ver 'Base de datos: dev vs prod'
+      en apps/backend/README.md).
+    • Si querés correr dev CONTRA PROD a propósito: exportá YNARA_ALLOW_PROD_DB=1
+      (corrida consciente, bajo tu responsabilidad).
+    • En el deploy de producción esto no aplica: ENVIRONMENT=production boota
+      normal.
+  ```
+
+### Resumen rápido
+
+| Quiero… | `ENVIRONMENT` | `DATABASE_URL` | `YNARA_ALLOW_PROD_DB` |
+|---|---|---|---|
+| Dev contra DB local (default) | `development` | `...@localhost:5433/ynara_dev` | (sin setear) |
+| Deploy de producción | `production` | Supabase | (sin setear, no aplica) |
+| Dev contra prod a propósito | `development` | Supabase | `1` |
+
+Hosts que el guard considera de prod: `*.supabase.co`, `*.supabase.com` y
+cualquiera que contenga `pooler.supabase`. Tests bajo pytest nunca disparan el
+guard (overridean `get_db` con la DB de tests).
