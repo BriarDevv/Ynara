@@ -25,7 +25,6 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
-    async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.pool import NullPool
@@ -74,10 +73,31 @@ async def db_engine(db_url: str) -> AsyncIterator[AsyncEngine]:
 
 @pytest_asyncio.fixture
 async def db_session(db_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
-    """AsyncSession por test; rollback al final para no persistir entre tests."""
-    maker = async_sessionmaker(db_engine, expire_on_commit=False, class_=AsyncSession)
-    async with maker() as session:
+    """AsyncSession por test, AISLADA por una transacción externa siempre revertida.
+
+    Patrón "session joined into an external transaction" con savepoint (SQLAlchemy
+    2.0 ``join_transaction_mode="create_savepoint"``): se abre UNA transacción sobre
+    una conexión dedicada y la sesión del test corre DENTRO de un savepoint. Un
+    ``session.commit()`` del endpoint (o del test) commitea el SAVEPOINT, no la
+    transacción externa; al final se hace ``rollback`` de la externa y se descarta
+    TODO —incluidos los commits—, sin limpieza manual por test.
+
+    Por qué importa: el fixture viejo hacía un ``rollback`` ingenuo de una sesión sin
+    transacción externa, así que NO distinguía ``flush`` de ``commit`` — un endpoint
+    mutante que se olvidaba el ``commit`` igual pasaba los tests (la misma sesión veía
+    el flush) pero NO persistía en prod, y un ``commit`` de verdad filtraba filas a la
+    ``ynara_test`` compartida. Con el savepoint, los endpoints commitean como en prod
+    y el aislamiento entre tests se mantiene intacto.
+    """
+    async with db_engine.connect() as conn:
+        external = await conn.begin()
+        session = AsyncSession(
+            bind=conn,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
         try:
             yield session
         finally:
-            await session.rollback()
+            await session.close()
+            await external.rollback()
