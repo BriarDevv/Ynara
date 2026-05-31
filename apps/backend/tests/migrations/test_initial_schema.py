@@ -21,6 +21,7 @@ import asyncio
 import importlib.util
 import os
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import asyncpg
 import pytest
@@ -112,28 +113,74 @@ async def _schema_snapshot(dsn: str) -> tuple[set[str], set[str], int]:
         await conn.close()
 
 
+# DB efimera dedicada del roundtrip: se crea y dropea por el test (ver abajo).
+_ROUNDTRIP_DB = "ynara_migration_roundtrip"
+
+
+def _swap_database(dsn: str, dbname: str) -> str:
+    """Devuelve ``dsn`` con la base de datos del path reemplazada por ``dbname``."""
+    return urlunsplit(urlsplit(dsn)._replace(path=f"/{dbname}"))
+
+
+async def _create_db(maintenance_dsn: str, name: str) -> None:
+    """Crea (recreando si quedo de una corrida fallida) la DB ``name``.
+
+    CREATE/DROP DATABASE no corren dentro de una transaccion; asyncpg ejecuta en
+    autocommit. ``WITH (FORCE)`` (PG13+) corta conexiones colgadas a la DB target.
+    El nombre es una constante hardcodeada (``_ROUNDTRIP_DB``), no input externo.
+    """
+    conn = await asyncpg.connect(dsn=maintenance_dsn)
+    try:
+        await conn.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+        await conn.execute(f'CREATE DATABASE "{name}"')
+    finally:
+        await conn.close()
+
+
+async def _drop_db(maintenance_dsn: str, name: str) -> None:
+    """Dropea la DB efimera ``name`` (idempotente)."""
+    conn = await asyncpg.connect(dsn=maintenance_dsn)
+    try:
+        await conn.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+    finally:
+        await conn.close()
+
+
 @pytest.mark.integration
-def test_upgrade_downgrade_roundtrip() -> None:
+def test_upgrade_downgrade_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
     """Integracion: upgrade crea el schema y downgrade lo borra (incl. vector).
 
-    Corre contra ``TEST_DATABASE_URL`` (DB efimera dedicada). ``env.py`` toma
-    esa misma env var, asi alembic apunta a la DB de tests y no a prod.
+    Corre en una DB EFIMERA DEDICADA (la crea y la dropea este test), NO en la
+    ``TEST_DATABASE_URL`` (``ynara_test``) compartida: el ``downgrade(base)``
+    destruye el schema, y otros tests de integracion asumen que ``ynara_test`` lo
+    tiene persistente (el conftest no lo recrea por test). Aislar el roundtrip en
+    su propia DB elimina el flake de que su drop pise a otro test bajo cierto
+    timing. ``env.py`` de alembic toma ``TEST_DATABASE_URL``, asi que se la apunta
+    a la DB efimera SOLO durante este test (``monkeypatch`` la restaura al salir).
     """
-    dsn = _test_db_dsn()
-    if not dsn:
+    base_dsn = _test_db_dsn()
+    if not base_dsn:
         pytest.skip("TEST_DATABASE_URL no seteada (DB de tests dedicada, NO prod)")
+
+    maintenance_dsn = _swap_database(base_dsn, "postgres")
+    ephemeral_dsn = _swap_database(base_dsn, _ROUNDTRIP_DB)
+
+    asyncio.run(_create_db(maintenance_dsn, _ROUNDTRIP_DB))
+    monkeypatch.setenv("TEST_DATABASE_URL", ephemeral_dsn)
     cfg = _alembic_cfg()
+    try:
+        command.upgrade(cfg, "head")
+        tables, enums, vector = asyncio.run(_schema_snapshot(ephemeral_dsn))
+        assert _TABLES <= tables, f"faltan tablas: {_TABLES - tables}"
+        assert _ENUMS <= enums, f"faltan enums: {_ENUMS - enums}"
+        assert vector == 1, "la extension vector no quedo instalada"
 
-    command.upgrade(cfg, "head")
-    tables, enums, vector = asyncio.run(_schema_snapshot(dsn))
-    assert _TABLES <= tables, f"faltan tablas: {_TABLES - tables}"
-    assert _ENUMS <= enums, f"faltan enums: {_ENUMS - enums}"
-    assert vector == 1, "la extension vector no quedo instalada"
-
-    command.downgrade(cfg, "base")
-    tables_after, enums_after, vector_after = asyncio.run(_schema_snapshot(dsn))
-    assert not (_TABLES & tables_after), "el downgrade no borro las tablas"
-    assert not (_ENUMS & enums_after), "el downgrade no borro los enums"
-    assert vector_after == 0, "el downgrade no borro la extension vector"
-
-    command.upgrade(cfg, "head")
+        command.downgrade(cfg, "base")
+        tables_after, enums_after, vector_after = asyncio.run(_schema_snapshot(ephemeral_dsn))
+        assert not (_TABLES & tables_after), "el downgrade no borro las tablas"
+        assert not (_ENUMS & enums_after), "el downgrade no borro los enums"
+        assert vector_after == 0, "el downgrade no borro la extension vector"
+    finally:
+        # Dropear la DB efimera pase lo que pase (la ynara_test compartida nunca
+        # se toco): aunque un assert falle, no queda basura ni schema a medias.
+        asyncio.run(_drop_db(maintenance_dsn, _ROUNDTRIP_DB))
