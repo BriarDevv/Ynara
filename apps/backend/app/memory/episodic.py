@@ -193,6 +193,29 @@ class EpisodicMemoryStore:
         await self._session.flush()
         return result.scalar_one_or_none() is not None
 
+    async def wipe(self) -> int:
+        """Hard-delete físico de TODOS los episodios del usuario. Devuelve el rowcount.
+
+        Espejo exacto de ``SemanticMemoryStore.wipe``: la primitiva de borrado total de la
+        capa episódica para el wipe de cuenta (operación SAGRADA + DESTRUCTIVA + irreversible).
+        El ``WHERE`` es ``user_id == self._user_id`` a secas (sin ``id``): barre el estado
+        presente COMPLETO de este usuario en ``episodic_memory`` (aislamiento estructural: el
+        ``user_id`` se ligó en el ``__init__`` y nunca toca otro usuario).
+
+        NO descifra: borrar el blob ``BYTEA`` del ``summary`` no requiere leerlo en claro, así
+        que jamás invoca ``decrypt_for_user`` (regla #4: solo viaja el conteo). Usa
+        ``rowcount`` —no ``RETURNING id`` + ``len``— porque es un bulk delete y ningún id se
+        usa downstream; el ``rowcount`` es el número REAL de filas borradas (puede diferir de
+        un conteo previo si el worker insertó en el ínterin; ese número siempre es verdad).
+
+        Solo hace ``flush``: el ``commit`` lo da el endpoint en el happy path, en la MISMA
+        transacción donde recontó (atomicidad recount+wipe+commit).
+        """
+        stmt = sa_delete(EpisodicMemory).where(EpisodicMemory.user_id == self._user_id)
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        return result.rowcount
+
     @staticmethod
     def _to_out(row: EpisodicMemory, *, plaintext: str) -> EpisodicMemoryOut:
         """Construye el ``Out`` con el ``summary`` ya descifrado (nunca el ``BYTEA``)."""

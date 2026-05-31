@@ -612,3 +612,151 @@ async def test_procedural_update_pure_and_isolated(db_session: AsyncSession) -> 
     entry_b = await proc_b.get("pref.solo-de-b")
     assert entry_b is not None
     assert entry_b.value == {"owner": "b"}
+
+
+# ---------------------------------------------------------------------------
+# 11. Ola 3 — wipe() borra todas las filas del user y devuelve el rowcount exacto
+# ---------------------------------------------------------------------------
+
+
+async def _seed_full_user_memory(
+    session: AsyncSession,
+    user: User,
+    *,
+    n_semantic: int,
+    n_episodic: int,
+    n_procedural: int,
+) -> tuple[SemanticMemoryStore, EpisodicMemoryStore, ProceduralMemoryStore]:
+    """Siembra ``n_*`` filas por capa para el user y devuelve sus 3 stores.
+
+    Cada episodio usa su PROPIA ChatSession (la episódica tiene un UNIQUE en
+    ``session_id``: a lo sumo un episodio por sesión).
+    """
+    semantic, episodic, procedural = _fake_stores(session, user.id)
+    for i in range(n_semantic):
+        await semantic.add(SemanticMemoryCreate(content=f"hecho {i}"))
+    for i in range(n_episodic):
+        chat = await _seed_session(session, user)
+        await episodic.add(
+            EpisodicMemoryCreate(
+                session_id=chat.id,
+                summary=f"episodio {i}",
+                occurred_at=_now(),
+                retention_days=90,
+            )
+        )
+    for i in range(n_procedural):
+        await procedural.upsert(ProceduralMemoryUpsert(key=f"pref.{i}", value={"i": i}))
+    return semantic, episodic, procedural
+
+
+@pytest.mark.integration
+async def test_wipe_deletes_all_user_rows_returns_exact_rowcount(db_session: AsyncSession) -> None:
+    """wipe() borra TODAS las filas del user en cada capa y devuelve el rowcount EXACTO.
+
+    Verifica que ``rowcount`` (no ``RETURNING id`` + ``len``) da el conteo exacto, que las 3
+    capas quedan en 0 tras el wipe y que el DELETE es físico (query crudo confirma 0 filas).
+    """
+    user = await _seed_user(db_session)
+    semantic, episodic, procedural = await _seed_full_user_memory(
+        db_session, user, n_semantic=3, n_episodic=2, n_procedural=4
+    )
+
+    # Sanity: las capas tienen lo sembrado antes del wipe.
+    assert await semantic.count() == 3
+    assert await episodic.count() == 2
+    assert await procedural.count() == 4
+
+    # wipe() devuelve el rowcount EXACTO de cada capa.
+    assert await semantic.wipe() == 3
+    assert await episodic.wipe() == 2
+    assert await procedural.wipe() == 4
+
+    # Las 3 capas quedan vacías tras el wipe.
+    assert await semantic.count() == 0
+    assert await episodic.count() == 0
+    assert await procedural.count() == 0
+
+    # DELETE físico: query crudo confirma 0 filas del user en cada tabla.
+    sem_rows = (
+        await db_session.execute(select(SemanticMemory.id).where(SemanticMemory.user_id == user.id))
+    ).all()
+    epi_rows = (
+        await db_session.execute(select(EpisodicMemory.id).where(EpisodicMemory.user_id == user.id))
+    ).all()
+    assert sem_rows == []
+    assert epi_rows == []
+
+
+@pytest.mark.integration
+async def test_wipe_empty_store_returns_zero(db_session: AsyncSession) -> None:
+    """wipe() sobre un store vacío → 0 (idempotencia: no hay nada que borrar)."""
+    user = await _seed_user(db_session)
+    semantic, episodic, procedural = _fake_stores(db_session, user.id)
+
+    assert await semantic.wipe() == 0
+    assert await episodic.wipe() == 0
+    assert await procedural.wipe() == 0
+
+
+@pytest.mark.integration
+async def test_wipe_user_id_isolation(db_session: AsyncSession) -> None:
+    """AISLAMIENTO: poblar A y B, wipe() de A, releer con los stores de B → B intacto.
+
+    El ``wipe()`` filtra ``WHERE user_id == self._user_id`` (ligado en el ``__init__``), así
+    que jamás toca las filas de otro user. Tras wipear A, las 3 capas de B siguen intactas
+    (count + un get de cada capa devuelven lo sembrado).
+    """
+    user_a = await _seed_user(db_session)
+    user_b = await _seed_user(db_session)
+
+    sem_a, epi_a, proc_a = await _seed_full_user_memory(
+        db_session, user_a, n_semantic=2, n_episodic=2, n_procedural=2
+    )
+    sem_b, epi_b, proc_b = await _seed_full_user_memory(
+        db_session, user_b, n_semantic=3, n_episodic=1, n_procedural=2
+    )
+
+    # Wipe SOLO de A.
+    assert await sem_a.wipe() == 2
+    assert await epi_a.wipe() == 2
+    assert await proc_a.wipe() == 2
+
+    # Las 3 capas de B siguen intactas (count exacto).
+    assert await sem_b.count() == 3
+    assert await epi_b.count() == 1
+    assert await proc_b.count() == 2
+
+    # Y un get/list de cada capa de B devuelve contenido real (no se borró ni corrompió).
+    b_facts = await sem_b.list_all()
+    assert len(b_facts) == 3
+    assert all(f.content.startswith("hecho ") for f in b_facts)
+    b_episodes = await epi_b.list_all()
+    assert len(b_episodes) == 1
+    assert b_episodes[0].summary == "episodio 0"
+    b_prefs = await proc_b.list_all()
+    assert len(b_prefs) == 2
+
+    # A quedó completamente vacío.
+    assert await sem_a.count() == 0
+    assert await epi_a.count() == 0
+    assert await proc_a.count() == 0
+
+
+@pytest.mark.integration
+async def test_procedural_count_returns_correct_total(db_session: AsyncSession) -> None:
+    """procedural.count() devuelve el conteo correcto (0 inicial, N tras N upserts)."""
+    user = await _seed_user(db_session)
+    _, _, procedural = _fake_stores(db_session, user.id)
+
+    # Vacío al principio.
+    assert await procedural.count() == 0
+
+    for i in range(5):
+        await procedural.upsert(ProceduralMemoryUpsert(key=f"pref.{i}", value={"i": i}))
+
+    assert await procedural.count() == 5
+
+    # Upsert idempotente sobre una key existente NO incrementa el conteo.
+    await procedural.upsert(ProceduralMemoryUpsert(key="pref.0", value={"i": 0, "v": 2}))
+    assert await procedural.count() == 5

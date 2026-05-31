@@ -218,6 +218,32 @@ class SemanticMemoryStore:
         await self._session.flush()
         return result.scalar_one_or_none() is not None
 
+    async def wipe(self) -> int:
+        """Hard-delete físico de TODOS los hechos semánticos del usuario. Devuelve el rowcount.
+
+        Es la primitiva de borrado total de la capa semántica para el wipe de cuenta
+        (``POST /v1/memory/wipe``, operación SAGRADA + DESTRUCTIVA + irreversible).
+        Espeja el estilo de ``delete`` pero **sin** filtrar por ``id``: el ``WHERE`` es
+        ``user_id == self._user_id`` a secas, así que barre el estado presente COMPLETO de
+        este usuario en ``semantic_memory`` (aislamiento estructural: el ``user_id`` se ligó
+        en el ``__init__`` y nunca toca otro usuario).
+
+        NO descifra: borrar el blob ``BYTEA`` no requiere leerlo en claro, así que esta
+        operación jamás invoca ``decrypt_for_user`` ni toca crypto (regla #4: cero contenido
+        a logs/respuestas; solo viaja el conteo). Usa ``rowcount`` —no ``RETURNING id`` +
+        ``len``— porque es un bulk delete: materializar miles de ids solo para contarlos es
+        desperdicio y ningún id se usa downstream. El ``rowcount`` es el número REAL de filas
+        borradas por este ``DELETE`` (puede diferir de un conteo previo si el worker insertó
+        en el ínterin; ese número siempre es verdad).
+
+        Solo hace ``flush`` (igual que ``delete``): el ``commit`` lo da el endpoint en el
+        happy path, en la MISMA transacción donde recontó (atomicidad recount+wipe+commit).
+        """
+        stmt = sa_delete(SemanticMemory).where(SemanticMemory.user_id == self._user_id)
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        return result.rowcount
+
     @staticmethod
     def _to_out(row: SemanticMemory, *, plaintext: str) -> SemanticMemoryOut:
         """Construye el ``Out`` con el ``content`` ya descifrado (nunca el ``BYTEA``)."""

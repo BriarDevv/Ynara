@@ -116,6 +116,23 @@ class ProceduralMemoryStore:
         rows = (await self._session.execute(stmt)).scalars().all()
         return [ProceduralMemoryOut.model_validate(row) for row in rows]
 
+    async def count(self) -> int:
+        """Cuenta las entradas procedurales del usuario. No descifra (no hay cifrado acá).
+
+        Espeja ``SemanticMemoryStore.count`` / ``EpisodicMemoryStore.count``: un
+        ``SELECT count(*)`` filtrado por ``self._user_id`` (aislamiento estructural). Lo usa
+        el preview del wipe (``GET /v1/memory/wipe``) para reportar el conteo de esta capa sin
+        materializar las filas. La procedural no tenía ``count`` propio (su paginación se
+        recortaba en Python sobre ``list_all``); el wipe lo necesita per-capa, así que se
+        agrega de forma aditiva.
+        """
+        stmt = (
+            select(func.count())
+            .select_from(ProceduralMemory)
+            .where(ProceduralMemory.user_id == self._user_id)
+        )
+        return (await self._session.execute(stmt)).scalar_one()
+
     async def delete(self, key: str) -> bool:
         """Borra físicamente una entrada por ``key``. ``True`` si borró una fila."""
         stmt = (
@@ -129,3 +146,25 @@ class ProceduralMemoryStore:
         result = await self._session.execute(stmt)
         await self._session.flush()
         return result.scalar_one_or_none() is not None
+
+    async def wipe(self) -> int:
+        """Hard-delete físico de TODAS las entradas procedurales del usuario. Devuelve el rowcount.
+
+        Espejo de ``SemanticMemoryStore.wipe`` / ``EpisodicMemoryStore.wipe`` para la capa
+        procedural (operación SAGRADA + DESTRUCTIVA + irreversible). El ``WHERE`` es
+        ``user_id == self._user_id`` a secas (sin ``key``): barre el estado presente COMPLETO
+        de este usuario en ``procedural_memory`` (aislamiento estructural: el ``user_id`` se
+        ligó en el ``__init__`` y nunca toca otro usuario). La procedural no tiene cifrado ni
+        embeddings, así que el borrado es directo.
+
+        Usa ``rowcount`` —no ``RETURNING id`` + ``len``— porque es un bulk delete y ningún id
+        se usa downstream; el ``rowcount`` es el número REAL de filas borradas (puede diferir
+        de un conteo previo si el worker insertó en el ínterin; ese número siempre es verdad).
+
+        Solo hace ``flush``: el ``commit`` lo da el endpoint en el happy path, en la MISMA
+        transacción donde recontó (atomicidad recount+wipe+commit).
+        """
+        stmt = sa_delete(ProceduralMemory).where(ProceduralMemory.user_id == self._user_id)
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        return result.rowcount
