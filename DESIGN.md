@@ -49,6 +49,8 @@ Lo que la UI **no es**: infantil, ñoña, recargada, ruidosa, "Material Design
 genérico", ni el look "AI/SaaS template" (gradiente violeta-azul de relleno,
 glassmorphism porque sí, emojis como íconos, todo centrado).
 
+Para detalle conceptual ver [`IDENTITY.md`](./IDENTITY.md).
+
 ---
 
 ## 2. Sistema gráfico (la "Red de memoria")
@@ -568,6 +570,9 @@ Cambios a aplicar (en su propio PR de implementación, con verificación visual)
 
 > Nota: el ámbar y el jade (`--gradient-amber`, `--gradient-jade`) se **conservan**
 > como tints de modo (§3.5), pendientes de revalidación con marca.
+>
+> Nota: por el renumerado de secciones, al migrar actualizar la referencia de
+> `apps/web/src/styles/motion.css` (`§7` → **`§8`**).
 
 ---
 
@@ -584,4 +589,7 @@ Cambios a aplicar (en su propio PR de implementación, con verificación visual)
 - `Ynara-Universo-de-Marca.html` — Guía de identidad visual · Ynara 2026 (fuente del
   sistema gráfico, iconografía, paleta y aplicaciones; **conviene versionarla en el
   repo**, p. ej. `docs/brand/`).
+- [`IDENTITY.md`](./IDENTITY.md) — ADN de marca.
+- [`docs/product/TONE-OF-VOICE.md`](./docs/product/TONE-OF-VOICE.md) — voz operativa
+  modo-por-modo.
 - Prototipo de referencia: [querques20/ynara](https://github.com/querques20/ynara).
