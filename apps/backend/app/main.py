@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from app import __version__
 from app.api.v1 import auth, chat, health
 from app.core.config import get_settings
+from app.core.db_guard import guard_against_prod_db_in_dev
 from app.core.observability import init_sentry
 from app.llm.clients.embedding import FakeEmbeddingClient
 from app.llm.clients.fakes import FakeLlmClient
@@ -42,6 +43,15 @@ async def lifespan(app: FastAPI):
     disponible — solo cambia este bloque; el resto del stack no toca.
     TODO: warm-up del LLM router, conexión a Redis, etc.
     """
+    # Guard anti-prod (PRIMERA línea): si NO es producción y el DATABASE_URL
+    # apunta a una DB de prod conocida (Supabase) sin opt-in explícito, abortar
+    # el arranque ANTES de construir cualquier cliente o tocar la DB. No se
+    # dispara en production, con YNARA_ALLOW_PROD_DB=1, ni bajo pytest.
+    guard_against_prod_db_in_dev(
+        environment=settings.environment,
+        database_url=settings.database_url,
+    )
+
     # startup — clientes como singletons
     cfg = load_llm_config()
     served_models = frozenset(m.served_name for m in cfg.models.values())
