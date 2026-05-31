@@ -466,3 +466,358 @@ async def test_no_token_401(db_session: AsyncSession) -> None:
         assert r_export.status_code == 401
     finally:
         app.dependency_overrides.clear()
+
+
+# ===========================================================================
+# OLA 2 — MUTACIÓN INDIVIDUAL (PATCH / DELETE). Aislamiento + ownership + 405.
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# OLA2-1. PATCH semantic propio → content actualizado (respuesta + GET reflejan)
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_own_semantic_updates_content(db_session: AsyncSession) -> None:
+    """PATCH semantic propio: la respuesta trae el content nuevo y un GET posterior
+    también (re-cifrado round-trip de punta a punta)."""
+    user = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, user, tag="P1")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.patch(
+                f"/v1/memory/semantic/{refs['semantic_id']}",
+                json={"content": "hecho semantico EDITADO"},
+                headers=_bearer(user.id),
+            )
+            # GET posterior en la MISMA sesión: refleja el cambio re-cifrado.
+            after = await client.get(
+                f"/v1/memory/semantic/{refs['semantic_id']}", headers=_bearer(user.id)
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["id"] == str(refs["semantic_id"])
+        assert body["content"] == "hecho semantico EDITADO"
+        assert body["user_id"] == str(user.id)
+        _assert_no_raw_blob(body)
+
+        assert after.status_code == 200
+        assert after.json()["content"] == "hecho semantico EDITADO"
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA2-2. PATCH procedural propio → value actualizado (sin crear, key existente)
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_own_procedural_updates_value(db_session: AsyncSession) -> None:
+    """PATCH procedural propio: el value JSONB se reemplaza; un GET posterior lo refleja."""
+    user = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, user, tag="P2")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.patch(
+                f"/v1/memory/procedural/{refs['procedural_key']}",
+                json={"value": {"nuevo": "valor", "n": 7}},
+                headers=_bearer(user.id),
+            )
+            after = await client.get(
+                f"/v1/memory/procedural/{refs['procedural_key']}", headers=_bearer(user.id)
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["key"] == refs["procedural_key"]
+        assert body["value"] == {"nuevo": "valor", "n": 7}
+
+        assert after.status_code == 200
+        assert after.json()["value"] == {"nuevo": "valor", "n": 7}
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA2-3. PATCH episodic → 405 (el summary no se edita a mano)
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_episodic_405(db_session: AsyncSession) -> None:
+    """PATCH episodic → 405 Method Not Allowed (no 404, no 200)."""
+    user = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, user, tag="P3")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.patch(
+                f"/v1/memory/episodic/{refs['episodic_id']}",
+                json={"content": "no deberia poder editar el resumen"},
+                headers=_bearer(user.id),
+            )
+            # El episodio sigue intacto (el summary original no cambió).
+            after = await client.get(
+                f"/v1/memory/episodic/{refs['episodic_id']}", headers=_bearer(user.id)
+            )
+
+        assert resp.status_code == 405
+        assert after.status_code == 200
+        assert after.json()["summary"] == "resumen episodico de P3"
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA2-4. AISLAMIENTO: PATCH semantic de OTRO user → 404 (no muta, sin leak)
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_other_users_semantic_404_no_mutation(db_session: AsyncSession) -> None:
+    """PATCH del item semantic de otro user → 404; el item del owner NO se mutó."""
+    owner = await _seed_user(db_session)
+    intruder = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, owner, tag="OWNER")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.patch(
+                f"/v1/memory/semantic/{refs['semantic_id']}",
+                json={"content": "INYECTADO por el intruder"},
+                headers=_bearer(intruder.id),
+            )
+            # El owner relee su item: sigue con el content original, intacto.
+            owner_get = await client.get(
+                f"/v1/memory/semantic/{refs['semantic_id']}", headers=_bearer(owner.id)
+            )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "memoria no encontrada"
+        # Ni el content del owner ni el inyectado se filtran en la respuesta.
+        assert "OWNER" not in resp.text
+        assert "INYECTADO" not in resp.text
+
+        # El item del owner no fue tocado.
+        assert owner_get.status_code == 200
+        assert owner_get.json()["content"] == "hecho semantico de OWNER"
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA2-5. PATCH procedural de key inexistente → 404 (NO crea vía upsert)
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_procedural_nonexistent_key_404_no_create(db_session: AsyncSession) -> None:
+    """PATCH sobre una key procedural inexistente → 404; NO se crea la entrada."""
+    user = await _seed_user(db_session)
+    # El user no tiene ninguna preferencia sembrada.
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.patch(
+                "/v1/memory/procedural/pref.inexistente",
+                json={"value": {"no": "deberia crearse"}},
+                headers=_bearer(user.id),
+            )
+            # Un GET confirma que la key NO fue creada por el PATCH.
+            after = await client.get(
+                "/v1/memory/procedural/pref.inexistente", headers=_bearer(user.id)
+            )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "memoria no encontrada"
+        assert after.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA2-6. PATCH con body que NO corresponde a la capa → 422
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_body_mismatch_422(db_session: AsyncSession) -> None:
+    """semantic sin 'content' → 422; procedural sin 'value' → 422 (body no aplica)."""
+    user = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, user, tag="P6")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            # semantic con body de procedural (value, sin content) → 422.
+            r_sem = await client.patch(
+                f"/v1/memory/semantic/{refs['semantic_id']}",
+                json={"value": {"x": 1}},
+                headers=_bearer(user.id),
+            )
+            # procedural con body de semantic (content, sin value) → 422.
+            r_proc = await client.patch(
+                f"/v1/memory/procedural/{refs['procedural_key']}",
+                json={"content": "soy content, no value"},
+                headers=_bearer(user.id),
+            )
+
+        assert r_sem.status_code == 422
+        assert r_proc.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA2-7. DELETE propio (3 capas) → 204; GET posterior → 404
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_own_three_layers_204_then_404(db_session: AsyncSession) -> None:
+    """DELETE de semantic/episodic/procedural propios → 204 sin body; luego GET → 404."""
+    user = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, user, tag="DEL")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            d_sem = await client.delete(
+                f"/v1/memory/semantic/{refs['semantic_id']}", headers=_bearer(user.id)
+            )
+            d_epi = await client.delete(
+                f"/v1/memory/episodic/{refs['episodic_id']}", headers=_bearer(user.id)
+            )
+            d_proc = await client.delete(
+                f"/v1/memory/procedural/{refs['procedural_key']}", headers=_bearer(user.id)
+            )
+
+            g_sem = await client.get(
+                f"/v1/memory/semantic/{refs['semantic_id']}", headers=_bearer(user.id)
+            )
+            g_epi = await client.get(
+                f"/v1/memory/episodic/{refs['episodic_id']}", headers=_bearer(user.id)
+            )
+            g_proc = await client.get(
+                f"/v1/memory/procedural/{refs['procedural_key']}", headers=_bearer(user.id)
+            )
+
+        # 204 sin body en las 3 capas.
+        assert d_sem.status_code == 204
+        assert d_epi.status_code == 204
+        assert d_proc.status_code == 204
+        assert d_sem.content == b""
+        assert d_epi.content == b""
+        assert d_proc.content == b""
+
+        # Ya no existen.
+        assert g_sem.status_code == 404
+        assert g_epi.status_code == 404
+        assert g_proc.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA2-8. AISLAMIENTO: DELETE de OTRO user (id/key real del owner) → 404; sobrevive
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_other_users_404_owner_survives(db_session: AsyncSession) -> None:
+    """DELETE con id/key REAL del owner pero JWT del intruder → 404; el owner sigue
+    teniendo su memoria intacta (no se borró)."""
+    owner = await _seed_user(db_session)
+    intruder = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, owner, tag="SURV")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            d_sem = await client.delete(
+                f"/v1/memory/semantic/{refs['semantic_id']}", headers=_bearer(intruder.id)
+            )
+            d_epi = await client.delete(
+                f"/v1/memory/episodic/{refs['episodic_id']}", headers=_bearer(intruder.id)
+            )
+            d_proc = await client.delete(
+                f"/v1/memory/procedural/{refs['procedural_key']}", headers=_bearer(intruder.id)
+            )
+
+            # El owner relee: sus 3 ítems siguen existiendo.
+            g_sem = await client.get(
+                f"/v1/memory/semantic/{refs['semantic_id']}", headers=_bearer(owner.id)
+            )
+            g_epi = await client.get(
+                f"/v1/memory/episodic/{refs['episodic_id']}", headers=_bearer(owner.id)
+            )
+            g_proc = await client.get(
+                f"/v1/memory/procedural/{refs['procedural_key']}", headers=_bearer(owner.id)
+            )
+
+        # El intruder recibe 404 en las 3 capas (ajena == inexistente).
+        assert d_sem.status_code == 404
+        assert d_epi.status_code == 404
+        assert d_proc.status_code == 404
+        assert d_sem.json()["detail"] == "memoria no encontrada"
+
+        # La memoria del owner sigue intacta: no se borró nada ajeno.
+        assert g_sem.status_code == 200
+        assert g_sem.json()["content"] == "hecho semantico de SURV"
+        assert g_epi.status_code == 200
+        assert g_proc.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA2-9. DELETE inexistente → 404
+# ---------------------------------------------------------------------------
+
+
+async def test_delete_nonexistent_404(db_session: AsyncSession) -> None:
+    """DELETE de un id/key inexistente → 404 (mismo detail que ajena)."""
+    user = await _seed_user(db_session)
+    nonexistent = uuid.uuid4()
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            d_sem = await client.delete(
+                f"/v1/memory/semantic/{nonexistent}", headers=_bearer(user.id)
+            )
+            d_proc = await client.delete(
+                "/v1/memory/procedural/pref.no-existe", headers=_bearer(user.id)
+            )
+
+        assert d_sem.status_code == 404
+        assert d_sem.json()["detail"] == "memoria no encontrada"
+        assert d_proc.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA2-10. sin token → 401 (PATCH + DELETE)
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_delete_no_token_401(db_session: AsyncSession) -> None:
+    """Sin Authorization header → 401 en PATCH y DELETE (get_current_user)."""
+    user = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, user, tag="NT")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            r_patch = await client.patch(
+                f"/v1/memory/semantic/{refs['semantic_id']}",
+                json={"content": "x"},
+            )
+            r_delete = await client.delete(f"/v1/memory/semantic/{refs['semantic_id']}")
+        assert r_patch.status_code == 401
+        assert r_delete.status_code == 401
+    finally:
+        app.dependency_overrides.clear()

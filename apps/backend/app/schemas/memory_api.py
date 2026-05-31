@@ -16,6 +16,9 @@ archivo nuevo que no toca el contrato de la memoria. Los ``*Out`` ya devuelven e
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
+
+from pydantic import Field
 
 from app.schemas.base import YnaraBaseModel
 from app.schemas.memory import (
@@ -74,3 +77,25 @@ class MemoryExport(YnaraBaseModel):
     semantic: list[SemanticMemoryOut]
     episodic: list[EpisodicMemoryOut]
     procedural: list[ProceduralMemoryOut]
+
+
+class MemoryPatchRequest(YnaraBaseModel):
+    """Body de ``PATCH /v1/memory/{layer}/{ref}`` (NO sagrado, envelope del wire).
+
+    Polimórfico por capa, pero **no** se mete en ``schemas/memory.py`` (sagrado):
+    el contrato de la mutación individual es de presentación, no espeja una tabla.
+    Ambos campos son opcionales acá porque el body válido depende del ``layer`` del
+    path (que el schema no conoce); el endpoint valida la correspondencia y devuelve
+    422 si el body no aplica a la capa:
+
+    - ``semantic``: requiere ``content`` (str no vacío) → re-embeddea + re-cifra.
+    - ``procedural``: requiere ``value`` (dict) → reemplaza el JSONB de una key
+      EXISTENTE.
+    - ``episodic``: no admite PATCH (405); este body nunca se evalúa para esa capa.
+
+    ``content`` replica el ``min_length=1`` del ``SemanticMemoryCreate`` sagrado
+    (FastAPI da 422 si llega ``""``); ``value`` es un dict arbitrario (JSONB).
+    """
+
+    content: str | None = Field(default=None, min_length=1, max_length=4096)
+    value: dict[str, Any] | None = None
