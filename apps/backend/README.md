@@ -13,8 +13,8 @@ ningún dato de usuario sale del perímetro (regla #4).
 
 ## Estado
 
-- **Construido** (mergeado): capa de inferencia LLM **M0–M6** — config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs) — y la **migración inicial** (6 tablas, 4 enums, pgvector). DB conectada (Supabase, session pooler).
-- **Pendiente**: M7 (`memory.*`, sagrado), M8 (`router.py`), M9 (endpoint `/v1/chat`), auth (`core/security.py`), workers Celery. Ver [`../../docs/planning/LLM-INFERENCE-INTEGRATION.md`](../../docs/planning/LLM-INFERENCE-INTEGRATION.md).
+- **Construido y mergeado**: capa LLM **M0–M8** completa — config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Workers Celery: consolidación async + decay procedural. Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migración inicial mergeada (6 tablas, 4 enums, pgvector).
+- **Pendiente**: infra vLLM real (hoy todo se ejercita con `FakeLlmClient`/`FakeEmbeddingClient`/`FakeReranker` — el vLLM real es un track de infra separado); rate-limit; refresh/logout; gap "persistir turnos" para consolidación episódica.
 
 ## Estructura
 
@@ -22,15 +22,15 @@ ningún dato de usuario sale del perímetro (regla #4).
 app/
 ├── main.py          # entrypoint FastAPI (lifespan, CORS, routers v1)
 ├── enums.py         # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation)
-├── core/            # config (Settings lazy), deps (engine async), security (auth, TODO)
+├── core/            # config (Settings lazy), deps (engine async), security (auth JWT implementado), db_guard
 ├── api/v1/          # rutas FastAPI, un archivo por dominio
 ├── models/          # SQLAlchemy 2 (user, session, memory 🔴, audit 🔴)
 ├── schemas/         # Pydantic v2 (mirror de models + payloads de API)
 ├── services/        # lógica de negocio sin framework (deps por argumento)
 ├── llm/             # capa de inferencia — config, clients/, prompts/, tools/, router (M8)
-├── memory/          # 🔴 wrappers de las 3 capas sagradas (M7, TODO)
+├── memory/          # 🔴 wrappers de las 3 capas sagradas (M7, implementado)
 ├── workers/         # Celery (consolidación async)
-└── workflows/       # decay/retención/consolidación (TODO)
+└── workflows/       # consolidación + decay implementados
 
 alembic/             # Migraciones (env.py acepta TEST_DATABASE_URL)
 docs/                # Catálogos vivos (MODELS, ENDPOINTS, TOOLS, MIGRATIONS)
@@ -65,7 +65,7 @@ Copiar `.env.example` a `.env` (gitignored). Críticas:
 | `JWT_SECRET` | Firma de tokens (auth). |
 | `LLM_PRIMARY_BASE_URL` / `LLM_SECONDARY_BASE_URL` / `LLM_TOPOLOGY` | Serving vLLM (ADR-009). |
 | `TEST_DATABASE_URL` | Solo tests de integración — DB **dedicada**, nunca prod. |
-| `MEMORY_ENCRYPTION_MASTER_KEY` | Cifrado de memoria (pendiente, PR C). |
+| `MEMORY_ENCRYPTION_MASTER_KEY` | Cifrado de memoria (implementado, ADR-007 D3). |
 
 `served_name` (en `models`), parsers, `quantization` y `max_model_len` (en
 `llm.serving`) NO van en `.env`: viven en

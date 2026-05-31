@@ -16,7 +16,9 @@
 - Errores estructurados, no excepciones que escapen al modelo:
   `{ "error": { "code": "...", "message": "..." } }`.
 
-## Tools iniciales (esqueleto)
+## Tools disponibles
+
+> **Estado**: `calendar.*` y `reminder.*` son stubs (esqueleto sin integración externa real). `memory.*` está **implementado** (M7, mergeado). Las tools `memory.*` **no están en `default_registry()`**: se construyen con `memory_registry(semantic_store)` y el router (M8) las combina por modo cuando la memoria está habilitada.
 
 ### calendar.create_event
 
@@ -66,12 +68,12 @@
 
 ### memory.add
 
-- **Descripción**: agregar un hecho a memoria.
+- **Descripción**: registrar un hecho nuevo en la memoria semántica del usuario. **No escribe de forma síncrona**: la consolidación es async (M8); el efecto es diferido. Devuelve confirmación inmediata con el detalle pendiente.
 - **Parámetros**:
   - `content: str`
-  - `layer: Literal["semantic", "episodic", "procedural"]`
+  - `layer: Literal["semantic"]` (hoy solo semántica; episódica/procedural van por el pipeline async de M8)
   - `importance: int | None` (0-100)
-- **Habilitada en modos**: productividad, memoria.
+- **Habilitada en modos**: productividad, memoria. Se habilita vía el router (M8), no por `default_registry()`.
 
 ### memory.search
 

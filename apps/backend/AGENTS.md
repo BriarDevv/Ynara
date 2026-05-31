@@ -24,13 +24,13 @@
 - **DB**: Postgres + pgvector. MVP en Supabase vía **session pooler** (puerto 5432, IPv4; la conexión directa es IPv6-only). V2 self-hosted (ADR-005).
 - **LLM**: stack dual vLLM — **Gemma 4 26B-A4B** (conversacional, solo lee memoria) + **Qwen 3.5-9B** (agente, lee+escribe, llama tools). Ver ADR-002 (roles) y ADR-009 (serving + parsers).
 
-**Construido y mergeado** (capa de inferencia LLM M0–M6 + migración inicial):
+**Construido y mergeado** (capa LLM M0–M8 completa):
 
-- Config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs). Migración inicial (6 tablas, 4 enums, pgvector).
+- Config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Workers Celery: consolidación async + decay procedural. Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migración inicial (6 tablas, 4 enums, pgvector).
 
 **Pendiente** (no empezar sin leer el plan):
 
-- **M7** — tool `memory.*` 🔴 sagrado · **M8** — `router.py` (orquestación) · **M9** — endpoint `/v1/chat` · `core/security.py` (auth JWT) · workers Celery (consolidación). Plan: [`../../docs/planning/LLM-INFERENCE-INTEGRATION.md`](../../docs/planning/LLM-INFERENCE-INTEGRATION.md). Roadmap de memoria: [`../../docs/planning/BACKEND-MEMORY-ROADMAP.md`](../../docs/planning/BACKEND-MEMORY-ROADMAP.md).
+- Infra vLLM real (hoy todo se ejercita con `FakeLlmClient`/`FakeEmbeddingClient`/`FakeReranker`). Rate-limit. Refresh/logout. Gap "persistir turnos" para consolidación episódica. Plan: [`../../docs/planning/LLM-INFERENCE-INTEGRATION.md`](../../docs/planning/LLM-INFERENCE-INTEGRATION.md). Roadmap de memoria: [`../../docs/planning/BACKEND-MEMORY-ROADMAP.md`](../../docs/planning/BACKEND-MEMORY-ROADMAP.md).
 
 ---
 
@@ -43,15 +43,15 @@ app/
 ├── core/
 │   ├── config.py      # Settings (pydantic-settings); get_settings() cacheado y lazy
 │   ├── deps.py        # engine async + get_db (AsyncSession por request)
-│   └── security.py    # JWT/hashing — TODO (NotImplementedError)
-├── api/v1/            # rutas, un archivo por dominio (health.py, ... chat/memory pendientes)
+│   └── security.py    # JWT/hashing — implementado (create_access_token, verify_access_token, hash_password, verify_password)
+├── api/v1/            # rutas, un archivo por dominio (health, auth, chat, sessions, memory)
 ├── models/            # SQLAlchemy 2 (user, session, memory, audit) — base.py: mixins UUIDPK/Timestamp
 ├── schemas/           # Pydantic v2 mirror de models + payloads de API
 ├── services/          # lógica de negocio SIN framework (recibe deps por argumento)
 ├── llm/               # capa de inferencia — ver §3
-├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, mayormente TODO)
+├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, implementado)
 ├── workers/           # Celery (celery_app.py + tasks) — autodiscovery en app.workflows
-└── workflows/         # consolidación async, decay procedural, retención episódica (TODO)
+└── workflows/         # consolidación async + decay procedural implementados
 ```
 
 ---
@@ -73,7 +73,7 @@ llm/
 │   └── resilient.py   # ResilientClient: retry+backoff → fallback on-prem → respuesta degradada
 ├── prompts/           # shared.py (identidad/voz/seguridad) + loader.py (load_prompt(mode)) + 1 SYSTEM_PROMPT por modo
 ├── tools/             # base.py (Tool Protocol, to_spec, tool_error, IsoDatetime) + registry.py + calendar.py + reminder.py
-└── router.py          # M8 — orquesta modo→modelo→memoria→tools. TODO (NotImplementedError)
+└── router.py          # M8 — orquesta modo→modelo→memoria→tools. Implementado.
 ```
 
 **Invariantes que NO se rompen:**
@@ -81,7 +81,7 @@ llm/
 - **Serving** (ADR-009): un modelo por proceso vLLM; topología configurable por `LLM_TOPOLOGY` (`split_process`/`single_process`/`swap_lru`) detrás del `ClientPool`. Parsers de tool-calling: `hermes` (Qwen) / `gemma4` (Gemma).
 - **Resiliencia**: cadena **primario → secundario on-prem → respuesta degradada**. El fallback es SIEMPRE on-prem (regla #4): cero APIs externas. Nunca propaga una excepción de infra al caller.
 - **Errores** (`errors.py`): la taxonomía nunca expone contenido del usuario en `__str__`/logs (regla #4).
-- **Tools**: los errores vuelven SIEMPRE como dict estructurado `{"error": {"code", "message"}}` — el modelo **jamás** ve un traceback (el `ToolRegistry` blinda con `except Exception`). Fechas vía el tipo `IsoDatetime` (solo ISO 8601, rechaza epoch). **Gemma no llama tools** (solo Qwen); el registry por defecto NO incluye `memory.*` (es M7).
+- **Tools**: los errores vuelven SIEMPRE como dict estructurado `{"error": {"code", "message"}}` — el modelo **jamás** ve un traceback (el `ToolRegistry` blinda con `except Exception`). Fechas vía el tipo `IsoDatetime` (solo ISO 8601, rechaza epoch). **Gemma no llama tools** (solo Qwen); el registry por defecto (`default_registry()`) NO incluye `memory.*`: se construye por separado con `memory_registry(semantic_store)` (M7 implementado) y el router lo combina por modo cuando la memoria está habilitada.
 - **Config single-source**: los `base_url` + topología viven en `Settings`/`.env`; `served_name` vive en `ynara.config.json[models]`, y parsers / `quantization` / `max_model_len` en `[llm.serving]`. `load_llm_config()` valida coherencia (fail-fast).
 
 ---

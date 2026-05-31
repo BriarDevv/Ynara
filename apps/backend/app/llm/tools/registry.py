@@ -67,8 +67,8 @@ class ToolRegistry:
 def default_registry() -> ToolRegistry:
     """Registry por defecto: calendar + reminder (NO memory).
 
-    Memory es M7 (tabla sagrada, regla #3) y se registra aparte cuando
-    exista. Aca solo van las 4 tools stub de M6.
+    Memory es M7 (tabla sagrada, regla #3) y se registra aparte vía
+    ``memory_registry()``. Aca solo van las 4 tools stub de M6.
     """
     return ToolRegistry(
         [
