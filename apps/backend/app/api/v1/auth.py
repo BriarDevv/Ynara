@@ -31,6 +31,13 @@ Decisiones de seguridad (criticadas adversarialmente, NO re-litigar):
     passwords sin freno aplicativo. Es deuda conocida y documentada; mitigarlo
     (slowapi / WAF / reverse-proxy) es trabajo posterior.
 
+(e) ``GET /auth/me`` es la PROPIA identidad, no un recurso ajeno. Si el ``sub`` del
+    JWT (token válido) ya no tiene fila (user borrado, caso raro), se devuelve 401
+    con ``WWW-Authenticate: Bearer`` —la identidad caducó, re-autenticarse— y NO un
+    404: un 404 sugeriría un recurso ausente, no una identidad inválida. El
+    aislamiento "ajena == inexistente → 404 sin oráculo" de ``/sessions/{id}`` /
+    ``/memory`` aplica a recursos de OTROS users, no a la identidad del propio token.
+
 Regla #4: ningún password ni hash llega a logs, respuestas ni excepciones. El
 422 de Pydantic puede ecoar el ``input`` del campo que falló; en register el
 campo que típicamente falla por longitud es ``password``, así que ese eco se
@@ -42,8 +49,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.core.deps import DbSession
+from app.core.deps import CurrentUser, DbSession
 from app.core.security import create_access_token
+from app.models.user import User
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenOut
 from app.schemas.user import UserOut
 from app.services.auth import (
@@ -104,3 +112,35 @@ async def token(body: LoginRequest, session: DbSession) -> TokenOut:
             headers={"WWW-Authenticate": "Bearer"},
         )
     return TokenOut(access_token=create_access_token(str(user.id)))
+
+
+@router.get("/auth/me", response_model=UserOut, status_code=status.HTTP_200_OK)
+async def me(session: DbSession, user_id: CurrentUser) -> UserOut:
+    """Devuelve el ``UserOut`` de la identidad autenticada. 200 o 401.
+
+    El ``user_id`` sale del JWT (``CurrentUser``, ya validado por
+    ``get_current_user``: 401 si el token falta / es invalido / expiro). Se busca
+    el ``User`` por ese id (``session.get``).
+
+    401, NO 404, si el user no existe. Es la PROPIA identidad, no un lookup de
+    recurso ajeno: un token valido cuyo ``sub`` ya no tiene fila (user borrado,
+    caso raro) representa una identidad que dejo de existir, asi que la respuesta
+    correcta es 401 con ``WWW-Authenticate: Bearer`` (re-autenticarse), igual que
+    un token invalido. Un 404 sugeriria erroneamente un recurso ausente y no la
+    identidad caduca; ademas el aislamiento de ``/sessions/{id}`` (404 sin oraculo)
+    aplica a recursos AJENOS, no a la identidad propia.
+
+    Regla #4: ``UserOut`` nunca expone ``password_hash`` (no es campo del schema),
+    asi que la respuesta no filtra credenciales.
+
+    Returns:
+        ``UserOut`` del usuario autenticado (sin nada sensible).
+    """
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="credenciales invalidas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return UserOut.model_validate(user)

@@ -1,46 +1,132 @@
-"""Endpoint HTTP de ciclo de vida de sesion: ``POST /v1/sessions/{id}/close``.
+"""Read + lifecycle de la ``ChatSession``: ``GET /v1/sessions``,
+``GET /v1/sessions/{id}`` y ``POST /v1/sessions/{id}/close``.
 
-Cierra una ``ChatSession`` seteando ``ended_at``. Es el trigger de cierre que
-mas adelante (M10 Ola 4) dispara la consolidacion episodica; aca entrega SOLO el
-lifecycle (setear ``ended_at``), sin tocar memoria ni encolar nada.
+Las dos read surfaces (list paginado + detail) y el cierre lifecycle comparten
+el MISMO aislamiento por usuario: el ``user_id`` sale del JWT (``CurrentUser``) y
+todo query filtra por el. El close ademas setea ``ended_at`` (trigger que mas
+adelante, M10 Ola 4, dispara la consolidacion episodica); aca entrega SOLO el
+lifecycle, sin tocar memoria ni encolar nada.
 
 Decisiones de diseno (criticadas, NO re-litigar):
 
-(1) Aislamiento por usuario, sin oraculo. El ``user_id`` sale del JWT
-    (``CurrentUser``). Una sesion inexistente y una sesion de otro usuario dan el
-    MISMO 404 (mismo status + mismo ``detail``); nunca se revela la existencia de
-    una sesion ajena. Identico al patron de ``resolve_chat_session`` en
-    ``app/api/v1/_sessions.py``.
+(1) Aislamiento por usuario, sin oraculo. Una sesion inexistente y una sesion de
+    otro usuario dan el MISMO 404 (mismo status + mismo ``detail``); nunca se
+    revela la existencia de una sesion ajena. El ``GET /sessions`` lista SOLO las
+    del user (``WHERE user_id == current``) y su ``total`` es el conteo del user.
+    El ``GET /sessions/{id}`` ajeno da el mismo 404 que uno inexistente. Identico
+    al patron de ``resolve_chat_session`` en ``app/api/v1/_sessions.py``.
 
-(2) Idempotente. Cerrar una sesion ya cerrada es inocuo: si ``ended_at`` ya esta
-    seteado NO se re-setea y se devuelve 200 con el ``ended_at`` ORIGINAL (no
-    409). Solo cuando ``ended_at`` es ``None`` se asigna ``datetime.now(UTC)``.
+(2) Solo lectura en los GET. Ningun GET muta ni encola nada: ``GET /sessions``
+    arma la pagina con un SELECT + un COUNT, ``GET /sessions/{id}`` es un
+    ``session.get``. El orden del listado es ``started_at DESC`` (la mas reciente
+    primero); ``started_at`` siempre existe (``server_default=func.now()``).
+
+(3) Idempotente (close). Cerrar una sesion ya cerrada es inocuo: si ``ended_at``
+    ya esta seteado NO se re-setea y se devuelve 200 con el ``ended_at`` ORIGINAL
+    (no 409). Solo cuando ``ended_at`` es ``None`` se asigna ``datetime.now(UTC)``.
     Asi un retry del cliente (o un doble click) no mueve el timestamp de cierre.
 
-(3) Timestamp en Python (``datetime.now(UTC)``), NO ``func.now()``. Asignar el
+(4) Timestamp en Python (``datetime.now(UTC)``), NO ``func.now()``. Asignar el
     valor en Python deja el atributo poblado en la instancia ORM sin necesitar un
     ``refresh()`` tras el commit para resolver un server-default; ``SessionOut``
     se valida directo contra ``cs``. Es ademas determinista para los tests
     (asercion de no-null + monotonia / igualdad entre cierres). ``func.now()``
     complicaria el return (el valor recien existiria post-refresh).
 
-(4) Solo lifecycle. El endpoint setea ``ended_at`` y commitea: NO toca memoria,
-    NO encola consolidacion (la episodica es M10 Ola 4). ``SessionOut`` es el
-    mirror del modelo y no expone nada sensible.
+(5) Mirror sin nada sensible. ``SessionOut`` es el mirror del modelo y no expone
+    nada sensible; el wrapper de paginacion (``SessionListPage``) vive en
+    ``app/schemas/session_api.py`` (no sagrado), espejando ``memory_api.py``.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy import func, select
 
 from app.core.deps import CurrentUser, DbSession
 from app.models.session import ChatSession
 from app.schemas.session import SessionOut
+from app.schemas.session_api import SessionListPage
 
 router = APIRouter()
+
+# Default + cap de la paginacion de ``GET /v1/sessions`` (igual que ``/v1/memory``).
+_LIMIT_DEFAULT = 50
+_LIMIT_MAX = 100
+
+# Detail UNICO del 404 de ``GET /sessions/{id}`` (y de ``close``): ajena e
+# inexistente comparten exactamente este mensaje (sin oraculo de existencia ajena).
+_NOT_FOUND_DETAIL = "sesion no encontrada"
+
+
+@router.get("/sessions", response_model=SessionListPage, status_code=200)
+async def list_sessions(
+    session: DbSession,
+    user_id: CurrentUser,
+    limit: Annotated[int, Query(ge=1, le=_LIMIT_MAX)] = _LIMIT_DEFAULT,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> SessionListPage:
+    """Lista las ``ChatSession`` del usuario, paginadas y ordenadas por recencia.
+
+    - AISLAMIENTO: ``WHERE user_id == current`` en el SELECT y en el COUNT; solo
+      las sesiones del user, y ``total`` es el conteo COMPLETO del user (no el
+      largo de la pagina) para que el cliente pueda paginar.
+    - Orden ``started_at DESC`` (la mas reciente primero). ``limit`` ∈ ``[1, 100]``
+      (default 50), ``offset`` ≥ 0: FastAPI devuelve 422 fuera de rango.
+    - Solo lectura: un SELECT + un COUNT, sin mutar ni encolar nada.
+
+    Returns:
+        ``SessionListPage`` con ``items`` (la pagina) + ``total`` (del user).
+    """
+    items_result = await session.execute(
+        select(ChatSession)
+        .where(ChatSession.user_id == user_id)
+        .order_by(ChatSession.started_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    items = items_result.scalars().all()
+
+    total = await session.scalar(
+        select(func.count()).select_from(ChatSession).where(ChatSession.user_id == user_id)
+    )
+
+    return SessionListPage(
+        items=[SessionOut.model_validate(cs) for cs in items],
+        total=total or 0,
+    )
+
+
+@router.get("/sessions/{session_id}", response_model=SessionOut, status_code=200)
+async def get_session(
+    session_id: UUID,
+    session: DbSession,
+    user_id: CurrentUser,
+) -> SessionOut:
+    """Devuelve UNA ``ChatSession`` del usuario por id.
+
+    - Busca la sesion por id. Si no existe O pertenece a otro usuario -> 404 con
+      el MISMO ``detail`` (``_NOT_FOUND_DETAIL``): sin oraculo de existencia ajena,
+      identico a ``close_session`` (decision #1).
+    - Solo lectura: un ``session.get``, sin mutar ni encolar nada.
+
+    Returns:
+        ``SessionOut`` (mirror del modelo, sin nada sensible).
+    """
+    cs = await session.get(ChatSession, session_id)
+
+    # Aislamiento sin oraculo: sesion inexistente y sesion ajena dan el MISMO 404.
+    if cs is None or cs.user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_NOT_FOUND_DETAIL,
+        )
+
+    return SessionOut.model_validate(cs)
 
 
 @router.post("/sessions/{session_id}/close", response_model=SessionOut, status_code=200)
@@ -67,7 +153,7 @@ async def close_session(
     if cs is None or cs.user_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="sesion no encontrada",
+            detail=_NOT_FOUND_DETAIL,
         )
 
     # Idempotente: solo se setea ended_at si todavia es None. Un segundo cierre

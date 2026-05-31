@@ -42,7 +42,18 @@ seguridad en el docstring de [`../app/api/v1/auth.py`](../app/api/v1/auth.py).
     `WWW-Authenticate: Bearer`) para email inexistente y para password incorrecto
     (anti-enumeración); además timing-safe (dummy hash en el camino "email
     inexistente"). **NUNCA** un 404.
-- Permisos: **público** (estos endpoints son el punto de entrada de auth).
+- **GET** `/v1/auth/me` — devuelve la identidad autenticada.
+  - Request: ninguno (el `user_id` sale del JWT, `CurrentUser`).
+  - Response 200: `UserOut` (incluye `id` / `email` / `display_name` /
+    timestamps; **nunca** `password_hash` — no es campo del schema).
+  - Response 401: sin token / token inválido / expirado (`get_current_user`); **y
+    también** si el `sub` del token (válido) ya no tiene fila (user borrado, caso
+    raro): es la **propia identidad** caduca, así que 401 con `WWW-Authenticate:
+    Bearer` (re-autenticarse), **no** un 404. El aislamiento "ajena == inexistente
+    → 404 sin oráculo" aplica a recursos de **otros** users, no a la identidad propia.
+  - Permisos: **usuario autenticado** (su propia identidad).
+- Permisos: `register` / `token` son **público** (punto de entrada de auth); `me`
+  requiere token.
 - **Rate limit: TODO** — deuda conocida. El MVP no agrega dependencias (sin
   `slowapi` / Redis), así que no hay rate-limit aplicativo todavía; mitigarlo
   (slowapi / WAF / reverse-proxy) es trabajo posterior.
@@ -123,9 +134,30 @@ Invariantes (regla #3 / ADR-007 / ADR-010):
 
 ## /v1/sessions
 
-Ciclo de vida de la `ChatSession`. Contrato + decisiones en el docstring de
-[`../app/api/v1/sessions.py`](../app/api/v1/sessions.py).
+Read surfaces + ciclo de vida de la `ChatSession`. Contrato + decisiones en el
+docstring de [`../app/api/v1/sessions.py`](../app/api/v1/sessions.py).
 
+Invariante transversal — **aislamiento por `user_id` del JWT**: el listado trae
+solo las sesiones del user, y un detail de sesión ajena da el **mismo** 404 que
+una inexistente (sin oráculo de existencia ajena). Todas las read surfaces son
+**solo lectura** (ningún GET muta ni encola nada).
+
+- **GET** `/v1/sessions` — lista paginada de las sesiones del usuario.
+  - Query: `limit?: int (1..100, default 50)`, `offset?: int (>=0, default 0)`.
+  - Response 200: `SessionListPage = { "items": SessionOut[], "total": N }`.
+    `items` es la página `limit`/`offset` ordenada por `started_at` **DESC** (la
+    más reciente primero); `total` es el conteo **completo** de sesiones del user
+    (no el largo de la página), para paginar. `SessionListPage` vive en
+    `app/schemas/session_api.py` (no sagrado, espeja `memory_api.py`).
+  - Response 422: `limit` fuera de `[1, 100]` o `offset < 0`.
+  - **Aislamiento**: `WHERE user_id == current` en el SELECT y en el COUNT — solo
+    las sesiones del user; nunca aparecen sesiones ajenas.
+- **GET** `/v1/sessions/{session_id}` — detalle de **una** sesión del usuario.
+  - Path param: `session_id: UUID`.
+  - Response 200: `SessionOut` (mirror del modelo; nunca nada sensible).
+  - Response 404: sesión inexistente **o** de otro usuario — **mismo** 404 (status +
+    `detail: "sesion no encontrada"`), **sin oráculo** de existencia ajena (idéntico
+    al `close`).
 - **POST** `/v1/sessions/{session_id}/close` — cierra una sesión seteando `ended_at`.
   - Path param: `session_id: UUID` (la sesión a cerrar).
   - Request: ninguno (el `user_id` sale del JWT, no del body).
@@ -137,9 +169,9 @@ Ciclo de vida de la `ChatSession`. Contrato + decisiones en el docstring de
   - Response 404: sesión inexistente **o** de otro usuario — **mismo** 404 (status +
     `detail: "sesion no encontrada"`), **sin oráculo** de existencia ajena
     (aislamiento por `user_id` del JWT, igual que `resolve_chat_session`).
-  - Response 401: sin token / token inválido (`get_current_user`).
   - Solo setea `ended_at`: **no** toca memoria, **no** encola consolidación (la
     consolidación episódica es M10 Ola 4).
+- Response 401 (todas las rutas): sin token / token inválido (`get_current_user`).
 - Permisos: **usuario autenticado** (solo sobre sus propias sesiones).
 - Rate limit: TODO.
 - Modos: todos.
