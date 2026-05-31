@@ -86,7 +86,8 @@ Dos endpoints: uno no-streaming (JSON) y uno SSE. Contrato + justificación en
 ## /v1/memory
 
 Superficie **privacy-first** donde el **dueño** ve y exporta su propia memoria con
-su JWT. **Ola 1: READ-ONLY** (los 3 GET de abajo). Contrato + decisiones en el
+su JWT. **Ola 1** (los 3 GET: list/detail/export) + **Ola 2** (PATCH/DELETE
+individual). Contrato + decisiones en el
 docstring de [`../app/api/v1/memory.py`](../app/api/v1/memory.py).
 
 Invariantes (regla #3 / ADR-007 / ADR-010):
@@ -125,12 +126,36 @@ Invariantes (regla #3 / ADR-007 / ADR-010):
     "episodic": EpisodicMemoryOut[], "procedural": ProceduralMemoryOut[] }` (las 3
     capas **completas**, sin paginar, descifradas). Header
     `Content-Disposition: attachment; filename="ynara-memory-export.json"`.
+- **PATCH** `/v1/memory/{layer}/{ref}` — edita **un** ítem de memoria del usuario.
+  - Path: `layer: {semantic, episodic, procedural}`; `ref: UUID` para
+    semantic/episodic, `key (str)` para procedural.
+  - Body (`MemoryPatchRequest`, polimórfico por capa, **no sagrado**): `content?:
+    str (1..4096)` para semantic, `value?: object (JSONB)` para procedural. El
+    endpoint valida la correspondencia body↔capa.
+  - `semantic`: actualiza el `content` (re-embeddea + re-cifra) → 200
+    `SemanticMemoryOut`.
+  - `procedural`: reemplaza el `value` de una **key existente** (UPDATE puro, **no**
+    upsert; **no** resetea el decay — editar a mano no es reforzar, ADR-007 D1) →
+    200 `ProceduralMemoryOut`. Si la key no existe → 404 (jamás crea vía PATCH).
+  - `episodic`: **405** Method Not Allowed — el `summary` lo genera el worker de
+    consolidación; se **borra** (DELETE) o se regenera, no se reescribe a mano.
+  - Response 404: ref inexistente **o** de otro usuario — **mismo** 404
+    (`detail: "memoria no encontrada"`), sin oráculo ni mutar/descifrar data ajena.
+  - Response 422: `layer` inválida, `ref` no-UUID (semantic/episodic), body que no
+    aplica a la capa (semantic sin `content`, procedural sin `value`), o `content`
+    vacío / >4096.
+- **DELETE** `/v1/memory/{layer}/{ref}` — borra **un** ítem de memoria del usuario.
+  - Path: igual que PATCH (`layer` + `ref` UUID|key). Aplica a las **3** capas
+    (incluida episodic: el dueño sí puede borrar un episodio, aunque no editarlo).
+  - Response **204** No Content (sin body) en éxito; el blob cifrado nunca viaja.
+  - Response 404: ref inexistente **o** de otro usuario — **mismo** 404
+    (`detail: "memoria no encontrada"`), sin oráculo ni tocar data ajena.
+  - Response 422: `ref` no-UUID en semantic/episodic.
 - Response 401 (todos): sin token / token inválido (`get_current_user`).
 - Permisos: **usuario autenticado**, solo su propia memoria.
 - Rate limit: TODO.
-- **Próximas olas** (no implementadas en esta): `PATCH /v1/memory/{layer}/{ref}`
-  (editar), `DELETE /v1/memory/{layer}/{ref}` (borrar), `DELETE /v1/memory`
-  (wipe con dry-run + confirm).
+- **Próxima ola** (no implementada): `DELETE /v1/memory` (wipe total con dry-run +
+  confirm).
 
 ## /v1/sessions
 
