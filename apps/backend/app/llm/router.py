@@ -203,7 +203,7 @@ async def route(
     # y demas errores permanentes (LlmBadRequestError) -> devolvemos fallback en
     # vez de propagar un 500 (ver nota (c)).
     try:
-        final_text, actions = await run_tool_loop(
+        final_text, actions, finish_reason = await run_tool_loop(
             llm_client=llm_client,
             served_name=model_cfg.served_name,
             messages=messages,
@@ -212,7 +212,9 @@ async def route(
             fallback_text=_FALLBACK_TEXT,
         )
     except LlmBadRequestError:
-        return ChatResponse(text=_FALLBACK_TEXT, actions=[], session_id=session_id)
+        return ChatResponse(
+            text=_FALLBACK_TEXT, actions=[], session_id=session_id, finish_reason="degraded"
+        )
 
     # Consolidacion (Ola 2): encolar SOLO si el modelo escribe memoria (Qwen=True,
     # Gemma=False). .delay() es no-bloqueante; no retrasa la respuesta al usuario.
@@ -226,4 +228,6 @@ async def route(
             mode=mode_key,
         )
 
-    return ChatResponse(text=final_text, actions=actions, session_id=session_id)
+    return ChatResponse(
+        text=final_text, actions=actions, session_id=session_id, finish_reason=finish_reason
+    )

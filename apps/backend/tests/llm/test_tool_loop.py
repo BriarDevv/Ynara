@@ -79,7 +79,7 @@ async def test_gemma_sin_specs_una_vuelta() -> None:
     fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
     fake.queue_result(_make_result(text="Hola! En que te ayudo?", finish_reason="stop"))
 
-    text, actions = await run_tool_loop(
+    text, actions, finish_reason = await run_tool_loop(
         llm_client=fake,
         served_name="gemma4",
         messages=_messages(),
@@ -90,6 +90,7 @@ async def test_gemma_sin_specs_una_vuelta() -> None:
 
     assert text == "Hola! En que te ayudo?"
     assert actions == []
+    assert finish_reason == "stop"
     # Solo 1 llamada al LLM
     assert len(fake.complete_calls) == 1
     # specs=[] debe traducirse a tools=None en complete
@@ -132,7 +133,7 @@ async def test_qwen_1_vuelta_con_tool_call() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    text, actions = await run_tool_loop(
+    text, actions, finish_reason = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -142,9 +143,13 @@ async def test_qwen_1_vuelta_con_tool_call() -> None:
     )
 
     assert text == "Listo, evento creado."
+    assert finish_reason == "stop"
     assert len(actions) == 1
-    assert actions[0]["name"] == "calendar.create_event"
-    assert actions[0]["result"] == {"status": "ok", "event_id": "ev-1"}
+    action = actions[0]
+    assert action["id"] == "tc-abc"
+    assert action["name"] == "calendar.create_event"
+    assert action["arguments"] == {"title": "reunion"}
+    assert action["result"] == {"status": "ok", "event_id": "ev-1"}
     assert len(fake.complete_calls) == 2
 
 
@@ -182,7 +187,7 @@ async def test_qwen_2_vueltas_con_tool_call() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    text, actions = await run_tool_loop(
+    text, actions, finish_reason = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -192,7 +197,13 @@ async def test_qwen_2_vueltas_con_tool_call() -> None:
     )
 
     assert text == "Dos eventos creados."
+    assert finish_reason == "stop"
     assert len(actions) == 2
+    # Ambas actions tienen los 4 campos
+    for i, (tc_id, _tc) in enumerate([("tc-1", tc1), ("tc-2", tc2)]):
+        assert actions[i]["id"] == tc_id
+        assert actions[i]["name"] == "calendar.create_event"
+        assert actions[i]["arguments"] == {"title": "reunion"}
     assert len(fake.complete_calls) == 3
 
 
@@ -228,7 +239,7 @@ async def test_guard_max_iteraciones_usa_fallback() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    text, actions = await run_tool_loop(
+    text, actions, finish_reason = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -239,6 +250,8 @@ async def test_guard_max_iteraciones_usa_fallback() -> None:
     )
 
     assert text == "no pude completar la tarea"
+    # Guard agotado: finish_reason 'max_iterations' (sentinel honesto, no 'stop')
+    assert finish_reason == "max_iterations"
     # 5 tool calls ejecutadas (una por iteracion)
     assert len(actions) == MAX_TOOL_ITERATIONS
     assert len(fake.complete_calls) == MAX_TOOL_ITERATIONS
@@ -280,7 +293,7 @@ async def test_guard_max_iteraciones_usa_result_text_si_no_vacio() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    text, _actions = await run_tool_loop(
+    text, _actions, finish_reason = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -291,6 +304,8 @@ async def test_guard_max_iteraciones_usa_result_text_si_no_vacio() -> None:
     )
 
     assert text == "algo parcial"
+    # Guard agotado (aunque el ultimo result.text no este vacio).
+    assert finish_reason == "max_iterations"
 
 
 @pytest.mark.asyncio
@@ -308,7 +323,7 @@ async def test_unknown_tool_devuelve_tool_error() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    _text, actions = await run_tool_loop(
+    _text, actions, finish_reason = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -318,10 +333,13 @@ async def test_unknown_tool_devuelve_tool_error() -> None:
     )
 
     assert len(actions) == 1
+    assert actions[0]["id"] == "tc-unk"
     assert actions[0]["name"] == "nonexistent.tool"
+    assert actions[0]["arguments"] == {"title": "reunion"}
     result = actions[0]["result"]
     assert "error" in result
     assert result["error"]["code"] == "unknown_tool"
+    assert finish_reason == "stop"
 
 
 @pytest.mark.asyncio
@@ -339,7 +357,7 @@ async def test_degraded_termina_inmediatamente() -> None:
         )
     )
 
-    text, actions = await run_tool_loop(
+    text, actions, finish_reason = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -350,6 +368,7 @@ async def test_degraded_termina_inmediatamente() -> None:
 
     assert text == "lo siento, estoy degradado"
     assert actions == []
+    assert finish_reason == "degraded"
     assert len(fake.complete_calls) == 1
 
 
@@ -359,7 +378,7 @@ async def test_result_text_vacio_final_usa_fallback() -> None:
     fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
     fake.queue_result(_make_result(text="", finish_reason="stop"))
 
-    text, actions = await run_tool_loop(
+    text, actions, finish_reason = await run_tool_loop(
         llm_client=fake,
         served_name="gemma4",
         messages=_messages(),
@@ -370,6 +389,7 @@ async def test_result_text_vacio_final_usa_fallback() -> None:
 
     assert text == "texto de fallback"
     assert actions == []
+    assert finish_reason == "stop"
 
 
 @pytest.mark.asyncio
@@ -378,7 +398,7 @@ async def test_specs_vacia_pasa_tools_none() -> None:
     fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
     fake.queue_result(_make_result(text="ok", finish_reason="stop"))
 
-    await run_tool_loop(
+    _text, _actions, _fr = await run_tool_loop(
         llm_client=fake,
         served_name="gemma4",
         messages=_messages(),
@@ -402,7 +422,7 @@ async def test_specs_no_vacia_pasa_tools_lista() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    await run_tool_loop(
+    _text, _actions, _fr = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -505,7 +525,7 @@ async def test_chatmessage_tool_contiene_id_y_nombre() -> None:
     reg.register(FakeTool())  # type: ignore[arg-type]
 
     msgs = _messages()
-    await run_tool_loop(
+    _text, _actions, _fr = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=msgs,

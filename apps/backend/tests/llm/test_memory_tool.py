@@ -120,10 +120,15 @@ class TestMemorySearch:
         result = await tool.execute({"query": "q"})
         first = result["results"][0]  # type: ignore[index]
 
-        # id y user_id deben ser strings (mode='json')
+        # id debe estar presente y ser string
         assert isinstance(first["id"], str)
-        assert isinstance(first["user_id"], str)
         assert first["content"] == "recuerdo de prueba"
+        assert isinstance(first["importance"], int)
+        # user_id, source_session_id, created_at, updated_at NO deben exponerse al modelo
+        assert "user_id" not in first
+        assert "source_session_id" not in first
+        assert "created_at" not in first
+        assert "updated_at" not in first
 
     async def test_missing_query_returns_invalid_arguments(self) -> None:
         store = FakeSemanticStore()

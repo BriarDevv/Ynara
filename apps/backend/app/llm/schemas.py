@@ -39,6 +39,7 @@ class ChatResponse(BaseModel):
     text: str
     actions: list[dict[str, Any]] = []
     session_id: str
+    finish_reason: str | None = None
 
 
 # ---------- Mensajes y tools ----------
@@ -47,7 +48,8 @@ class ChatResponse(BaseModel):
 class ChatMessage(BaseModel):
     """Un turno del historial. ``content`` puede ser ``None`` cuando el
     assistant solo emite tool_calls; ``tool_call_id`` / ``name`` aplican al
-    rol ``tool`` (resultado de una tool)."""
+    rol ``tool`` (resultado de una tool). ``tool_calls`` preserva las calls
+    del assistant para el multi-turno correcto con Qwen/hermes."""
 
     model_config = ConfigDict(strict=True)
 
@@ -55,6 +57,7 @@ class ChatMessage(BaseModel):
     content: str | None = None
     tool_call_id: str | None = None
     name: str | None = None
+    tool_calls: list[ToolCall] | None = None
 
 
 class ToolSpec(BaseModel):
