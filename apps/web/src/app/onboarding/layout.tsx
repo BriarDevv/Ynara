@@ -1,5 +1,6 @@
 "use client";
 
+import { GrainOverlay, MemoryField } from "@ynara/ui";
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 import { OnboardingHeader } from "@/features/onboarding/components/OnboardingHeader";
@@ -30,7 +31,17 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
   if (completed) return null;
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-soft)]">
+    <div className="relative isolate min-h-screen bg-[var(--color-bg-soft)]">
+      {/* Ambiente de marca detrás de todo el flujo: la "Red de memoria" como
+          fondo + grano (§2/§3.6). Decorativo, no captura punteros. `isolate`
+          crea el stacking context que scopea los z-index acá; `-z-10` deja la
+          capa detrás del header y el contenido. El `overflow-hidden` vive en
+          esta capa (no en el root) para clipear el SVG `slice` sin matar el
+          scroll del documento en steps altos (forms en viewports chicos). */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <MemoryField density="dispersa" />
+        <GrainOverlay />
+      </div>
       <OnboardingHeaderWithProgress />
       <main className="flex flex-col">{children}</main>
     </div>
