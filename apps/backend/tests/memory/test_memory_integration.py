@@ -419,3 +419,105 @@ async def test_procedural_isolation(db_session: AsyncSession) -> None:
     entry_b_after = await proc_b.get("tema.favorito")
     assert entry_b_after is not None
     assert entry_b_after.value == {"tema": "diseño"}
+
+
+# ---------------------------------------------------------------------------
+# 8. Read-only Ola 1 — list_all / count / get_by_id (semantic & episodic)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_semantic_list_all_and_count_paginate_decrypted(db_session: AsyncSession) -> None:
+    """list_all() pagina (created_at DESC) y descifra; count() es el total del user."""
+    user = await _seed_user(db_session)
+    semantic, _, _ = _fake_stores(db_session, user.id)
+
+    for i in range(3):
+        await semantic.add(SemanticMemoryCreate(content=f"hecho {i}"))
+
+    # count() = total del user.
+    assert await semantic.count() == 3
+
+    # Página de 2: items descifrados (str), todos del user.
+    page = await semantic.list_all(limit=2, offset=0)
+    assert len(page) == 2
+    for item in page:
+        assert isinstance(item.content, str)
+        assert item.content.startswith("hecho ")
+        assert item.user_id == user.id
+
+    # offset trae el resto sin solapar.
+    rest = await semantic.list_all(limit=2, offset=2)
+    assert len(rest) == 1
+    assert {i.id for i in page}.isdisjoint({i.id for i in rest})
+
+
+@pytest.mark.integration
+async def test_semantic_get_by_id_decrypt_post_ownership(db_session: AsyncSession) -> None:
+    """get_by_id: propio → Out descifrado; ajeno/inexistente → None SIN descifrar.
+
+    Es la disciplina SAGRADA decrypt-post-ownership: pedir el id de B desde el store
+    de A devuelve None (filtro user_id antes de crypto), NUNCA intenta descifrar el
+    blob de B con la key de A (eso tiraría InvalidTag; ni se llega ahí).
+    """
+    user_a = await _seed_user(db_session)
+    user_b = await _seed_user(db_session)
+    store_a, _, _ = _fake_stores(db_session, user_a.id)
+    store_b, _, _ = _fake_stores(db_session, user_b.id)
+
+    out_a = await store_a.add(SemanticMemoryCreate(content="hecho propio de A"))
+    out_b = await store_b.add(SemanticMemoryCreate(content="hecho de B"))
+
+    # Propio: descifra y devuelve el Out.
+    got = await store_a.get_by_id(out_a.id)
+    assert got is not None
+    assert got.content == "hecho propio de A"
+    assert got.user_id == user_a.id
+
+    # Ajeno: None (sin intentar descifrar el blob de B con la key de A).
+    assert await store_a.get_by_id(out_b.id) is None
+
+    # Inexistente: None.
+    assert await store_a.get_by_id(uuid.uuid4()) is None
+
+
+@pytest.mark.integration
+async def test_episodic_list_all_and_get_by_id_post_ownership(db_session: AsyncSession) -> None:
+    """Episodic: list_all/count descifran summary; get_by_id ajeno → None sin crypto."""
+    user_a = await _seed_user(db_session)
+    user_b = await _seed_user(db_session)
+    chat_a = await _seed_session(db_session, user_a)
+    chat_b = await _seed_session(db_session, user_b)
+    _, epi_a, _ = _fake_stores(db_session, user_a.id)
+    _, epi_b, _ = _fake_stores(db_session, user_b.id)
+
+    out_a = await epi_a.add(
+        EpisodicMemoryCreate(
+            session_id=chat_a.id,
+            summary="episodio de A",
+            occurred_at=_now(),
+            retention_days=90,
+        )
+    )
+    out_b = await epi_b.add(
+        EpisodicMemoryCreate(
+            session_id=chat_b.id,
+            summary="episodio de B",
+            occurred_at=_now(),
+            retention_days=90,
+        )
+    )
+
+    # list_all + count del user A: solo su episodio, summary descifrado.
+    assert await epi_a.count() == 1
+    page = await epi_a.list_all(limit=50, offset=0)
+    assert len(page) == 1
+    assert page[0].summary == "episodio de A"
+    assert page[0].user_id == user_a.id
+
+    # get_by_id propio descifra; ajeno e inexistente → None sin tocar crypto.
+    got = await epi_a.get_by_id(out_a.id)
+    assert got is not None
+    assert got.summary == "episodio de A"
+    assert await epi_a.get_by_id(out_b.id) is None
+    assert await epi_a.get_by_id(uuid.uuid4()) is None
