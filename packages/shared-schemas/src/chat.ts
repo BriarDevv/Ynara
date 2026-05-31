@@ -72,6 +72,12 @@ export const ChatResponseSchema = z.object({
   // matchea el default `actions = []` de Pydantic.
   actions: z.array(ActionSchema).default([]),
   session_id: z.string(),
+  // `finish_reason` del router: required-pero-nullable, igual que `ended_at`.
+  // El Pydantic `ChatHttpResponse.finish_reason: str | None = None` siempre
+  // serializa la clave, con `null` cuando el router no lo seteó. A diferencia
+  // de `StreamDoneSchema` (el `done` SSE lo coerciona a string no-null), el
+  // no-streaming puede venir `null`.
+  finish_reason: z.string().nullable(),
 });
 export type ChatResponse = z.infer<typeof ChatResponseSchema>;
 

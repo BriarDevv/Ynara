@@ -77,6 +77,7 @@ describe("ChatResponseSchema", () => {
     const parsed = ChatResponseSchema.parse({
       text: "respuesta",
       session_id: "sess-1",
+      finish_reason: "stop",
     });
     expect(parsed.actions).toEqual([]);
   });
@@ -85,9 +86,27 @@ describe("ChatResponseSchema", () => {
     const parsed = ChatResponseSchema.parse({
       text: "ok",
       session_id: "sess-1",
+      finish_reason: "stop",
       actions: [{ id: "a1", name: "reminder.create", arguments: {}, result: {} }],
     });
     expect(parsed.actions).toHaveLength(1);
+  });
+
+  it("acepta finish_reason null (router no lo seteó)", () => {
+    const parsed = ChatResponseSchema.parse({
+      text: "ok",
+      session_id: "sess-1",
+      finish_reason: null,
+    });
+    expect(parsed.finish_reason).toBeNull();
+  });
+
+  it("rechaza si falta finish_reason (es required-pero-nullable)", () => {
+    const result = ChatResponseSchema.safeParse({
+      text: "ok",
+      session_id: "sess-1",
+    });
+    expect(result.success).toBe(false);
   });
 });
 
