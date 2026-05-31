@@ -84,6 +84,26 @@ profundidad/ambiente (reemplaza al gradiente genérico).
   elemento), que no existe en RN → para mobile necesita otra estrategia
   (imagen/SVG de ruido), TODO al llegar ese consumidor.
 
+## Motion (`src/motion/`) — DESIGN.md §8
+
+**Valores** compartidos, sin atar una librería (decisión F0.4:
+**CSS-first**, sin Framer Motion). Los springs usan el modelo perceptual
+`visualDuration` + `bounce` (§8.1), consumible por Motion (web) o
+Reanimated (mobile) cuando una animación compleja lo necesite.
+
+```ts
+import { SPRING_SNAPPY, SPRING_SOFT, DURATION, EASE_OUT_SOFT } from "@ynara/ui";
+```
+
+- `SPRING_SNAPPY` / `SPRING_SOFT` — presets de spring.
+- `DURATION` — duraciones en ms (espejo de `--duration-*`).
+- `EASE_OUT_SOFT` — puntos de la curva (espejo de `--ease-out-soft`).
+
+Los helpers **web** viven en `apps/web` (no son portables): el hook
+`useReducedMotion` (deriva del store de a11y + `prefers-reduced-motion`,
+espejando la cascada de `globals.css`) y `startViewTransition` (View
+Transitions con progressive enhancement + respeto de reduced-motion).
+
 ## Convención
 
 - Componentes presentacionales, sin lógica de dominio.
