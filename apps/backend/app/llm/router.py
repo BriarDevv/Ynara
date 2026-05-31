@@ -16,7 +16,9 @@ Reglas (M8 Ola 1 + Ola 2; enqueue movido en M10 Ola 0):
   solo ensambla contexto + tool loop y devuelve la respuesta; la decision de
   consolidar (``writes_memory`` + turno no-degradado) se evalua en el endpoint.
 - El router nunca acepta inputs sin sanear: ``request.mode`` es un ``Mode``
-  validado por Pydantic; el ``session_id`` es OPACO (ver abajo).
+  validado por Pydantic; el ``session_id`` se trata como string opaco DENTRO del
+  router (no lo parsea ni lo usa como FK), pero AGUAS ARRIBA es el
+  ``ChatSession.id`` real (ver nota (a)).
 
 Flujo de ``route()``:
 1. Carga la config del modo (``mode_cfg``), el modelo (``model_cfg``) y el
@@ -35,12 +37,14 @@ Flujo de ``route()``:
 
 Decisiones de diseno documentadas (M8 Ola 1 + Ola 2):
 
-(a) ``session_id`` OPACO. ``route()`` usa ``request.session_id`` si viene; si no,
-    genera ``str(uuid4())``. NO se parsea a ``UUID``, NO se usa como FK. La
-    consolidacion (Ola 2) escribira SOLO semantic + procedural y SIN
-    ``source_session_id``; NUNCA episodica (``EpisodicMemory.session_id`` es FK
-    NOT NULL a ``sessions.id``, y la ``ChatSession`` persistida + la episodica
-    son M9).
+(a) ``session_id`` opaco DENTRO del router. ``route()`` usa
+    ``request.session_id`` si viene; si no, genera ``str(uuid4())``. El router NO
+    lo parsea a ``UUID`` ni lo usa como FK: es un string que devuelve tal cual en
+    el ``ChatResponse``. AGUAS ARRIBA (M9) el endpoint ya pasa
+    ``str(ChatSession.id)`` real, y la consolidacion (M10 Ola 1) lo parsea y lo
+    persiste como ``source_session_id`` (FK a ``sessions.id``) en el ADD
+    semantic. La episodica sigue siendo trabajo aparte
+    (``EpisodicMemory.session_id`` es FK NOT NULL a ``sessions.id``).
 
 (b) Sin historial multi-turno. ``route()`` arma ``messages`` desde cero
     (system + user actual) en cada llamada. El historial vivo de la sesion es
@@ -136,7 +140,8 @@ async def route(
 
     Args:
         request: Entrada del usuario (``text`` + ``mode`` + ``session_id``
-            opcional). El ``session_id`` es OPACO (ver nota (a) del modulo).
+            opcional). El router trata el ``session_id`` opaco (ver nota (a) del
+            modulo); aguas arriba es el ``ChatSession.id`` real.
         session: ``AsyncSession`` de la request actual (la usan los stores de
             memoria; el router no commitea nada).
         user_id: UUID del usuario autenticado. Liga la key de cifrado de los
@@ -154,11 +159,13 @@ async def route(
         ``ChatResponse`` con:
         - ``text``: respuesta final del modelo (nunca vacia: usa fallback).
         - ``actions``: lista de tools ejecutadas ``{'name', 'result'}``.
-        - ``session_id``: el de la request o uno nuevo ``str(uuid4())`` (OPACO).
+        - ``session_id``: el de la request o uno nuevo ``str(uuid4())`` (opaco
+          dentro del router; aguas arriba es el ``ChatSession.id`` real).
 
     Notas (ver docstring del modulo para el detalle):
-        (a) ``session_id`` opaco; consolidacion = semantic + procedural sin
-            ``source_session_id``; episodica + ``ChatSession`` = M9.
+        (a) ``session_id`` opaco dentro del router; aguas arriba es el
+            ``ChatSession.id`` real y la consolidacion (M10 Ola 1) lo persiste
+            como ``source_session_id`` en el ADD semantic.
         (b) sin historial multi-turno: ``messages`` desde cero; historial
             vivo = M9.
         (c) overflow / error permanente del LLM -> ``ChatResponse`` con

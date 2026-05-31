@@ -15,7 +15,9 @@ Componentes:
 
 Decisiones (ADR-010 + critica adversarial M8, NO re-litigar):
 1. Solo Qwen escribe. ``route()`` solo encola si ``model_cfg.writes_memory``.
-2. NUNCA source_session_id: el session_id de Ola 2 es OPACO.
+2. source_session_id (provenance, M10 Ola 1): ``apply_ops`` recibe el
+   ``source_session_id`` (UUID de la ``ChatSession``) y lo persiste SOLO en el
+   ADD semantic (no en UPDATE/DELETE). Es FK opcional a ``sessions.id``.
 3. NUNCA episodica: layer = 'semantic' | 'procedural' solamente.
 4. Parseo defensivo: JSON invalido -> [] sin crashear el worker.
 5. Sin dedup search-based en Ola 2: ops directo sin search-before-add.
@@ -287,11 +289,13 @@ async def apply_ops(
     *,
     semantic_store: Any,
     procedural_store: Any,
+    source_session_id: UUID | None = None,
 ) -> int:
     """Aplica cada op contra los stores de memoria.
 
     Reglas de aplicacion (decision #5 M8 — sin dedup search-based):
-    - ADD semantic    -> semantic_store.add(SemanticMemoryCreate(content=...))
+    - ADD semantic    -> semantic_store.add(SemanticMemoryCreate(content=...,
+      source_session_id=...))
     - ADD/UPDATE proc -> procedural_store.upsert(ProceduralMemoryUpsert(key, value))
     - UPDATE semantic -> semantic_store.update(UUID(target_id), content)
     - DELETE semantic -> semantic_store.delete(UUID(target_id))
@@ -306,10 +310,20 @@ async def apply_ops(
     duplicados semanticos queda gateado por el embedder/reranker real
     (FakeReranker no modela similitud). Se implementa en Ola 3+.
 
+    PROVENANCE (M10 Ola 1): ``source_session_id`` se setea SOLO en el branch
+    ADD semantic (alta de un hecho nuevo). NO se propaga a UPDATE ni a DELETE:
+    un UPDATE refina el texto del hecho pero NO cambia de que sesion vino el
+    hecho original (su provenance se decidio cuando se hizo el ADD), y un DELETE
+    lo borra. Es FK opcional a ``sessions.id`` (``ondelete=SET NULL``): si la
+    ``ChatSession`` se borra, el hecho sobrevive con ``source_session_id`` NULL.
+
     Args:
         ops: Lista de ``MemoryOp`` a aplicar.
         semantic_store: Instancia de ``SemanticMemoryStore`` del usuario.
         procedural_store: Instancia de ``ProceduralMemoryStore`` del usuario.
+        source_session_id: UUID de la ``ChatSession`` que origino el turno, o
+            ``None`` si no se pudo determinar. Se persiste SOLO en ADD semantic
+            como provenance del hecho (M10 Ola 1).
 
     Returns:
         Cantidad de ops efectivamente aplicadas (NOOP y skips no cuentan).
@@ -324,8 +338,14 @@ async def apply_ops(
                 if op.op == "ADD":
                     if not op.content:
                         continue
+                    # source_session_id SOLO aca (provenance del hecho nuevo).
+                    # NO en UPDATE/DELETE: un update refina el texto pero no
+                    # cambia de que sesion vino el hecho original (M10 Ola 1).
                     await semantic_store.add(
-                        SemanticMemoryCreate(content=op.content)
+                        SemanticMemoryCreate(
+                            content=op.content,
+                            source_session_id=source_session_id,
+                        )
                     )
                     applied += 1
 
