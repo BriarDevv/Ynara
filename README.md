@@ -6,7 +6,7 @@
 [![Web: Next.js 16](https://img.shields.io/badge/Web-Next.js%2016-black)](./apps/web)
 [![Mobile: Expo 53+](https://img.shields.io/badge/Mobile-Expo%2053%2B-1B1F23)](./apps/mobile)
 [![Backend: FastAPI + Pydantic v2](https://img.shields.io/badge/Backend-FastAPI%20%2B%20Pydantic%20v2-009688)](./apps/backend)
-[![LLM: vLLM + Mem0 OSS v2](https://img.shields.io/badge/LLM-vLLM%20%2B%20Mem0%20OSS%20v2-ff6b6b)](./infra/vllm)
+[![LLM: vLLM (Gemma+Qwen)](https://img.shields.io/badge/LLM-vLLM%20(Gemma%2BQwen)-ff6b6b)](./infra/vllm)
 [![DB: Postgres 16 + pgvector](https://img.shields.io/badge/DB-Postgres%2016%20%2B%20pgvector-4169E1)](./docs/architecture/adrs/ADR-004-postgres-pgvector-vs-pinecone.md)
 [![AI-friendly](https://img.shields.io/badge/AI--friendly-Claude%20%C2%B7%20Codex%20%C2%B7%20Gemini-8e44ad)](./AGENTS.md)
 [![Phase: MVP](https://img.shields.io/badge/Phase-MVP-yellow)](./docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md)
@@ -37,9 +37,9 @@ de usuario saliendo del perímetro, sin lock-in a big tech.
 | Tools del agente Qwen | 9 (calendar, reminder, memory, mode.switch) |
 | Apps | 3 (web Next.js 16, mobile Expo 53+, backend FastAPI) |
 | Packages compartidos | 4 (shared-types, shared-schemas, ui, config) |
-| ADRs aprobados | 5 |
-| Skills reutilizables | 5 |
-| Archivos tracked | 176 |
+| ADRs aprobados | 10 |
+| Skills reutilizables | 6 |
+| Archivos tracked | ~190+ |
 | CODEOWNERS | 3 (@MateoGs013, @BriarDevv, @querques20) |
 
 ## Los 5 modos
@@ -117,8 +117,9 @@ Si tenés la 4080 Super o GPU NVIDIA con CUDA 12.x:
 ./infra/vllm/start-vllm.sh                      # Gemma :8000 + Qwen :8001
 ```
 
-Sin GPU, usar Ollama como fallback y apuntar `GEMMA_ENDPOINT` /
-`QWEN_ENDPOINT` en `apps/backend/.env` a Ollama.
+Sin GPU, el backend corre con Fakes (`FakeLlmClient`) por defecto. Para
+apuntar a Ollama/vLLM real, setear `LLM_PRIMARY_BASE_URL` /
+`LLM_SECONDARY_BASE_URL` (+ `LLM_TOPOLOGY`) en `apps/backend/.env`.
 
 Guía paso a paso completa: [`docs/operations/INSTALL.md`](./docs/operations/INSTALL.md).
 Flujo de desarrollo diario: [`docs/operations/LOCAL-DEV.md`](./docs/operations/LOCAL-DEV.md).
@@ -151,7 +152,7 @@ Atajos completos en [`Makefile`](./Makefile).
 | Web | Next.js 16, TypeScript strict, Tailwind v4 (CSS-first), shadcn/ui, GSAP, Lenis, TanStack Query v5, Zustand v5, React Hook Form + Zod, Auth.js v5 |
 | Mobile | Expo SDK 53+, Expo Router (file-based), NativeWind, TanStack Query, Zustand, expo-secure-store, expo-notifications |
 | Backend | Python 3.12+, FastAPI, Pydantic v2, SQLAlchemy 2 async, Alembic, Celery 5.4+, uv, Ruff |
-| LLM | vLLM (prod), Ollama (dev), Unsloth + QLoRA (fine-tuning), LlamaIndex (orquestación), Mem0 OSS v2 (memoria semántica) |
+| LLM | vLLM (prod), Ollama (dev), Unsloth + QLoRA (fine-tuning), LlamaIndex (orquestación) |
 | DB (MVP) | Supabase como Postgres 16 gestionado + pgvector, Redis (Upstash o Docker) |
 | DB (V2) | Postgres 16 self-hosted + pgvector, Redis self-hosted |
 | Monorepo | pnpm 10+, Turborepo 2.x, Biome 2.x |
@@ -171,7 +172,7 @@ Ambos corren cuantizados (Q4/Q5) en una RTX 4080 Super 16GB vía vLLM.
 
 | Capa | Qué guarda | Store | Quién escribe |
 | --- | --- | --- | --- |
-| **Semántica** | Hechos persistentes sobre el usuario | Mem0 OSS v2 + Postgres + pgvector + bge-m3 (1024-dim) | Qwen (async Celery) |
+| **Semántica** | Hechos persistentes sobre el usuario | Postgres + pgvector + bge-m3 (1024-dim), engine in-house (ADR-010) | Qwen (async Celery) |
 | **Episódica** | Resúmenes de sesiones pasadas con embedding | Postgres + pgvector + JSONB metadata | Qwen al cerrar sesión |
 | **Procedural** | Preferencias y patrones | Postgres + JSONB | Qwen + heurísticas |
 
@@ -234,7 +235,7 @@ ynara/
 │   └── config/              # tsconfig.base + biome + eslint
 │
 ├── docs/
-│   ├── architecture/        # 5 ADRs + 3 diagramas Mermaid
+│   ├── architecture/        # 10 ADRs + 3 diagramas Mermaid
 │   ├── product/             # VISION, MODES, MEMORY, TONE-OF-VOICE
 │   ├── operations/          # INSTALL, LOCAL-DEV, DEPLOY, RUNBOOK, MIGRATION
 │   └── conventions/         # COMMITS, GLOSSARY, AI-GUIDELINES, CODE-STYLE
@@ -244,7 +245,7 @@ ynara/
 │   ├── vllm/                # start-vllm.sh para Gemma + Qwen
 │   └── prod/                # systemd, Cloudflare Tunnel, backups (TODO)
 │
-├── skills/                  # 5 SKILL.md reutilizables
+├── skills/                  # 6 SKILL.md reutilizables
 │   ├── add-new-mode/        # agregar un modo al producto
 │   ├── add-llm-tool/        # agregar una tool al agente Qwen
 │   ├── add-memory-type/     # agregar una capa de memoria (proceso pesado)
