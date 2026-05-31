@@ -18,8 +18,10 @@ Decisiones de diseno M9 (criticadas adversarialmente, NO re-litigar):
     + user actual) en cada request; ningun turno se persiste todavia. El
     ``sessions.id`` es solo el ancla (FK futura para episodica /
     ``source_session_id``); M9 lo expone honesto sin sobre-vender memoria de
-    conversacion. En M9 el worker de consolidacion NO usa ``session_id`` como FK
-    al encolar, asi que no necesita la fila committeada antes del enqueue.
+    conversacion. M10 Ola 0: el enqueue de consolidacion ocurre DESPUES del
+    ``commit`` (ver ``_run_chat_turn``), asi que cuando M10 escriba una FK a
+    ``sessions.id`` la fila ya esta persistida cuando el worker procesa el turno
+    (sin race con el commit ni ``ForeignKeyViolation`` bajo carga).
 
 (3) Aislamiento por usuario. El ``user_id`` sale del JWT (``CurrentUser``); una
     ``ChatSession`` de otro usuario o inexistente da 404 (sin oraculo de
@@ -67,10 +69,12 @@ from app.core.deps import (
 from app.llm.clients.base import LLMClient
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
+from app.llm.config import load_llm_config
 from app.llm.router import route
 from app.llm.schemas import ChatRequest, ChatResponse
 from app.models.session import ChatSession
 from app.schemas.chat import Action, ChatHttpRequest, ChatHttpResponse
+from app.workflows.consolidation import consolidate_turn
 
 router = APIRouter()
 
@@ -120,13 +124,23 @@ async def _run_chat_turn(
     ``ChatSession`` y el ``ChatResponse`` crudos (sin armar el wire) mantiene
     ese ensamblado en los endpoints.
 
-    Orden transaccional (decision #2 M9, byte-a-byte el del ``/chat`` original):
+    Orden transaccional (decision #2 M9 + M10 Ola 0):
     ``resolve_chat_session`` (flush, sin commit) -> ``route()`` ->
-    ``session.commit()`` DESPUES de ``route()``. Es seguro commitear al final
-    porque ``route()`` nunca propaga errores del LLM (overflow / error
-    permanente devuelven fallback); asi se evita persistir una ``ChatSession``
-    huerfana y se mantiene el commit unico por request. Si saltara un bug
-    inesperado antes del commit, ``get_db()`` hace rollback y nada se persiste.
+    ``session.commit()`` DESPUES de ``route()`` -> ``consolidate_turn.delay()``
+    DESPUES del commit. Es seguro commitear al final porque ``route()`` nunca
+    propaga errores del LLM (overflow / error permanente devuelven fallback); asi
+    se evita persistir una ``ChatSession`` huerfana y se mantiene el commit unico
+    por request. Si saltara un bug inesperado antes del commit, ``get_db()`` hace
+    rollback y nada se persiste (ni se encola: el enqueue es lo ultimo).
+
+    Enqueue post-commit (M10 Ola 0): el ``consolidate_turn.delay()`` se movio de
+    ``route()`` a aca, DESPUES del commit, para que la ``ChatSession`` ya este
+    persistida antes de que el worker Celery (otro proceso) procese el turno.
+    Hoy es inocuo (la task no toca FKs a ``sessions``), pero blinda a M10 cuando
+    escriba ``source_session_id`` / ``episodic.session_id`` (FK a ``sessions.id``)
+    contra un race enqueue-vs-commit. Sede UNICA: ``/chat`` y ``/chat/stream``
+    heredan el enqueue. Misma condicion que tenia ``route()`` (``writes_memory``
+    + turno no-degradado); mismos kwargs.
 
     M9 NO entrega multi-turno: ``route()`` arma ``messages`` desde cero (system
     + user actual) en cada llamada; ningun turno se persiste. El ``session_id``
@@ -169,6 +183,33 @@ async def _run_chat_turn(
     #     hayan escrito los stores en esta sesion). Si saltara un bug inesperado
     #     antes de aca, get_db() hace rollback y nada se persiste.
     await session.commit()
+
+    # (5) Enqueue de consolidacion DESPUES del commit (M10 Ola 0). Se movio aca
+    #     desde route() para garantizar que la ChatSession ya este persistida
+    #     antes de que el worker Celery (otro proceso) lea el turno: un enqueue
+    #     pre-commit puede ganarle al commit y, el dia que M10 escriba una FK a
+    #     sessions.id (source_session_id / episodic.session_id), seria un
+    #     ForeignKeyViolation reproducible bajo carga. .delay() es no-bloqueante.
+    #
+    #     MISMA condicion que tenia route() (no se re-litiga): encolar SOLO si el
+    #     modelo del modo escribe memoria (writes_memory: Qwen=True, Gemma=False)
+    #     y el turno NO degrado. El finish_reason 'degraded' lo produce solo el
+    #     fallback de route() ante un error permanente del LLM; en ese turno
+    #     route() nunca encolaba (retornaba antes), asi que aca tampoco.
+    #
+    #     Esta es la UNICA sede de enqueue: ambos endpoints (/chat y /chat/stream)
+    #     pasan por _run_chat_turn, asi que los dos heredan el enqueue post-commit.
+    #     NUNCA meter el .delay() en el generator SSE del endpoint: el commit ya
+    #     ocurrio aca y el closure del stream solo cierra sobre primitivos.
+    writes_memory = load_llm_config().model_for_mode(body.mode.value).writes_memory
+    if writes_memory and resp.finish_reason != "degraded":
+        consolidate_turn.delay(
+            user_id=str(user_id),
+            session_id=str(chat_session.id),
+            user_msg=body.text,
+            model_response=resp.text,
+            mode=body.mode.value,
+        )
 
     return chat_session, resp
 

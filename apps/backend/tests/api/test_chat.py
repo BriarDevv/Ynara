@@ -10,7 +10,8 @@ clientes Fake, sin red ni Redis:
 - ``get_llm_client`` / ``get_embedder`` / ``get_reranker`` se overridean con
   Fakes; el ``FakeLlmClient`` se programa con ``CompletionResult`` para que
   ``route()`` responda determinista.
-- ``app.llm.router.consolidate_turn`` se parchea (Qwen encola; no hay Redis).
+- ``app.api.v1.chat.consolidate_turn`` se parchea (Qwen encola post-commit; no
+  hay Redis). El enqueue se movio de ``route()`` al endpoint en M10 Ola 0.
 
 Limpieza: el endpoint commitea, asi que el rollback del fixture NO alcanza para
 los datos persistidos. Cada test borra el ``User`` que sembro al final
@@ -174,7 +175,9 @@ async def test_happy_path_qwen_productividad_with_actions(db_session: AsyncSessi
 
     client = await _client(db_session, llm_client=fake)
     try:
-        with patch("app.llm.router.consolidate_turn") as mock_task:
+        # Patch target M10 Ola 0: el enqueue se movio de route() al endpoint, asi
+        # que el binding real ahora es ``app.api.v1.chat.consolidate_turn``.
+        with patch("app.api.v1.chat.consolidate_turn") as mock_task:
             mock_task.delay = MagicMock()
             async with client:
                 resp = await client.post(
@@ -191,8 +194,22 @@ async def test_happy_path_qwen_productividad_with_actions(db_session: AsyncSessi
         assert action["id"] == "tc-1"
         assert action["name"] == "memory.search"
         assert action["arguments"] == {"query": "reuniones"}
-        # Qwen escribe memoria -> se encolo la consolidacion.
+        # Qwen escribe memoria -> se encolo la consolidacion (post-commit).
         mock_task.delay.assert_called_once()
+        # Los kwargs replican EXACTO los que pasaba route(): todos str. El
+        # session_id es el de la ChatSession ya devuelta/persistida -> el enqueue
+        # ocurrio DESPUES del commit (la fila existe cuando se encola).
+        call_kwargs = mock_task.delay.call_args.kwargs
+        assert call_kwargs == {
+            "user_id": str(user.id),
+            "session_id": body["session_id"],
+            "user_msg": "agenda una reunion",
+            "model_response": "Listo, lo agende.",
+            "mode": "productividad",
+        }
+        # La ChatSession ya esta persistida en la DB cuando se encolo.
+        persisted = await db_session.get(ChatSession, uuid.UUID(body["session_id"]))
+        assert persisted is not None
     finally:
         app.dependency_overrides.clear()
         await _delete_user(db_session, user.id)

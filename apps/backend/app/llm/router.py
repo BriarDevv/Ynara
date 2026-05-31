@@ -4,13 +4,17 @@ Decision: el modelo a usar viene de ``ynara.config.json[modes][...].model``.
 Este archivo NO duplica esa configuracion: la carga en runtime via
 ``load_llm_config()`` (cacheado a nivel de modulo).
 
-Reglas (M8 Ola 1 + Ola 2):
+Reglas (M8 Ola 1 + Ola 2; enqueue movido en M10 Ola 0):
 - Gemma (conversacional) solo lee memoria: ``tools_enabled=[]`` -> sin tool loop
-  real, una sola vuelta al modelo. ``writes_memory=False``: NO encola
-  consolidacion.
+  real, una sola vuelta al modelo. ``writes_memory=False``: el turno NO se
+  consolida.
 - Qwen (agent) lee memoria y puede llamar tools (calendar/reminder/memory).
-  ``writes_memory=True``: encola ``consolidate_turn`` DESPUES de tener
-  ``final_text`` (no bloqueante, decision #2 ADR-010).
+  ``writes_memory=True``: el turno SE consolida en el worker Celery (no
+  bloqueante, decision #2 ADR-010).
+- ``route()`` ya NO encola: el ``consolidate_turn.delay()`` vive en el endpoint
+  (``_run_chat_turn``), DESPUES del ``session.commit()`` (M10 Ola 0). El router
+  solo ensambla contexto + tool loop y devuelve la respuesta; la decision de
+  consolidar (``writes_memory`` + turno no-degradado) se evalua en el endpoint.
 - El router nunca acepta inputs sin sanear: ``request.mode`` es un ``Mode``
   validado por Pydantic; el ``session_id`` es OPACO (ver abajo).
 
@@ -25,11 +29,9 @@ Flujo de ``route()``:
    cacheado) si el bloque no esta vacio.
 5. Arma ``messages = [system, user]`` y corre ``run_tool_loop`` con el
    ``served_name`` del modelo (NUNCA la key interna).
-6. Si ``model_cfg.writes_memory``, encola ``consolidate_turn.delay()`` (Ola 2,
-   no bloqueante). La escritura ocurre en el worker Celery, nunca en el path de
-   respuesta.
-7. Devuelve un ``ChatResponse`` con el texto final, las ``actions`` ejecutadas
-   y el ``session_id``.
+6. Devuelve un ``ChatResponse`` con el texto final, las ``actions`` ejecutadas
+   y el ``session_id``. ``route()`` NO encola consolidacion: eso lo hace el
+   endpoint despues del commit (M10 Ola 0; ver ``app.api.v1.chat``).
 
 Decisiones de diseno documentadas (M8 Ola 1 + Ola 2):
 
@@ -51,10 +53,14 @@ Decisiones de diseno documentadas (M8 Ola 1 + Ola 2):
     captura el overflow (y los errores permanentes del LLM) y devuelve un
     ``ChatResponse`` con texto de fallback en vez de propagar la excepcion.
 
-(d) Encolado de consolidacion (Ola 2). ``consolidate_turn.delay()`` es
-    no-bloqueante: el encolado en Redis tarda microsegundos y NO retrasa la
-    respuesta al usuario. Se encola DESPUES de tener ``final_text`` y ANTES del
-    ``return``. Solo si ``model_cfg.writes_memory`` (Qwen=True, Gemma=False).
+(d) Encolado de consolidacion (Ola 2; movido en M10 Ola 0). El
+    ``consolidate_turn.delay()`` ya NO vive en ``route()``: se movio al endpoint
+    (``_run_chat_turn`` en ``app.api.v1.chat``), DESPUES del ``session.commit()``,
+    para que la ``ChatSession`` este persistida antes de que el worker Celery
+    (otro proceso) procese el turno. El enqueue sigue siendo no-bloqueante y
+    condicionado a ``writes_memory`` (Qwen=True, Gemma=False) + turno no-degradado;
+    la condicion se replica EXACTA en el endpoint. ``route()`` solo provee la
+    respuesta (incluido ``finish_reason``) que el endpoint usa para decidir.
 """
 
 from __future__ import annotations
@@ -77,7 +83,6 @@ from app.llm.errors import LlmBadRequestError
 from app.llm.prompts.loader import load_prompt
 from app.llm.schemas import ChatMessage, ChatRequest, ChatResponse
 from app.llm.tool_loop import run_tool_loop
-from app.workflows.consolidation import consolidate_turn
 
 __all__ = ["ChatRequest", "ChatResponse", "route"]
 
@@ -216,18 +221,11 @@ async def route(
             text=_FALLBACK_TEXT, actions=[], session_id=session_id, finish_reason="degraded"
         )
 
-    # Consolidacion (Ola 2): encolar SOLO si el modelo escribe memoria (Qwen=True,
-    # Gemma=False). .delay() es no-bloqueante; no retrasa la respuesta al usuario.
-    # Se encola DESPUES de tener final_text. El session_id es OPACO (decision (a)).
-    if model_cfg.writes_memory:
-        consolidate_turn.delay(
-            user_id=str(user_id),
-            session_id=session_id,
-            user_msg=request.text,
-            model_response=final_text,
-            mode=mode_key,
-        )
-
+    # NO se encola consolidacion aca (M10 Ola 0): el enqueue se movio al endpoint
+    # (``_run_chat_turn`` en ``app.api.v1.chat``), DESPUES del ``session.commit()``,
+    # para garantizar que la ``ChatSession`` ya este persistida antes de que el
+    # worker Celery (otro proceso) lea el turno. ``route()`` ya no encola NADA: la
+    # condicion (``writes_memory`` + turno no-degradado) se replica en el endpoint.
     return ChatResponse(
         text=final_text, actions=actions, session_id=session_id, finish_reason=finish_reason
     )

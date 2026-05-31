@@ -234,7 +234,10 @@ async def test_happy_qwen_actions_en_done(db_session: AsyncSession) -> None:
 
     client = await _client(db_session, llm_client=fake)
     try:
-        with patch("app.llm.router.consolidate_turn") as mock_task:
+        # Patch target M10 Ola 0: el enqueue se movio de route() a _run_chat_turn
+        # (compartido por /chat y /chat/stream); el binding real ahora es
+        # ``app.api.v1.chat.consolidate_turn``.
+        with patch("app.api.v1.chat.consolidate_turn") as mock_task:
             mock_task.delay = MagicMock()
             async with client:
                 resp = await client.post(
@@ -255,8 +258,63 @@ async def test_happy_qwen_actions_en_done(db_session: AsyncSession) -> None:
         assert action["id"] == "tc-1"
         assert action["name"] == "memory.search"
         assert action["arguments"] == {"query": "reuniones"}
-        # Qwen escribe memoria -> se encolo la consolidacion.
+        # Qwen escribe memoria -> /chat/stream TAMBIEN encola (hereda el enqueue
+        # post-commit de _run_chat_turn, igual que /chat).
         mock_task.delay.assert_called_once()
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+# ---------------------------------------------------------------------------
+# 2b. /chat/stream encola consolidacion DESPUES del commit (M10 Ola 0)
+# ---------------------------------------------------------------------------
+
+
+async def test_stream_enqueues_consolidate_post_commit(db_session: AsyncSession) -> None:
+    """/chat/stream encola consolidate_turn DESPUES del commit, con kwargs exactos.
+
+    El enqueue se movio de ``route()`` a ``_run_chat_turn`` (M10 Ola 0), que
+    ambos endpoints comparten: este test prueba que /chat/stream (no solo /chat)
+    encola, y que cuando lo hace la ``ChatSession`` YA esta persistida en la DB
+    (enqueue post-commit) con los kwargs que pasaba ``route()``. Qwen
+    (productividad) tiene ``writes_memory=True``.
+    """
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+    fake.queue_result(_completion(text="Hecho", finish_reason="stop", model_name="qwen"))
+
+    client = await _client(db_session, llm_client=fake)
+    try:
+        with patch("app.api.v1.chat.consolidate_turn") as mock_task:
+            mock_task.delay = MagicMock()
+            async with client:
+                resp = await client.post(
+                    "/v1/chat/stream",
+                    json={"text": "recorda esto", "mode": "productividad"},
+                    headers=_bearer(user.id),
+                )
+
+        assert resp.status_code == 200
+        done = _done(_parse_sse(resp.text))
+        session_id = done["session_id"]
+
+        # /chat/stream encola exactamente una vez (hereda de _run_chat_turn).
+        mock_task.delay.assert_called_once()
+        # Kwargs identicos a los que pasaba route(): todos str.
+        call_kwargs = mock_task.delay.call_args.kwargs
+        assert call_kwargs == {
+            "user_id": str(user.id),
+            "session_id": session_id,
+            "user_msg": "recorda esto",
+            "model_response": "Hecho",
+            "mode": "productividad",
+        }
+        # POST-COMMIT: la ChatSession ya esta persistida cuando se encola. El
+        # session_id encolado es el de la fila real (no un id opaco del router).
+        persisted = await db_session.get(ChatSession, uuid.UUID(session_id))
+        assert persisted is not None
+        assert persisted.user_id == user.id
     finally:
         app.dependency_overrides.clear()
         await _delete_user(db_session, user.id)
