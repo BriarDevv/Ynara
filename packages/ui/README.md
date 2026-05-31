@@ -53,6 +53,37 @@ El color sale de `currentColor` por defecto (sin hex hardcodeado).
 > no cubra todavía, se puede sumar Lucide manteniendo el mismo grosor de
 > trazo. Pendiente (no se agregó la dep en este PR).
 
+## Sistema gráfico (`src/graphics/`) — DESIGN.md §2 / §3.6
+
+El rasgo más ownable de la marca: la **"Red de memoria"** como recurso de
+profundidad/ambiente (reemplaza al gradiente genérico).
+
+- **`MemoryField`** — fondo SVG de nodos + vínculos curvos + diamantes
+  (acento). Props `density` (dispersa/media/densa), `variant`
+  (clara/nocturna) y `seed`. Llena su contenedor (`width/height 100%` +
+  `preserveAspectRatio="slice"`); envolverlo en un contenedor posicionado.
+
+  ```tsx
+  import { MemoryField } from "@ynara/ui";
+
+  <div style={{ position: "relative", overflow: "hidden" }}>
+    <MemoryField density="dispersa" variant="nocturna" />
+    {/* contenido encima */}
+  </div>
+  ```
+
+  La geometría vive como data **determinista** (`field.ts`, PRNG sembrado,
+  sin `Math.random`/`Date`): idéntica en server y cliente (no rompe la
+  hidratación SSR) y estable entre builds. Es la capa portable; el
+  renderer web la dibuja, RN mapeará las mismas formas a `react-native-svg`.
+  Colores siempre por tokens de la rampa de memoria (sin hex). Estático
+  (sin loops, §2.5).
+
+- **`GrainOverlay`** — capa de grano que envuelve el utility `.bg-grain`
+  de `globals.css`. **Web-first**: depende de esa clase global (pseudo-
+  elemento), que no existe en RN → para mobile necesita otra estrategia
+  (imagen/SVG de ruido), TODO al llegar ese consumidor.
+
 ## Convención
 
 - Componentes presentacionales, sin lógica de dominio.
