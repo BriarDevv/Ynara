@@ -49,8 +49,6 @@ Lo que la UI **no es**: infantil, ñoña, recargada, ruidosa, "Material Design
 genérico", ni el look "AI/SaaS template" (gradiente violeta-azul de relleno,
 glassmorphism porque sí, emojis como íconos, todo centrado).
 
-Para detalle conceptual ver [`IDENTITY.md`](./IDENTITY.md).
-
 ---
 
 ## 2. Sistema gráfico (la "Red de memoria")
@@ -343,10 +341,14 @@ semitransparente; las sombras se reducen al mínimo.
 |---|---|---|
 | `--duration-instant` | `100ms` | Feedback inmediato (press) |
 | `--duration-fast` | `150ms` | Hover, focus, microinteracciones |
-| `--duration-base` | `200ms` | Transiciones de UI estándar |
-| `--duration-slow` | `300ms` | Transiciones más amplias |
-| `--duration-screen` | `350ms` | Cambio de pantalla / navegación |
+| `--duration-base` | `200ms` | Transiciones de UI estándar (antes 250ms) |
+| `--duration-slow` | `300ms` | Transiciones amplias **dentro** de una vista |
+| `--duration-screen` | `350ms` | Cambio de pantalla / navegación **entre** vistas |
 | `--ease-out-soft` | `cubic-bezier(0.22, 1, 0.36, 1)` | Easing default |
+
+> `--duration-slow` (300ms) y `--duration-screen` (350ms) son distintos a propósito:
+> el primero para transiciones grandes dentro de la misma pantalla (acordeones,
+> expandir cards); el segundo, más largo, para la transición de ruta completa.
 
 **Springs** (para Motion / animaciones con física), modelo perceptual
 `visualDuration` + `bounce` [research, respaldado por Apple WWDC23 + Figma]:
@@ -484,14 +486,17 @@ Los primitives web-only viven en
 | `TextField` / `Textarea` | default, error | Error inline con copy humano. |
 | `Toggle` | off, on | Switch propio con tokens. |
 | `ChipGroup` | — | Opciones segmentadas. |
-| `PromptChip` | — | Chip de prompt accionable (empty state del chat, §10.5). |
+| `PromptChip` ⬚ | — | Chip de prompt accionable (empty state del chat, §10.5). |
 | `ProgressDots` | — | current = gradient azul base; otros = ink-faint. |
 | `Toast` | info, success, error | Auto-dismiss configurable. |
 | `YnaraMark` | size | Logo SVG con gradientes. |
-| `Icon` | nombre del set | Set propio (§9); fallback Lucide controlado. |
+| `Icon` ⬚ | nombre del set | Set propio (§9); fallback Lucide controlado. |
 | `ModeChip` / `SuggestionCard` | por modo | Tint del modo (§3.5). |
 | `EmptyStateCard` | — | Estados vacíos con sistema gráfico de fondo. |
-| `GrainOverlay` / `MemoryField` | — | Capa de grano (§3.6) / red de memoria (§2) ambiental. |
+| `GrainOverlay` / `MemoryField` ⬚ | — | Capa de grano (§3.6) / red de memoria (§2) ambiental. |
+
+> ⬚ = componente **objetivo, no implementado aún** (parte del rebuild, no del estado
+> actual del código).
 
 Cada componente en su propio archivo, named export, sin barrel monstruo.
 
@@ -554,7 +559,7 @@ Cambios a aplicar (en su propio PR de implementación, con verificación visual)
 | `--color-bg-soft` (dark) | `#161B25` | `#2E3750` |
 | `--color-on-dark` | `#FFFFFF` | `#FAF9F5` |
 | Rampa de memoria | solo `--gradient-violet` (`#8C63B8→#7C4FA3`) | `--color-memory-*` (indigo/violáceo/periwinkle/violeta) + `--gradient-memory` (`#434A82→#8165A3`) |
-| Motion tokens | `--duration-base`, `--duration-screen`, `--ease-out-soft` | + `--duration-instant/fast/slow` + springs (§8.1) |
+| Motion tokens | `--duration-base` (250ms), `--duration-screen` (350ms), `--ease-out-soft` | `--duration-base` **250ms → 200ms** + nuevos `--duration-instant/fast/slow` + springs (§8.1) |
 | Tipografía | escala fija + clamp en hero/title | escala fluida completa (§4.2) + `text-display` |
 | Grano | — | `--texture-grain` / `.bg-grain` (§3.6) |
 | Sistema gráfico | — | componentes SVG `MemoryField` / patrón (§2) |
@@ -579,7 +584,4 @@ Cambios a aplicar (en su propio PR de implementación, con verificación visual)
 - `Ynara-Universo-de-Marca.html` — Guía de identidad visual · Ynara 2026 (fuente del
   sistema gráfico, iconografía, paleta y aplicaciones; **conviene versionarla en el
   repo**, p. ej. `docs/brand/`).
-- [`IDENTITY.md`](./IDENTITY.md) — ADN de marca.
-- [`docs/product/TONE-OF-VOICE.md`](./docs/product/TONE-OF-VOICE.md) — voz operativa
-  modo-por-modo.
 - Prototipo de referencia: [querques20/ynara](https://github.com/querques20/ynara).
