@@ -359,7 +359,12 @@ async def test_integration_qwen_tool_loop_memory_search(db_session: Any) -> None
 
     Vuelta 1: tool_call memory.search; vuelta 2: stop con texto. actions poblado;
     served_name='qwen' en complete_calls.
+
+    consolidate_turn.delay se parchea con no-op: este test verifica el flujo del
+    tool loop, no el encolado (Redis no corre en el entorno de tests de integracion).
     """
+    from unittest.mock import MagicMock, patch
+
     from app.memory.semantic import SemanticMemoryStore
     from app.schemas.memory import SemanticMemoryCreate
 
@@ -377,15 +382,17 @@ async def test_integration_qwen_tool_loop_memory_search(db_session: Any) -> None
         _result(text="Programe la reunion corta.", finish_reason="stop", model_name="qwen")
     )
 
-    resp = await route(
-        ChatRequest(text="agenda una reunion", mode=Mode.PRODUCTIVIDAD, session_id="s-prod"),
-        session=db_session,
-        user_id=user.id,
-        llm_client=fake,
-        embedder=FakeEmbeddingClient(),
-        reranker=FakeReranker(),
-        config=_cfg(),
-    )
+    with patch("app.llm.router.consolidate_turn") as mock_task:
+        mock_task.delay = MagicMock()
+        resp = await route(
+            ChatRequest(text="agenda una reunion", mode=Mode.PRODUCTIVIDAD, session_id="s-prod"),
+            session=db_session,
+            user_id=user.id,
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            config=_cfg(),
+        )
 
     assert resp.text == "Programe la reunion corta."
     assert resp.session_id == "s-prod"
@@ -411,7 +418,13 @@ async def test_integration_qwen_tool_loop_memory_search(db_session: Any) -> None
 @pytest.mark.integration
 async def test_integration_qwen_served_name_and_context(db_session: Any) -> None:
     """Qwen (productividad): el system prompt lleva el bloque de contexto con los
-    hechos semanticos sembrados, y se pasa served_name='qwen'."""
+    hechos semanticos sembrados, y se pasa served_name='qwen'.
+
+    consolidate_turn.delay se parchea con no-op: este test verifica el contexto
+    de memoria inyectado, no el encolado (Redis no corre en tests de integracion).
+    """
+    from unittest.mock import MagicMock, patch
+
     from app.memory.semantic import SemanticMemoryStore
     from app.schemas.memory import SemanticMemoryCreate
 
@@ -423,15 +436,17 @@ async def test_integration_qwen_served_name_and_context(db_session: Any) -> None
     fake = FakeLlmClient(served_models=frozenset({"qwen"}))
     fake.queue_result(_result(text="listo", finish_reason="stop", model_name="qwen"))
 
-    await route(
-        ChatRequest(text="que sabes de mi?", mode=Mode.PRODUCTIVIDAD),
-        session=db_session,
-        user_id=user.id,
-        llm_client=fake,
-        embedder=FakeEmbeddingClient(),
-        reranker=FakeReranker(),
-        config=_cfg(),
-    )
+    with patch("app.llm.router.consolidate_turn") as mock_task:
+        mock_task.delay = MagicMock()
+        await route(
+            ChatRequest(text="que sabes de mi?", mode=Mode.PRODUCTIVIDAD),
+            session=db_session,
+            user_id=user.id,
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            config=_cfg(),
+        )
 
     messages = fake.complete_calls[0]["messages"]
     system_msg = messages[0]
@@ -489,3 +504,205 @@ async def test_integration_user_no_memory_no_context_block(db_session: Any) -> N
     messages = fake.complete_calls[0]["messages"]
     system_msg = messages[0]
     assert "Contexto de memoria" not in system_msg.content
+
+
+# ===========================================================================
+# UNIT: encolado de consolidate_turn (Ola 2)
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_qwen_mode_enqueues_consolidate_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Modo Qwen (productividad, writes_memory=True): route() encola
+    consolidate_turn.delay con los args correctos (user_id, session_id,
+    user_msg, model_response, mode). NO se levanta un worker real."""
+    from app.llm import router as router_mod
+    from app.llm.context import MemoryContext
+    from app.llm.tools.registry import default_registry
+
+    delay_calls: list[dict[str, str]] = []
+
+    class _FakeTask:
+        def delay(self, **kwargs: str) -> None:
+            delay_calls.append(dict(kwargs))
+
+    monkeypatch.setattr(router_mod, "consolidate_turn", _FakeTask())
+
+    empty_ctx = MemoryContext(
+        semantic_store=None,
+        episodic_store=None,
+        procedural_store=None,
+        _default_reg=default_registry(),
+        _memory_reg=None,
+    )
+    original = router_mod.build_memory_context
+    router_mod.build_memory_context = lambda **_kw: empty_ctx
+
+    uid = uuid.uuid4()
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+    fake.queue_result(_result(text="listo qwen", finish_reason="stop", model_name="qwen"))
+
+    try:
+        resp = await route(
+            ChatRequest(text="hola qwen", mode=Mode.PRODUCTIVIDAD, session_id="sess-qwen"),
+            session=MagicMock(),
+            user_id=uid,
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            config=_cfg(),
+        )
+    finally:
+        router_mod.build_memory_context = original
+
+    assert resp.text == "listo qwen"
+    assert len(delay_calls) == 1
+    call = delay_calls[0]
+    assert call["user_id"] == str(uid)
+    assert call["session_id"] == "sess-qwen"
+    assert call["user_msg"] == "hola qwen"
+    assert call["model_response"] == "listo qwen"
+    assert call["mode"] == "productividad"
+
+
+@pytest.mark.asyncio
+async def test_gemma_mode_does_not_enqueue_consolidate_turn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Modo Gemma (vida, writes_memory=False): route() NO encola
+    consolidate_turn.delay bajo ningun camino."""
+    from app.llm import router as router_mod
+    from app.llm.context import MemoryContext
+    from app.llm.tools.registry import default_registry
+
+    delay_calls: list[dict[str, str]] = []
+
+    class _FakeTask:
+        def delay(self, **kwargs: str) -> None:
+            delay_calls.append(dict(kwargs))
+
+    monkeypatch.setattr(router_mod, "consolidate_turn", _FakeTask())
+
+    empty_ctx = MemoryContext(
+        semantic_store=None,
+        episodic_store=None,
+        procedural_store=None,
+        _default_reg=default_registry(),
+        _memory_reg=None,
+    )
+    original = router_mod.build_memory_context
+    router_mod.build_memory_context = lambda **_kw: empty_ctx
+
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_result(_result(text="hola gemma", finish_reason="stop", model_name="gemma4"))
+
+    try:
+        resp = await route(
+            ChatRequest(text="hola", mode=Mode.VIDA, session_id="sess-gemma"),
+            session=MagicMock(),
+            user_id=uuid.uuid4(),
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            config=_cfg(),
+        )
+    finally:
+        router_mod.build_memory_context = original
+
+    assert resp.text == "hola gemma"
+    assert delay_calls == [], "Gemma NO debe encolar consolidacion"
+
+
+@pytest.mark.asyncio
+async def test_estudio_mode_does_not_enqueue_consolidate_turn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Modo estudio (Gemma, writes_memory=False): igual que vida, NO encola."""
+    from app.llm import router as router_mod
+    from app.llm.context import MemoryContext
+    from app.llm.tools.registry import default_registry
+
+    delay_calls: list[dict[str, str]] = []
+
+    class _FakeTask:
+        def delay(self, **kwargs: str) -> None:
+            delay_calls.append(dict(kwargs))
+
+    monkeypatch.setattr(router_mod, "consolidate_turn", _FakeTask())
+
+    empty_ctx = MemoryContext(
+        semantic_store=None,
+        episodic_store=None,
+        procedural_store=None,
+        _default_reg=default_registry(),
+        _memory_reg=None,
+    )
+    original = router_mod.build_memory_context
+    router_mod.build_memory_context = lambda **_kw: empty_ctx
+
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_result(_result(text="listo estudio", finish_reason="stop", model_name="gemma4"))
+
+    try:
+        resp = await route(
+            ChatRequest(text="explica esto", mode=Mode.ESTUDIO, session_id="sess-estudio"),
+            session=MagicMock(),
+            user_id=uuid.uuid4(),
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            config=_cfg(),
+        )
+    finally:
+        router_mod.build_memory_context = original
+
+    assert resp.text == "listo estudio"
+    assert delay_calls == [], "Estudio (Gemma) NO debe encolar consolidacion"
+
+
+@pytest.mark.asyncio
+async def test_memoria_mode_enqueues_consolidate_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Modo memoria (Qwen, writes_memory=True): route() encola consolidate_turn."""
+    from app.llm import router as router_mod
+    from app.llm.context import MemoryContext
+    from app.llm.tools.registry import default_registry
+
+    delay_calls: list[dict[str, str]] = []
+
+    class _FakeTask:
+        def delay(self, **kwargs: str) -> None:
+            delay_calls.append(dict(kwargs))
+
+    monkeypatch.setattr(router_mod, "consolidate_turn", _FakeTask())
+
+    empty_ctx = MemoryContext(
+        semantic_store=None,
+        episodic_store=None,
+        procedural_store=None,
+        _default_reg=default_registry(),
+        _memory_reg=None,
+    )
+    original = router_mod.build_memory_context
+    router_mod.build_memory_context = lambda **_kw: empty_ctx
+
+    uid = uuid.uuid4()
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+    fake.queue_result(_result(text="memoria ok", finish_reason="stop", model_name="qwen"))
+
+    try:
+        resp = await route(
+            ChatRequest(text="recorda esto", mode=Mode.MEMORIA, session_id="sess-mem"),
+            session=MagicMock(),
+            user_id=uid,
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            config=_cfg(),
+        )
+    finally:
+        router_mod.build_memory_context = original
+
+    assert resp.text == "memoria ok"
+    assert len(delay_calls) == 1
+    assert delay_calls[0]["mode"] == "memoria"
+    assert delay_calls[0]["user_id"] == str(uid)
