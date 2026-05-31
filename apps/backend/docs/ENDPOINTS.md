@@ -83,9 +83,28 @@ Dos endpoints: uno no-streaming (JSON) y uno SSE. Contrato + justificación en
 - GET `/v1/memory/export` — export JSON estructurado.
 - Permisos: usuario autenticado, solo su propia memoria.
 
-## /v1/sessions (TODO)
+## /v1/sessions
 
-- TODO: completar.
+Ciclo de vida de la `ChatSession`. Contrato + decisiones en el docstring de
+[`../app/api/v1/sessions.py`](../app/api/v1/sessions.py).
+
+- **POST** `/v1/sessions/{session_id}/close` — cierra una sesión seteando `ended_at`.
+  - Path param: `session_id: UUID` (la sesión a cerrar).
+  - Request: ninguno (el `user_id` sale del JWT, no del body).
+  - Response 200: `SessionOut = { id, user_id, mode, started_at, ended_at, created_at, updated_at }`
+    (mirror del modelo; `ended_at` queda **no nulo** tras el cierre). Nunca expone
+    nada sensible.
+  - **Idempotente**: cerrar una sesión ya cerrada devuelve **200** con el `ended_at`
+    **original** (no se re-setea; cerrar dos veces es inocuo, **no** 409).
+  - Response 404: sesión inexistente **o** de otro usuario — **mismo** 404 (status +
+    `detail: "sesion no encontrada"`), **sin oráculo** de existencia ajena
+    (aislamiento por `user_id` del JWT, igual que `resolve_chat_session`).
+  - Response 401: sin token / token inválido (`get_current_user`).
+  - Solo setea `ended_at`: **no** toca memoria, **no** encola consolidación (la
+    consolidación episódica es M10 Ola 4).
+- Permisos: **usuario autenticado** (solo sobre sus propias sesiones).
+- Rate limit: TODO.
+- Modos: todos.
 
 ---
 
