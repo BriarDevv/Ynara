@@ -81,7 +81,11 @@ export function CelebrationOutro() {
       className="anim-fade-in mx-auto flex w-full max-w-[480px] flex-1 flex-col items-center justify-center gap-8 px-6 py-16 text-center"
     >
       <YnaraMark size={120} className="anim-pulse-soft" title="Ynara" />
-      <p className="text-subtitle text-[var(--color-ink)]">Listo, te estoy esperando.</p>
+      {/* Pieza editorial de cierre: big type (§4) sobre el ambiente de la
+          "Red de memoria" que ya provee el layout (no se duplica el field). */}
+      <p className="text-display text-balance text-[var(--color-ink)]">
+        Listo, te estoy esperando.
+      </p>
     </div>
   );
 }
