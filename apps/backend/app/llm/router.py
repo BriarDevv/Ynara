@@ -4,10 +4,13 @@ Decision: el modelo a usar viene de ``ynara.config.json[modes][...].model``.
 Este archivo NO duplica esa configuracion: la carga en runtime via
 ``load_llm_config()`` (cacheado a nivel de modulo).
 
-Reglas (M8 Ola 1):
+Reglas (M8 Ola 1 + Ola 2):
 - Gemma (conversacional) solo lee memoria: ``tools_enabled=[]`` -> sin tool loop
-  real, una sola vuelta al modelo.
+  real, una sola vuelta al modelo. ``writes_memory=False``: NO encola
+  consolidacion.
 - Qwen (agent) lee memoria y puede llamar tools (calendar/reminder/memory).
+  ``writes_memory=True``: encola ``consolidate_turn`` DESPUES de tener
+  ``final_text`` (no bloqueante, decision #2 ADR-010).
 - El router nunca acepta inputs sin sanear: ``request.mode`` es un ``Mode``
   validado por Pydantic; el ``session_id`` es OPACO (ver abajo).
 
@@ -22,10 +25,13 @@ Flujo de ``route()``:
    cacheado) si el bloque no esta vacio.
 5. Arma ``messages = [system, user]`` y corre ``run_tool_loop`` con el
    ``served_name`` del modelo (NUNCA la key interna).
-6. Devuelve un ``ChatResponse`` con el texto final, las ``actions`` ejecutadas
+6. Si ``model_cfg.writes_memory``, encola ``consolidate_turn.delay()`` (Ola 2,
+   no bloqueante). La escritura ocurre en el worker Celery, nunca en el path de
+   respuesta.
+7. Devuelve un ``ChatResponse`` con el texto final, las ``actions`` ejecutadas
    y el ``session_id``.
 
-Decisiones de diseno documentadas (M8 Ola 1):
+Decisiones de diseno documentadas (M8 Ola 1 + Ola 2):
 
 (a) ``session_id`` OPACO. ``route()`` usa ``request.session_id`` si viene; si no,
     genera ``str(uuid4())``. NO se parsea a ``UUID``, NO se usa como FK. La
@@ -45,8 +51,10 @@ Decisiones de diseno documentadas (M8 Ola 1):
     captura el overflow (y los errores permanentes del LLM) y devuelve un
     ``ChatResponse`` con texto de fallback en vez de propagar la excepcion.
 
-NOTA: esta Ola 1 NO incluye la consolidacion (memory_engine + tarea Celery =
-Ola 2). ``route()`` termina despues del tool loop y NO encola nada.
+(d) Encolado de consolidacion (Ola 2). ``consolidate_turn.delay()`` es
+    no-bloqueante: el encolado en Redis tarda microsegundos y NO retrasa la
+    respuesta al usuario. Se encola DESPUES de tener ``final_text`` y ANTES del
+    ``return``. Solo si ``model_cfg.writes_memory`` (Qwen=True, Gemma=False).
 """
 
 from __future__ import annotations
@@ -69,6 +77,7 @@ from app.llm.errors import LlmBadRequestError
 from app.llm.prompts.loader import load_prompt
 from app.llm.schemas import ChatMessage, ChatRequest, ChatResponse
 from app.llm.tool_loop import run_tool_loop
+from app.workflows.consolidation import consolidate_turn
 
 __all__ = ["ChatRequest", "ChatResponse", "route"]
 
@@ -205,7 +214,16 @@ async def route(
     except LlmBadRequestError:
         return ChatResponse(text=_FALLBACK_TEXT, actions=[], session_id=session_id)
 
-    # Consolidacion = Ola 2 (memory_engine + tarea Celery). En Ola 1 NO se encola
-    # nada: route() termina aca despues del tool loop.
+    # Consolidacion (Ola 2): encolar SOLO si el modelo escribe memoria (Qwen=True,
+    # Gemma=False). .delay() es no-bloqueante; no retrasa la respuesta al usuario.
+    # Se encola DESPUES de tener final_text. El session_id es OPACO (decision (a)).
+    if model_cfg.writes_memory:
+        consolidate_turn.delay(
+            user_id=str(user_id),
+            session_id=session_id,
+            user_msg=request.text,
+            model_response=final_text,
+            mode=mode_key,
+        )
 
     return ChatResponse(text=final_text, actions=actions, session_id=session_id)
