@@ -47,7 +47,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
 
 from app.core.deps import (
@@ -71,6 +71,7 @@ from app.schemas.memory_api import (
     EpisodicMemoryPage,
     MemoryExport,
     MemoryGroupedResponse,
+    MemoryPatchRequest,
     ProceduralMemoryPage,
     SemanticMemoryPage,
 )
@@ -84,6 +85,11 @@ _LIMIT_MAX = 100
 # Detail ÚNICO del 404 de ``/memory/{layer}/{ref}``: ajena e inexistente comparten
 # exactamente este mensaje (sin oráculo de existencia ajena).
 _NOT_FOUND_DETAIL = "memoria no encontrada"
+
+# Detail del 405 de ``PATCH /memory/episodic/{ref}``: el summary lo genera el worker
+# de consolidación; editar a mano "un resumen de lo que pasó" corrompe la
+# trazabilidad. El dueño puede BORRAR un episodio (DELETE), no reescribirlo.
+_EPISODIC_PATCH_NOT_ALLOWED = "el resumen episódico no se edita: se borra (DELETE) o se regenera"
 
 # Versión del formato de export (``MemoryExport.version``). Bump al evolucionar.
 _EXPORT_VERSION = 1
@@ -122,6 +128,22 @@ async def _procedural_page(
     all_items = await store.list_all()
     page = all_items[offset : offset + limit]
     return ProceduralMemoryPage(items=page, total=len(all_items))
+
+
+def _parse_uuid_ref(ref: str) -> UUID:
+    """Parsea la ``ref`` polimórfica a UUID (semantic/episodic). 422 si no parsea.
+
+    La ``ref`` es ``str`` en la firma porque para procedural es una ``key``; para
+    semantic/episodic debe ser un UUID. Espeja el 422 que daría un path param
+    tipado ``UUID`` (acá es manual porque la ref cambia de tipo según la capa).
+    """
+    try:
+        return UUID(ref)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="ref no es un UUID válido",
+        ) from exc
 
 
 @router.get("/memory", response_model=None, status_code=200)
@@ -242,13 +264,7 @@ async def get_memory(
 
     # Semantic / Episodic: la ref es un UUID. 422 si no parsea (igual que un path
     # param tipado UUID; acá es manual porque la ref es polimórfica por capa).
-    try:
-        memory_id = UUID(ref)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="ref no es un UUID válido",
-        ) from exc
+    memory_id = _parse_uuid_ref(ref)
 
     if layer is MemoryLayer.SEMANTIC:
         semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
@@ -263,3 +279,122 @@ async def get_memory(
     if epi_item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
     return epi_item
+
+
+@router.patch("/memory/{layer}/{ref}", response_model=None, status_code=200)
+async def update_memory(
+    layer: MemoryLayer,
+    ref: str,
+    body: MemoryPatchRequest,
+    session: DbSession,
+    user_id: CurrentUser,
+    embedder: EmbedderDep,
+    reranker: RerankerDep,
+) -> SemanticMemoryOut | ProceduralMemoryOut:
+    """Edita UN ítem de memoria del usuario por capa + referencia.
+
+    El dueño edita su propia memoria con su JWT. La mutación es **polimórfica por
+    capa** y respeta el aislamiento estructural (los stores filtran por ``user_id``):
+
+    - ``semantic``: actualiza el ``content``. Body requiere ``content`` (str no
+      vacío). ``semantic.update(UUID(ref), content)`` re-embeddea + re-cifra y filtra
+      por ``id`` **y** ``user_id``; ``None`` (inexistente o ajeno) → **404** con
+      ``_NOT_FOUND_DETAIL`` (sin oráculo, sin descifrar nada ajeno). Devuelve
+      ``SemanticMemoryOut`` con el ``content`` plaintext actualizado.
+    - ``procedural``: actualiza el ``value`` (JSONB) de una key EXISTENTE. Body
+      requiere ``value`` (dict). ``procedural.update(key, value)`` es un UPDATE puro
+      (NO upsert): ``None`` si la key no existe o es ajena → **404** (jamás crea la
+      key vía ``PATCH``). Devuelve ``ProceduralMemoryOut``.
+    - ``episodic``: **405 Method Not Allowed**. El ``summary`` lo genera el worker de
+      consolidación; reescribir a mano "un resumen de lo que pasó" corrompe la
+      trazabilidad. El dueño puede BORRAR un episodio (``DELETE``), no reescribirlo.
+
+    El body por capa se valida acá (el ``layer`` del path lo conoce el endpoint, no
+    el schema): si el campo requerido para la capa falta → **422**. El ``content``
+    vacío ya lo rechaza Pydantic (``min_length=1``) con 422.
+
+    Returns:
+        ``SemanticMemoryOut`` o ``ProceduralMemoryOut`` con el ítem actualizado.
+    """
+    if layer is MemoryLayer.EPISODIC:
+        # 405: la capa no admite edición (no es 404 ni 200 — el método no se permite).
+        raise HTTPException(
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+            detail=_EPISODIC_PATCH_NOT_ALLOWED,
+        )
+
+    if layer is MemoryLayer.SEMANTIC:
+        if body.content is None:
+            # El body no corresponde a la capa: semantic exige ``content``.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="el PATCH semantic requiere 'content'",
+            )
+        memory_id = _parse_uuid_ref(ref)
+        semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
+        sem_item = await semantic.update(memory_id, body.content)
+        if sem_item is None:
+            # Inexistente o ajeno: mismo 404 que un GET (sin oráculo, no mutó nada).
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+        return sem_item
+
+    # layer is PROCEDURAL: la ref es la ``key`` (str). Exige ``value`` (dict).
+    if body.value is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="el PATCH procedural requiere 'value'",
+        )
+    procedural = ProceduralMemoryStore(session, user_id)
+    proc_item = await procedural.update(ref, body.value)
+    if proc_item is None:
+        # Key inexistente o ajena: 404 (NUNCA se crea vía PATCH — eso sería upsert).
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+    return proc_item
+
+
+@router.delete("/memory/{layer}/{ref}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_memory(
+    layer: MemoryLayer,
+    ref: str,
+    session: DbSession,
+    user_id: CurrentUser,
+    embedder: EmbedderDep,
+    reranker: RerankerDep,
+) -> Response:
+    """Borra UN ítem de memoria del usuario por capa + referencia → **204** sin body.
+
+    El dueño borra su propia memoria con su JWT, en las 3 capas. El aislamiento es
+    estructural: los stores filtran el DELETE por ``id``/``key`` **y** ``user_id``,
+    así que un ref ajeno o inexistente devuelve ``False`` → **404** con
+    ``_NOT_FOUND_DETAIL`` (sin oráculo de existencia ajena, sin tocar data de otro
+    usuario). El blob cifrado nunca viaja: el éxito es un 204 vacío.
+
+    - ``semantic``: ``semantic.delete(UUID(ref))`` (``bool``). ``False`` → 404.
+    - ``episodic``: ``episodic.delete(UUID(ref))`` (``bool``). ``False`` → 404.
+    - ``procedural``: ``procedural.delete(key)`` (``bool``). ``False`` → 404.
+
+    Returns:
+        ``Response`` 204 No Content (sin cuerpo) en éxito.
+    """
+    if layer is MemoryLayer.PROCEDURAL:
+        # Procedural: la ref es la ``key`` (str), no un UUID.
+        procedural = ProceduralMemoryStore(session, user_id)
+        deleted = await procedural.delete(ref)
+        if not deleted:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    # Semantic / Episodic: la ref es un UUID (422 si no parsea).
+    memory_id = _parse_uuid_ref(ref)
+
+    if layer is MemoryLayer.SEMANTIC:
+        semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
+        deleted = await semantic.delete(memory_id)
+    else:
+        # layer is EPISODIC (las 3 ramas de MemoryLayer están cubiertas).
+        episodic = EpisodicMemoryStore(session, user_id, embedder, reranker)
+        deleted = await episodic.delete(memory_id)
+
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
