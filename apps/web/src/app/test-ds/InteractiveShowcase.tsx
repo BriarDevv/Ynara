@@ -231,13 +231,6 @@ export function InteractiveShowcase() {
             hint="Probá pedirle al modo productividad."
             action={<Button variant="secondary">Crear uno</Button>}
           />
-          {/* Variante con la "Red de memoria" de fondo (field) */}
-          <EmptyStateCard
-            field
-            title="Empezá tu primera conversación"
-            hint="Ynara va tejiendo lo que aprende de vos."
-            action={<Button variant="primary">Nueva conversación</Button>}
-          />
         </div>
       </section>
 

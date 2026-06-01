@@ -41,7 +41,6 @@ export function PrioritiesSection() {
         />
       ) : data.length === 0 ? (
         <EmptyStateCard
-          field
           title="Sin urgentes esta hora"
           hint="Aprovechá el tiempo libre, o pedile algo a Ynara."
         />
