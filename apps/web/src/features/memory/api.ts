@@ -1,11 +1,13 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type MemoryItemOut,
   type MemoryLayer,
   MemoryListSchema,
   memoryOutSchemaFor,
+  type ProceduralMemoryPatch,
+  type SemanticMemoryPatch,
 } from "@ynara/shared-schemas";
 import { api } from "@/lib/api";
 import { qk } from "@/lib/queryKeys";
@@ -77,4 +79,43 @@ export function useMemoryRelated(layer: MemoryLayer, item: MemoryItemOut | undef
 function refOf(layer: MemoryLayer, item: MemoryItemOut | undefined): string {
   if (!item) return "";
   return layer === "procedural" && "key" in item ? item.key : "id" in item ? item.id : "";
+}
+
+/** Body del PATCH según la capa (semantic→content, procedural→value). */
+export type MemoryPatch = SemanticMemoryPatch | ProceduralMemoryPatch;
+
+/**
+ * Edita un ítem (`PATCH /v1/memory/{layer}/{ref}`). Al confirmar, siembra el
+ * detalle con el ítem actualizado e invalida `qk.memory.all()` (prefijo →
+ * timeline + relacionados) para que la lista refleje el cambio. La capa
+ * episódica no admite PATCH (el backend responde 405).
+ */
+export function usePatchMemory(layer: MemoryLayer, ref: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: MemoryPatch): Promise<MemoryItemOut> => {
+      const raw = await api.patch<unknown>(`/v1/memory/${layer}/${encodeURIComponent(ref)}`, patch);
+      return memoryOutSchemaFor(layer).parse(raw);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(qk.memory.detail(layer, ref), updated);
+      queryClient.invalidateQueries({ queryKey: qk.memory.all() });
+    },
+  });
+}
+
+/**
+ * Borra un ítem (`DELETE /v1/memory/{layer}/{ref}`, 204 sin body). Limpia la
+ * cache del detalle e invalida la lista. La navegación de vuelta a `/memoria`
+ * la hace el componente (para poder confirmar primero).
+ */
+export function useDeleteMemory(layer: MemoryLayer, ref: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<void>(`/v1/memory/${layer}/${encodeURIComponent(ref)}`),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: qk.memory.detail(layer, ref) });
+      queryClient.invalidateQueries({ queryKey: qk.memory.all() });
+    },
+  });
 }
