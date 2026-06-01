@@ -8,7 +8,11 @@ export function EmptySessions() {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-caption text-[var(--color-ink-muted)]">Tus conversaciones</h2>
-      <EmptyStateCard title="Vacío. Empezá una abajo." />
+      <EmptyStateCard
+        field
+        title="Acá vive lo que vamos hablando"
+        hint="Empezá una conversación abajo y la vas a ver tejerse en tu red."
+      />
     </section>
   );
 }
