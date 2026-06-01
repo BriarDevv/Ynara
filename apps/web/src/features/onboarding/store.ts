@@ -81,12 +81,18 @@ const initialState: OnboardingDraft = {
 
 /**
  * createJSONStorage(() => sessionStorage) con guard para SSR: en
- * server-side `sessionStorage` no existe. `createJSONStorage` acepta
- * `undefined` y Zustand v5 lo trata como "no persistir".
+ * server-side `sessionStorage` no existe. Zustand v5 trata `undefined`
+ * como "no persistir".
+ *
+ * El guard va FUERA de `createJSONStorage` porque algunas resoluciones
+ * de tipos (con el lockfile actualizado) no aceptan factory que retorna
+ * `Storage | undefined`. Devolver `undefined` directo es equivalente
+ * semánticamente: persist() no escribe en server.
  */
-const sessionJsonStorage = createJSONStorage(() =>
-  typeof window === "undefined" ? undefined : sessionStorage,
-);
+const sessionJsonStorage =
+  typeof window === "undefined"
+    ? undefined
+    : createJSONStorage(() => sessionStorage);
 
 export const useOnboardingStore = create<OnboardingDraft & OnboardingActions>()(
   persist(
