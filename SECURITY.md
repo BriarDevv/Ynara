@@ -58,12 +58,15 @@ agenda, recordatorios). La política de seguridad refleja eso:
 
 5. **JWT firmado con secret rotable.** El access token expira en 7 días
    por defecto (`JWT_EXPIRE_MINUTES`); el refresh token en 30 días
-   (`JWT_REFRESH_EXPIRE_MINUTES`). El refresh es **single-use**: cada
-   `/v1/auth/refresh` rota el par (blocklistea el `jti` consumido y emite
-   uno nuevo). `/v1/auth/logout` es revocación real: blocklistea el `jti`
-   en Redis, así el token deja de servir aunque todavía no haya expirado.
-   La blocklist es **fail-open**: si Redis cae, degrada al baseline
-   JWT-stateless (el token vale hasta su `exp`).
+   (`JWT_REFRESH_EXPIRE_MINUTES`). El refresh es **single-use con
+   reuse-detection a nivel familia** (claim `sid`): un retry dentro de la
+   ventana de gracia (`AUTH_REFRESH_REUSE_GRACE_SECONDS`, 30s) es idempotente
+   (converge en el sucesor canónico, no revoca nada); un reuse fuera del grace
+   es un **breach** → revoca la **familia entera** (todos los access + refresh
+   de esa sesión) → 401. `/v1/auth/logout` revoca la **sesión completa**
+   (familia vía `sid`: refresh + access hermanos), además de los `jti`
+   individuales (compat pre-#142). La revocación es **fail-open**: si Redis cae,
+   degrada al baseline JWT-stateless (el token vale hasta su `exp`).
 
 6. **TLS end-to-end.** En producción, tráfico Cloudflare Tunnel →
    FastAPI siempre cifrado. En dev local, HTTPS con mkcert.

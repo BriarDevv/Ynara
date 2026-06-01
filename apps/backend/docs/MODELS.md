@@ -126,8 +126,9 @@ Usuario de Ynara. Auth JWT implementada (`app/core/security.py`:
 `verify_token`, `hash_password`, `verify_password`). Endpoints activos:
 `/v1/auth/register`, `/v1/auth/token`, `/v1/auth/me`, `/v1/auth/refresh`,
 `/v1/auth/logout`. Refresh/logout implementados (#63): POST
-`/v1/auth/refresh` (rotación single-use) + POST `/v1/auth/logout`
-(blocklist Redis por `jti`).
+`/v1/auth/refresh` (rotación single-use con reuse-detection a nivel
+familia/`sid`, retry-safe — #142) + POST `/v1/auth/logout` (revoca la
+familia entera vía `sid` + blocklist por `jti` — #142).
 
 | Columna | Tipo | Notas |
 |---|---|---|

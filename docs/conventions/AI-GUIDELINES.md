@@ -188,8 +188,12 @@ con JWT real (PyJWT + bcrypt). Los endpoints `/v1/auth/register`,
 `/v1/auth/token`, `/v1/auth/me`, `/v1/auth/refresh` y `/v1/auth/logout`
 están activos y mergeados.
 
-**Refresh y logout están implementados (#63)**: refresh single-use que
-rota el `jti` consumido, y logout que blocklistea el `jti` en Redis. El
+**Refresh y logout están implementados (#63 + #142)**: refresh con
+reuse-detection a nivel familia (`sid`) retry-safe — un reuse dentro del grace
+(`AUTH_REFRESH_REUSE_GRACE_SECONDS`) es idempotente, fuera del grace es un
+breach → family-revoke → 401. Logout revoca la familia entera (`sid`).
+access + refresh llevan `sid`; `get_current_claims` chequea blocklist-jti +
+family-revocation en 1 RTT (`auth_status`). El
 flujo vive en [`apps/backend/app/api/v1/auth.py`](../../apps/backend/app/api/v1/auth.py);
 el contrato completo (request/response, códigos, fail-open) está en
 [`apps/backend/docs/ENDPOINTS.md`](../../apps/backend/docs/ENDPOINTS.md).

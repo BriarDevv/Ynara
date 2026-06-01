@@ -32,7 +32,7 @@
 
 - Infra vLLM real (hoy todo se ejercita con `FakeLlmClient`/`FakeEmbeddingClient`/`FakeReranker`). Gap "persistir turnos" para consolidación episódica. Plan: [`../../docs/planning/LLM-INFERENCE-INTEGRATION.md`](../../docs/planning/LLM-INFERENCE-INTEGRATION.md). Roadmap de memoria: [`../../docs/planning/BACKEND-MEMORY-ROADMAP.md`](../../docs/planning/BACKEND-MEMORY-ROADMAP.md).
 
-**Implementados en #63**: rate-limit (token/register), refresh single-use y logout (blocklist Redis) — ver [`docs/ENDPOINTS.md`](./docs/ENDPOINTS.md).
+**Implementados en #63**: rate-limit (token/register), refresh single-use y logout (blocklist Redis) — ver [`docs/ENDPOINTS.md`](./docs/ENDPOINTS.md). **Hardening en #142**: reuse-detection a nivel familia/`sid` en `/refresh` (grace window retry-safe + breach → family-revoke) y logout con revocación de familia entera.
 
 ---
 

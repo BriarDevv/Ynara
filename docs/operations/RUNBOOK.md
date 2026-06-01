@@ -84,8 +84,10 @@ Para invalidar la sesión de **un** usuario sin rotar el `JWT_SECRET` global:
 
 1. `POST /v1/auth/logout` con el JWT del usuario (`Authorization: Bearer
    <access>`; opcionalmente su `refresh_token` en el body).
-2. El backend blocklistea el `jti` en Redis (desde #63); el token deja de
-   servir aunque no haya expirado.
+2. El backend revoca la FAMILIA completa de esa sesión (desde #142: todos los
+   tokens del mismo `sid` — access, refresh y rotaciones futuras — dejan de
+   servir aunque no hayan expirado); para tokens pre-#142 sin `sid`, revoca solo
+   el `jti` del access (compat). Requiere Redis arriba; fail-open si cae.
 
 > Requiere Redis arriba (si está caído, la auth está en fail-open y la
 > revocación no surte efecto — ver "Redis caído o degradado"). Para revocar

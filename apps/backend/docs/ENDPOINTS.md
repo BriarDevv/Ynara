@@ -57,16 +57,32 @@ seguridad en el docstring de [`../app/api/v1/auth.py`](../app/api/v1/auth.py).
   - Request: `{ refresh_token: string }`.
   - Response 200: `TokenOut = { access_token, token_type: "bearer", refresh_token }`
     (par nuevo; el `refresh_token` siempre viene poblado).
-  - **Rotación single-use**: blocklistea el `jti` del refresh consumido y emite
-    access + refresh nuevos. Un refresh ya rotado no se puede reusar.
-  - Response 401: token inválido, no es `type=refresh`, expirado, **o** reuso de
-    un refresh ya rotado (detección de reuse vía blocklist en Redis).
+  - **Rotación single-use con reuse-detection a nivel familia (claim `sid`)** —
+    el handler tiene 4 ramas:
+    0. El `sid` del refresh ya pertenece a una familia revocada → **401**.
+    1. **first-use**: el gate atómico `revoke_if_absent` (SET NX EX) gana el
+       claim → mintea un par nuevo (propaga el mismo `sid`) + setea un **grace
+       marker** apuntando al `jti` del sucesor → **200**.
+    2. **benign-retry** (dentro del grace `AUTH_REFRESH_REUSE_GRACE_SECONDS`,
+       default 30s): el refresh ya rotado reaparece pero existe el grace marker
+       → re-emite convergiendo en el **sucesor canónico** (**200**, idempotente);
+       NO revoca la familia.
+    3. **breach** (reuse fuera del grace): no hay grace marker → revoca la
+       **familia entera** (`revoke_family(sid)`, TTL = vida completa del refresh)
+       → **401**.
+  - Response 401: token inválido, no es `type=refresh`, expirado, **o** reuse
+    fuera del grace (breach) que revoca la familia entera vía `sid` (ramas 0 y 3).
   - Permisos: **público** (el propio refresh token es la credencial).
 - **POST** `/v1/auth/logout` — revoca la sesión activa (blocklist Redis).
   - Request: `{ refresh_token?: string }` (opcional) + `Authorization: Bearer <access>`.
-  - Requiere un access token válido. Blocklistea el `jti` del access (y el del
-    `refresh_token` si viene en el body) en Redis, con TTL = vida restante del
-    token (self-expire). Un token blocklisteado da 401 en `get_current_user`.
+  - Requiere un access token válido. Si el access trae `sid`, revoca la
+    **familia entera** (`revoke_family(sid)`, TTL = vida completa del refresh):
+    el refresh y **todos los access hermanos** de esa sesión quedan inválidos;
+    otras sesiones (distinto `sid`) no se afectan. Además blocklistea el `jti`
+    del access (y el del `refresh_token` si viene en el body) en Redis con TTL =
+    vida restante del token (self-expire) — los `revoke` por `jti` individual
+    quedan como compat para tokens pre-#142 sin `sid`. Un token blocklisteado o
+    de una familia revocada da 401 en `get_current_user`.
   - Response **204** No Content (sin body). **Best-effort / idempotente**: llamar
     logout dos veces es inocuo.
   - **fail-open**: si Redis está caído, la revocación se desactiva (degrada al
