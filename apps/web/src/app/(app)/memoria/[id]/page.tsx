@@ -1,21 +1,24 @@
 import type { Metadata } from "next";
-import { TabPlaceholder } from "@/components/TabPlaceholder";
+import { MemoryDetailRoute } from "@/features/memory/components/MemoryDetailRoute";
 
 export const metadata: Metadata = {
   title: "Recuerdo",
 };
 
-/**
- * Sub-vista **Detalle de memoria**. Stub hasta la Fase C
- * (`GET /v1/memory/{layer}/{ref}`): quote grande, contexto, relacionados,
- * acciones (editar `PATCH`, borrar `DELETE`).
- */
-export default function MemoriaDetallePage() {
-  return (
-    <TabPlaceholder
-      icon="memoria"
-      title="Recuerdo"
-      hint="El detalle de un recuerdo, con su contexto y lo que se le conecta. En camino."
-    />
-  );
+// El detalle del backend necesita `{layer}/{ref}`, pero la ruta es de un solo
+// segmento (`[id]` = ref); la capa viaja por query `?capa=`. La página extrae
+// ambos y delega en el dispatcher cliente, que valida la capa y aplica los
+// estados. Dynamic: el ref/capa salen del request, no se prerenderiza.
+export const dynamic = "force-dynamic";
+
+export default async function MemoriaDetallePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ capa?: string }>;
+}) {
+  const { id } = await params;
+  const { capa } = await searchParams;
+  return <MemoryDetailRoute memoryRef={id} rawLayer={capa} />;
 }
