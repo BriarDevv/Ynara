@@ -6,30 +6,43 @@
 
 /* ============================================================
  * Tokens — single source of truth.
- * Documentado en DESIGN.md (raíz del repo).
+ *
+ * Decisión de marca (DESIGN.md §3): la app web es LIGHT-ONLY. No hay
+ * variante dark ni respeto a `prefers-color-scheme`. El sistema usa:
+ *   - `--color-bg-canvas` (ivory tibio) para el body / fondo detrás del
+ *     contenido — pareado al fondo del poster de marca.
+ *   - `--color-bg` (blanco puro) para cards, inputs y superficies elevadas
+ *     que se apoyan sobre el canvas.
+ *
  * Cualquier cambio acá requiere PR con review de @MateoGs013.
  * ============================================================ */
 
 :root {
-  /* Texto (ink) */
+  /* ---- Texto (ink) ---- */
   --color-ink: #242c3f;
+  /* Más oscuro que ink, reservado para hero/title con presencia editorial. */
+  --color-ink-deep: #1b2233;
   --color-ink-soft: rgb(36 44 63 / 0.65);
   --color-ink-muted: rgb(36 44 63 / 0.45);
   --color-ink-faint: rgb(36 44 63 / 0.18);
   --color-on-dark: #ffffff;
 
-  /* Fondos */
+  /* ---- Fondos ---- */
+  /* Blanco puro: cards, inputs, modals. Lo que "flota" sobre el canvas. */
   --color-bg: #ffffff;
-  --color-bg-soft: #f6f6f8;
+  /* Ivory tibio: body de la app. Variante clara del poster de marca. */
+  --color-bg-canvas: #faf9f5;
+  /* Crema cálido: pills, chip containers, secciones alternas. */
+  --color-bg-soft: #f3f0ea;
 
-  /* Bordes */
+  /* ---- Bordes ---- */
   --color-border: rgb(36 44 63 / 0.12);
   --color-border-strong: rgb(36 44 63 / 0.22);
 
   /*
-   * Stops individuales — fuente única para gradientes Y para usos
-   * puntuales (focus-ring, stops del logo SVG). Si cambia uno, cambia
-   * todo lo derivado.
+   * ---- Stops individuales ----
+   * Fuente única para gradientes y usos puntuales (focus-ring, stops del
+   * logo SVG). Si cambia uno, cambia todo lo derivado.
    */
   --color-blue-base-from: #2f5aa6;
   --color-blue-base-to: #1f66db;
@@ -42,8 +55,21 @@
   --color-amber-from: #d9a24a;
   --color-amber-to: #e8c77a;
 
-  /* Acento puntual (focus-ring, etc.). Alias del stop inicial del azul base. */
-  --color-accent: var(--color-blue-base-from);
+  /*
+   * ---- Azul plano de marca (CTA primary) ----
+   * Antes el primary usaba gradient-blue-base; quedaba saturado y "genérico".
+   * Ahora se usa azul plano + sombras suaves. El gradiente se reserva para
+   * acentos (ProgressDots active, hairline de OptionCard selected, etc.).
+   */
+  --color-blue-flat: #2f5aa6;
+  --color-blue-flat-hover: #26498a;
+  --color-blue-flat-active: #1f3c75;
+
+  /* Glow violeta para acentos ambientales (no para fills). */
+  --color-violet-glow: rgb(129 101 163 / 0.18);
+
+  /* Acento puntual (focus-ring, text-link). Alineado al CTA primary. */
+  --color-accent: var(--color-blue-flat);
 
   /* Errores (form fields invalid, toasts variant=error). */
   --color-error: #c0392b;
@@ -52,7 +78,7 @@
   /* Overlay para modales/dialogs (backdrop). */
   --color-overlay: rgb(36 44 63 / 0.4);
 
-  /* Gradientes — uso semántico */
+  /* ---- Gradientes — uso semántico ---- */
   --gradient-blue-base: linear-gradient(
     135deg,
     var(--color-blue-base-from),
@@ -86,62 +112,28 @@
   --mode-vida: var(--gradient-amber);
   --mode-memoria: var(--gradient-violet);
 
-  /* Radius */
+  /* ---- Radius ---- */
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
   --radius-xl: 1.25rem;
   --radius-pill: 9999px;
 
-  /* Elevation */
+  /*
+   * ---- Elevation ----
+   * Calibrado para card blanca sobre canvas ivory: poca densidad de sombra,
+   * lectura como "papel" más que "plástico". Si se mueve a fondo blanco
+   * puro, revisar los alphas.
+   */
   --shadow-soft: 0 1px 2px rgb(36 44 63 / 0.06),
     0 4px 12px rgb(36 44 63 / 0.04);
   --shadow-lifted: 0 8px 24px rgb(36 44 63 / 0.08),
     0 24px 48px rgb(36 44 63 / 0.06);
 
-  /* Motion */
+  /* ---- Motion ---- */
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
   --duration-base: 250ms;
   --duration-screen: 350ms;
-}
-
-/* Dark mode discreto */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-ink: #e8ecf4;
-    --color-ink-soft: rgb(232 236 244 / 0.7);
-    --color-ink-muted: rgb(232 236 244 / 0.5);
-    --color-ink-faint: rgb(232 236 244 / 0.2);
-    --color-bg: #0e1219;
-    --color-bg-soft: #161b25;
-    --color-border: rgb(232 236 244 / 0.12);
-    --color-border-strong: rgb(232 236 244 / 0.22);
-    --color-overlay: rgb(14 18 25 / 0.6);
-  }
-}
-
-[data-theme="light"] {
-  --color-ink: #242c3f;
-  --color-ink-soft: rgb(36 44 63 / 0.65);
-  --color-ink-muted: rgb(36 44 63 / 0.45);
-  --color-ink-faint: rgb(36 44 63 / 0.18);
-  --color-bg: #ffffff;
-  --color-bg-soft: #f6f6f8;
-  --color-border: rgb(36 44 63 / 0.12);
-  --color-border-strong: rgb(36 44 63 / 0.22);
-  --color-overlay: rgb(36 44 63 / 0.4);
-}
-
-[data-theme="dark"] {
-  --color-ink: #e8ecf4;
-  --color-ink-soft: rgb(232 236 244 / 0.7);
-  --color-ink-muted: rgb(232 236 244 / 0.5);
-  --color-ink-faint: rgb(232 236 244 / 0.2);
-  --color-bg: #0e1219;
-  --color-bg-soft: #161b25;
-  --color-border: rgb(232 236 244 / 0.12);
-  --color-border-strong: rgb(232 236 244 / 0.22);
-  --color-overlay: rgb(14 18 25 / 0.6);
 }
 
 /* ============================================================
@@ -151,14 +143,20 @@
 @theme inline {
   /* Colores */
   --color-ink: var(--color-ink);
+  --color-ink-deep: var(--color-ink-deep);
   --color-ink-soft: var(--color-ink-soft);
   --color-ink-muted: var(--color-ink-muted);
   --color-ink-faint: var(--color-ink-faint);
   --color-on-dark: var(--color-on-dark);
   --color-bg: var(--color-bg);
+  --color-bg-canvas: var(--color-bg-canvas);
   --color-bg-soft: var(--color-bg-soft);
   --color-border: var(--color-border);
   --color-border-strong: var(--color-border-strong);
+  --color-blue-flat: var(--color-blue-flat);
+  --color-blue-flat-hover: var(--color-blue-flat-hover);
+  --color-blue-flat-active: var(--color-blue-flat-active);
+  --color-violet-glow: var(--color-violet-glow);
 
   /* Tipografía — fallback chain */
   --font-display: var(--font-display), "Space Grotesk", system-ui, sans-serif;
@@ -189,7 +187,9 @@ html.text-size-lg {
 }
 
 body {
-  background-color: var(--color-bg);
+  /* Canvas ivory, no blanco puro: refleja el fondo de la marca y evita
+     que las cards (blancas) se fundan con el body. */
+  background-color: var(--color-bg-canvas);
   color: var(--color-ink);
   font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -318,7 +318,8 @@ body {
 }
 
 /* ============================================================
- * A11y — overrides aplicables desde el store de accesibilidad.
+ * A11y — override de alto contraste aplicable desde el store.
+ * Aplica solo en light (la app no tiene variante dark).
  * ============================================================ */
 
 html.theme-high-contrast {
@@ -326,13 +327,6 @@ html.theme-high-contrast {
   --color-ink-muted: rgb(36 44 63 / 0.65);
   --color-border: rgb(36 44 63 / 0.25);
   --color-border-strong: rgb(36 44 63 / 0.45);
-}
-
-html.theme-high-contrast[data-theme="dark"] {
-  --color-ink-soft: rgb(232 236 244 / 0.92);
-  --color-ink-muted: rgb(232 236 244 / 0.75);
-  --color-border: rgb(232 236 244 / 0.28);
-  --color-border-strong: rgb(232 236 244 / 0.48);
 }
 
 /*
@@ -370,6 +364,8 @@ html.motion-off *::after {
 
 /* ============================================================
  * Focus rings — accesibles y con identidad.
+ * El ring usa --color-accent (azul plano de marca), separado del fondo
+ * por un anillo de --color-bg para legibilidad sobre cualquier surface.
  * ============================================================ */
 
 :focus-visible {
