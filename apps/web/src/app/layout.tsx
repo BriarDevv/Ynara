@@ -17,7 +17,17 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   const fontClasses = `${fontDisplay.variable} ${fontBody.variable} text-size-md`;
   return (
-    <html lang="es-AR" suppressHydrationWarning className={fontClasses}>
+    <html
+      lang="es-AR"
+      // `data-theme="light"` fija el tema en light: el sistema de tokens en
+      // globals.css es light-only por decisión de marca (ver DESIGN.md). Sin
+      // esto, el browser podría aplicar `prefers-color-scheme: dark` del OS
+      // antes de la primera ronda de CSS. El atributo es estable (no cambia
+      // por client), así que es seguro renderizarlo en el server.
+      data-theme="light"
+      suppressHydrationWarning
+      className={fontClasses}
+    >
       <head>
         {/*
           Script inline pre-paint para aplicar preferencias de a11y antes
