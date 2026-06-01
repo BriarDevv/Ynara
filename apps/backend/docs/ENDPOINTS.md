@@ -37,7 +37,8 @@ seguridad en el docstring de [`../app/api/v1/auth.py`](../app/api/v1/auth.py).
   - Request: `LoginRequest = { email: EmailStr, password: string }`. `password`
     **sin** `min/max_length` a propósito: un 422 por longitud sería un oráculo de
     formato; login solo distingue 200 / 401.
-  - Response 200: `TokenOut = { access_token: string, token_type: "bearer" }`.
+  - Response 200: `TokenOut = { access_token: string, token_type: "bearer", refresh_token: string }`.
+    En `/token` (y en `/refresh`) el `refresh_token` **siempre** viene poblado.
   - Response 401: credenciales inválidas. **MISMO** 401 (status + `detail` +
     `WWW-Authenticate: Bearer`) para email inexistente y para password incorrecto
     (anti-enumeración); además timing-safe (dummy hash en el camino "email
@@ -52,15 +53,38 @@ seguridad en el docstring de [`../app/api/v1/auth.py`](../app/api/v1/auth.py).
     Bearer` (re-autenticarse), **no** un 404. El aislamiento "ajena == inexistente
     → 404 sin oráculo" aplica a recursos de **otros** users, no a la identidad propia.
   - Permisos: **usuario autenticado** (su propia identidad).
-- Permisos: `register` / `token` son **público** (punto de entrada de auth); `me`
-  requiere token.
-- **Rate limit: TODO** — deuda conocida. El MVP no agrega dependencias (sin
-  `slowapi` / Redis), así que no hay rate-limit aplicativo todavía; mitigarlo
-  (slowapi / WAF / reverse-proxy) es trabajo posterior.
-- `/v1/auth/refresh` y `/v1/auth/logout` quedan **diferidos**: el JWT es stateless
-  y no hay store de revocación, así que el logout sería un no-op honesto y la
-  única ventana de revocación es el TTL del access token. Se implementan cuando
-  haya refresh tokens / blacklist, no como mentiras.
+- **POST** `/v1/auth/refresh` — rota el refresh token y emite un par nuevo.
+  - Request: `{ refresh_token: string }`.
+  - Response 200: `TokenOut = { access_token, token_type: "bearer", refresh_token }`
+    (par nuevo; el `refresh_token` siempre viene poblado).
+  - **Rotación single-use**: blocklistea el `jti` del refresh consumido y emite
+    access + refresh nuevos. Un refresh ya rotado no se puede reusar.
+  - Response 401: token inválido, no es `type=refresh`, expirado, **o** reuso de
+    un refresh ya rotado (detección de reuse vía blocklist en Redis).
+  - Permisos: **público** (el propio refresh token es la credencial).
+- **POST** `/v1/auth/logout` — revoca la sesión activa (blocklist Redis).
+  - Request: `{ refresh_token?: string }` (opcional) + `Authorization: Bearer <access>`.
+  - Requiere un access token válido. Blocklistea el `jti` del access (y el del
+    `refresh_token` si viene en el body) en Redis, con TTL = vida restante del
+    token (self-expire). Un token blocklisteado da 401 en `get_current_user`.
+  - Response **204** No Content (sin body). **Best-effort / idempotente**: llamar
+    logout dos veces es inocuo.
+  - **fail-open**: si Redis está caído, la revocación se desactiva (degrada al
+    baseline JWT-stateless); el token vale hasta su `exp`.
+  - Permisos: **usuario autenticado**.
+- Permisos: `register` / `token` / `refresh` son **público** (punto de entrada de
+  auth); `me` y `logout` requieren token.
+- **Rate limit** — implementado en `app/core/ratelimit.py`, estado en Redis:
+  - `POST /auth/token`: lockout por `(ip, sha256(email)[:32])` tras
+    `AUTH_LOGIN_MAX_ATTEMPTS` (5) intentos en `AUTH_LOGIN_WINDOW_SECONDS` (900s),
+    lockout `AUTH_LOGIN_LOCKOUT_SECONDS` (900s). El email **nunca** va crudo en
+    las keys (se hashea). Anti-enumeración: el 429 llega al mismo nº de intentos
+    exista o no el email.
+  - `POST /auth/register`: por IP (`AUTH_REGISTER_MAX_ATTEMPTS` 10,
+    `AUTH_REGISTER_WINDOW_SECONDS` 3600s).
+  - Al pasar el umbral responde **429** con header `Retry-After`.
+  - **fail-open**: si Redis cae, el rate-limit se desactiva (auth sigue
+    funcionando, sin throttling aplicativo).
 
 ## /v1/chat (TODO — M9)
 

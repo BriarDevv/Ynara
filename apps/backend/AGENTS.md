@@ -30,7 +30,9 @@
 
 **Pendiente** (no empezar sin leer el plan):
 
-- Infra vLLM real (hoy todo se ejercita con `FakeLlmClient`/`FakeEmbeddingClient`/`FakeReranker`). Rate-limit. Refresh/logout. Gap "persistir turnos" para consolidación episódica. Plan: [`../../docs/planning/LLM-INFERENCE-INTEGRATION.md`](../../docs/planning/LLM-INFERENCE-INTEGRATION.md). Roadmap de memoria: [`../../docs/planning/BACKEND-MEMORY-ROADMAP.md`](../../docs/planning/BACKEND-MEMORY-ROADMAP.md).
+- Infra vLLM real (hoy todo se ejercita con `FakeLlmClient`/`FakeEmbeddingClient`/`FakeReranker`). Gap "persistir turnos" para consolidación episódica. Plan: [`../../docs/planning/LLM-INFERENCE-INTEGRATION.md`](../../docs/planning/LLM-INFERENCE-INTEGRATION.md). Roadmap de memoria: [`../../docs/planning/BACKEND-MEMORY-ROADMAP.md`](../../docs/planning/BACKEND-MEMORY-ROADMAP.md).
+
+**Implementados en #63**: rate-limit (token/register), refresh single-use y logout (blocklist Redis) — ver [`docs/ENDPOINTS.md`](./docs/ENDPOINTS.md).
 
 ---
 

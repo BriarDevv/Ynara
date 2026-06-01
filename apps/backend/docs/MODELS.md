@@ -122,9 +122,12 @@ Decay exponencial sobre `confidence`; worker Celery diario aplica
 ### users
 
 Usuario de Ynara. Auth JWT implementada (`app/core/security.py`:
-`create_access_token`, `verify_access_token`, `hash_password`,
-`verify_password`). Endpoints activos: `/v1/auth/register`,
-`/v1/auth/token`, `/v1/auth/me`. Refresh/logout diferidos.
+`create_access_token`, `verify_access_token`, `create_refresh_token`,
+`verify_token`, `hash_password`, `verify_password`). Endpoints activos:
+`/v1/auth/register`, `/v1/auth/token`, `/v1/auth/me`, `/v1/auth/refresh`,
+`/v1/auth/logout`. Refresh/logout implementados (#63): POST
+`/v1/auth/refresh` (rotación single-use) + POST `/v1/auth/logout`
+(blocklist Redis por `jti`).
 
 | Columna | Tipo | Notas |
 |---|---|---|

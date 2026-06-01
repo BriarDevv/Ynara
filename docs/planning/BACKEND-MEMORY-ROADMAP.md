@@ -1,6 +1,6 @@
 # Backend · Memoria contextual + capa LLM — Roadmap
 
-> **Estado**: v2 — agente funcionando hasta M9; infra vLLM real y rate-limit pendientes
+> **Estado**: v2 — agente funcionando hasta M9; infra vLLM real pendiente
 > **Fecha**: 2026-05-21 · **Actualizado**: 2026-05-31
 > **Owner**: @BriarDevv
 > **Alcance**: `apps/backend` — desde el estado actual hasta tener el agente respondiendo con memoria viva.
@@ -76,20 +76,20 @@ Se apoya en cuatro fuentes:
 | Framework de tools + calendar + reminders (M6) | `ToolRegistry`, stubs honestos |
 | Tool `memory.*` (M7) | `memory.search/add/update/delete`; `memory_registry(semantic_store)` combinado por el router |
 | Router completo + tool loop + consolidación (M8) | Clasificación modo→modelo, recuperación memoria, prompt, tool loop |
-| `core/security.py` (auth JWT) | `create_access_token`, `verify_access_token`, `hash_password`, `verify_password`; endpoints `/v1/auth/register`, `/v1/auth/token`, `/v1/auth/me` |
+| `core/security.py` (auth JWT) | `create_access_token`, `verify_access_token`, `create_refresh_token`, `verify_token`, `hash_password`, `verify_password`; endpoints `/v1/auth/register`, `/v1/auth/token`, `/v1/auth/me`, `/v1/auth/refresh`, `/v1/auth/logout` |
+| Auth hardening (#63) | Refresh single-use (rota el `jti` consumido) + logout vía blocklist Redis por `jti` + rate-limit de `/auth/token` (por ip+email_hash) y `/auth/register` (por IP), estado en `app.state.redis`, fail-open si Redis cae |
 | Workers Celery — consolidación + decay | Consolidación post-turno y decay procedural implementados |
-| Endpoints FastAPI | `/v1/health`, `/v1/auth` (register/token/me), `/v1/chat` (sync + SSE), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual, wipe) |
+| Endpoints FastAPI | `/v1/health`, `/v1/auth` (register/token/me/refresh/logout), `/v1/chat` (sync + SSE), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual, wipe) |
 | Supabase conectado | Session pooler (5432), schema aplicado, DB en `head` |
 
 ### Pendiente
 
 - ADR-008 (bge-m3) — decisión de modelo de embedding, desbloquea VllmEmbeddingClient real
 - Infra vLLM real — track de infra aparte; hoy todo corre con Fakes
-- Rate-limit (~30/min por usuario)
-- Refresh/logout de auth — diferidos
 - Gap "persistir turnos" — la consolidación episódica necesita que los turnos se persistan antes de ser procesados
 - Retención episódica — verificar si el worker de retention ya está implementado o pendiente
-- M4 observabilidad (Sentry + métricas) — pendiente
+
+> M4 observabilidad (Sentry PII scrubbing + métricas) — **hecho (#66)**.
 
 ---
 
@@ -186,9 +186,11 @@ Esperando elección entre:
 ### 4.1 `core/security.py` — auth mínimo
 
 **✅ Implementado** (mergeado). JWT real: `create_access_token`, `verify_access_token`,
-`hash_password`, `verify_password`. Endpoints: `/v1/auth/register`, `/v1/auth/token`,
-`/v1/auth/me`. Dependency `get_current_user(token) -> User` cableada en FastAPI.
-Refresh/logout **diferidos** (no implementados aún).
+`create_refresh_token`, `verify_token`, `hash_password`, `verify_password`. Endpoints:
+`/v1/auth/register`, `/v1/auth/token`, `/v1/auth/me`, `/v1/auth/refresh`,
+`/v1/auth/logout`. Dependency `get_current_user(token) -> User` cableada en FastAPI.
+Refresh/logout **implementados en #63** (refresh single-use + logout vía blocklist
+Redis por `jti`, más rate-limit en token/register).
 
 ### 4.2 Cliente vLLM
 
@@ -301,8 +303,8 @@ Refresh/logout **diferidos** (no implementados aún).
 | `/v1/auth/register` | POST | ✅ implementado |
 | `/v1/auth/token` | POST | ✅ implementado |
 | `/v1/auth/me` | GET | ✅ implementado |
-| `/v1/auth/refresh` | POST | ⏳ diferido |
-| `/v1/auth/logout` | POST | ⏳ diferido |
+| `/v1/auth/refresh` | POST | ✅ implementado (#63, rotación single-use) |
+| `/v1/auth/logout` | POST | ✅ implementado (#63, blocklist Redis) |
 | `/v1/chat` | POST | ✅ implementado (sync JSON) |
 | `/v1/chat/stream` | POST | ✅ implementado (SSE streaming) |
 | `/v1/sessions` | GET | ✅ implementado (lista) |

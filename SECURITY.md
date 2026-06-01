@@ -56,9 +56,14 @@ agenda, recordatorios). La política de seguridad refleja eso:
    `episodic_memory`, `procedural_memory` requieren tests + 1 aprobación
    humana explícita para cualquier migración (regla #3 de `AGENTS.md`).
 
-5. **JWT firmado con secret rotable.** Token expira en 7 días por
-   defecto (configurable). Refresh requiere re-autenticación si pasó
-   más de 30 días.
+5. **JWT firmado con secret rotable.** El access token expira en 7 días
+   por defecto (`JWT_EXPIRE_MINUTES`); el refresh token en 30 días
+   (`JWT_REFRESH_EXPIRE_MINUTES`). El refresh es **single-use**: cada
+   `/v1/auth/refresh` rota el par (blocklistea el `jti` consumido y emite
+   uno nuevo). `/v1/auth/logout` es revocación real: blocklistea el `jti`
+   en Redis, así el token deja de servir aunque todavía no haya expirado.
+   La blocklist es **fail-open**: si Redis cae, degrada al baseline
+   JWT-stateless (el token vale hasta su `exp`).
 
 6. **TLS end-to-end.** En producción, tráfico Cloudflare Tunnel →
    FastAPI siempre cifrado. En dev local, HTTPS con mkcert.

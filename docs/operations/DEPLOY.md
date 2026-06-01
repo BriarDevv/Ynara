@@ -8,7 +8,11 @@ Ver `docs/architecture/diagrams/deploy-topology.md`.
 - **Mobile** → Expo EAS Build (iOS + Android).
 - **Backend** → VPS LATAM detrás de Cloudflare Tunnel.
 - **DB** → Supabase (MVP) → Postgres self-hosted (V2).
-- **Cache / queue** → Redis (Upstash o Docker en VPS).
+- **Cache / queue / auth store** → Redis (Upstash o Docker en VPS).
+  **Requerido**: además de caché y broker/result de Celery, desde #63 es
+  el store de AUTH (blocklist de tokens para logout/refresh + rate-limit
+  de login). La auth degrada a fail-open si Redis cae, pero el servicio
+  debe estar provisto.
 - **Storage** → Cloudflare R2.
 - **GPU inference** → vLLM en máquina con RTX 4080 Super.
   _(PENDIENTE: track de infra aparte; hoy el backend usa `FakeLlmClient`.

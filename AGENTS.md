@@ -239,7 +239,7 @@ Cosas que ya nos hicieron tropezar (o que sabemos que van a hacerlo). No las re-
 
 **Zod divergente de Pydantic.** Pydantic es fuente de verdad. Zod (`packages/shared-schemas/`) es mirror manual. Si divergen, corregir Zod en el mismo PR.
 
-**`core/security.py` está implementado.** JWT/bcrypt completos (`create_access_token`, `verify_access_token`, `hash_password`, `verify_password`). Los endpoints `/v1/auth/register`, `/v1/auth/token` y `/v1/auth/me` están activos. Lo que sigue pendiente: `refresh` y `logout` (diferidos a un PR futuro).
+**`core/security.py` está implementado.** JWT/bcrypt completos (`create_access_token`, `verify_access_token`, `create_refresh_token`, `verify_token`, `hash_password`, `verify_password`). Los endpoints `/v1/auth/register`, `/v1/auth/token`, `/v1/auth/me`, `/v1/auth/refresh` y `/v1/auth/logout` están activos. `refresh` y `logout` se implementaron en #63: refresh single-use (rota el `jti` consumido), logout vía blocklist Redis por `jti`, rate-limit en token/register, todo sobre el singleton `app.state.redis` (con fail-open si Redis cae).
 
 **CI con `push`/`pull_request` antes de los lockfiles.** CI hoy es solo `workflow_dispatch`. Reactivar `push`/`pull_request` recién cuando existan `pnpm-lock.yaml` y `apps/backend/uv.lock`.
 
