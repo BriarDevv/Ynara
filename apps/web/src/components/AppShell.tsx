@@ -16,6 +16,14 @@ import { AppNav } from "./AppNav";
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="relative isolate flex min-h-[100dvh] flex-col bg-[var(--color-bg)] lg:flex-row">
+      {/* Skip-link: primer foco tabbable, salta la nav y va directo al
+          contenido. Oculto hasta recibir foco de teclado (DESIGN §12). */}
+      <a
+        href="#contenido"
+        className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:left-4 focus-visible:top-4 focus-visible:z-50 focus-visible:rounded-[var(--radius-md)] focus-visible:bg-[var(--color-bg)] focus-visible:px-4 focus-visible:py-2 focus-visible:text-button focus-visible:text-[var(--color-ink)] focus-visible:shadow-lifted"
+      >
+        Saltar al contenido
+      </a>
       <AppNav />
       <main
         id="contenido"
