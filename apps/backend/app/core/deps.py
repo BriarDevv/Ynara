@@ -93,14 +93,23 @@ async def get_current_claims(
     blocklisteado (logout/rotación). El header ``WWW-Authenticate: Bearer`` se
     incluye según el RFC 6750.
 
-    Chequeo de blocklist (issue #63): un hit O(1) a Redis (``EXISTS``). Si el
-    token NO tiene ``jti`` (token viejo pre-#63 en vuelo) se saltea el chequeo
-    (no es revocable, pero expira solo: ventana de gracia del deploy). fail-OPEN:
-    si Redis cae, ``is_revoked`` devuelve ``False`` y el token se acepta hasta su
-    ``exp`` natural (baseline pre-#63), nunca una caída total de auth.
+    Chequeo de blocklist + familia (issue #63 + item 1 de #142): un solo
+    round-trip a Redis (``auth_status`` -> ``MGET`` de la key de blocklist del
+    ``jti`` y la de revocación de familia del ``sid``). Si el access fue revocado
+    individualmente (``jti`` blocklisteado por logout/rotación) O su familia entera
+    fue revocada (``sid`` matado por logout-de-sesión o reuse-detection del
+    refresh), -> 401. Revocar la familia mata TANTO el refresh COMO todos los
+    access hermanos de esa sesión, cerrando el hueco de "revoqué el refresh pero
+    el access robado vive 7 días".
+
+    Compat: si el token NO tiene ``jti`` (pre-#63) o NO tiene ``sid`` (pre-item 1),
+    ese componente del chequeo se saltea (``auth_status`` recibe ``None`` y devuelve
+    ``False`` para ese slot). fail-OPEN: si Redis cae, ``auth_status`` devuelve
+    ``(False, False)`` y el token se acepta hasta su ``exp`` natural, nunca una
+    caída total de auth.
 
     Regla #4: el ``detail`` es estático (``"credenciales inválidas"``); NUNCA se
-    construye con ``str(exc)`` ni con el token crudo.
+    construye con ``str(exc)`` ni con el token/jti/sid crudo.
     """
     _unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -112,8 +121,11 @@ async def get_current_claims(
     except InvalidTokenError as exc:
         raise _unauthorized from exc
     jti = payload.get("jti")
-    if jti is not None and await store.is_revoked(jti):
-        # Token revocado (logout/rotación): 401 uniforme, igual que un token malo.
+    sid = payload.get("sid")
+    jti_revoked, family_revoked = await store.auth_status(jti, sid)
+    if jti_revoked or family_revoked:
+        # Token revocado (logout/rotación) o familia revocada (logout-de-sesión /
+        # reuse-detection): 401 uniforme, igual que un token malo.
         raise _unauthorized
     return payload
 

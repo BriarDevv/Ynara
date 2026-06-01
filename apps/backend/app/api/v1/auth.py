@@ -52,10 +52,11 @@ neutraliza con un exception handler de validación montado en ``app/main.py``
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.deps import CurrentClaims, CurrentUser, DbSession, TokenStoreDep
 from app.core.ratelimit import (
     check_login_rate_limit,
@@ -64,6 +65,7 @@ from app.core.ratelimit import (
     reset_login_rate_limit,
 )
 from app.core.security import (
+    SID_CLAIM,
     InvalidTokenError,
     create_access_token,
     create_refresh_token,
@@ -97,13 +99,18 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _too_many_requests() -> HTTPException:
-    """429 uniforme del rate-limit, sin oráculo de enumeración (ver docstring del módulo)."""
-    settings = get_settings()
+def _too_many_requests(retry_after: int) -> HTTPException:
+    """429 uniforme del rate-limit, sin oráculo de enumeración (ver docstring del módulo).
+
+    ``retry_after`` (segundos) llena el header ``Retry-After``: cada call site pasa
+    la ventana real de SU límite (lockout del login, ventana del register) para que
+    el cliente sepa cuánto esperar. El ``detail`` sigue siendo el string uniforme
+    (no se introduce oráculo de enumeración por cuerpo).
+    """
     return HTTPException(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         detail="demasiados intentos, intente mas tarde",
-        headers={"Retry-After": str(settings.auth_login_lockout_seconds)},
+        headers={"Retry-After": str(retry_after)},
     )
 
 
@@ -121,6 +128,17 @@ def _ttl_from_exp(payload: dict) -> int:
     exp = int(payload["exp"])
     now = int(datetime.now(UTC).timestamp())
     return max(exp - now, 0)
+
+
+def _refresh_ttl_seconds(settings: Settings) -> int:
+    """TTL completo del refresh en segundos (vida de la familia, item 1 de #142).
+
+    La family-revocation usa el TTL COMPLETO del refresh, NO el remaining del token
+    que disparó el reuse: la familia debe sobrevivir al refresh vivo más largo que
+    pudo emitirse en ella (un hermano más nuevo no debe sobrevivir a la key de
+    revocación). Self-expira sin GC.
+    """
+    return settings.jwt_refresh_expire_minutes * 60
 
 
 @router.post("/auth/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -143,8 +161,9 @@ async def register(
     automático), 409 email duplicado (trade-off de enumeración consciente, ver
     docstring del módulo), 201 éxito.
     """
+    settings = get_settings()
     if not await check_register_rate_limit(store, ip=_client_ip(request)):
-        raise _too_many_requests()
+        raise _too_many_requests(settings.auth_register_window_seconds)
     try:
         user = await register_user(
             session,
@@ -191,15 +210,20 @@ async def token(
     """
     ip = _client_ip(request)
     if not await check_login_rate_limit(store, ip=ip, email=body.email):
-        raise _too_many_requests()
+        raise _too_many_requests(get_settings().auth_login_lockout_seconds)
     user = await authenticate_user(session, email=body.email, password=body.password)
     if user is None:
         await register_login_failure(store, ip=ip, email=body.email)
         raise _unauthorized()
     await reset_login_rate_limit(store, ip=ip, email=body.email)
+    # Cada login nace una sesión nueva (sid uuid4) que va en AMBOS tokens: agrupa
+    # el access + todos los refresh rotados bajo una única unidad de revocación
+    # (familia). El logout-de-sesión y la reuse-detection del refresh la matan de
+    # una (item 1 de #142).
+    sid = uuid4().hex
     return TokenOut(
-        access_token=create_access_token(str(user.id)),
-        refresh_token=create_refresh_token(str(user.id)),
+        access_token=create_access_token(str(user.id), {SID_CLAIM: sid}),
+        refresh_token=create_refresh_token(str(user.id), {SID_CLAIM: sid}),
     )
 
 
@@ -207,20 +231,42 @@ async def token(
 async def refresh(body: RefreshRequest, store: TokenStoreDep) -> TokenOut:
     """Rota un refresh token: devuelve access + refresh nuevos. 200 o 401.
 
-    El refresh es **single-use**: cada ``/refresh`` blocklistea el refresh
-    consumido (su ``jti``) y entrega uno nuevo. Reusar el refresh viejo cae en la
-    detección de reuse (paso de ``is_revoked``) y da 401 — un refresh ya rotado
-    que vuelve a aparecer es replay/robo.
+    El refresh es **single-use** con **reuse-detection a nivel familia (sid)**,
+    retry-safe (item 1 de #142). Ramas:
 
-    El refresh emitido en ``/token`` nace "limpio" (su ``jti`` no se registra): el
-    modelo es **blocklist** (deny-list), un refresh es válido mientras NO esté
-    blocklisteado y su firma/exp/type sean correctos.
+    0. **familia revocada:** si el ``sid`` del refresh ya fue revocado (logout-de-
+       sesión o un breach previo), NO rota -> 401. ``/refresh`` no pasa por
+       ``get_current_claims``, así que este chequeo es explícito (de lo contrario un
+       logout no mataría el refresh que no se mandó en el body).
 
-    Regla #4: 401 uniforme; el detalle de ``jose`` NUNCA se loguea ni se devuelve
-    (``verify_token`` ya lo deja solo en ``__cause__``).
+    1. **first-use (camino feliz):** el gate atómico ``revoke_if_absent`` (SET NX
+       EX, cierra el TOCTOU de rotaciones concurrentes) blocklistea el ``jti`` viejo
+       SOLO si no estaba ya revocado. Si gana el claim, mintea un par nuevo
+       propagando el ``sid`` (familia) y deja un **grace marker** corto apuntando al
+       sucesor (para que un retry de red benigno sea idempotente).
 
-    TODO (diferido por scope): blocklistear toda la FAMILIA del token ante un
-    reuse (requiere un claim ``family``/``sid``).
+    2. **benign-retry (dentro del grace):** si NO ganó el claim (ya estaba revocado)
+       PERO existe el grace marker, es un reenvío del MISMO refresh dentro de la
+       ventana (timeout TCP móvil + retry). NO se revoca la familia: se re-mintea un
+       par usable de la misma familia. El ``jti`` viejo sigue muerto (no se
+       des-revoca); como toda la familia se mata de una vía ``sid``, re-mintear no
+       agranda el blast-radius.
+
+    3. **breach (reuse fuera del grace):** si NO ganó el claim y NO hay grace marker,
+       un refresh ya rotado resurgió tarde -> replay/robo. Se revoca la familia
+       ENTERA (mata el refresh + todos los access hermanos vía ``get_current_claims``)
+       y se da 401.
+
+    Compat: un refresh sin ``sid`` (pre-item 1) cae a la rama 1 arrancando una
+    familia nueva; reusarlo cae a la rama 3 SIN family-revoke (no hay sid que matar)
+    -> degrada al single-use de #142 sin nukear nada imposible.
+
+    fail-open: ``revoke_if_absent`` True si Redis cae (rota igual);
+    ``get_grace_marker`` None si Redis cae (un retry cae a rama 3 pero
+    ``revoke_family`` también es no-op -> 401 sin revocación persistente).
+
+    Regla #4: 401 uniforme; ni jose, ni el token, ni el ``jti``/``sid`` se loguean
+    ni se devuelven (``verify_token`` deja el detalle de jose solo en ``__cause__``).
     """
     try:
         payload = verify_token(body.refresh_token, expected_type="refresh")
@@ -232,16 +278,60 @@ async def refresh(body: RefreshRequest, store: TokenStoreDep) -> TokenOut:
         # Un refresh sin jti/sub no es rotable: los refresh siempre nacen con
         # ambos, así que su ausencia es sospechosa -> 401 uniforme.
         raise _unauthorized()
-    # Detección de reuse: si el viejo YA está blocklisteado, fue rotado antes y se
-    # está reusando (robo/replay). 401 uniforme, sin revelar "reuse detectado".
-    if await store.is_revoked(old_jti):
+    sid = payload.get(SID_CLAIM)
+    settings = get_settings()
+
+    # --- RAMA 0: familia ya revocada (logout-de-sesión o breach previo) ---
+    # /refresh NO pasa por get_current_claims, así que el family-check del access
+    # no lo cubre: lo hacemos explícito acá. Un refresh cuya familia murió NO rota
+    # (si no, un logout no mataría el refresh que no fue al body). Se chequea ANTES
+    # del gate atómico para que una familia muerta jamás re-mintee. fail-open: si
+    # Redis cae, is_family_revoked devuelve False -> se cae al baseline (rota igual).
+    if sid is not None and await store.is_family_revoked(sid):
         raise _unauthorized()
-    # Rotar: blocklistear el refresh consumido con su vida restante (self-expire).
-    await store.revoke(old_jti, ttl_seconds=_ttl_from_exp(payload))
-    return TokenOut(
-        access_token=create_access_token(sub),
-        refresh_token=create_refresh_token(sub),
-    )
+
+    # --- RAMA 1: first-use (gate atómico gana el claim) ---
+    if await store.revoke_if_absent(old_jti, ttl_seconds=_ttl_from_exp(payload)):
+        new_refresh_jti = uuid4().hex
+        # Grace marker ANTES de responder, apuntando al sucesor: habilita el
+        # retry-safe (rama 2). Solo tiene sentido con sid (sin familia no hay
+        # retry-safe que ofrecer).
+        if sid is not None:
+            await store.set_grace_marker(
+                old_jti,
+                new_refresh_jti,
+                ttl_seconds=settings.auth_refresh_reuse_grace_seconds,
+            )
+        # Propaga el sid; si faltaba (token pre-item 1), arranca una familia nueva.
+        new_sid = sid if sid is not None else uuid4().hex
+        return TokenOut(
+            access_token=create_access_token(sub, {SID_CLAIM: new_sid}),
+            refresh_token=create_refresh_token(
+                sub, {SID_CLAIM: new_sid}, jti=new_refresh_jti
+            ),
+        )
+
+    # Llegamos acá: revoke_if_absent devolvió False => old_jti YA estaba revocado.
+    # --- RAMA 2: benign-retry idempotente (dentro del grace) ---
+    successor_jti = await store.get_grace_marker(old_jti) if sid is not None else None
+    if successor_jti is not None:
+        # Retry de red: el cliente reenvió el mismo refresh dentro de la ventana.
+        # Idempotencia REAL: el refresh re-emitido reusa el jti del sucesor canónico
+        # (el que minteó la rama 1), así TODOS los retries de ``old_jti`` convergen
+        # en UNA sola cadena en vez de forkear la familia en ramas paralelas que
+        # evadirían la reuse-detection hasta el exp natural (30d). El ``jti`` viejo
+        # sigue blocklisteado (no se des-revoca); un reuse posterior del sucesor
+        # fuera de SU propio grace vuelve a caer en la rama 3 (breach) y la familia
+        # se revoca. El access es nuevo (independiente, vida corta propia).
+        return TokenOut(
+            access_token=create_access_token(sub, {SID_CLAIM: sid}),
+            refresh_token=create_refresh_token(sub, {SID_CLAIM: sid}, jti=successor_jti),
+        )
+
+    # --- RAMA 3: breach (reuse fuera del grace) ---
+    if sid is not None:
+        await store.revoke_family(sid, ttl_seconds=_refresh_ttl_seconds(settings))
+    raise _unauthorized()
 
 
 @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -250,20 +340,31 @@ async def logout(
     store: TokenStoreDep,
     claims: CurrentClaims,
 ) -> Response:
-    """Revoca el access actual (y el refresh si viene). 204 No Content.
+    """Revoca la sesión actual (familia entera) + el refresh del body. 204 No Content.
 
-    Blocklistea el ``jti`` del access del header ``Authorization`` con su vida
-    restante: ese mismo access deja de servir en ``/me``/``/chat`` (vía
-    ``get_current_user``). Si el access es viejo (sin ``jti``) -> no-op (no rompe).
+    Si el access trae ``sid`` (item 1 de #142), revoca la FAMILIA entera de esa
+    sesión: el refresh, el access actual y cualquier access hermano dejan de servir
+    (vía ``get_current_claims`` -> ``auth_status`` -> family_revoked). Otras sesiones
+    (otro device, otro login con distinto ``sid``) quedan intactas: blast-radius
+    mínimo. La family-revocation usa el TTL completo del refresh (la familia
+    sobrevive a cualquier jti).
 
-    Si ``body.refresh_token`` viene y es válido, también se blocklistea su ``jti``.
+    Se mantienen ADEMÁS los ``revoke`` por ``jti`` individuales (access del header +
+    refresh del body): para un token pre-item 1 SIN ``sid`` no hay familia que matar,
+    así que el revoke por jti sigue siendo su única defensa. Con ``sid`` presente son
+    redundantes (la familia ya los cubre) pero inofensivos y baratos -> compat sin
+    ramas extra.
+
     Un refresh inválido en el body se IGNORA en silencio: logout es idempotente y
     best-effort, un token basura no debe dar error.
 
-    Regla #4: no se loguea ni se devuelve ningún token crudo. fail-open: si Redis
-    cae al escribir, el logout "falla en silencio" (el store es best-effort) pero
-    el token expira solo.
+    Regla #4: no se loguea ni se devuelve ningún token/jti/sid crudo. fail-open: si
+    Redis cae al escribir, el logout "falla en silencio" (el store es best-effort)
+    pero el token expira solo.
     """
+    sid = claims.get("sid")
+    if sid is not None:
+        await store.revoke_family(sid, ttl_seconds=_refresh_ttl_seconds(get_settings()))
     access_jti = claims.get("jti")
     if access_jti is not None:
         await store.revoke(access_jti, ttl_seconds=_ttl_from_exp(claims))
