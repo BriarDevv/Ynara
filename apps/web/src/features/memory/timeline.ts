@@ -1,5 +1,6 @@
 import type {
   EpisodicMemoryOut,
+  MemoryItemOut,
   MemoryLayer,
   MemoryList,
   ProceduralMemoryOut,
@@ -81,6 +82,46 @@ export function entriesForLayer(
   return mapped.sort(byDateDesc);
 }
 
+// ---------- Relacionados ----------
+
+/**
+ * La sesión de origen de un ítem, según la capa: `source_session_id` en
+ * semantic, `session_id` en episodic, `null` en procedural (no nace de una
+ * sesión). Es la clave para encontrar memorias hermanas.
+ */
+export function sessionRefOf(layer: MemoryLayer, item: MemoryItemOut): string | null {
+  if (layer === "semantic") return (item as SemanticMemoryOut).source_session_id;
+  if (layer === "episodic") return (item as EpisodicMemoryOut).session_id;
+  return null;
+}
+
+/**
+ * Memorias que comparten la sesión `sessionId`, excluyendo la actual
+ * (`excludeLayer`/`excludeRef`). Derivación de cliente: no hay endpoint de
+ * relacionados, así que se cruzan los ítems de la lista por su sesión de
+ * origen. Devuelve hasta 3 entradas, ordenadas por fecha desc. Procedural no
+ * tiene sesión → si `sessionId` es null, no hay relacionados.
+ */
+export function relatedEntries(
+  list: MemoryList,
+  opts: { sessionId: string | null; excludeLayer: MemoryLayer; excludeRef: string },
+): TimelineEntry[] {
+  if (opts.sessionId === null) return [];
+
+  const siblings: TimelineEntry[] = [];
+  for (const item of list.semantic.items) {
+    if (item.source_session_id !== opts.sessionId) continue;
+    if (opts.excludeLayer === "semantic" && item.id === opts.excludeRef) continue;
+    siblings.push(semanticToEntry(item));
+  }
+  for (const item of list.episodic.items) {
+    if (item.session_id !== opts.sessionId) continue;
+    if (opts.excludeLayer === "episodic" && item.id === opts.excludeRef) continue;
+    siblings.push(episodicToEntry(item));
+  }
+  return siblings.sort(byDateDesc).slice(0, 3);
+}
+
 // ---------- Agrupado por bucket temporal ----------
 
 export type TimelineGroup = {
@@ -140,6 +181,14 @@ const MONTHS_ES = [
   "nov",
   "dic",
 ];
+
+/** Fecha absoluta con hora para el detalle: `8 may 2026 · 09:42`. */
+export function formatFullDate(iso: string): string {
+  const date = new Date(iso);
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${date.getDate()} ${MONTHS_ES[date.getMonth()]} ${date.getFullYear()} · ${hh}:${mm}`;
+}
 
 /**
  * Fecha corta y humana para la meta de una entrada, relativa a `now`:
