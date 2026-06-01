@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  type Suggestion,
+  SuggestionsResponseSchema,
   type Task,
   TaskSchema,
   type TaskStatus,
@@ -22,6 +24,21 @@ export function useTasks() {
     queryFn: async (): Promise<Task[]> => {
       const raw = await api.get<unknown>("/v1/tasks");
       return TasksResponseSchema.parse(raw).items;
+    },
+  });
+}
+
+/**
+ * Sugerencias proactivas (`GET /v1/suggestions`). **PROVISIONAL**: corre contra
+ * el handler MSW (las genera el LLM real a futuro). Devuelve los ítems crudos;
+ * la sección decide cómo mostrarlos.
+ */
+export function useSuggestions() {
+  return useQuery({
+    queryKey: qk.today.suggestions(),
+    queryFn: async (): Promise<Suggestion[]> => {
+      const raw = await api.get<unknown>("/v1/suggestions");
+      return SuggestionsResponseSchema.parse(raw).items;
     },
   });
 }
@@ -61,5 +78,5 @@ export function useToggleTask() {
   });
 }
 
-/** Re-exporta el tipo del cache para los componentes (evita imports cruzados). */
-export type { Task, TasksResponse };
+/** Re-exporta los tipos del cache para los componentes (evita imports cruzados). */
+export type { Suggestion, Task, TasksResponse };

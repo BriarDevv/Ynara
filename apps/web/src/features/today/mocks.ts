@@ -1,5 +1,7 @@
 import {
   type ApiErrorBody,
+  type Suggestion,
+  type SuggestionsResponse,
   type Task,
   TaskPatchSchema,
   type TasksResponse,
@@ -77,6 +79,48 @@ function getStore(): Task[] {
   return store;
 }
 
+/** UUIDs estables de las sugerencias demo. */
+const SUGGESTION_IDS = {
+  foco: "0193c002-0000-4000-8000-000000000001",
+  pausa: "0193c002-0000-4000-8000-000000000002",
+  reunion: "0193c002-0000-4000-8000-000000000003",
+} as const;
+
+/**
+ * Sugerencias demo ("Ynara sugiere", wireframe 06/07). Cada una con su
+ * **porqué** y el modo que la tinta. Read-only (las genera el LLM real a
+ * futuro), así que no necesitan store mutable.
+ */
+export function buildSuggestions(): Suggestion[] {
+  return [
+    {
+      id: SUGGESTION_IDS.foco,
+      title: "Bloque de foco 10:30–12:00",
+      why: "90 min sin notificaciones para la propuesta Õmi",
+      mode: "productividad",
+    },
+    {
+      id: SUGGESTION_IDS.pausa,
+      title: "Pausá 10 min · estirá",
+      why: "Llevás 90 min en pantalla",
+      mode: "bienestar",
+    },
+    {
+      id: SUGGESTION_IDS.reunion,
+      title: "Preparar reunión 16:30",
+      why: "Los briefs ya están cargados en el chat",
+      mode: "productividad",
+    },
+  ];
+}
+
+let suggestionsStore: Suggestion[] | null = null;
+
+function getSuggestions(): Suggestion[] {
+  if (!suggestionsStore) suggestionsStore = buildSuggestions();
+  return suggestionsStore;
+}
+
 export const todayHandlers = [
   // GET /v1/tasks — prioridades del día.
   http.get(apiUrl("/v1/tasks"), () => {
@@ -106,5 +150,11 @@ export const todayHandlers = [
     }
     task.status = parsed.data.status;
     return HttpResponse.json(task);
+  }),
+
+  // GET /v1/suggestions — "Ynara sugiere".
+  http.get(apiUrl("/v1/suggestions"), () => {
+    const body: SuggestionsResponse = { items: getSuggestions() };
+    return HttpResponse.json(body);
   }),
 ];
