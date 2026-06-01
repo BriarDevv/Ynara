@@ -8,6 +8,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import Any
 
+import redis.asyncio as aioredis
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,7 @@ from app.api.v1 import auth, chat, health, memory, sessions
 from app.core.config import get_settings
 from app.core.db_guard import guard_against_prod_db_in_dev
 from app.core.observability import init_sentry
+from app.core.token_store import RedisTokenStore
 from app.llm.clients.embedding import FakeEmbeddingClient
 from app.llm.clients.fakes import FakeLlmClient
 from app.llm.clients.reranker import FakeReranker
@@ -41,7 +43,12 @@ async def lifespan(app: FastAPI):
 
     TODO: swap por ResilientClient / VllmEmbeddingClient cuando vLLM esté
     disponible — solo cambia este bloque; el resto del stack no toca.
-    TODO: warm-up del LLM router, conexión a Redis, etc.
+    TODO: warm-up del LLM router, etc.
+
+    Redis (issue #63): se construye UN solo cliente ``app.state.redis`` acá
+    (reusable, cerrado en shutdown) y se envuelve en el ``RedisTokenStore``
+    (``app.state.token_store``) que la blocklist + rate-limit consumen vía deps.
+    ``health.check_redis`` reusa este mismo cliente (no abre uno por probe).
     """
     # Guard anti-prod (PRIMERA línea): si NO es producción y el DATABASE_URL
     # apunta a una DB de prod conocida (Supabase) sin opt-in explícito, abortar
@@ -59,9 +66,15 @@ async def lifespan(app: FastAPI):
     app.state.embedder = FakeEmbeddingClient()
     app.state.reranker = FakeReranker()
 
+    # Redis singleton + token store (blocklist + rate-limit, issue #63). UN solo
+    # cliente para toda la app: lo reusan las deps de auth y health.check_redis.
+    app.state.redis = aioredis.from_url(settings.redis_url)
+    app.state.token_store = RedisTokenStore(app.state.redis)
+
     yield
 
-    # shutdown (actualmente no-op; cerrar conexiones reales aquí cuando existan)
+    # shutdown — cerrar la conexión a Redis (las demás son Fakes en memoria).
+    await app.state.redis.aclose()
 
 
 app = FastAPI(
@@ -87,7 +100,11 @@ app.add_middleware(
 # password corto eso devolvería el password en claro al cliente (y a cualquier
 # log que capture la response). Se scrubea por nombre de campo, no por ruta: es
 # defensa en profundidad y aplica a cualquier endpoint que reciba estos campos.
-_SENSITIVE_VALIDATION_FIELDS = frozenset({"password", "password_hash"})
+# Issue #63: ``refresh_token`` / ``access_token`` se agregan para que un 422
+# sobre /auth/refresh|logout no ecoe el token crudo (regla #4).
+_SENSITIVE_VALIDATION_FIELDS = frozenset(
+    {"password", "password_hash", "refresh_token", "access_token"}
+)
 _VALIDATION_SCRUBBED = "[scrubbed]"
 
 

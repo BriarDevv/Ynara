@@ -7,6 +7,8 @@ run default (sin marker ``integration``) queda 100% en memoria.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi import Response
 
@@ -22,6 +24,11 @@ def _ok() -> DependencyCheck:
 
 def _fail() -> DependencyCheck:
     return DependencyCheck(ok=False, error="ConnectionError")
+
+
+def _fake_request(redis: object | None = None) -> SimpleNamespace:
+    """Stub de Request con ``app.state.redis`` (lo único que lee ``readiness``)."""
+    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(redis=redis)))
 
 
 # ---------- liveness ----------
@@ -40,14 +47,14 @@ async def test_readiness_ok_returns_200(monkeypatch: pytest.MonkeyPatch) -> None
     async def fake_db() -> DependencyCheck:
         return _ok()
 
-    async def fake_redis() -> DependencyCheck:
+    async def fake_redis(client: object) -> DependencyCheck:
         return _ok()
 
     monkeypatch.setattr(health, "check_database", fake_db)
     monkeypatch.setattr(health, "check_redis", fake_redis)
 
     response = Response()
-    body = await readiness(response)
+    body = await readiness(_fake_request(), response)
 
     assert response.status_code == 200
     assert body.status == "ready"
@@ -59,14 +66,14 @@ async def test_readiness_db_down_returns_503(monkeypatch: pytest.MonkeyPatch) ->
     async def fake_db() -> DependencyCheck:
         return _fail()
 
-    async def fake_redis() -> DependencyCheck:
+    async def fake_redis(client: object) -> DependencyCheck:
         return _ok()
 
     monkeypatch.setattr(health, "check_database", fake_db)
     monkeypatch.setattr(health, "check_redis", fake_redis)
 
     response = Response()
-    body = await readiness(response)
+    body = await readiness(_fake_request(), response)
 
     assert response.status_code == 503
     assert body.status == "degraded"
@@ -78,14 +85,14 @@ async def test_readiness_redis_down_returns_503(monkeypatch: pytest.MonkeyPatch)
     async def fake_db() -> DependencyCheck:
         return _ok()
 
-    async def fake_redis() -> DependencyCheck:
+    async def fake_redis(client: object) -> DependencyCheck:
         return _fail()
 
     monkeypatch.setattr(health, "check_database", fake_db)
     monkeypatch.setattr(health, "check_redis", fake_redis)
 
     response = Response()
-    body = await readiness(response)
+    body = await readiness(_fake_request(), response)
 
     assert response.status_code == 503
     assert body.status == "degraded"
@@ -95,14 +102,14 @@ async def test_readiness_both_down_returns_503(monkeypatch: pytest.MonkeyPatch) 
     async def fake_db() -> DependencyCheck:
         return _fail()
 
-    async def fake_redis() -> DependencyCheck:
+    async def fake_redis(client: object) -> DependencyCheck:
         return _fail()
 
     monkeypatch.setattr(health, "check_database", fake_db)
     monkeypatch.setattr(health, "check_redis", fake_redis)
 
     response = Response()
-    body = await readiness(response)
+    body = await readiness(_fake_request(), response)
 
     assert response.status_code == 503
     assert body.status == "degraded"
@@ -124,9 +131,6 @@ class _BoomRedis:
     async def ping(self) -> None:
         raise RuntimeError("Error 111 connecting to redis://:p4ssw0rd@host:6379/0")
 
-    async def aclose(self) -> None:
-        return None
-
 
 async def test_check_database_error_is_class_name_not_dsn(monkeypatch: pytest.MonkeyPatch) -> None:
     # Ejercita el path real except->type(exc).__name__: el str(exc) trae el DSN,
@@ -139,9 +143,10 @@ async def test_check_database_error_is_class_name_not_dsn(monkeypatch: pytest.Mo
     assert "://" not in (result.error or "")
 
 
-async def test_check_redis_error_is_class_name_not_dsn(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(health.aioredis, "from_url", lambda *a, **k: _BoomRedis())
-    result = await check_redis()
+async def test_check_redis_error_is_class_name_not_dsn() -> None:
+    # check_redis reusa el cliente de app.state.redis: le pasamos uno que falla.
+    # El str(exc) trae el DSN; el reporte solo el nombre de la clase (regla #4).
+    result = await check_redis(_BoomRedis())
     assert result.ok is False
     assert result.error == "RuntimeError"
     assert "p4ssw0rd" not in (result.error or "")

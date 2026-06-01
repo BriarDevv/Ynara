@@ -18,6 +18,7 @@ from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 from app.core.security import InvalidTokenError, verify_access_token
+from app.core.token_store import TokenStore
 from app.llm.clients.base import LLMClient
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
@@ -67,13 +68,39 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/token", auto_error=True)
 
 
-async def get_current_user(
-    token: Annotated[str, Depends(_oauth2_scheme)],
-) -> UUID:
-    """Extrae el user_id UUID del JWT. Pura, sin hit a DB.
+def get_token_store(request: Request) -> TokenStore:
+    """Devuelve el ``TokenStore`` singleton construido en el lifespan (app.state).
 
-    Levanta HTTP 401 si el token es inválido, expirado o el ``sub`` no es un UUID.
-    El header ``WWW-Authenticate: Bearer`` se incluye según el RFC 6750.
+    Mismo patrón que ``get_llm_client``/``get_embedder``: no es async (sólo lee el
+    singleton); los métodos del store SÍ son async. En prod es un
+    ``RedisTokenStore`` sobre ``app.state.redis``; en tests se overridea con un
+    ``InMemoryTokenStore`` vía ``app.dependency_overrides``.
+    """
+    return request.app.state.token_store  # type: ignore[no-any-return]
+
+
+TokenStoreDep = Annotated[TokenStore, Depends(get_token_store)]
+
+
+async def get_current_claims(
+    token: Annotated[str, Depends(_oauth2_scheme)],
+    store: Annotated[TokenStore, Depends(get_token_store)],
+) -> dict[str, Any]:
+    """Valida el access JWT y devuelve el payload completo (no solo el ``sub``).
+
+    Es la base de ``get_current_user`` (que extrae el ``UUID``). Levanta HTTP 401
+    si el token es inválido/expirado/``type`` incorrecto, o si su ``jti`` está
+    blocklisteado (logout/rotación). El header ``WWW-Authenticate: Bearer`` se
+    incluye según el RFC 6750.
+
+    Chequeo de blocklist (issue #63): un hit O(1) a Redis (``EXISTS``). Si el
+    token NO tiene ``jti`` (token viejo pre-#63 en vuelo) se saltea el chequeo
+    (no es revocable, pero expira solo: ventana de gracia del deploy). fail-OPEN:
+    si Redis cae, ``is_revoked`` devuelve ``False`` y el token se acepta hasta su
+    ``exp`` natural (baseline pre-#63), nunca una caída total de auth.
+
+    Regla #4: el ``detail`` es estático (``"credenciales inválidas"``); NUNCA se
+    construye con ``str(exc)`` ni con el token crudo.
     """
     _unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -84,10 +111,34 @@ async def get_current_user(
         payload = verify_access_token(token)
     except InvalidTokenError as exc:
         raise _unauthorized from exc
+    jti = payload.get("jti")
+    if jti is not None and await store.is_revoked(jti):
+        # Token revocado (logout/rotación): 401 uniforme, igual que un token malo.
+        raise _unauthorized
+    return payload
+
+
+CurrentClaims = Annotated[dict[str, Any], Depends(get_current_claims)]
+
+
+async def get_current_user(
+    claims: Annotated[dict[str, Any], Depends(get_current_claims)],
+) -> UUID:
+    """Extrae el user_id UUID del JWT validado (incl. chequeo de blocklist).
+
+    Consume ``get_current_claims`` (firma/exp/type/blocklist) y devuelve el
+    ``UUID`` del ``sub``. Levanta HTTP 401 si el ``sub`` falta o no es un UUID.
+    Los consumidores vía ``CurrentUser`` siguen recibiendo un ``UUID`` sin
+    cambios; el hit a Redis es transparente.
+    """
     try:
-        return UUID(payload["sub"])
+        return UUID(claims["sub"])
     except (KeyError, ValueError) as exc:
-        raise _unauthorized from exc
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="credenciales inválidas",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
 
 
 CurrentUser = Annotated[UUID, Depends(get_current_user)]

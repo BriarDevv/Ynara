@@ -36,6 +36,25 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
+@pytest.fixture(autouse=True)
+def _default_token_store() -> None:
+    """Monta un ``InMemoryTokenStore`` en ``app.state`` para todos los tests.
+
+    Bajo ``ASGITransport`` el lifespan de ``app/main.py`` no corre, así que
+    ``app.state.token_store`` (que ``get_current_user``/``get_current_claims``
+    consumen desde issue #63) no existe. Igual que los tests ya inyectan a mano
+    los Fakes de LLM/embedder, acá sembramos un store en memoria por default
+    (nada blocklisteado, sin rate-limit efectivo) para que las rutas protegidas
+    no exploten. Los tests de auth que necesitan un store específico lo
+    overridean vía ``get_token_store`` sin tocar esto.
+    """
+    # Import local para no atar el conftest a app.state si la app no se importa.
+    from app.core.token_store import InMemoryTokenStore
+    from app.main import app
+
+    app.state.token_store = InMemoryTokenStore()
+
+
 def _test_database_url() -> str:
     """URL async (asyncpg) de la DB de tests. Vacio si TEST_DATABASE_URL no esta."""
     raw = os.environ.get("TEST_DATABASE_URL", "")
