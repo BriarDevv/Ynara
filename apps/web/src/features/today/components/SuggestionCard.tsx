@@ -21,13 +21,18 @@ export function SuggestionCard({ suggestion, index }: Props) {
     : "bg-[var(--color-border-strong)]";
   return (
     <li
-      className="anim-stagger-up flex items-stretch gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] p-4"
+      // Mismo lenguaje papel-sobre-canvas que PriorityRow: bg blanco + border
+      // sutil. Antes era bg-soft, lo que generaba dos tonos de gris encimados
+      // sin razón. El acento de modo queda como hairline a la izquierda.
+      className="anim-stagger-up flex items-stretch gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4"
       style={{ "--stagger-index": Math.min(index, 5) } as CSSProperties}
     >
       <span aria-hidden className={`w-1 shrink-0 rounded-full ${accentClass}`} />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="text-body text-[var(--color-ink)]">{suggestion.title}</span>
-        <span className="text-body-sm text-[var(--color-ink-muted)]">{suggestion.why}</span>
+        <span className="text-body font-medium text-[var(--color-ink-deep)]">
+          {suggestion.title}
+        </span>
+        <span className="text-body-sm text-[var(--color-ink-soft)]">{suggestion.why}</span>
       </span>
     </li>
   );

@@ -16,7 +16,7 @@ export function SuggestionsSection() {
   if (isError) {
     return (
       <section className="flex flex-col gap-3">
-        <h2 className="text-caption text-[var(--color-ink-muted)]">Ynara sugiere</h2>
+        <h2 className="text-caption text-[var(--color-ink-soft)]">Ynara sugiere</h2>
         <p className="text-body-sm text-[var(--color-ink-muted)]">
           No pudimos traer las sugerencias.{" "}
           <button
