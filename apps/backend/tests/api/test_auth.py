@@ -29,7 +29,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db, get_embedder, get_llm_client, get_reranker, get_token_store
-from app.core.security import create_access_token, verify_access_token
+from app.core.security import create_access_token, verify_access_token, verify_token
 from app.core.token_store import InMemoryTokenStore, TokenStore
 from app.llm.clients.embedding import FakeEmbeddingClient
 from app.llm.clients.fakes import FakeLlmClient
@@ -665,28 +665,115 @@ async def test_refresh_ok_emite_nuevos_tokens(db_session: AsyncSession) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 21. Rotación: reusar el refresh viejo tras /refresh -> 401 (reuse detectado)
+# 21. Rotación con reuse-detection a nivel familia (item 1 de #142).
+#
+#  Residual #3 del SPEC: con la ventana de gracia retry-safe, un reuse INMEDIATO
+#  del refresh recién rotado es indistinguible de un retry de red benigno -> 200
+#  re-minteado (NO 401), y la familia NO queda revocada. El 401 + family-revoke
+#  aparece cuando el reuse llega FUERA del grace (test 21b, con advance()).
 # ---------------------------------------------------------------------------
 
 
-async def test_refresh_reuse_del_viejo_rechazado(db_session: AsyncSession) -> None:
-    """Tras /refresh, reusar el refresh VIEJO -> 401 (quedó blocklisteado)."""
-    email = "refresh.reuse@example.com"
-    client = await _client(db_session)
+async def test_refresh_reuse_inmediato_es_retry_safe(db_session: AsyncSession) -> None:
+    """Reuse inmediato (dentro del grace) -> 200 re-minteado; la familia NO se nukea.
+
+    Antes (item 3) este reuse daba 401. Con el grace window retry-safe, un reenvío
+    del mismo refresh dentro de los 30s es un retry benigno (no se puede distinguir
+    de un robo en esa ventana — concesión consciente, residual #3). El cliente
+    recibe un par usable y un access hermano sigue dando 200.
+    """
+    email = "refresh.retry@example.com"
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
     try:
         async with client:
-            _, _, refresh = await _register_and_login(
+            _, access, refresh = await _register_and_login(
                 client, email=email, password="supersecreta1"
             )
             first = await client.post(
                 "/v1/auth/refresh", json={"refresh_token": refresh}
             )
             assert first.status_code == 200
-            # Reusar el viejo: cae en la detección de reuse.
+            # Reuse inmediato (dentro del grace): retry benigno -> 200 re-minteado.
+            retry = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": refresh}
+            )
+            assert retry.status_code == 200
+            assert retry.json()["access_token"]
+            # La familia NO fue revocada: el access ORIGINAL del login sigue vivo.
+            me = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
+            )
+        assert me.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+async def test_refresh_retry_converge_en_el_sucesor(db_session: AsyncSession) -> None:
+    """El retry benigno reusa el jti del sucesor canónico (anti-fork de familia).
+
+    La rama 1 (first-use) mintea un sucesor con jti ``J1`` y deja el grace marker
+    ``old_jti -> J1``. Un reuse dentro del grace (rama 2) debe converger en ESE
+    mismo ``J1``, no mintear una cadena paralela con jti random: si forkeara, las
+    dos cadenas rotarían independientes y jamás dispararían la reuse-detection (el
+    robo escaparía hasta el exp natural, 30d). Convergiendo en un único sucesor, un
+    reuse posterior fuera de grace vuelve a caer en breach y la familia se mata.
+    """
+    email = "refresh.converge@example.com"
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            _, _, refresh = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            first = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
+            assert first.status_code == 200
+            j1 = verify_token(first.json()["refresh_token"], expected_type="refresh")["jti"]
+            # Reuse dentro del grace: el refresh re-emitido reusa EL MISMO sucesor.
+            retry = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
+            assert retry.status_code == 200
+            j_retry = verify_token(retry.json()["refresh_token"], expected_type="refresh")["jti"]
+            assert j_retry == j1  # converge en una sola cadena, no forkea la familia
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+async def test_refresh_reuse_fuera_del_grace_revoca_familia(
+    db_session: AsyncSession,
+) -> None:
+    """Reuse FUERA del grace -> 401 y la familia QUEDA revocada (breach detectado).
+
+    Inyecta un InMemoryTokenStore para avanzar el reloj más allá de la ventana de
+    gracia (30s). Tras el advance, el grace marker expiró: el reuse del viejo ya no
+    es un retry benigno sino replay/robo -> 401 + family-revoke. Un access hermano
+    de esa familia pasa a 401.
+    """
+    email = "refresh.breach@example.com"
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            _, access, refresh = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            first = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": refresh}
+            )
+            assert first.status_code == 200
+            # Pasar el grace (default 30s): el grace marker expira.
+            store.advance(31)
             reuse = await client.post(
                 "/v1/auth/refresh", json={"refresh_token": refresh}
             )
-        assert reuse.status_code == 401
+            assert reuse.status_code == 401
+            # La familia quedó revocada: el access ORIGINAL hermano da 401.
+            me = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
+            )
+        assert me.status_code == 401
     finally:
         app.dependency_overrides.clear()
         await _delete_user_by_email(db_session, email)
@@ -975,6 +1062,9 @@ async def test_fail_open_blocklist(db_session: AsyncSession) -> None:
         async def expire(self, *a: object, **k: object) -> None:
             raise RuntimeError("redis down")
 
+        async def eval(self, *a: object, **k: object) -> int:
+            raise RuntimeError("redis down")
+
         async def delete(self, *a: object) -> None:
             raise RuntimeError("redis down")
 
@@ -1016,6 +1106,9 @@ async def test_fail_open_rate_limit(db_session: AsyncSession) -> None:
             raise RuntimeError("redis down")
 
         async def expire(self, *a: object, **k: object) -> None:
+            raise RuntimeError("redis down")
+
+        async def eval(self, *a: object, **k: object) -> int:
             raise RuntimeError("redis down")
 
         async def delete(self, *a: object) -> None:
@@ -1157,6 +1250,84 @@ async def test_no_leak_tokens_en_errores(db_session: AsyncSession) -> None:
         app.dependency_overrides.clear()
 
 
+# ---------------------------------------------------------------------------
+# 35. Retry-After por endpoint (item 6 de #142): register usa su ventana, login su
+#     lockout. Cada 429 informa cuánto esperar para SU límite, no un valor fijo.
+# ---------------------------------------------------------------------------
+
+
+async def test_retry_after_register_usa_window(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El 429 de /register trae Retry-After == auth_register_window_seconds."""
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _ratelimit_settings(register_max=1),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.auth.get_settings",
+        lambda: _ratelimit_settings(register_max=1),
+    )
+    emails: list[str] = []
+    client = await _client(db_session)
+    try:
+        async with client:
+            e0 = "retryafter.reg.0@example.com"
+            emails.append(e0)
+            ok = await client.post(
+                "/v1/auth/register", json={"email": e0, "password": "supersecreta1"}
+            )
+            assert ok.status_code == 201
+            e1 = "retryafter.reg.1@example.com"
+            emails.append(e1)
+            r429 = await client.post(
+                "/v1/auth/register", json={"email": e1, "password": "supersecreta1"}
+            )
+        assert r429.status_code == 429
+        # Retry-After == ventana del register (3600), no el lockout del login.
+        assert r429.headers.get("Retry-After") == "3600"
+    finally:
+        app.dependency_overrides.clear()
+        for e in emails:
+            await _delete_user_by_email(db_session, e)
+
+
+async def test_retry_after_login_usa_lockout(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El 429 de /token (lockout) trae Retry-After == auth_login_lockout_seconds."""
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _ratelimit_settings(max_attempts=2),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.auth.get_settings",
+        lambda: _ratelimit_settings(max_attempts=2),
+    )
+    email = "retryafter.login@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            reg = await client.post(
+                "/v1/auth/register", json={"email": email, "password": "supersecreta1"}
+            )
+            assert reg.status_code == 201
+            # 2 fallos -> lockout; el 3ro da 429.
+            for _ in range(2):
+                await client.post(
+                    "/v1/auth/token", json={"email": email, "password": "mal-password"}
+                )
+            r429 = await client.post(
+                "/v1/auth/token", json={"email": email, "password": "mal-password"}
+            )
+        assert r429.status_code == 429
+        # Retry-After == lockout del login (900), no la ventana del register.
+        assert r429.headers.get("Retry-After") == "900"
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
 def _ratelimit_settings(
     *, max_attempts: int = 5, register_max: int = 10
 ):
@@ -1174,3 +1345,279 @@ def _ratelimit_settings(
         AUTH_REGISTER_MAX_ATTEMPTS=register_max,
         AUTH_REGISTER_WINDOW_SECONDS=3600,
     )
+
+
+# ===========================================================================
+# Item 1 de #142 — sid (familia) + reuse-detection retry-safe + aislamiento
+# ===========================================================================
+
+
+def _refresh_sid(refresh_token: str) -> str | None:
+    """Decodifica un refresh y devuelve su claim sid (None si no tiene)."""
+    return verify_token(refresh_token, expected_type="refresh").get("sid")
+
+
+def _access_sid(access_token: str) -> str | None:
+    """Decodifica un access y devuelve su claim sid (None si no tiene)."""
+    return verify_access_token(access_token).get("sid")
+
+
+def _mint_refresh_with_jti_no_sid(sub: str) -> str:
+    """Mintea a mano un refresh CON jti+type pero SIN sid (token pre-item 1)."""
+    from datetime import UTC, datetime, timedelta
+
+    from jose import jwt
+
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    return jwt.encode(
+        {
+            "sub": sub,
+            "type": "refresh",
+            "jti": uuid.uuid4().hex,
+            "exp": datetime.now(UTC) + timedelta(days=30),
+        },
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
+
+
+async def test_token_emite_sid_en_ambos(db_session: AsyncSession) -> None:
+    """/token: el access y el refresh comparten el MISMO sid (misma familia)."""
+    email = "sid.both@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            _, access, refresh = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+        access_sid = _access_sid(access)
+        refresh_sid = _refresh_sid(refresh)
+        assert access_sid is not None
+        assert refresh_sid is not None
+        assert access_sid == refresh_sid
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+async def test_refresh_propaga_sid(db_session: AsyncSession) -> None:
+    """/refresh: el nuevo access + refresh comparten el sid del refresh original."""
+    email = "sid.propaga@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            _, _, refresh = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            original_sid = _refresh_sid(refresh)
+            resp = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": refresh}
+            )
+            assert resp.status_code == 200
+            body = resp.json()
+        assert original_sid is not None
+        # El sid se propaga (la familia sobrevive a la rotación).
+        assert _access_sid(body["access_token"]) == original_sid
+        assert _refresh_sid(body["refresh_token"]) == original_sid
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+async def test_access_hermano_muere_con_la_familia(db_session: AsyncSession) -> None:
+    """La family-revocation mata el access ORIGINAL, no solo el refresh reusado.
+
+    Demuestra que revocar la familia (vía reuse fuera del grace) cierra el agujero
+    de "el access robado vive 7 días": el access del login original (no el refresh
+    reusado) pasa a 401 en /me.
+    """
+    email = "sid.hermano@example.com"
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            _, access, refresh = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            # Antes del breach el access vale.
+            before = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
+            )
+            assert before.status_code == 200
+            # Rotar, luego reusar fuera del grace -> revoca la familia.
+            await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
+            store.advance(31)
+            reuse = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": refresh}
+            )
+            assert reuse.status_code == 401
+            after = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
+            )
+        assert after.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+async def test_sesiones_distinto_sid_no_se_afectan(db_session: AsyncSession) -> None:
+    """Aislamiento: revocar la familia A (breach) no afecta el access de la sesión B.
+
+    Dos logins del MISMO user generan dos sid distintos. Un breach en la sesión A
+    (reuse fuera del grace) revoca SOLO la familia A; el access de B sigue valiendo.
+    """
+    email = "sid.aislamiento@example.com"
+    password = "supersecreta1"
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            reg = await client.post(
+                "/v1/auth/register", json={"email": email, "password": password}
+            )
+            assert reg.status_code == 201
+            # Sesión A.
+            tok_a = await client.post(
+                "/v1/auth/token", json={"email": email, "password": password}
+            )
+            refresh_a = tok_a.json()["refresh_token"]
+            # Sesión B (otro login -> otro sid).
+            tok_b = await client.post(
+                "/v1/auth/token", json={"email": email, "password": password}
+            )
+            access_b = tok_b.json()["access_token"]
+            # Las dos sesiones tienen distinto sid.
+            assert _refresh_sid(refresh_a) != _access_sid(access_b)
+            # Breach en A: rotar + reusar fuera del grace.
+            await client.post("/v1/auth/refresh", json={"refresh_token": refresh_a})
+            store.advance(31)
+            reuse_a = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": refresh_a}
+            )
+            assert reuse_a.status_code == 401
+            # El access de B sigue vivo (otra familia).
+            me_b = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {access_b}"}
+            )
+        assert me_b.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+async def test_logout_mata_la_familia(db_session: AsyncSession) -> None:
+    """Logout revoca la familia: el access Y el refresh de esa sesión mueren.
+
+    Extiende test_logout_blocklistea_access: el logout (sin mandar el refresh en el
+    body) igual mata el refresh de la familia porque revoca por sid. El access da
+    401 en /me y el refresh da 401 en /refresh.
+    """
+    email = "sid.logout@example.com"
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            _, access, refresh = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            out = await client.post(
+                "/v1/auth/logout",
+                json={},  # NO mandamos el refresh: la familia lo cubre igual.
+                headers={"Authorization": f"Bearer {access}"},
+            )
+            assert out.status_code == 204
+            # El access de la sesión murió.
+            me = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
+            )
+            assert me.status_code == 401
+            # El refresh de la MISMA familia también murió, aunque no fue al body.
+            ref = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": refresh}
+            )
+        assert ref.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+async def test_refresh_compat_token_sin_sid(db_session: AsyncSession) -> None:
+    """Compat: un refresh con jti pero SIN sid (pre-item 1) rota OK (arranca familia)."""
+    email = "sid.compat.ok@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            user_id, _, _ = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            legacy_refresh = _mint_refresh_with_jti_no_sid(user_id)
+            resp = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": legacy_refresh}
+            )
+            assert resp.status_code == 200
+            body = resp.json()
+        # Rama 1: arranca una familia nueva (el nuevo par tiene un sid fresco).
+        assert _access_sid(body["access_token"]) is not None
+        assert _refresh_sid(body["refresh_token"]) is not None
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+async def test_refresh_reuse_token_sin_sid_401_sin_nukear(
+    db_session: AsyncSession,
+) -> None:
+    """Compat: reusar un refresh SIN sid -> 401 (rama 3 sin family-revoke, no crashea).
+
+    Sin sid no hay familia que revocar: el reuse degrada al single-use de #142 (401
+    uniforme) sin intentar una family-revocation imposible.
+    """
+    email = "sid.compat.reuse@example.com"
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            user_id, _, _ = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            legacy_refresh = _mint_refresh_with_jti_no_sid(user_id)
+            first = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": legacy_refresh}
+            )
+            assert first.status_code == 200
+            # Reusar el viejo sin sid: 401 (sin sid no entra a rama 2 ni nukea nada).
+            reuse = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": legacy_refresh}
+            )
+        assert reuse.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+async def test_no_leak_sid_en_errores(db_session: AsyncSession) -> None:
+    """El sid NO aparece en el response.text de un 401 de /refresh (higiene, regla #4)."""
+    email = "sid.noleak@example.com"
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            _, _, refresh = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            sid = _refresh_sid(refresh)
+            # Forzar la rama 3 (breach): rotar + reusar fuera del grace.
+            await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
+            store.advance(31)
+            reuse = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": refresh}
+            )
+        assert reuse.status_code == 401
+        assert sid is not None
+        # El sid no se filtra en el cuerpo del 401.
+        assert sid not in reuse.text
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)

@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     # TTL del refresh token. Mayor que el access (30 dias por default). Se usa
     # el MISMO secret/alg que el access; el claim `type` separa los dominios.
     jwt_refresh_expire_minutes: int = Field(43200, alias="JWT_REFRESH_EXPIRE_MINUTES")
+    # Reuse-detection de refresh a nivel familia (sid), retry-safe (item 1 de #142).
+    # Ventana de gracia tras rotar un refresh: dentro de ella, un reenvio del MISMO
+    # refresh (retry de red benigno, comun en mobile que perdio la respuesta) NO
+    # revoca la familia — se trata como reintento idempotente. Fuera de la ventana,
+    # un refresh ya rotado que resurge es replay/robo -> revoca la familia entera.
+    auth_refresh_reuse_grace_seconds: int = Field(30, alias="AUTH_REFRESH_REUSE_GRACE_SECONDS")
 
     # Rate-limit / lockout del login (issue #63). Bucket por (ip, email_hash).
     # El estado vive solo en Redis (sin tablas). fail-OPEN: si Redis cae, el

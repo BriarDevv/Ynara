@@ -29,6 +29,7 @@ from jose import JWTError, jwt
 from app.core.config import get_settings
 
 __all__ = [
+    "SID_CLAIM",
     "InvalidTokenError",
     "create_access_token",
     "create_refresh_token",
@@ -37,6 +38,14 @@ __all__ = [
     "verify_password",
     "verify_token",
 ]
+
+# Nombre del claim de "session/family id" (sid): agrupa el access + todos los
+# refresh rotados de una misma sesion bajo una unica unidad de revocacion
+# (item 1 de #142). No es un claim de control falsificable (su unico uso es
+# agrupar tokens de una sesion bajo una key de revocacion que el server controla),
+# asi que va legitimamente en `extra_claims`. Se comparte como constante entre
+# auth.py y deps.py para evitar un typo silencioso que rompa la family-revocation.
+SID_CLAIM = "sid"
 
 # bcrypt solo usa los primeros 72 bytes de la contraseña y bcrypt >= 4.1 levanta
 # si se pasan más (en vez de truncar). Truncamos explícito. Usamos bcrypt directo
@@ -112,8 +121,13 @@ def create_access_token(
     )
 
 
-def create_refresh_token(subject: str, *, jti: str | None = None) -> str:
-    """Genera un refresh JWT firmado con sub/iat/exp/jti/type=="refresh".
+def create_refresh_token(
+    subject: str,
+    extra_claims: dict[str, Any] | None = None,
+    *,
+    jti: str | None = None,
+) -> str:
+    """Genera un refresh JWT firmado con sub/iat/exp/jti/type=="refresh" + claims extra.
 
     TTL desde ``settings.jwt_refresh_expire_minutes`` (mayor que el access).
     Usa el MISMO secret/alg que el access (simplicidad MVP): el claim ``type``
@@ -123,6 +137,11 @@ def create_refresh_token(subject: str, *, jti: str | None = None) -> str:
     El ``jti`` (uuid4 hex si no se pasa) hace al refresh rotable: ``/refresh`` lo
     blocklistea al consumirlo (single-use), y un reuse del viejo cae en la
     detección de replay.
+
+    ``extra_claims`` (espejo de ``create_access_token``) NO puede override-ar
+    ``type``/``exp``/``jti`` (van DESPUÉS en el payload, ver ``_build_token``); lo
+    usa el flujo de refresh para propagar el ``sid`` (familia, item 1 de #142). El
+    default (``create_refresh_token(str(user.id))``) sigue funcionando sin cambios.
     """
     settings = get_settings()
     return _build_token(
@@ -131,6 +150,7 @@ def create_refresh_token(subject: str, *, jti: str | None = None) -> str:
         token_type="refresh",  # noqa: S106
         expire_minutes=settings.jwt_refresh_expire_minutes,
         jti=jti or uuid4().hex,
+        extra_claims=extra_claims,
     )
 
 
