@@ -10,6 +10,7 @@ import {
 import { HttpResponse, http } from "msw";
 import { cannedActions, cannedReply, isAgentMode } from "@/features/chat/constants";
 import { memoryHandlers } from "@/features/memory/mocks";
+import { todayHandlers } from "@/features/today/mocks";
 import { env } from "./env";
 
 /**
@@ -128,4 +129,7 @@ export const handlers = [
 
   // Memoria — Fase C. Handlers + fixtures viven con la feature.
   ...memoryHandlers,
+
+  // Hoy (tasks/suggestions/recap) — Fase E. PROVISIONAL: sin backend todavía.
+  ...todayHandlers,
 ];
