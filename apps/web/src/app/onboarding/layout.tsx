@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
+import { BrandWaves } from "@/components/ui/BrandWaves";
 import { OnboardingHeader } from "@/features/onboarding/components/OnboardingHeader";
 import { ONBOARDING_STEPS, STEP_INDEX } from "@/features/onboarding/constants";
 import { useOnboardingStore } from "@/features/onboarding/store";
@@ -32,9 +33,12 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
   if (completed) return null;
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-soft)]">
+    <div className="relative flex min-h-screen flex-col">
+      {/* Velo de marca: ondas violet/blue suaves detrás de todo. Vive fixed
+          inset-0 con z-negativo. No interfiere con focus ni pointer. */}
+      <BrandWaves />
       <OnboardingHeaderWithProgress />
-      <main className="flex flex-col">{children}</main>
+      <main className="flex flex-1 flex-col pb-12">{children}</main>
     </div>
   );
 }
