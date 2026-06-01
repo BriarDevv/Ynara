@@ -55,7 +55,9 @@ export function ModeSwitcher({ interestedModes, activeMode, onChange, className 
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pr-3 pl-1.5 transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)] hover:border-[var(--color-border-strong)]"
+        // Microinteracción §8.2: hover scale(1.02) / press scale(0.98). Pill
+        // chico → el scale es seguro (no desborda). Timing fast/instant.
+        className="flex items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pr-3 pl-1.5 transition-[transform,border-color] duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:scale-[1.02] hover:border-[var(--color-border-strong)] active:scale-[0.98] active:duration-[var(--duration-instant)]"
       >
         <ModeChip modeId={activeMode} size="sm" />
         <Icon name="chevron" size={14} className="text-[var(--color-ink-muted)]" />
