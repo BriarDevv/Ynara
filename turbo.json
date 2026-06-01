@@ -1,27 +1,13 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalDependencies": [
-    "**/.env.*local",
-    ".env",
-    "ynara.config.json"
-  ],
-  "globalEnv": [
-    "NODE_ENV",
-    "ENVIRONMENT"
-  ],
+  "globalDependencies": ["**/.env.*local", ".env", "ynara.config.json"],
+  "globalEnv": ["NODE_ENV", "ENVIRONMENT"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [
-        ".next/**",
-        "!.next/cache/**",
-        "dist/**",
-        "build/**"
-      ],
-      "env": [
-        "NEXT_PUBLIC_*"
-      ]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", "build/**"],
+      "env": ["NEXT_PUBLIC_*"]
     },
     "dev": {
       "cache": false,
