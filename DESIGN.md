@@ -176,20 +176,19 @@ sistema.
 | Token | Valor | Uso |
 |---|---|---|
 | `--color-violet-glow` | `rgb(129 101 163 / 0.18)` | Glow ambiental, no para fills |
+| `--color-memory` | alias de `--color-violet-to` (`#7C4FA3`) | Tinta de íconos del badge "capa memoria" (PromptChip, MemoryDetailView, SearchResultRow, TimelineEntryRow) |
 
 > **Cambio v2 → v3** [sobrio]: la v2 prescribía una **rampa de memoria** rica
 > (`--color-memory-deep/soft/accent` + `--gradient-memory`). El v3 **no la
-> implementó**: el violeta vive hoy como `--gradient-violet` (heredado de v1)
-> + `--color-violet-glow` ambiental. Si un consumidor futuro necesita la
-> rampa, sumarla en su PR.
+> implementó**: el violeta vive hoy como `--gradient-violet` (heredado de v1),
+> `--color-violet-glow` ambiental y `--color-memory` para la tinta de íconos
+> de capa. Si un consumidor futuro necesita la rampa completa, sumarla en su PR.
 >
-> **Deuda preexistente reconocida**: 4 callers usan `var(--color-memory)` sin
-> que el token exista en `globals.css` (PromptChip, MemoryDetailView,
-> SearchResultRow, TimelineEntryRow). El bug se introdujo antes de la serie
-> sobria (commit `9f84c6a` bajó light-only sin migrar estos callers). En
-> runtime el `var()` cae sin fallback y los íconos terminan heredando
-> `currentColor`. **Follow-up**: definir `--color-memory` o migrar los 4
-> callers a `--color-violet-glow` / `--gradient-violet` en su propio PR.
+> `--color-memory` se sumó después del bump a v3 para cerrar una deuda
+> preexistente: 4 callers lo referenciaban sin que el token existiera
+> (commits `76b1622`, `0c5e59a`, `3d8f5c8`, `62acc8b` introdujeron los usos;
+> `9f84c6a` bajó light-only sin migrar estos consumers; el PR de cierre
+> sumó el alias al violeta de marca).
 
 ### 3.5 Tints por modo
 
