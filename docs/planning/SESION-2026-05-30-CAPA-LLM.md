@@ -1,6 +1,8 @@
 # Bitácora de sesión — Capa de inferencia LLM (2026-05-30)
 
 > **Actualización post-sesión (2026-05-31):** `core/security.py` (auth JWT) fue implementado; `/v1/chat` (sync + SSE streaming), `/v1/sessions` y `/v1/memory` completo están mergeados. Este doc es la bitácora point-in-time de la sesión original — el cuerpo no se reescribe.
+>
+> **Actualización #66:** M4 observabilidad + Sentry PII scrubbing implementado; el scrubber (`_scrub_event`) cubre también breadcrumbs (message+data), `exception.values`, `contexts` y `extra`, además de request data/cookies/headers/query_string y user.
 
 > **Resumen de este documento.** Es la bitácora/handoff de la sesión del
 > 2026-05-30 sobre la **capa de inferencia LLM** del backend de Ynara.

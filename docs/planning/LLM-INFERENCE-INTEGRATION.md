@@ -129,9 +129,14 @@ es un track de infra aparte, pendiente).
   `LlmDegradedResponse`). Regla #4: cero externos.
 - **M4** — `observability.py`: tokens/s, queue depth (scrape de
   `vllm:num_requests_waiting`), TTFT, `tool_parse_errors`, fallback
-  counters, circuit state. **Sentry con `before_send` que borra el texto
-  del usuario y la respuesta** (regla #4 — Sentry es externo). Extender
+  counters, circuit state. **Sentry con `before_send` (`_scrub_event`)
+  que limpia PII de todo el evento** (regla #4 — Sentry es externo):
+  `request.data` / `cookies` / headers sensibles / `query_string`,
+  breadcrumbs (`message` + `data`), `exception.values[*].value`, `user`,
+  `server_name`, `contexts` y `extra` — no solo el texto del usuario y la
+  respuesta. `init_sentry()` es idempotente (flag de módulo). Extender
   `health.py` a readiness real (503 si el modelo crítico no responde).
+  **Implementado y mergeado (#66).**
 - **M5** — `prompts/{loader,shared}.py` + 5 `.md` por modo, alineados a
   `IDENTITY.md` + `TONE-OF-VOICE.md` (rioplatense). Snapshot tests.
 - **M6** — `tools/{base,registry,calendar,reminders}.py`. Schema JSON
@@ -226,7 +231,7 @@ El proyecto Supabase **ya existe** (ref `hmsfcqvnhlevfwfgatxd`) y está
 - ✅ M1 — Protocol + schemas + errores mergeado.
 - ✅ M2 — VllmClient + parsers + FakeLlmClient + contract tests mergeados.
 - ✅ M3 — Pool + circuit breaker + fallback on-prem mergeado.
-- [ ] M4 — Observabilidad + health real (Sentry PII scrubbing) — pendiente.
+- ✅ M4 — Observabilidad + health real (Sentry PII scrubbing) mergeado (#66).
 - ✅ M5 — Prompts por modo + loader mergeados.
 - ✅ M6 — Tools base + calendar + reminders mergeados.
 - ✅ M7 — Tool `memory.*` mergeado (depende de PR C; mergeado con aprobación humana).
