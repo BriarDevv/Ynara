@@ -12,6 +12,14 @@
 > rampa de memoria, motion, `.text-display`, grano, DM Sans 600). Este plan construye
 > **encima** de esos tokens.
 
+> **Estado [actualizado 2026-06-01]**: La serie efectiva fue **PRs #139–#148**
+> con **lenguaje sobrio** (light-only, ivory canvas, blue plano, sin sistema
+> gráfico). Algunas fases (F0.3 sistema gráfico, F1.2 con `MemoryField`, F2.1
+> piezas editoriales con `MemoryField` de fondo) **se ejecutaron y luego se
+> revirtieron** al pivotar al sobrio. Este plan se conserva como **registro
+> histórico** de la estructura por capas; la fuente de verdad del sistema
+> actual es [`DESIGN.md`](../../DESIGN.md) v3.
+
 ## Decisiones de alcance (validadas con el usuario)
 
 | Decisión | Elegido |
@@ -59,15 +67,11 @@ hoy no existen.
 - Esto mata el tell "emojis/flechas como íconos" de raíz.
 - **Verificación visual** (grid de íconos) en este PR — es fundación.
 
-### F0.3 — Sistema gráfico "Red de memoria" (`packages/ui`) — [DESIGN.md §2]
-- `MemoryField` (SVG): nodos + vínculos + diamantes, con props de **densidad**
-  (dispersa/media/densa) y variante clara/nocturna. Para fondos ambientales.
-- `GrainOverlay`: capa de grano reutilizable. En web envuelve el utility `.bg-grain`
-  (pseudo-elemento) ya creado en globals; **para RN no sirve el pseudo-elemento** →
-  necesita estrategia propia (overlay SVG de ruido o imagen). Definir en el PR; si la
-  versión RN se complica, scopear web-first con TODO de portabilidad.
-- Performance: SVG estático o canvas liviano; **nada de loops infinitos**; respeta
-  `prefers-reduced-motion`.
+### F0.3 — Sistema gráfico "Red de memoria" (`packages/ui`) · **DEPRECADA (PR #148)**
+- `MemoryField`/`GrainOverlay`/`buildMemoryField` vivieron en `packages/ui/src/graphics/`
+  durante esta fase; al pivotar al lenguaje sobrio (PRs #139–#147) quedaron sin
+  consumers y se removieron en el **PR #148**. Reemplazo: `BrandWaves` en
+  `apps/web/src/components/ui/`.
 
 ### F0.4 — Helpers de motion — [DESIGN.md §8]
 - Evaluar `motion` (Framer Motion) para springs perceptuales + microinteracciones, o
@@ -94,9 +98,8 @@ microinteracciones (§8.2), foco accesible, estados completos, dark co-protagoni
 - `ModeChip` / `SuggestionCard` (tints por modo con la rampa nueva; memoria usa
   `--gradient-memory`).
 - `Toast` (entrada/salida 300/200ms, variantes).
-- `EmptyStateCard` (con `MemoryField` de fondo). **Depende de `MemoryField` desde
-  `@ynara/ui`** — import direction web → `packages/ui` (correcto; explicitarlo al
-  implementar).
+- `EmptyStateCard` **sin fondo gráfico** [sobrio]. La prop `field` se removió en
+  el PR #148 cuando se deprecó `MemoryField`.
 - **`PromptChip`** (nuevo) — chip de prompt accionable para empty states de chat.
 
 > Nota de ubicación: estos primitives son **web-only** y viven en
@@ -185,6 +188,11 @@ vía NativeWind `vars()`).
   pantallas, reusando primitives portados.
 - Riesgo conocido (del chat plan): el fetch de RN no tiene `ReadableStream` → el
   streaming mobile usa `expo/fetch`.
+
+> **Nota v3** [sobrio]: cuando el track mobile arranque, hereda el **lenguaje
+> sobrio** (light-only, ivory canvas, blue plano, sin sistema gráfico). Las
+> fundaciones de `packages/ui` que sobrevivieron son **íconos** + **motion**
+> (`DURATION`, `SPRING_SNAPPY`/`SPRING_SOFT`).
 
 ---
 
