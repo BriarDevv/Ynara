@@ -17,7 +17,7 @@ import { useOnboardingStore } from "../store";
  * perfil persistente en `localStorage` (useUserStore) y lo marca como
  * completado.
  *
- * La navegación al /home la maneja el componente que lo consume
+ * La navegación a `/hoy` la maneja el componente que lo consume
  * (CelebrationOutro), para poder respetar la animación de 1.5s del outro.
  */
 export function useCompleteOnboarding() {
@@ -49,10 +49,9 @@ export function useCompleteOnboarding() {
       //
       // OJO: NO llamamos `completeOnboarding()` acá a propósito. Ese flag
       // dispara el guard del layout (`if (completed) return null` +
-      // redirect a /home), que desmontaría el CelebrationOutro antes de
-      // que reproduzca su animación. El flag lo flipea la /home al montar
-      // (ve `userId && !onboardingCompleted`), una vez que ya salimos del
-      // árbol del onboarding.
+      // redirect), que desmontaría el CelebrationOutro antes de que
+      // reproduzca su animación. El outro flipea el flag recién al navegar
+      // a `/hoy`, con la animación ya terminada (ver CelebrationOutro).
       user.setAuth({
         userId: draft.authedUserId ?? `ephemeral-${response.onboardedAt}`,
         token: draft.authedToken ?? "",

@@ -2,7 +2,7 @@
 
 import { GrainOverlay, MemoryField } from "@ynara/ui";
 import { useRouter } from "next/navigation";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { OnboardingHeader } from "@/features/onboarding/components/OnboardingHeader";
 import { ONBOARDING_STEPS, STEP_INDEX } from "@/features/onboarding/constants";
 import { useOnboardingStore } from "@/features/onboarding/store";
@@ -11,9 +11,11 @@ import { useUserStore } from "@/stores/user";
 /**
  * Layout del flujo de onboarding.
  *
- * - Si el user ya completó onboarding → redirect a `/home`. Sin esto, un
- *   user con `onboardingCompleted=true` que tipea `/onboarding/*` cae en
- *   un 404 muerto.
+ * - Si el user **llegó** ya completado (tipeó `/onboarding/*` de más) →
+ *   redirect a `/hoy`. Sin esto cae en un 404 muerto. El check se hace con
+ *   el valor capturado al montar (no el live): si el flag se flipea DURANTE
+ *   el flujo (outro / skip-all), no disparamos un redirect que competiría
+ *   con —y pisaría el query param de— la navegación del propio outro.
  * - Header sticky con ProgressDots + skip-all.
  * - El [step]/page renderiza el step actual; la prop `total/current`
  *   del ProgressDots las pasa cada step que usa StepShell (no las
@@ -22,13 +24,15 @@ import { useUserStore } from "@/stores/user";
  */
 export default function OnboardingLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const completed = useUserStore((s) => s.onboardingCompleted);
+  // Valor al montar: distingue "llegó completado" de "completó durante el
+  // flujo" (ver doc arriba). El segundo caso lo navega el outro/skip-all.
+  const completedOnMount = useRef(useUserStore.getState().onboardingCompleted);
 
   useEffect(() => {
-    if (completed) router.replace("/home");
-  }, [completed, router]);
+    if (completedOnMount.current) router.replace("/hoy");
+  }, [router]);
 
-  if (completed) return null;
+  if (completedOnMount.current) return null;
 
   return (
     <div className="relative isolate min-h-screen bg-[var(--color-bg-soft)]">
@@ -64,10 +68,10 @@ function OnboardingHeaderWithProgress() {
     // "Saltar onboarding" es una decisión deliberada de no completarlo
     // ahora (se retoma desde Ajustes). Marcamos `completed` para no
     // re-entrar al flujo en cada visita: sin esto, un skip antes del
-    // Step de auth deja al user sin userId y la /home nunca flipea el flag.
+    // Step de auth deja al user sin userId y nunca se flipea el flag.
     reset();
     useUserStore.getState().completeOnboarding();
-    router.replace("/home");
+    router.replace("/hoy");
   };
 
   return (

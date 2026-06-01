@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { YnaraMark } from "@/components/ui/YnaraMark";
+import { useUserStore } from "@/stores/user";
 import { useCompleteOnboarding } from "../hooks/useCompleteOnboarding";
 
 /** Duración mínima del outro antes de entrar al home (plan §4.7). */
@@ -12,8 +13,8 @@ const OUTRO_MIN_MS = 1500;
 /**
  * Cierre de marca del onboarding. Dispara la mutation de onboard, muestra
  * el YnaraMark pulsando (incluye el diamond violeta — símbolo de memoria)
- * y, cuando el backend confirma y pasó el tiempo mínimo, hace fade al
- * /home con `?welcome=true`.
+ * y, cuando el backend confirma y pasó el tiempo mínimo, hace fade a
+ * `/hoy` con `?welcome=true`.
  *
  * Si la mutation falla, no deja al usuario varado: muestra un error humano
  * con opción de reintentar.
@@ -43,11 +44,18 @@ export function CelebrationOutro() {
   }, []);
 
   // Navega cuando el backend confirmó y ya pasó la animación mínima.
+  //
+  // Acá flipeamos `onboardingCompleted` (antes se difería a la home): el
+  // guard del route group `(app)` exige el flag en true para montar `/hoy`,
+  // así que tiene que estar seteado ANTES de navegar. Hacerlo ahora — con la
+  // animación ya terminada y saliendo del árbol del onboarding — no desmonta
+  // el outro a destiempo (el problema que motivaba el deferral original).
   useEffect(() => {
     if (navigatedRef.current) return;
     if (isSuccess && minElapsed) {
       navigatedRef.current = true;
-      router.replace("/home?welcome=true");
+      useUserStore.getState().completeOnboarding();
+      router.replace("/hoy?welcome=true");
       clearDraft();
     }
   }, [isSuccess, minElapsed, router, clearDraft]);
