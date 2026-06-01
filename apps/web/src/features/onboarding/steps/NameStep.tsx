@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { CSSProperties } from "react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
@@ -31,13 +30,14 @@ export function NameStep() {
 
   return (
     <StepShell
+      eyebrow="Paso 2 — Tu nombre"
       title={copy.title}
       subtitle={copy.subtitle}
       footer={
         <StepFooter
           onBack={back}
           customNext={
-            <Button type="submit" fullWidth form="name-form" className="sm:w-auto sm:min-w-[200px]">
+            <Button type="submit" fullWidth form="name-form" className="sm:w-auto sm:min-w-[220px]">
               Seguir
             </Button>
           }
@@ -48,10 +48,7 @@ export function NameStep() {
         id="name-form"
         onSubmit={form.handleSubmit(onSubmit)}
         noValidate
-        // Entrada sutil: el campo aparece apenas después del título (§8.2).
-        // reduced-motion lo neutraliza vía la cascada global (ver MoodStep).
-        className="anim-stagger-up flex flex-col gap-4"
-        style={{ "--stagger-index": 1 } as CSSProperties}
+        className="flex flex-col gap-4"
       >
         <TextField
           label="TU NOMBRE"
