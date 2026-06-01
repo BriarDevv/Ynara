@@ -22,4 +22,9 @@ export const qk = {
     detail: (layer: string, ref: string) => ["memory", "detail", layer, ref] as const,
     search: (q: string) => ["memory", "search", q] as const,
   },
+  today: {
+    tasks: () => ["today", "tasks"] as const,
+    suggestions: () => ["today", "suggestions"] as const,
+    recap: () => ["today", "recap"] as const,
+  },
 } as const;

@@ -1,0 +1,110 @@
+import {
+  type ApiErrorBody,
+  type Task,
+  TaskPatchSchema,
+  type TasksResponse,
+} from "@ynara/shared-schemas";
+import { HttpResponse, http } from "msw";
+import { env } from "@/lib/env";
+
+/**
+ * Handlers MSW del dashboard **Hoy** (build-plan Fase E) — **PROVISIONALES**:
+ * el backend de tareas todavía no existe (track backend: `Task` model + CRUD,
+ * gate regla #1). La UI se construye contra estos handlers tipados con los Zod
+ * de `@ynara/shared-schemas`; cuando el endpoint real exista, se apaga el
+ * handler y la UI queda sin tocar.
+ *
+ * El store es **mutable y cacheado** (como el de memoria) para que el toggle de
+ * una prioridad persista durante la sesión: marcás una tarea hecha y al volver
+ * a Hoy sigue hecha.
+ */
+
+const apiUrl = (path: string) => `${env.NEXT_PUBLIC_API_URL}${path}`;
+
+function errorResponse(body: ApiErrorBody, status: number) {
+  return HttpResponse.json(body, { status });
+}
+
+/** UUIDs estables de las prioridades demo (para que el toggle matchee por id). */
+const TASK_IDS = {
+  mail: "0193c001-0000-4000-8000-000000000001",
+  llamada: "0193c001-0000-4000-8000-000000000002",
+  briefs: "0193c001-0000-4000-8000-000000000003",
+} as const;
+
+/** Hoy a una hora puntual, como ISO (UTC). El display lo re-localiza el front. */
+function atToday(now: Date, hour: number, minute: number): string {
+  const d = new Date(now);
+  d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
+}
+
+/**
+ * Prioridades demo, fechadas relativo a `now` para que el header y las metas se
+ * vean vivas. Espeja el wireframe 06: una hecha temprano + dos pendientes.
+ */
+export function buildTasks(now: Date): Task[] {
+  return [
+    {
+      id: TASK_IDS.mail,
+      title: "Responder mail de Takeshi",
+      status: "done",
+      scheduled_at: atToday(now, 9, 15),
+      duration_min: null,
+    },
+    {
+      id: TASK_IDS.llamada,
+      title: "Llamada con equipo de diseño",
+      status: "pending",
+      scheduled_at: atToday(now, 14, 0),
+      duration_min: 45,
+    },
+    {
+      id: TASK_IDS.briefs,
+      title: "Revisar briefs de la semana",
+      status: "pending",
+      scheduled_at: atToday(now, 16, 30),
+      duration_min: 30,
+    },
+  ];
+}
+
+let store: Task[] | null = null;
+
+/** Store mutable cacheado: seedea una sola vez y persiste toggles en la sesión. */
+function getStore(): Task[] {
+  if (!store) store = buildTasks(new Date());
+  return store;
+}
+
+export const todayHandlers = [
+  // GET /v1/tasks — prioridades del día.
+  http.get(apiUrl("/v1/tasks"), () => {
+    const items = getStore();
+    const body: TasksResponse = { items, total: items.length };
+    return HttpResponse.json(body);
+  }),
+
+  // PATCH /v1/tasks/:id — toggle de estado (marcar hecha / re-abrir).
+  http.patch(apiUrl("/v1/tasks/:id"), async ({ params, request }) => {
+    const json = await request.json().catch(() => null);
+    const parsed = TaskPatchSchema.safeParse(json);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      return errorResponse(
+        {
+          error: "validation",
+          detail: first?.message ?? "body inválido",
+          field: first?.path[0] !== undefined ? String(first.path[0]) : undefined,
+        },
+        422,
+      );
+    }
+    const task = getStore().find((t) => t.id === params.id);
+    if (!task) {
+      return errorResponse({ error: "not_found", detail: "tarea inexistente" }, 404);
+    }
+    task.status = parsed.data.status;
+    return HttpResponse.json(task);
+  }),
+];
