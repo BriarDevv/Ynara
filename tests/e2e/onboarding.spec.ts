@@ -9,9 +9,9 @@ import { expect, type Page, test } from "@playwright/test";
  * handlers de `src/lib/api.mocks.ts`, así no necesitamos el backend real.
  *
  * Cobertura:
- *   (a) happy path: auth(signup) → nombre → día → modos → a11y → outro → /home
+ *   (a) happy path: auth(signup) → nombre → día → modos → a11y → outro → /hoy
  *   (b) error inline en auth (email inválido, validación cliente)
- *   (c) axe sin violations CRÍTICAS en /onboarding/auth y /home
+ *   (c) axe sin violations CRÍTICAS en /onboarding/auth y /hoy
  *
  * Nota sobre axe (plan §2): el gate son violations de impacto `critical`.
  * Las páginas hoy tienen violations `serious` de `color-contrast` (tokens
@@ -30,7 +30,7 @@ const STEP_TITLES = {
 
 const IMPACTS_TO_FAIL = new Set(["critical"]);
 
-/** Recorre signup + nombre + día + modos + a11y hasta llegar al /home. */
+/** Recorre signup + nombre + día + modos + a11y hasta llegar al /hoy. */
 async function completeOnboarding(page: Page): Promise<void> {
   await page.goto("/onboarding/auth");
 
@@ -58,8 +58,8 @@ async function completeOnboarding(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: STEP_TITLES.a11y })).toBeVisible();
   await page.getByRole("button", { name: "Listo" }).click();
 
-  // --- Outro → /home?welcome=true ---
-  await page.waitForURL(/\/home/, { timeout: 20_000 });
+  // --- Outro → /hoy?welcome=true ---
+  await page.waitForURL(/\/hoy/, { timeout: 20_000 });
 }
 
 async function criticalViolations(page: Page) {
@@ -68,10 +68,10 @@ async function criticalViolations(page: Page) {
 }
 
 test.describe("Onboarding", () => {
-  test("happy path: recorre todos los steps y aterriza en /home", async ({ page }) => {
+  test("happy path: recorre todos los steps y aterriza en /hoy", async ({ page }) => {
     await completeOnboarding(page);
 
-    await expect(page).toHaveURL(/\/home/);
+    await expect(page).toHaveURL(/\/hoy/);
     // El home saluda con el nombre cargado durante el onboarding.
     await expect(page.getByText("Mateo")).toBeVisible();
   });
@@ -97,9 +97,9 @@ test.describe("Onboarding", () => {
     expect(critical, JSON.stringify(critical, null, 2)).toEqual([]);
   });
 
-  test("no tiene violations críticas de a11y en /home", async ({ page }) => {
+  test("no tiene violations críticas de a11y en /hoy", async ({ page }) => {
     await completeOnboarding(page);
-    await expect(page).toHaveURL(/\/home/);
+    await expect(page).toHaveURL(/\/hoy/);
 
     const critical = await criticalViolations(page);
     expect(critical, JSON.stringify(critical, null, 2)).toEqual([]);
