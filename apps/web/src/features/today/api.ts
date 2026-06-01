@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  type Recap,
+  RecapSchema,
   type Suggestion,
   SuggestionsResponseSchema,
   type Task,
@@ -43,6 +45,21 @@ export function useSuggestions() {
   });
 }
 
+/**
+ * Recap del día (`GET /v1/recap`). **PROVISIONAL**: corre contra el handler MSW
+ * (lo genera el LLM real a futuro). El CTA en Hoy se muestra mientras
+ * `pending` es true.
+ */
+export function useRecap() {
+  return useQuery({
+    queryKey: qk.today.recap(),
+    queryFn: async (): Promise<Recap> => {
+      const raw = await api.get<unknown>("/v1/recap");
+      return RecapSchema.parse(raw);
+    },
+  });
+}
+
 /** El estado opuesto: el check togglea pending↔done. */
 function flip(status: TaskStatus): TaskStatus {
   return status === "done" ? "pending" : "done";
@@ -79,4 +96,4 @@ export function useToggleTask() {
 }
 
 /** Re-exporta los tipos del cache para los componentes (evita imports cruzados). */
-export type { Suggestion, Task, TasksResponse };
+export type { Recap, Suggestion, Task, TasksResponse };
