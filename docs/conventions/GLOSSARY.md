@@ -47,6 +47,22 @@ con un PR.
 - **Tabla operativa** — cualquier tabla que no sea de memoria
   sagrada (users, sessions, audit_log, etc.).
 
+## Auth
+
+- **`sid`** — claim (UUID hex) que identifica la familia/sesión de un
+  token. Agrupa el access + todos los refresh rotados de esa sesión bajo
+  una unidad revocable. Lo llevan tanto el access como el refresh (#142).
+- **Familia de sesión** — conjunto de tokens que comparten el mismo `sid`.
+  Se revocan de golpe con `revoke_family` (un logout o un breach matan la
+  familia entera, no un solo `jti`).
+- **Reuse-detection** — mecanismo de `/v1/auth/refresh`: un refresh ya
+  rotado que reaparece se evalúa contra el grace. Dentro del grace
+  (`AUTH_REFRESH_REUSE_GRACE_SECONDS`) es un retry benigno e idempotente;
+  fuera del grace es un breach → revoca la familia entera → 401 (#142).
+- **Grace marker** — flag Redis efímero que marca un refresh recién rotado
+  y apunta al `jti` del sucesor. Habilita la idempotencia del retry dentro
+  de la ventana `AUTH_REFRESH_REUSE_GRACE_SECONDS` (#142).
+
 ## Infra
 
 - **Fase MVP** — etapa actual. DB sobre Supabase como Postgres

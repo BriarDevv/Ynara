@@ -95,9 +95,15 @@
 
 ### mode.switch
 
+> **Estado: planeada — NO implementada todavía** (el cambio de modo hoy lo
+> maneja el router, no una tool del LLM: `request.mode` entra como `Mode` en el
+> request a `app/llm/router.py`; no existe `app/llm/tools/mode.py` ni se registra
+> en `default_registry()`). El diseño de abajo queda como referencia para cuando
+> se implemente como tool.
+
 - **Descripción**: cambiar de modo (manual o sugerido por el agente).
 - **Parámetros**: `target_mode: Literal["productividad", "estudio", "bienestar", "vida", "memoria"]`.
-- **Habilitada en modos**: todos (es la única tool global).
+- **Habilitada en modos**: todos (sería la única tool global).
 
 ## Agregar una tool nueva
 

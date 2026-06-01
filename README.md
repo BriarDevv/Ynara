@@ -34,12 +34,12 @@ de usuario saliendo del perímetro, sin lock-in a big tech.
 | Modos del producto | 5 (productividad, estudio, bienestar, vida, memoria) |
 | Modelos LLM | 2 (Gemma 4 26B-A4B conversacional + Qwen 3.5-9B agente) |
 | Capas de memoria | 3 (semántica, episódica, procedural) |
-| Tools del agente Qwen | 9 (calendar, reminder, memory, mode.switch) |
+| Tools del agente Qwen | 8 (calendar×2, reminder×2, memory×4) |
 | Apps | 3 (web Next.js 16, mobile Expo 53+, backend FastAPI) |
 | Packages compartidos | 4 (shared-types, shared-schemas, ui, config) |
 | ADRs aprobados | 10 |
 | Skills reutilizables | 6 |
-| Archivos tracked | ~190+ |
+| Archivos tracked | ~500 |
 | CODEOWNERS | 3 (@MateoGs013, @BriarDevv, @querques20) |
 
 ## Los 5 modos
