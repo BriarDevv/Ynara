@@ -79,18 +79,18 @@
 
 - **Parámetros**:
   - `query: str`
-  - `layers: list[Layer] | None`
-  - `limit: int = 5`
+  - `limit: int = 5` (rango `[1, 20]`)
+- **Búsqueda semantic-only**: no hay parámetro de capa; envuelve `SemanticMemoryStore` (solo memoria semántica).
 - **Habilitada en modos**: productividad, memoria.
 
 ### memory.update
 
-- **Parámetros**: `id: UUID`, `content: str`.
+- **Parámetros**: `id: str`, `content: str`.
 - **Habilitada en modos**: memoria.
 
 ### memory.delete
 
-- **Parámetros**: `id: UUID`.
+- **Parámetros**: `id: str`.
 - **Habilitada en modos**: memoria.
 
 ### mode.switch
