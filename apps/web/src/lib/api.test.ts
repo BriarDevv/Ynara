@@ -50,4 +50,10 @@ describe("api — inyección de auth (Bearer)", () => {
     await api.post("/v1/auth/token", { email: "a@b.com" }, { skipAuth: true });
     expect(authHeaderOf(fetchMock)).toBeNull();
   });
+
+  it("NO manda el Bearer a un host ajeno (perímetro)", async () => {
+    useUserStore.getState().setAuth({ userId: "u1", token: "tok-123", isEphemeral: false });
+    await api.get("https://evil.example.com/steal");
+    expect(authHeaderOf(fetchMock)).toBeNull();
+  });
 });
