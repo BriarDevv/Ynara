@@ -75,7 +75,7 @@ export default function HoyPage() {
         <GrainOverlay />
       </div>
 
-      <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-8 px-6 pt-10">
+      <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-8 px-6 pb-8 pt-10">
         {/* En mobile el saludo (big type) va full-width arriba del switcher;
             en sm+ comparten fila. */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

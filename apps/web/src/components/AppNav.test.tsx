@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import type { AnchorHTMLAttributes } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { isNavItemActive } from "./nav-items";
@@ -19,7 +19,7 @@ vi.mock("next/link", () => ({
 }));
 
 // Import después de los mocks.
-const { AppNav } = await import("./AppNav");
+const { MobileTabBar, SidebarNav } = await import("./AppNav");
 
 describe("isNavItemActive", () => {
   it("matchea la ruta exacta", () => {
@@ -40,24 +40,31 @@ describe("isNavItemActive", () => {
   });
 });
 
-describe("AppNav", () => {
-  it("renderiza las 4 tabs en los dos chrome (bottom-tabs + sidebar)", () => {
+describe("MobileTabBar", () => {
+  it("renderiza las 4 tabs", () => {
     mockPathname = "/hoy";
-    render(<AppNav />);
-    // Dos <nav> (mobile + desktop), ambos en el DOM (jsdom no aplica el
-    // display:none de Tailwind): 2 links por tab.
-    expect(screen.getAllByRole("link", { name: "Hoy" })).toHaveLength(2);
-    expect(screen.getAllByRole("link", { name: "Agenda" })).toHaveLength(2);
+    render(<MobileTabBar />);
+    const nav = screen.getByRole("navigation", { name: "Navegación principal" });
+    expect(within(nav).getByRole("link", { name: "Hoy" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Chat" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Agenda" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Tú" })).toBeInTheDocument();
   });
 
   it("marca aria-current='page' sólo en la tab activa", () => {
     mockPathname = "/chat/sesion-1";
-    render(<AppNav />);
-    for (const link of screen.getAllByRole("link", { name: "Chat" })) {
-      expect(link).toHaveAttribute("aria-current", "page");
-    }
-    for (const link of screen.getAllByRole("link", { name: "Hoy" })) {
-      expect(link).not.toHaveAttribute("aria-current");
-    }
+    render(<MobileTabBar />);
+    expect(screen.getByRole("link", { name: "Chat" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Hoy" })).not.toHaveAttribute("aria-current");
+  });
+});
+
+describe("SidebarNav", () => {
+  it("renderiza el logo + las 4 tabs y marca la activa", () => {
+    mockPathname = "/agenda";
+    render(<SidebarNav />);
+    expect(screen.getByRole("link", { name: "Ynara — ir a Hoy" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Agenda" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Tú" })).not.toHaveAttribute("aria-current");
   });
 });
