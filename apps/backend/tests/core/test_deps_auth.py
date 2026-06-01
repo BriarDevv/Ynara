@@ -21,8 +21,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
-from app.core.deps import CurrentUser
+from app.core.deps import CurrentUser, get_token_store
 from app.core.security import create_access_token
+from app.core.token_store import InMemoryTokenStore
 
 # ---------- settings determinista ----------
 
@@ -57,6 +58,13 @@ _app = FastAPI()
 @_app.get("/protected")
 async def _protected(user_id: CurrentUser) -> dict:
     return {"user_id": str(user_id)}
+
+
+# get_current_user ahora chequea la blocklist vía get_token_store (issue #63);
+# la mini-app no monta app.state.token_store, así que overrideamos la dep con un
+# InMemoryTokenStore vacío (nada blocklisteado): los tests de validez del JWT no
+# cambian de comportamiento.
+_app.dependency_overrides[get_token_store] = lambda: InMemoryTokenStore()
 
 
 @pytest.fixture
