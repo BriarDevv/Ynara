@@ -15,8 +15,8 @@
       "!**/build",
       "!**/.turbo",
       "!**/.expo",
-      "!**/public/**",
-      "!apps/backend/**"
+      "!**/public",
+      "!apps/backend"
     ]
   },
   "formatter": {
