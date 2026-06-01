@@ -1,6 +1,8 @@
 import type {
   EpisodicMemoryOut,
   MemoryList,
+  MemorySearchHit,
+  MemorySearchResponse,
   ProceduralMemoryOut,
   SemanticMemoryOut,
 } from "@ynara/shared-schemas";
@@ -159,6 +161,56 @@ function findMemoryItem(layer: string, ref: string) {
   return undefined;
 }
 
+/**
+ * Búsqueda PROVISIONAL (`GET /v1/memory/search`, endpoint todavía inexistente).
+ * El store real hace embed + ANN + decrypt + rerank; el mock hace un match por
+ * substring (case-insensitive) sobre el texto de cada ítem y asigna un score
+ * decreciente, suficiente para construir la UI. Devuelve hasta cuantos matcheen,
+ * ordenados por score.
+ */
+export function searchMemoryList(list: MemoryList, query: string): MemorySearchHit[] {
+  const q = query.trim().toLowerCase();
+  if (q.length === 0) return [];
+  const hits: Omit<MemorySearchHit, "score">[] = [];
+
+  for (const item of list.semantic.items) {
+    if (item.content.toLowerCase().includes(q)) {
+      hits.push({
+        layer: "semantic",
+        ref: item.id,
+        snippet: item.content,
+        occurred_at: item.created_at,
+      });
+    }
+  }
+  for (const item of list.episodic.items) {
+    if (item.summary.toLowerCase().includes(q)) {
+      hits.push({
+        layer: "episodic",
+        ref: item.id,
+        snippet: item.summary,
+        occurred_at: item.occurred_at,
+      });
+    }
+  }
+  for (const item of list.procedural.items) {
+    const values = Object.values(item.value).join(" ");
+    const haystack = `${item.key} ${values}`.toLowerCase();
+    if (haystack.includes(q)) {
+      const snippet = `${item.key.replace(/[_-]+/g, " ")}: ${Object.values(item.value).join(", ")}`;
+      hits.push({
+        layer: "procedural",
+        ref: item.key,
+        snippet,
+        occurred_at: item.last_reinforced_at,
+      });
+    }
+  }
+
+  // Score decreciente por orden de aparición (mock determinista, 0..1).
+  return hits.map((hit, i) => ({ ...hit, score: Math.max(0.5, 0.95 - i * 0.08) }));
+}
+
 const memoryNotFound = () =>
   HttpResponse.json({ detail: "memoria no encontrada" }, { status: 404 });
 
@@ -180,6 +232,15 @@ export const memoryHandlers = [
       return HttpResponse.json(list[layer]);
     }
     return invalidLayer();
+  }),
+
+  // `GET /v1/memory/search?q=` — PROVISIONAL (endpoint todavía inexistente).
+  // Va antes de `:layer/:ref` por claridad (no colisiona: `search` es 1 segmento).
+  http.get(apiUrl("/v1/memory/search"), ({ request }) => {
+    const q = new URL(request.url).searchParams.get("q") ?? "";
+    const results = searchMemoryList(getStore(), q);
+    const response: MemorySearchResponse = { query: q, total: results.length, results };
+    return HttpResponse.json(response);
   }),
 
   // `GET /v1/memory/{layer}/{ref}` — detalle de un ítem. 422 capa inválida,
