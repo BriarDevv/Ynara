@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   RecapSchema,
   SuggestionSchema,
+  SuggestionsResponseSchema,
   TaskPatchSchema,
   TaskSchema,
   TasksResponseSchema,
@@ -88,6 +89,19 @@ describe("SuggestionSchema", () => {
 
   it("rechaza un porqué vacío", () => {
     expect(() => SuggestionSchema.parse({ id: UUID, title: "x", why: "", mode: null })).toThrow();
+  });
+});
+
+describe("SuggestionsResponseSchema", () => {
+  it("parsea la lista de sugerencias", () => {
+    const parsed = SuggestionsResponseSchema.parse({
+      items: [{ id: UUID, title: "Pausá 10 min", why: "Llevás 90 min en pantalla", mode: null }],
+    });
+    expect(parsed.items).toHaveLength(1);
+  });
+
+  it("acepta lista vacía", () => {
+    expect(SuggestionsResponseSchema.parse({ items: [] }).items).toEqual([]);
   });
 });
 
