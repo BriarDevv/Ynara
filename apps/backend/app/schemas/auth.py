@@ -73,8 +73,51 @@ class LoginRequest(YnaraBaseModel):
 
 
 class TokenOut(YnaraBaseModel):
-    """Response de ``POST /v1/auth/token``: el access token JWT (Bearer)."""
+    """Response de ``POST /v1/auth/token`` y ``/auth/refresh``: el access JWT (Bearer).
+
+    ``refresh_token`` (issue #63) es additive y no-breaking: un campo opcional con
+    default ``None`` en un RESPONSE no rompe a ningún cliente (el que solo lee
+    ``access_token``/``token_type`` lo ignora; ``extra='forbid'`` aplica al INPUT,
+    no a la serialización). Lo emiten ``/auth/token`` y ``/auth/refresh``.
+    """
 
     access_token: str
     # S105: "bearer" no es una credencial; es el tipo de token del RFC 6750.
     token_type: Literal["bearer"] = "bearer"  # noqa: S105
+    refresh_token: str | None = None
+
+
+class RefreshRequest(YnaraBaseModel):
+    """Payload de ``POST /v1/auth/refresh``: el refresh token a rotar.
+
+    Mismo override de strict que los demás requests wire (consistencia). El token
+    es un ``str`` opaco; ``verify_token(expected_type="refresh")`` lo valida en el
+    handler.
+    """
+
+    model_config = ConfigDict(
+        strict=False,
+        from_attributes=True,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    refresh_token: str
+
+
+class LogoutRequest(YnaraBaseModel):
+    """Payload de ``POST /v1/auth/logout``: el refresh token a revocar (opcional).
+
+    El access se revoca siempre (sale del header ``Authorization``). El
+    ``refresh_token`` es opcional: si viene y es válido, también se blocklistea;
+    si es inválido, se ignora en silencio (logout idempotente y best-effort).
+    """
+
+    model_config = ConfigDict(
+        strict=False,
+        from_attributes=True,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+    refresh_token: str | None = None
