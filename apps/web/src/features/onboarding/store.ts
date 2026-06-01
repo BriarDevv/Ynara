@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type { OnboardingStep } from "./constants";
 
 /**
@@ -24,14 +24,17 @@ export type OnboardingDraft = {
   // Step 2 — Nombre
   displayName: string;
 
-  // Step 3 — Mood (Sesión 4)
+  // Step 3 — Mood
   mood: string[];
   moodFreeText: string;
 
-  // Step 4 — Modos (Sesión 4)
+  // Step 4 — Modos
   interestedModes: string[];
 
-  // Step 5 — A11y (Sesión 4)
+  // Step 5 — A11y (mirror del useA11yStore para mostrar valores actuales en
+  // el step; la fuente canónica de a11y es siempre useA11yStore — D3 del
+  // plan §7.4. Estos campos se mantienen por compat pero no se leen en
+  // useCompleteOnboarding).
   a11yTextSize: "sm" | "md" | "lg";
   a11yHighContrast: boolean;
   a11yMotion: "auto" | "reduce" | "normal";
@@ -78,19 +81,18 @@ const initialState: OnboardingDraft = {
 
 /**
  * createJSONStorage(() => sessionStorage) con guard para SSR: en
- * server-side `sessionStorage` no existe. La factory de zustand 5.0.13
- * tipa el retorno como `StateStorage` (no acepta `undefined`), así que
- * devolvemos un storage no-op en server en vez de `undefined`.
+ * server-side `sessionStorage` no existe. Zustand v5 trata `undefined`
+ * como "no persistir".
+ *
+ * El guard va FUERA de `createJSONStorage` porque algunas resoluciones
+ * de tipos (con el lockfile actualizado) no aceptan factory que retorna
+ * `Storage | undefined`. Devolver `undefined` directo es equivalente
+ * semánticamente: persist() no escribe en server.
  */
-const noopStorage: StateStorage = {
-  getItem: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
-};
-
-const sessionJsonStorage = createJSONStorage(() =>
-  typeof window === "undefined" ? noopStorage : sessionStorage,
-);
+const sessionJsonStorage =
+  typeof window === "undefined"
+    ? undefined
+    : createJSONStorage(() => sessionStorage);
 
 export const useOnboardingStore = create<OnboardingDraft & OnboardingActions>()(
   persist(
