@@ -28,7 +28,7 @@ export function HoyHeader({ displayName, activeMode, now }: Props) {
         </span>
       </div>
       <div className="flex flex-col gap-1">
-        <h1 className="text-title text-[var(--color-ink)]">Hoy</h1>
+        <h1 className="text-title text-[var(--color-ink-deep)]">Hoy</h1>
         <p className="text-body text-[var(--color-ink-soft)]">{formatHoyDate(now)}</p>
       </div>
     </header>

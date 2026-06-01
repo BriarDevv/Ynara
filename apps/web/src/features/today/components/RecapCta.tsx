@@ -14,15 +14,22 @@ export function RecapCta({ onOpen }: Props) {
     <button
       type="button"
       onClick={onOpen}
-      className="group flex w-full items-center gap-4 rounded-[var(--radius-lg)] bg-[var(--color-ink)] p-4 text-left transition-[transform,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:shadow-lifted"
+      // Azul plano de marca (alineado a Button primary) en lugar de bg-ink
+      // oscuro. El CTA del recap es accion del día — corresponde al color
+      // de la marca, no a una superficie nocturna.
+      className="group flex w-full items-center gap-4 rounded-[var(--radius-lg)] bg-[var(--color-blue-flat)] p-4 text-left shadow-soft transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:bg-[var(--color-blue-flat-hover)]"
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-caption text-[var(--color-bg)] opacity-70">Recap pendiente</span>
-        <span className="text-body text-[var(--color-bg)]">Cerrá el día con Ynara</span>
+        <span className="text-caption text-[var(--color-on-dark)] opacity-80">
+          Recap pendiente
+        </span>
+        <span className="text-body font-medium text-[var(--color-on-dark)]">
+          Cerrá el día con Ynara
+        </span>
       </span>
       <span
         aria-hidden
-        className="shrink-0 text-[var(--color-bg)] opacity-70 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-100"
+        className="shrink-0 text-[var(--color-on-dark)] opacity-80 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-100"
       >
         <Icon name="chevron" size={20} className="-rotate-90" />
       </span>
