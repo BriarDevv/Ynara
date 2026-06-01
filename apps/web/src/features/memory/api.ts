@@ -5,6 +5,8 @@ import {
   type MemoryItemOut,
   type MemoryLayer,
   MemoryListSchema,
+  type MemorySearchResponse,
+  MemorySearchResponseSchema,
   memoryOutSchemaFor,
   type ProceduralMemoryPatch,
   ProceduralMemoryPatchSchema,
@@ -74,6 +76,27 @@ export function useMemoryRelated(layer: MemoryLayer, item: MemoryItemOut | undef
     enabled: item !== undefined,
     select: (list) =>
       relatedEntries(list, { sessionId, excludeLayer: layer, excludeRef: refOf(layer, item) }),
+  });
+}
+
+/** Largo mínimo de query para disparar la búsqueda (evita pegar por una letra). */
+export const SEARCH_MIN_LENGTH = 2;
+
+/**
+ * Búsqueda de memoria (`GET /v1/memory/search?q=`). **PROVISIONAL**: el endpoint
+ * todavía no existe en el backend, así que en dev corre contra el handler MSW;
+ * al cablear el endpoint real, esta función no cambia. Sólo se dispara con una
+ * query de al menos `SEARCH_MIN_LENGTH` caracteres (ya recortada por el caller).
+ */
+export function useMemorySearch(query: string) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: qk.memory.search(q),
+    queryFn: async (): Promise<MemorySearchResponse> => {
+      const raw = await api.get<unknown>(`/v1/memory/search?q=${encodeURIComponent(q)}`);
+      return MemorySearchResponseSchema.parse(raw);
+    },
+    enabled: q.length >= SEARCH_MIN_LENGTH,
   });
 }
 
