@@ -37,7 +37,13 @@ async function request<T>(path: string, init: FetchInit = {}): Promise<T> {
   // Inyección de auth: leemos el token del store (SSR-safe: en server el
   // store no hidrató y `token` es null → sin header). No acoplamos los
   // callers al store; el header se arma acá una sola vez.
-  if (!init.skipAuth && !headers.has("Authorization")) {
+  //
+  // Perímetro (reglas #2/#4): el Bearer SOLO se manda a nuestra API. Si el
+  // `path` fuera una URL absoluta a un host ajeno, el token del usuario NO
+  // viaja afuera. Los paths relativos se prefijan con NEXT_PUBLIC_API_URL,
+  // así que pasan el guard naturalmente.
+  const targetsOurApi = url.startsWith(env.NEXT_PUBLIC_API_URL);
+  if (!init.skipAuth && !headers.has("Authorization") && targetsOurApi) {
     const token = useUserStore.getState().token;
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
