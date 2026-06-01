@@ -9,6 +9,7 @@ import {
 } from "@ynara/shared-schemas";
 import { HttpResponse, http } from "msw";
 import { cannedActions, cannedReply, isAgentMode } from "@/features/chat/constants";
+import { memoryHandlers } from "@/features/memory/mocks";
 import { env } from "./env";
 
 /**
@@ -124,4 +125,7 @@ export const handlers = [
     };
     return HttpResponse.json(response);
   }),
+
+  // Memoria — Fase C. Handlers + fixtures viven con la feature.
+  ...memoryHandlers,
 ];
