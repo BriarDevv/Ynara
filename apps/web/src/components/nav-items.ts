@@ -26,11 +26,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
 
 /**
  * Una tab está activa si la ruta es exactamente su `href` o cuelga de él
- * (`/chat/123` activa la tab Chat). Pura para poder testearla sin router.
- *
- * Nota: hoy la conversación `/chat/[sessionId]` vive fuera del route group
- * `(app)` (sin shell); la Fase A2 la mueve adentro y ahí el match por prefijo
- * de la tab Chat cobra efecto visual.
+ * (`/chat/123` activa la tab Chat, que vive dentro del shell desde A2).
+ * Pura para poder testearla sin router.
  */
 export function isNavItemActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
