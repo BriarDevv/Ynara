@@ -32,25 +32,51 @@ export function StepFooter({
   className,
 }: Props) {
   return (
-    <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-center", className)}>
+    /*
+     * Mobile: column gap-3, CTA primero por orden visual (full-width arriba),
+     * Atrás abajo (variant ghost).
+     * Desktop: row, Atrás a la izquierda, CTA a la derecha con `ml-auto`.
+     * Antes usábamos `<div className="flex-1" />` separator: distribuía
+     * los botones a los extremos del card, lo que dejaba sensación de
+     * "elementos flotando". `ml-auto` mantiene el CTA pegado al borde
+     * derecho sin estirar arbitrariamente la separación.
+     */
+    <div
+      className={cn(
+        "flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:gap-4",
+        className,
+      )}
+    >
       {onBack ? (
-        <Button variant="ghost" onClick={onBack} disabled={loading}>
+        /*
+         * `self-center` en mobile: el flex-col-reverse parent tiene
+         * align-items=stretch por default, lo que expandía "Atrás" como
+         * una barra ancha. En desktop el flex-row centra por items así
+         * que `sm:self-auto` revierte.
+         */
+        <Button
+          variant="ghost"
+          onClick={onBack}
+          disabled={loading}
+          className="self-center sm:self-auto sm:px-2"
+        >
           {backLabel}
         </Button>
       ) : null}
-      <div className="flex-1" />
-      {customNext ?? (
-        <Button
-          variant="primary"
-          type={nextType}
-          onClick={onNext}
-          disabled={loading || nextDisabled}
-          fullWidth
-          className="sm:w-auto sm:min-w-[200px]"
-        >
-          {loading ? "Un momento…" : nextLabel}
-        </Button>
-      )}
+      <div className="sm:ml-auto">
+        {customNext ?? (
+          <Button
+            variant="primary"
+            type={nextType}
+            onClick={onNext}
+            disabled={loading || nextDisabled}
+            fullWidth
+            className="sm:w-auto sm:min-w-[220px]"
+          >
+            {loading ? "Un momento…" : nextLabel}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
