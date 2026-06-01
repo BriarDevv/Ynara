@@ -1,5 +1,6 @@
 "use client";
 
+import { GrainOverlay, MemoryField } from "@ynara/ui";
 import { useEffect, useMemo, useState } from "react";
 import { MODES, type ModeId } from "@/components/ui/modes";
 import { Toast } from "@/components/ui/Toast";
@@ -70,25 +71,37 @@ export default function HomePage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[640px] flex-col gap-8 bg-[var(--color-bg-soft)] px-6 pt-10">
-      <div className="flex items-start justify-between gap-4">
-        <Greeting displayName={displayName} mood={mood} moodFreeText={moodFreeText} />
-        <ModeSwitcher interestedModes={modes} activeMode={activeMode} onChange={setActiveMode} />
+    <div className="relative isolate min-h-screen bg-[var(--color-bg-soft)]">
+      {/* Ambiente de marca (§2/§3.6) detrás de todo: la "Red de memoria" +
+          grano, full-bleed (la columna de contenido va centrada encima). El
+          overflow-hidden vive en esta capa, no en el contenedor que scrollea. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <MemoryField density="dispersa" />
+        <GrainOverlay />
       </div>
 
-      <div className="flex flex-1 flex-col gap-10">
-        <RecommendationsGrid interestedModes={modes} onPick={onPick} />
-        <EmptySessions />
-      </div>
+      <main className="mx-auto flex min-h-screen w-full max-w-[640px] flex-col gap-8 px-6 pt-10">
+        {/* En mobile el saludo (big type) va full-width arriba del switcher;
+            en sm+ comparten fila. */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <Greeting displayName={displayName} mood={mood} moodFreeText={moodFreeText} />
+          <ModeSwitcher interestedModes={modes} activeMode={activeMode} onChange={setActiveMode} />
+        </div>
 
-      <ChatInputDocked value={prefill} />
+        <div className="flex flex-1 flex-col gap-10">
+          <RecommendationsGrid interestedModes={modes} onPick={onPick} />
+          <EmptySessions />
+        </div>
 
-      <Toast
-        message="Listo, ya podés arrancar."
-        visible={showWelcome}
-        onDismiss={() => setShowWelcome(false)}
-        variant="success"
-      />
-    </main>
+        <ChatInputDocked value={prefill} />
+
+        <Toast
+          message="Listo, ya podés arrancar."
+          visible={showWelcome}
+          onDismiss={() => setShowWelcome(false)}
+          variant="success"
+        />
+      </main>
+    </div>
   );
 }

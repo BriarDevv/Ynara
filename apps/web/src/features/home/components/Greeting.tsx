@@ -49,7 +49,8 @@ export function Greeting({ displayName, mood, moodFreeText }: Props) {
 
   return (
     <header className="flex flex-col gap-2">
-      <h1 className="text-title">
+      {/* Saludo como pieza editorial: big type (§4). */}
+      <h1 className="text-display text-balance">
         {greeting ? `${greeting}${name ? `, ${name}` : ""}` : name || "Hola"}
       </h1>
       {line ? <p className="text-body text-[var(--color-ink-soft)]">{line}</p> : null}
