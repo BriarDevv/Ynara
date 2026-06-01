@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "@ynara/ui";
 import { useRouter } from "next/navigation";
 import { ModeChip } from "@/components/ui/ModeChip";
 import type { ModeId } from "@/components/ui/modes";
@@ -17,9 +18,9 @@ export function ChatHeader({ mode }: { mode: ModeId }) {
         type="button"
         onClick={() => router.push("/hoy")}
         aria-label="Volver al inicio"
-        className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] text-[var(--color-ink-soft)] hover:bg-[var(--color-bg-soft)] hover:text-[var(--color-ink)]"
+        className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-pill)] text-[var(--color-ink-soft)] hover:bg-[var(--color-bg-soft)] hover:text-[var(--color-ink)]"
       >
-        ←
+        <Icon name="atras" size={20} />
       </button>
       <ModeChip modeId={mode} />
     </header>

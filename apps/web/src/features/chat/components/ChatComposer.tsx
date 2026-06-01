@@ -1,7 +1,15 @@
 "use client";
 
 import { CHAT_TEXT_MAX_LENGTH } from "@ynara/shared-schemas";
-import { type ChangeEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { Icon } from "@ynara/ui";
+import {
+  type ChangeEvent,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "@/lib/cn";
 
 /**
@@ -39,14 +47,17 @@ export function ChatComposer({ onSend, busy, initialText = "" }: Props) {
   // onChange (el textarea ya tiene el contenido nuevo, así que scrollHeight es
   // correcto y sin flicker) en vez de en un efecto — y una vez al montar para
   // el caso de `initialText` (prefill desde la home, W5).
-  const resize = (el: HTMLTextAreaElement) => {
+  // `useCallback` con deps vacías: `resize` solo usa constantes de módulo, así
+  // que es estable y el efecto de abajo corre una sola vez al montar (sizing
+  // inicial para `initialText`) sin disparar el lint de deps exhaustivas.
+  const resize = useCallback((el: HTMLTextAreaElement) => {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT_PX)}px`;
-  };
+  }, []);
 
   useEffect(() => {
     if (ref.current) resize(ref.current);
-  }, []);
+  }, [resize]);
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
@@ -101,7 +112,7 @@ export function ChatComposer({ onSend, busy, initialText = "" }: Props) {
           aria-label="Enviar"
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-gradient-blue-base text-[var(--color-on-dark)] transition-opacity duration-[var(--duration-base)] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          →
+          <Icon name="enviar" size={18} />
         </button>
       </div>
       {showCounter ? (
