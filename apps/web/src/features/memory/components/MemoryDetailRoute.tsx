@@ -1,6 +1,7 @@
 "use client";
 
 import { MemoryLayerSchema } from "@ynara/shared-schemas";
+import { Icon } from "@ynara/ui";
 import Link from "next/link";
 import { useState } from "react";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
@@ -15,9 +16,10 @@ function NotFound({ title, hint }: { title: string; hint: string }) {
     <div className="mx-auto flex w-full max-w-[680px] flex-col gap-6 px-6 pb-16 pt-6">
       <Link
         href="/memoria"
-        className="text-button text-[var(--color-ink-soft)] underline underline-offset-4 hover:text-[var(--color-ink)]"
+        className="-ml-2 inline-flex w-fit items-center gap-1 rounded-[var(--radius-md)] px-2 py-1.5 text-button text-[var(--color-ink-soft)] transition-colors duration-[var(--duration-fast)] hover:text-[var(--color-ink)]"
       >
-        ← Volver a Memoria
+        <Icon name="atras" size={20} />
+        Volver a Memoria
       </Link>
       <EmptyStateCard title={title} hint={hint} />
     </div>
