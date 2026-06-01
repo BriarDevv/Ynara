@@ -18,9 +18,10 @@ type Props = {
  * discreto. "Saltar onboarding" abre un modal de confirmación (no es
  * un skip por step, ver §4.8 del plan).
  *
- * `sticky top-0` mantiene progress/skip visibles al scrollear steps altos
- * (forms). Lleva su propia superficie marfil/nocturna + hairline inferior
- * para separarse del fondo ambiente (MemoryField) que corre por detrás.
+ * Layout: contenedor centrado (max-w 640) con mismo eje que el StepShell.
+ * Background semi-transparente con `backdrop-blur-sm` para que las
+ * BrandWaves del layout se atenúen detrás del header sin ocultarse del
+ * todo. `sticky top-0 z-20` lo deja ahí mientras se scrollea.
  */
 export function OnboardingHeader({ total, current, onSkipAll, className }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -28,30 +29,38 @@ export function OnboardingHeader({ total, current, onSkipAll, className }: Props
   return (
     <header
       className={cn(
-        "sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-[var(--color-border)] bg-[var(--color-bg-soft)] px-6 py-4",
+        "sticky top-0 z-20 w-full border-b border-[var(--color-border)]/40 bg-[color-mix(in_srgb,var(--color-bg-canvas)_82%,transparent)] backdrop-blur-md",
         className,
       )}
     >
-      <YnaraMark size={32} title="Ynara" />
-      <ProgressDots total={total} current={current} ariaLabel="Progreso del onboarding" />
-      {onSkipAll ? (
-        <>
-          <Button variant="ghost" onClick={() => setConfirmOpen(true)} className="text-body-sm">
-            Saltar
-          </Button>
-          {confirmOpen ? (
-            <SkipConfirmDialog
-              onCancel={() => setConfirmOpen(false)}
-              onConfirm={() => {
-                setConfirmOpen(false);
-                onSkipAll();
-              }}
-            />
-          ) : null}
-        </>
-      ) : (
-        <span aria-hidden className="w-[64px]" />
-      )}
+      <div className="mx-auto flex w-full max-w-[640px] items-center justify-between gap-3 px-6 py-3.5 sm:px-10">
+        <YnaraMark size={32} title="Ynara" />
+        <ProgressDots total={total} current={current} ariaLabel="Progreso del onboarding" />
+        {onSkipAll ? (
+          <>
+            <Button
+              variant="subtle"
+              onClick={() => setConfirmOpen(true)}
+              className="text-body-sm"
+            >
+              Saltar
+            </Button>
+            {confirmOpen ? (
+              <SkipConfirmDialog
+                onCancel={() => setConfirmOpen(false)}
+                onConfirm={() => {
+                  setConfirmOpen(false);
+                  onSkipAll();
+                }}
+              />
+            ) : null}
+          </>
+        ) : (
+          /* Spacer del mismo ancho aprox que el botón "Saltar" para que el
+             ProgressDots quede centrado óptico. */
+          <span aria-hidden className="w-[52px]" />
+        )}
+      </div>
     </header>
   );
 }
@@ -90,9 +99,9 @@ function SkipConfirmDialog({
   };
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape cierra vía onCancel; el click en el backdrop es enhancement de mouse, no la única vía de cierre.
     <dialog
       ref={dialogRef}
+      role="dialog"
       aria-modal="true"
       aria-labelledby="skip-title"
       onClick={handleBackdropClick}
@@ -105,7 +114,7 @@ function SkipConfirmDialog({
       className="m-0 max-h-full max-w-full bg-transparent p-0 backdrop:bg-[var(--color-overlay)]"
     >
       <div className="anim-fade-up flex w-full max-w-[420px] flex-col gap-4 rounded-[var(--radius-lg)] bg-[var(--color-bg)] p-6 shadow-lifted">
-        <h2 id="skip-title" className="text-subtitle">
+        <h2 id="skip-title" className="text-subtitle text-[var(--color-ink-deep)]">
           ¿Saltar el onboarding?
         </h2>
         <p className="text-body text-[var(--color-ink-soft)]">
