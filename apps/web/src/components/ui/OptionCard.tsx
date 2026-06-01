@@ -27,43 +27,35 @@ export function OptionCard({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={selected}
+      /*
+       * Selected sobrio: ring inset de --color-blue-flat (no fill oscuro).
+       * Antes el selected pintaba bg-ink (azul casi negro) con hairline
+       * gradient encima — quedaba "pesado" sobre canvas ivory. Ahora el
+       * card mantiene fondo blanco y se distingue por el ring azul de
+       * marca + sombra más marcada, que se lee como "elegido" sin pisar
+       * el lenguaje papel-sobre-canvas.
+       *
+       * `ring-inset` evita layout shift entre estados (no expande la box
+       * por agregar border).
+       */
       className={cn(
-        // Target full-width: el feedback de hover es elevación + borde (sin scale,
-        // que en full-width podría desbordar), a 150ms (§8.2 "+ leve elevación").
-        "relative w-full rounded-[var(--radius-md)] border p-6 text-left transition-[box-shadow,background-color,border-color] duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] disabled:cursor-not-allowed disabled:opacity-50",
+        "relative w-full rounded-[var(--radius-md)] border bg-[var(--color-bg)] p-4 text-left transition-[transform,box-shadow,border-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)] disabled:cursor-not-allowed disabled:opacity-50",
         selected
-          ? "border-[var(--color-ink)] bg-[var(--color-ink)] text-[var(--color-on-dark)]"
-          : "border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-ink)] hover:border-[var(--color-border-strong)] hover:shadow-soft",
+          ? "border-transparent text-[var(--color-ink-deep)] shadow-soft ring-2 ring-inset ring-[var(--color-blue-flat)]"
+          : "border-[var(--color-border)] text-[var(--color-ink)] hover:border-[var(--color-border-strong)] hover:shadow-soft",
         className,
       )}
     >
-      {/* Hairline gradient en selected — devuelve calidez al ink plano */}
-      {selected ? (
-        <span
-          aria-hidden
-          className="bg-gradient-blue-relief pointer-events-none absolute inset-0 rounded-[var(--radius-md)] opacity-30"
-          style={{
-            mask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
-            maskComposite: "exclude",
-            WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
-            WebkitMaskComposite: "xor",
-            padding: "1px",
-          }}
-        />
-      ) : null}
-      <div className="relative flex items-start gap-4">
+      {/* gap items-center (no items-start) para opciones de 1 línea como las
+          de Mood; los hints multi-línea quedan bien por el flex-col interno. */}
+      <div className="relative flex items-center gap-3">
         {leading ? <span className="shrink-0">{leading}</span> : null}
-        <span className="flex flex-col gap-1">
-          <span className="text-subtitle">{title}</span>
+        <span className="flex flex-1 flex-col">
+          <span className="text-body font-medium text-[var(--color-ink-deep)]">
+            {title}
+          </span>
           {hint ? (
-            <span
-              className={cn(
-                "text-body-sm italic",
-                selected ? "text-[rgb(255_255_255_/_0.72)]" : "text-[var(--color-ink-soft)]",
-              )}
-            >
-              {hint}
-            </span>
+            <span className="text-body-sm text-[var(--color-ink-soft)]">{hint}</span>
           ) : null}
         </span>
       </div>
