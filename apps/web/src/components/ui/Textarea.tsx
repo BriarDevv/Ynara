@@ -8,6 +8,10 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "className"> & {
   className?: string;
 };
 
+/**
+ * Sibling de TextField. Mantener en sync — mismos tokens de padding /
+ * border / hint para que un form mezclando ambos se lea coherente.
+ */
 export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea(
   { label, hint, error, id, className, rows = 4, ...rest },
   ref,
@@ -20,9 +24,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea
   const invalid = Boolean(error);
 
   return (
-    <div className={cn("flex w-full flex-col gap-2", className)}>
+    <div className={cn("flex w-full flex-col gap-1.5", className)}>
       {label ? (
-        <label htmlFor={fieldId} className="text-caption text-[var(--color-ink-muted)]">
+        <label
+          htmlFor={fieldId}
+          className="text-caption text-[var(--color-ink-soft)]"
+        >
           {label}
         </label>
       ) : null}
@@ -33,11 +40,10 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         className={cn(
-          "text-body w-full resize-y rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-4 py-3 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] transition-[border-color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-out-soft)]",
-          // El borde toma la identidad al foco (complementa el anillo global de :focus-visible, §12).
+          "text-body w-full resize-y rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-4 py-3.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] transition-[border-color,background-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
           invalid
             ? "border-[var(--color-error)]"
-            : "border-[var(--color-border)] hover:border-[var(--color-border-strong)] focus:border-[var(--color-accent)]",
+            : "border-[var(--color-border)] hover:border-[var(--color-border-strong)]",
         )}
         {...rest}
       />
@@ -46,7 +52,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea
           {error}
         </p>
       ) : hint ? (
-        <p id={hintId} className="text-body-sm text-[var(--color-ink-muted)]">
+        <p id={hintId} className="text-body-sm text-[var(--color-ink-soft)]">
           {hint}
         </p>
       ) : null}
