@@ -54,6 +54,44 @@
 2. Inspeccionar cola: `redis-cli -u $REDIS_URL LLEN celery`.
 3. Restart: `docker compose restart worker`.
 
+### Redis caído o degradado
+
+**Síntoma:** `/v1/health/ready` devuelve **503** con `checks.redis.ok=false`.
+
+**Impacto:** la auth pasa a **fail-open** (desde #63 Redis es el store de
+blocklist de tokens + rate-limit de login). Con Redis caído:
+
+- La **revocación anticipada** (logout / refresh single-use) se desactiva:
+  los tokens valen hasta su `exp` (un logout previo no surte efecto hasta
+  que el token expire).
+- El **rate-limit** de `/auth/token` y `/auth/register` se desactiva (sin
+  throttling aplicativo).
+
+La auth **sigue funcionando** (degrada al baseline JWT-stateless); Celery sí
+se ve afectado (broker/result backend).
+
+**Acción:**
+
+1. Verificar el estado: `redis-cli -u $REDIS_URL PING` (espera `PONG`).
+2. Reiniciar/verificar Redis: `docker compose restart redis` (VPS) o revisar
+   el panel de Upstash si es gestionado.
+3. Confirmar recuperación: `/v1/health/ready` vuelve a **200** con
+   `checks.redis.ok=true`.
+
+### Revocar la sesión activa de un usuario
+
+Para invalidar la sesión de **un** usuario sin rotar el `JWT_SECRET` global:
+
+1. `POST /v1/auth/logout` con el JWT del usuario (`Authorization: Bearer
+   <access>`; opcionalmente su `refresh_token` en el body).
+2. El backend blocklistea el `jti` en Redis (desde #63); el token deja de
+   servir aunque no haya expirado.
+
+> Requiere Redis arriba (si está caído, la auth está en fail-open y la
+> revocación no surte efecto — ver "Redis caído o degradado"). Para revocar
+> **todas** las sesiones de golpe, rotar `JWT_SECRET` (ver "Secret expuesto
+> en commit").
+
 ### App no arranca (RuntimeError del guard anti-prod)
 
 El backend tiene un guard (`app/core/db_guard.py`) que aborta el boot
@@ -98,7 +136,11 @@ que menciona el host que disparó el guard.
 ### Secret expuesto en commit
 
 1. Rotar el secret inmediatamente.
-2. Forzar logout de sesiones existentes si era JWT secret.
+2. Forzar logout de sesiones existentes si era JWT secret. Rotar
+   `JWT_SECRET` invalida **todos** los tokens de golpe por firma
+   (mecanismo primario, no depende de Redis); el blocklist per-`jti`
+   (`/v1/auth/logout`, desde #63) es complementario y solo alcanza tokens
+   individuales.
 3. Borrar el secret del histórico de git (BFG o git filter-repo).
 4. Force push solo con autorización explícita (regla #1).
 5. Post-mortem.

@@ -180,16 +180,19 @@ Si Pydantic y Zod divergen:
 
 TODO eventual: codegen Zod desde Pydantic (no es prioridad MVP).
 
-### `app/core/security.py` — auth implementada; pendiente refresh/logout
+### `app/core/security.py` — auth implementada (incluye refresh/logout)
 
-`create_access_token`, `verify_access_token`, `hash_password` y
-`verify_password` están implementadas con JWT real (PyJWT + bcrypt).
-Los endpoints `/v1/auth/register`, `/v1/auth/token` y `/v1/auth/me`
+`create_access_token`, `verify_access_token`, `create_refresh_token`,
+`verify_token`, `hash_password` y `verify_password` están implementadas
+con JWT real (PyJWT + bcrypt). Los endpoints `/v1/auth/register`,
+`/v1/auth/token`, `/v1/auth/me`, `/v1/auth/refresh` y `/v1/auth/logout`
 están activos y mergeados.
 
-**Lo que sigue pendiente**: refresh de token y logout (invalidación de
-sesión). Si tu feature depende de alguno de esos dos flujos, abrí un
-issue/discusión antes de implementar parcialmente.
+**Refresh y logout están implementados (#63)**: refresh single-use que
+rota el `jti` consumido, y logout que blocklistea el `jti` en Redis. El
+flujo vive en [`apps/backend/app/api/v1/auth.py`](../../apps/backend/app/api/v1/auth.py);
+el contrato completo (request/response, códigos, fail-open) está en
+[`apps/backend/docs/ENDPOINTS.md`](../../apps/backend/docs/ENDPOINTS.md).
 
 ### CI corre solo manual hasta que existan lockfiles
 
