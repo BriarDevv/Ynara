@@ -56,14 +56,18 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     mutation.mutate({ text: msg.text, userMessageId: messageId });
   };
 
+  // `h-full`: calza exacto en el área de contenido del shell (que es de
+  // altura fija con scroll interno); la `MessageList` scrollea adentro y el
+  // composer queda anclado abajo, arriba de la tab bar. No declara `<main>`:
+  // el landmark lo provee el AppShell.
   return (
-    <main className="mx-auto flex h-dvh w-full max-w-[720px] flex-col">
+    <div className="mx-auto flex h-full w-full max-w-[720px] flex-col">
       <ChatHeader mode={session.mode} />
       <MessageList messages={messages ?? []} mode={session.mode} onRetry={handleRetry} />
       <div className="px-4 pb-4">
         <ChatComposer onSend={handleSend} busy={mutation.isPending} />
       </div>
-    </main>
+    </div>
   );
 }
 
