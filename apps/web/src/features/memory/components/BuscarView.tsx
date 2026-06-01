@@ -37,7 +37,7 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
 
   return (
     <div className="mx-auto flex w-full max-w-[680px] flex-col gap-6 px-6 pb-10 pt-10">
-      <h1 className="text-title text-[var(--color-ink)]">Buscar</h1>
+      <h1 className="text-title text-[var(--color-ink-deep)]">Buscar</h1>
 
       <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] px-4 focus-within:border-[var(--color-accent)]">
         <Icon name="buscar" size={20} className="shrink-0 text-[var(--color-ink-muted)]" />
@@ -65,7 +65,7 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
 
       {!active ? (
         <section className="flex flex-col gap-3">
-          <h2 className="text-caption text-[var(--color-ink-muted)]">Probá buscar</h2>
+          <h2 className="text-caption text-[var(--color-ink-soft)]">Probá buscar</h2>
           <ul className="flex flex-wrap gap-2">
             {SUGGESTIONS.map((s) => (
               <li key={s}>
@@ -87,13 +87,12 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
         />
       ) : search.data && search.data.total === 0 ? (
         <EmptyStateCard
-          field
           title={`Nada para «${search.data.query}»`}
           hint="Probá con otras palabras, o revisá el timeline completo."
         />
       ) : search.data ? (
         <section className="flex flex-col gap-3">
-          <h2 className="text-caption text-[var(--color-ink-muted)]">
+          <h2 className="text-caption text-[var(--color-ink-soft)]">
             {search.data.total} {search.data.total === 1 ? "resultado" : "resultados"}
           </h2>
           <ul className="flex flex-col gap-3">

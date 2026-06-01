@@ -37,7 +37,7 @@ export function MemoryView() {
   return (
     <div className="mx-auto flex w-full max-w-[680px] flex-col gap-6 px-6 pb-10 pt-10">
       <header className="flex flex-col gap-2">
-        <h1 className="text-title text-[var(--color-ink)]">Memoria</h1>
+        <h1 className="text-title text-[var(--color-ink-deep)]">Memoria</h1>
         <p className="text-body text-[var(--color-ink-soft)]">
           Todo lo que Ynara fue guardando con vos, en orden.
         </p>
@@ -71,7 +71,6 @@ export function MemoryView() {
         />
       ) : groups.length === 0 ? (
         <EmptyStateCard
-          field
           title="Todavía no hay nada acá"
           hint="A medida que charlen, Ynara va a ir recordando lo importante. Esto se llena solo."
         />
@@ -82,7 +81,7 @@ export function MemoryView() {
             let runningIndex = 0;
             return groups.map((group) => (
               <section key={group.bucket} className="flex flex-col gap-3">
-                <h2 className="text-caption text-[var(--color-ink-muted)]">{group.bucket}</h2>
+                <h2 className="text-caption text-[var(--color-ink-soft)]">{group.bucket}</h2>
                 <ul className="flex flex-col gap-3">
                   {group.entries.map((entry) => (
                     <TimelineEntryRow

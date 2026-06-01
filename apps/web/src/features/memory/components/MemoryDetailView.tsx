@@ -41,7 +41,7 @@ export function MemoryDetailView({ layer, item, related, relatedPending, now, ac
           <Icon name={layerInfo.icon} size={14} className="text-[var(--color-memory)]" />
           {layerInfo.label}
         </span>
-        <h1 className="text-title text-balance text-[var(--color-ink)]">{p.quote}</h1>
+        <h1 className="text-title text-balance text-[var(--color-ink-deep)]">{p.quote}</h1>
         {p.note ? (
           <p className="text-body-sm rounded-[var(--radius-md)] bg-[var(--color-bg-soft)] px-4 py-3 text-[var(--color-ink-soft)]">
             {p.note}
@@ -51,7 +51,7 @@ export function MemoryDetailView({ layer, item, related, relatedPending, now, ac
 
       {p.fromSession ? (
         <section className="flex flex-col gap-2">
-          <h2 className="text-caption text-[var(--color-ink-muted)]">Contexto</h2>
+          <h2 className="text-caption text-[var(--color-ink-soft)]">Contexto</h2>
           <p className="text-body text-[var(--color-ink-soft)]">
             Esto surgió en una conversación con Ynara.
           </p>
@@ -60,14 +60,14 @@ export function MemoryDetailView({ layer, item, related, relatedPending, now, ac
 
       <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
         <div className="flex flex-col gap-1">
-          <dt className="text-caption text-[var(--color-ink-muted)]">Fecha</dt>
+          <dt className="text-caption text-[var(--color-ink-soft)]">Fecha</dt>
           <dd className="text-body-sm tabular-nums text-[var(--color-ink)]">
             {formatFullDate(p.dateIso)}
           </dd>
         </div>
         {p.meta.map((row) => (
           <div key={row.label} className="flex flex-col gap-1">
-            <dt className="text-caption text-[var(--color-ink-muted)]">{row.label}</dt>
+            <dt className="text-caption text-[var(--color-ink-soft)]">{row.label}</dt>
             <dd className="text-body-sm text-[var(--color-ink)]">{row.value}</dd>
           </div>
         ))}
@@ -75,7 +75,7 @@ export function MemoryDetailView({ layer, item, related, relatedPending, now, ac
 
       {p.tags.length > 0 ? (
         <section className="flex flex-col gap-3">
-          <h2 className="text-caption text-[var(--color-ink-muted)]">Detalles</h2>
+          <h2 className="text-caption text-[var(--color-ink-soft)]">Detalles</h2>
           <ul className="flex flex-wrap gap-2">
             {p.tags.map((tag) => (
               <li
@@ -93,7 +93,7 @@ export function MemoryDetailView({ layer, item, related, relatedPending, now, ac
 
       {p.fromSession ? (
         <section className="flex flex-col gap-3 border-t border-[var(--color-border)] pt-6">
-          <h2 className="text-caption text-[var(--color-ink-muted)]">Relacionado</h2>
+          <h2 className="text-caption text-[var(--color-ink-soft)]">Relacionado</h2>
           {relatedPending ? (
             <p className="text-body-sm text-[var(--color-ink-muted)]">
               Buscando recuerdos cercanos…
