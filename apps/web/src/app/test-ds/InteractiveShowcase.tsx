@@ -10,6 +10,7 @@ import { MODES } from "@/components/ui/modes";
 import { OptionCard } from "@/components/ui/OptionCard";
 import { ProgressDots } from "@/components/ui/ProgressDots";
 import { PromptChip } from "@/components/ui/PromptChip";
+import { Sheet } from "@/components/ui/Sheet";
 import { SuggestionCard } from "@/components/ui/SuggestionCard";
 import { Textarea } from "@/components/ui/Textarea";
 import { TextField } from "@/components/ui/TextField";
@@ -36,6 +37,7 @@ export function InteractiveShowcase() {
   const [toastOpen, setToastOpen] = useState(false);
   const [toastVariant, setToastVariant] = useState<ToastVariant>("success");
   const [picked, setPicked] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const showToast = (variant: ToastVariant) => {
     setToastVariant(variant);
@@ -263,6 +265,44 @@ export function InteractiveShowcase() {
           visible={toastOpen}
           onDismiss={() => setToastOpen(false)}
         />
+      </section>
+
+      <section>
+        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">
+          Sheet (bottom-sheet mobile / modal desktop)
+        </h2>
+        <Card>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="primary" onClick={() => setSheetOpen(true)}>
+              Abrir sheet
+            </Button>
+            <p className="text-body-sm text-[var(--color-ink-soft)]">
+              Esc o click en el backdrop cierran. En mobile entra desde abajo con handle.
+            </p>
+          </div>
+        </Card>
+        <Sheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          title="Cambiar modo"
+          description="Elegí cómo te acompaña hoy."
+        >
+          <div className="flex flex-col gap-2">
+            {MODES.map((mode) => (
+              <OptionCard
+                key={mode.id}
+                title={mode.label}
+                hint={mode.blurb}
+                leading={<ModeChip modeId={mode.id} size="sm" label=" " />}
+                selected={picked === mode.id}
+                onClick={() => setPicked(mode.id)}
+              />
+            ))}
+            <Button variant="ghost" fullWidth onClick={() => setSheetOpen(false)} className="mt-2">
+              Cerrar
+            </Button>
+          </div>
+        </Sheet>
       </section>
     </div>
   );
