@@ -56,6 +56,19 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(..., alias="JWT_SECRET")
     jwt_algorithm: str = Field("HS256", alias="JWT_ALGORITHM")
     jwt_expire_minutes: int = Field(10080, alias="JWT_EXPIRE_MINUTES")
+    # TTL del refresh token. Mayor que el access (30 dias por default). Se usa
+    # el MISMO secret/alg que el access; el claim `type` separa los dominios.
+    jwt_refresh_expire_minutes: int = Field(43200, alias="JWT_REFRESH_EXPIRE_MINUTES")
+
+    # Rate-limit / lockout del login (issue #63). Bucket por (ip, email_hash).
+    # El estado vive solo en Redis (sin tablas). fail-OPEN: si Redis cae, el
+    # login procede sin freno (baseline pre-#63), nunca se auto-DoSea.
+    auth_login_max_attempts: int = Field(5, alias="AUTH_LOGIN_MAX_ATTEMPTS")
+    auth_login_window_seconds: int = Field(900, alias="AUTH_LOGIN_WINDOW_SECONDS")
+    auth_login_lockout_seconds: int = Field(900, alias="AUTH_LOGIN_LOCKOUT_SECONDS")
+    # Rate-limit del register, por IP (el email aun no existe). Mas laxo.
+    auth_register_max_attempts: int = Field(10, alias="AUTH_REGISTER_MAX_ATTEMPTS")
+    auth_register_window_seconds: int = Field(3600, alias="AUTH_REGISTER_WINDOW_SECONDS")
 
     # Storage (R2)
     r2_account_id: str = Field("", alias="R2_ACCOUNT_ID")
