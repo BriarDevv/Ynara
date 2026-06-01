@@ -65,9 +65,15 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
     mutation.mutate(values);
   };
 
+  const handleEphemeral = () => {
+    const id = `ephemeral-${Date.now()}`;
+    startEphemeral({ userId: id, token: `ephemeral-${id}` });
+    next();
+  };
+
   return (
     <StepShell
-      variant="editorial"
+      eyebrow="Paso 1 — Cuenta"
       title={AUTH_STEP_COPY.signup.title}
       subtitle={AUTH_STEP_COPY.signup.subtitle}
       footer={
@@ -78,7 +84,7 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
               fullWidth
               disabled={mutation.isPending}
               form="signup-form"
-              className="sm:w-auto sm:min-w-[200px]"
+              className="sm:w-auto sm:min-w-[220px]"
             >
               {mutation.isPending ? "Creando…" : "Crear cuenta"}
             </Button>
@@ -86,12 +92,11 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
         />
       }
     >
-      <AuthModeSwitchLink mode="signup" onChange={onSwitch} />
       <form
         id="signup-form"
         onSubmit={form.handleSubmit(onSubmit)}
         noValidate
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-5"
       >
         <TextField
           label="EMAIL"
@@ -111,13 +116,31 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
           {...form.register("password")}
         />
       </form>
-      <EphemeralButton
-        onContinue={() => {
-          const id = `ephemeral-${Date.now()}`;
-          startEphemeral({ userId: id, token: `ephemeral-${id}` });
-          next();
-        }}
-      />
+
+      {/*
+        Bloque secundario, alineado a la izquierda — mismo eje que el form
+        y el título. Antes "Probar sin cuenta" y la nota quedaban centrados,
+        rompiendo la grilla del step.
+
+        La nota va en una línea aparte (text-caption) en lugar de inline
+        con punto separador: mobile no la cortaba bien y la jerarquía
+        queda más clara (acción primero, explicación abajo).
+      */}
+      <div className="flex flex-col gap-3 pt-2">
+        <AuthModeSwitchLink mode="signup" onChange={onSwitch} />
+        <div className="flex flex-col gap-1">
+          <Button
+            variant="subtle"
+            onClick={handleEphemeral}
+            className="text-body-sm self-start"
+          >
+            Probar sin cuenta
+          </Button>
+          <p className="text-caption text-[var(--color-ink-muted)]">
+            Cuenta efímera — no se guarda entre sesiones.
+          </p>
+        </div>
+      </div>
     </StepShell>
   );
 }
@@ -127,7 +150,7 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
 // ============================================================
 
 /**
- * LoginForm intencionalmente no muestra `EphemeralButton`: la cuenta
+ * LoginForm intencionalmente no muestra "Probar sin cuenta": la cuenta
  * efímera es para users nuevos sin credenciales (flujo signup). Si
  * el user llegó al tab login, asumimos que tiene cuenta real.
  */
@@ -157,7 +180,7 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
 
   return (
     <StepShell
-      variant="editorial"
+      eyebrow="Paso 1 — Cuenta"
       title={AUTH_STEP_COPY.login.title}
       subtitle={AUTH_STEP_COPY.login.subtitle}
       footer={
@@ -168,7 +191,7 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
               fullWidth
               disabled={mutation.isPending}
               form="login-form"
-              className="sm:w-auto sm:min-w-[200px]"
+              className="sm:w-auto sm:min-w-[220px]"
             >
               {mutation.isPending ? "Entrando…" : "Entrar"}
             </Button>
@@ -176,12 +199,11 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
         />
       }
     >
-      <AuthModeSwitchLink mode="login" onChange={onSwitch} />
       <form
         id="login-form"
         onSubmit={form.handleSubmit(onSubmit)}
         noValidate
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-5"
       >
         <TextField
           label="EMAIL"
@@ -201,6 +223,10 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
           {...form.register("password")}
         />
       </form>
+
+      <div className="pt-2">
+        <AuthModeSwitchLink mode="login" onChange={onSwitch} />
+      </div>
     </StepShell>
   );
 }
@@ -214,35 +240,17 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
  * `role="tablist"`: no hay paneles separados, solo dos modos del mismo
  * form. Si en algún momento se rediseña como tabs reales (con role=tab
  * + aria-controls + arrow-key nav), renombrar a `AuthModeTabs`.
+ *
+ * Alineado a la izquierda — antes quedaba "centrado" mezclado con un
+ * título a la izquierda, rompiendo la grilla.
  */
 function AuthModeSwitchLink({ mode, onChange }: { mode: AuthMode; onChange: () => void }) {
   return (
-    <div className="flex items-center gap-2 text-body-sm text-[var(--color-ink-soft)]">
+    <div className="flex items-baseline gap-2 text-body-sm text-[var(--color-ink-soft)]">
       <span>{mode === "signup" ? "¿Ya tenés cuenta?" : "¿Sos nuevo?"}</span>
-      <button
-        type="button"
-        onClick={onChange}
-        className="text-button rounded-[var(--radius-sm)] px-1 text-[var(--color-accent)] underline-offset-2 hover:underline"
-      >
+      <Button variant="subtle" onClick={onChange} className="text-body-sm">
         {mode === "signup" ? "Iniciar sesión" : "Crear cuenta"}
-      </button>
-    </div>
-  );
-}
-
-function EphemeralButton({ onContinue }: { onContinue: () => void }) {
-  return (
-    <div className="mt-2 flex flex-col gap-2">
-      <button
-        type="button"
-        onClick={onContinue}
-        className="text-body-sm text-[var(--color-ink-soft)] underline-offset-4 hover:text-[var(--color-ink)] hover:underline"
-      >
-        Probar sin cuenta
-      </button>
-      <p className="text-caption text-[var(--color-ink-muted)]">
-        Cuenta efímera: tu perfil no se va a guardar entre sesiones.
-      </p>
+      </Button>
     </div>
   );
 }
