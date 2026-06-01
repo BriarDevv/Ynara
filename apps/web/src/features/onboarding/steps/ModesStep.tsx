@@ -5,9 +5,9 @@ import { useEffect } from "react";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/Button";
-import { ModeChip } from "@/components/ui/ModeChip";
 import { MODE_BY_ID } from "@/components/ui/modes";
 import { OptionCard } from "@/components/ui/OptionCard";
+import { cn } from "@/lib/cn";
 import { AVAILABLE_MODES } from "@/lib/modes";
 import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
@@ -54,6 +54,7 @@ export function ModesStep() {
 
   return (
     <StepShell
+      eyebrow="Paso 4 — Para qué te sirvo"
       title={copy.title}
       subtitle={copy.subtitle}
       footer={
@@ -64,7 +65,7 @@ export function ModesStep() {
               type="submit"
               fullWidth
               form="modes-form"
-              className="sm:w-auto sm:min-w-[200px]"
+              className="sm:w-auto sm:min-w-[220px]"
             >
               Seguir
             </Button>
@@ -91,7 +92,18 @@ export function ModesStep() {
                   return (
                     <OptionCard
                       key={modeId}
-                      leading={<ModeChip modeId={modeId} />}
+                      // Dot color del modo como leading — el chip completo con label
+                      // duplicaba el title del card. Acá sólo necesitamos la pista
+                      // visual de color (gradient del modo).
+                      leading={
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "h-2.5 w-2.5 rounded-[var(--radius-pill)]",
+                            descriptor.gradientClass,
+                          )}
+                        />
+                      }
                       title={descriptor.label}
                       hint={descriptor.blurb}
                       selected={isSelected}

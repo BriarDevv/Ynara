@@ -84,6 +84,7 @@ export function A11yStep() {
 
   return (
     <StepShell
+      eyebrow="Paso 5 — Cómo se lee"
       title={copy.title}
       subtitle={copy.subtitle}
       footer={
@@ -95,7 +96,7 @@ export function A11yStep() {
               fullWidth
               disabled={isPending}
               onClick={complete}
-              className="sm:w-auto sm:min-w-[200px]"
+              className="sm:w-auto sm:min-w-[220px]"
             >
               {isPending ? "Guardando…" : "Listo"}
             </Button>

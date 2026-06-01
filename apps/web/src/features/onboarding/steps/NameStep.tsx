@@ -30,13 +30,14 @@ export function NameStep() {
 
   return (
     <StepShell
+      eyebrow="Paso 2 — Tu nombre"
       title={copy.title}
       subtitle={copy.subtitle}
       footer={
         <StepFooter
           onBack={back}
           customNext={
-            <Button type="submit" fullWidth form="name-form" className="sm:w-auto sm:min-w-[200px]">
+            <Button type="submit" fullWidth form="name-form" className="sm:w-auto sm:min-w-[220px]">
               Seguir
             </Button>
           }

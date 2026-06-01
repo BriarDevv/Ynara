@@ -44,13 +44,14 @@ export function MoodStep() {
 
   return (
     <StepShell
+      eyebrow="Paso 3 — Tu día"
       title={copy.title}
       subtitle={copy.subtitle}
       footer={
         <StepFooter
           onBack={back}
           customNext={
-            <Button type="submit" fullWidth form="mood-form" className="sm:w-auto sm:min-w-[200px]">
+            <Button type="submit" fullWidth form="mood-form" className="sm:w-auto sm:min-w-[220px]">
               Seguir
             </Button>
           }
