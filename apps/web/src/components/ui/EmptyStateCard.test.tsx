@@ -9,16 +9,8 @@ describe("EmptyStateCard", () => {
     expect(screen.getByText("Empezá una conversación")).toBeDefined();
   });
 
-  it("sin field no dibuja la Red de memoria", () => {
+  it("no dibuja ningún fondo gráfico (lenguaje sobrio)", () => {
     const { container } = render(<EmptyStateCard title="Vacío" />);
     expect(container.querySelector("svg")).toBeNull();
-  });
-
-  it("con field=true dibuja el MemoryField de @ynara/ui (svg decorativo)", () => {
-    const { container } = render(<EmptyStateCard title="Vacío" field />);
-    const svg = container.querySelector("svg");
-    expect(svg).not.toBeNull();
-    // el field es ambiente: no debe anunciarse al lector de pantalla
-    expect(svg?.closest("[aria-hidden='true']")).not.toBeNull();
   });
 });
