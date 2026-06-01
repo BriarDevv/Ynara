@@ -135,16 +135,24 @@ export function buildMemoryList(now: Date): MemoryList {
   };
 }
 
-/**
- * `GET /v1/memory` — agrupado por capa, o una sola rama con `?layer=`.
- * Espeja el aislamiento del backend de forma simplificada (el mock siempre
- * sirve el mismo dataset; el JWT real filtra por usuario).
- */
 const VALID_LAYERS = new Set(["semantic", "episodic", "procedural"]);
 
+/**
+ * Store mutable del mock. Se materializa una vez (fechado al primer acceso, así
+ * el timeline no "salta" entre requests) y PATCH/DELETE lo mutan in-place, para
+ * que la demo sea coherente: editar y volver muestra el cambio, borrar lo saca
+ * de la lista. En el backend real esto vive en Postgres; un full reload resetea
+ * el mock. NO persiste fuera de la sesión.
+ */
+let store: MemoryList | null = null;
+function getStore(): MemoryList {
+  if (store === null) store = buildMemoryList(new Date());
+  return store;
+}
+
 /** Busca un ítem por capa + referencia (UUID en sem/epi, `key` en procedural). */
-function findMemoryItem(layer: string, ref: string, now: Date) {
-  const list = buildMemoryList(now);
+function findMemoryItem(layer: string, ref: string) {
+  const list = getStore();
   if (layer === "semantic") return list.semantic.items.find((i) => i.id === ref);
   if (layer === "episodic") return list.episodic.items.find((i) => i.id === ref);
   if (layer === "procedural") return list.procedural.items.find((i) => i.key === ref);
@@ -154,21 +162,24 @@ function findMemoryItem(layer: string, ref: string, now: Date) {
 const memoryNotFound = () =>
   HttpResponse.json({ detail: "memoria no encontrada" }, { status: 404 });
 
+const invalidLayer = () =>
+  HttpResponse.json(
+    { error: "validation", detail: "layer inválida", field: "layer" },
+    { status: 422 },
+  );
+
 export const memoryHandlers = [
+  // `GET /v1/memory` — agrupado por capa, o una sola rama con `?layer=`.
   http.get(apiUrl("/v1/memory"), ({ request }) => {
     const url = new URL(request.url);
     const layer = url.searchParams.get("layer");
-    const list = buildMemoryList(new Date());
+    const list = getStore();
 
     if (layer === null) return HttpResponse.json(list);
     if (layer === "semantic" || layer === "episodic" || layer === "procedural") {
       return HttpResponse.json(list[layer]);
     }
-    // El backend responde 422 a una capa inválida.
-    return HttpResponse.json(
-      { error: "validation", detail: "layer inválida", field: "layer" },
-      { status: 422 },
-    );
+    return invalidLayer();
   }),
 
   // `GET /v1/memory/{layer}/{ref}` — detalle de un ítem. 422 capa inválida,
@@ -176,13 +187,79 @@ export const memoryHandlers = [
   http.get(apiUrl("/v1/memory/:layer/:ref"), ({ params }) => {
     const layer = String(params.layer);
     const ref = decodeURIComponent(String(params.ref));
-    if (!VALID_LAYERS.has(layer)) {
+    if (!VALID_LAYERS.has(layer)) return invalidLayer();
+    const item = findMemoryItem(layer, ref);
+    return item ? HttpResponse.json(item) : memoryNotFound();
+  }),
+
+  // `PATCH /v1/memory/{layer}/{ref}` — edita un ítem. semantic→content,
+  // procedural→value; episodic devuelve 405 (el summary lo genera el worker).
+  http.patch(apiUrl("/v1/memory/:layer/:ref"), async ({ params, request }) => {
+    const layer = String(params.layer);
+    const ref = decodeURIComponent(String(params.ref));
+    if (!VALID_LAYERS.has(layer)) return invalidLayer();
+    if (layer === "episodic") {
+      return HttpResponse.json({ detail: "no se puede editar un episodio" }, { status: 405 });
+    }
+
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const item = findMemoryItem(layer, ref);
+    if (!item) return memoryNotFound();
+
+    if (layer === "semantic") {
+      const content = body?.content;
+      if (typeof content !== "string" || content.length < 1 || content.length > 4096) {
+        return HttpResponse.json(
+          { error: "validation", detail: "content inválido", field: "content" },
+          { status: 422 },
+        );
+      }
+      Object.assign(item, { content, updated_at: new Date().toISOString() });
+      return HttpResponse.json(item);
+    }
+
+    // procedural
+    const value = body?.value;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
       return HttpResponse.json(
-        { error: "validation", detail: "layer inválida", field: "layer" },
+        { error: "validation", detail: "value inválido", field: "value" },
         { status: 422 },
       );
     }
-    const item = findMemoryItem(layer, ref, new Date());
-    return item ? HttpResponse.json(item) : memoryNotFound();
+    Object.assign(item, { value, updated_at: new Date().toISOString() });
+    return HttpResponse.json(item);
+  }),
+
+  // `DELETE /v1/memory/{layer}/{ref}` — borra un ítem (las 3 capas). 204 sin body.
+  http.delete(apiUrl("/v1/memory/:layer/:ref"), ({ params }) => {
+    const layer = String(params.layer);
+    const ref = decodeURIComponent(String(params.ref));
+    if (!VALID_LAYERS.has(layer)) return invalidLayer();
+
+    const list = getStore();
+    let removed = false;
+    if (layer === "semantic") {
+      const i = list.semantic.items.findIndex((x) => x.id === ref);
+      if (i !== -1) {
+        list.semantic.items.splice(i, 1);
+        list.semantic.total = list.semantic.items.length;
+        removed = true;
+      }
+    } else if (layer === "episodic") {
+      const i = list.episodic.items.findIndex((x) => x.id === ref);
+      if (i !== -1) {
+        list.episodic.items.splice(i, 1);
+        list.episodic.total = list.episodic.items.length;
+        removed = true;
+      }
+    } else {
+      const i = list.procedural.items.findIndex((x) => x.key === ref);
+      if (i !== -1) {
+        list.procedural.items.splice(i, 1);
+        list.procedural.total = list.procedural.items.length;
+        removed = true;
+      }
+    }
+    return removed ? new HttpResponse(null, { status: 204 }) : memoryNotFound();
   }),
 ];
