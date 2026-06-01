@@ -1,5 +1,6 @@
 import {
   type ApiErrorBody,
+  type Recap,
   type Suggestion,
   type SuggestionsResponse,
   type Task,
@@ -121,6 +122,25 @@ function getSuggestions(): Suggestion[] {
   return suggestionsStore;
 }
 
+/**
+ * Recap del día (wireframe 15). `pending: true` = el día no se cerró todavía
+ * (por eso aparece el CTA en Hoy), pero Ynara ya tiene un borrador: el
+ * `headline` y los `highlights` de lo que pasó. Cerrarlo de verdad (y
+ * regenerarlo con el LLM) es la Fase H2 / backend.
+ */
+export function buildRecap(now: Date): Recap {
+  return {
+    pending: true,
+    date: now.toISOString(),
+    headline: "Un día de foco, con un pendiente que quedó para mañana.",
+    highlights: [
+      "Cerraste el mail de Takeshi temprano",
+      "90 min de foco sin cortes en la propuesta Õmi",
+      "Quedó pendiente revisar los briefs de la semana",
+    ],
+  };
+}
+
 export const todayHandlers = [
   // GET /v1/tasks — prioridades del día.
   http.get(apiUrl("/v1/tasks"), () => {
@@ -157,4 +177,7 @@ export const todayHandlers = [
     const body: SuggestionsResponse = { items: getSuggestions() };
     return HttpResponse.json(body);
   }),
+
+  // GET /v1/recap — recap del día (CTA del wireframe 06 → sheet 15).
+  http.get(apiUrl("/v1/recap"), () => HttpResponse.json(buildRecap(new Date()))),
 ];
