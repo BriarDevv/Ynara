@@ -7,6 +7,7 @@ import { useState } from "react";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { ApiError } from "@/lib/api";
 import { useMemoryDetail, useMemoryRelated } from "../api";
+import { MemoryDetailActions } from "./MemoryDetailActions";
 import { MemoryDetailSkeleton } from "./MemoryDetailSkeleton";
 import { MemoryDetailView } from "./MemoryDetailView";
 
@@ -83,6 +84,7 @@ export function MemoryDetailRoute({
       related={related.data ?? []}
       relatedPending={related.isPending}
       now={now}
+      actions={<MemoryDetailActions layer={layer} item={detail.data} />}
     />
   );
 }
