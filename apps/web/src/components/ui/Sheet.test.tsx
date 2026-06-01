@@ -46,7 +46,7 @@ describe("Sheet", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("no cierra al clickear dentro del panel (stopPropagation)", () => {
+  it("no cierra al clickear dentro del panel (target contenido en el panel)", () => {
     const onClose = vi.fn();
     render(
       <Sheet open onClose={onClose} title="Cambiar modo">
