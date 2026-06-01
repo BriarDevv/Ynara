@@ -1,8 +1,9 @@
 "use client";
 
+import { Icon } from "@ynara/ui";
 import { useEffect, useId, useRef, useState } from "react";
 import { ModeChip } from "@/components/ui/ModeChip";
-import { MODES, type ModeId } from "@/components/ui/modes";
+import { MODE_BY_ID, MODES, type ModeId } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -50,15 +51,14 @@ export function ModeSwitcher({ interestedModes, activeMode, onChange, className 
     <div ref={rootRef} className={cn("relative w-fit", className)}>
       <button
         type="button"
+        aria-label={`Cambiar modo: ${MODE_BY_ID[activeMode].label}`}
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-bg)] py-1.5 pr-3 pl-1.5 transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)] hover:border-[var(--color-border-strong)]"
       >
         <ModeChip modeId={activeMode} size="sm" />
-        <span aria-hidden className="text-body-sm text-[var(--color-ink-muted)]">
-          ▾
-        </span>
+        <Icon name="chevron" size={14} className="text-[var(--color-ink-muted)]" />
       </button>
 
       {open ? (
@@ -83,6 +83,7 @@ export function ModeSwitcher({ interestedModes, activeMode, onChange, className 
             >
               <ModeChip modeId={id} size="sm" />
               {id === activeMode ? (
+                // TODO(@ynara/ui): reemplazar por <Icon name="check"> cuando el set propio lo tenga.
                 <span aria-hidden className="ml-auto text-[var(--color-accent)]">
                   ✓
                 </span>

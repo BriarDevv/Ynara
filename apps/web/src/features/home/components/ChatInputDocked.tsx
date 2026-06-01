@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "@ynara/ui";
 import { useId } from "react";
 
 /**
@@ -50,7 +51,7 @@ export function ChatInputDocked({ value }: Props) {
             aria-hidden
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-gradient-blue-base text-[var(--color-on-dark)] opacity-50"
           >
-            →
+            <Icon name="enviar" size={18} />
           </span>
         </div>
       </div>
