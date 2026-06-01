@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { Button } from "@/components/ui/Button";
 import { ChipGroup } from "@/components/ui/ChipGroup";
 import { Toggle } from "@/components/ui/Toggle";
 import { applyA11yClasses, type TextSize, useA11yStore } from "@/stores/a11y";
@@ -9,18 +10,30 @@ import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
 import { STEP_COPY } from "../constants";
 import { useOnboardingNav } from "../hooks/useOnboardingNav";
+import { useCompleteOnboarding } from "../hooks/useCompleteOnboarding";
 
-const TEXT_SIZE_OPTIONS: readonly { value: TextSize; label: string }[] = [
-  { value: "sm", label: "Chico" },
-  { value: "md", label: "Normal" },
-  { value: "lg", label: "Grande" },
+const TEXT_SIZE_OPTIONS = [
+  { value: "sm" as const, label: "Chico" },
+  { value: "md" as const, label: "Normal" },
+  { value: "lg" as const, label: "Grande" },
 ];
 
 /**
- * Step 5 · A11y visual. Tres controles puramente visuales (sin APIs
- * externas) que se aplican en vivo al `<html>` mientras el usuario los
- * toca (plan §4.6). Es el último step: el CTA dispara el outro de
- * celebración en vez de navegar a otro step.
+ * Step final del onboarding — preferencias de a11y.
+ *
+ * **D3**: cada control escribe directo a `useA11yStore` y dispara
+ * `applyA11yClasses` inmediatamente para preview vivo. NO usa el draft
+ * `useOnboardingStore.a11y*` (esos campos quedan obsoletos; la fuente
+ * canónica de a11y es siempre `useA11yStore`).
+ *
+ * **Motion toggle**: mapeo binario. OFF (default si OS no pide reduce)
+ * → `motion="auto"`. ON (default si OS pide reduce o el user lo elige)
+ * → `motion="reduce"`. La opción `"normal"` (forzar animaciones aunque
+ * el OS las pida reducidas) NO se expone acá; queda para Ajustes
+ * post-MVP donde el user puede pedirlo explícitamente.
+ *
+ * **Submit**: este es el último step. En vez de `next()`, llama
+ * `useCompleteOnboarding.complete()` para cerrar el flujo.
  */
 export function A11yStep() {
   const copy = STEP_COPY.a11y;
@@ -33,53 +46,88 @@ export function A11yStep() {
   const setHighContrast = useA11yStore((s) => s.setHighContrast);
   const setMotion = useA11yStore((s) => s.setMotion);
 
-  const [completing, setCompleting] = useState(false);
-  const [prefersReduced, setPrefersReduced] = useState(false);
+  const { complete, isPending, isCelebrating, error, triggerOutroComplete } =
+    useCompleteOnboarding();
 
-  useEffect(() => {
-    setPrefersReduced(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  }, []);
+  // Mapeo motion (tri-estado en store) ⇆ toggle binario.
+  // OS-pref se chequea sólo para mostrar el toggle ON cuando motion=auto
+  // y el OS pide reduce, así el user ve reflejada la preferencia heredada.
+  const osPrefersReduce = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
 
-  // Aplica los cambios al <html> en vivo de forma reactiva: cualquier
-  // cambio en el store de a11y re-aplica las clases. Así el efecto es
-  // inmediato en la pantalla actual sin depender del orden set→getState.
-  useEffect(() => useA11yStore.subscribe(applyA11yClasses), []);
+  const motionToggleChecked =
+    motion === "reduce" || (motion === "auto" && Boolean(osPrefersReduce));
 
-  const onTextSize = (size: TextSize) => setTextSize(size);
-  const onHighContrast = (on: boolean) => setHighContrast(on);
-  const onReduceMotion = (on: boolean) => setMotion(on ? "reduce" : "normal");
+  const handleTextSize = (value: TextSize) => {
+    setTextSize(value);
+    applyA11yClasses({ textSize: value, highContrast, motion });
+  };
 
-  // El toggle es binario; el store tiene 3 estados. "auto" se muestra como
-  // checked si el OS pide reducir movimiento.
-  const reduceChecked = motion === "reduce" || (motion === "auto" && prefersReduced);
+  const handleHighContrast = (on: boolean) => {
+    setHighContrast(on);
+    applyA11yClasses({ textSize, highContrast: on, motion });
+  };
 
-  if (completing) return <CelebrationOutro />;
+  const handleMotion = (reduceOn: boolean) => {
+    const nextMotion = reduceOn ? "reduce" : "auto";
+    setMotion(nextMotion);
+    applyA11yClasses({ textSize, highContrast, motion: nextMotion });
+  };
+
+  if (isCelebrating) {
+    return <CelebrationOutro onComplete={triggerOutroComplete} />;
+  }
 
   return (
     <StepShell
+      eyebrow="Paso 5 — Cómo se lee"
       title={copy.title}
       subtitle={copy.subtitle}
-      footer={<StepFooter onBack={back} onNext={() => setCompleting(true)} nextLabel="Listo" />}
+      footer={
+        <StepFooter
+          onBack={back}
+          customNext={
+            <Button
+              type="button"
+              fullWidth
+              disabled={isPending}
+              onClick={complete}
+              className="sm:w-auto sm:min-w-[220px]"
+            >
+              {isPending ? "Guardando…" : "Listo"}
+            </Button>
+          }
+        />
+      }
     >
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-6">
         <ChipGroup
-          label="TAMAÑO DE TEXTO"
+          label="TAMAÑO DEL TEXTO"
           options={TEXT_SIZE_OPTIONS}
           value={textSize}
-          onChange={onTextSize}
+          onChange={handleTextSize}
         />
         <Toggle
-          label="Contraste alto"
-          hint="Más definición entre texto y fondo."
+          label="Alto contraste"
+          hint="Bordes y textos más definidos."
           checked={highContrast}
-          onChange={onHighContrast}
+          onChange={handleHighContrast}
         />
         <Toggle
           label="Reducir animaciones"
-          hint="Menos movimiento en transiciones y efectos."
-          checked={reduceChecked}
-          onChange={onReduceMotion}
+          hint="Menos movimiento en transiciones."
+          checked={motionToggleChecked}
+          onChange={handleMotion}
         />
+        {error ? (
+          <p role="alert" className="text-body-sm text-[var(--color-error)]">
+            {error}
+          </p>
+        ) : null}
       </div>
     </StepShell>
   );
