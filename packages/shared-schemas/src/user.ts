@@ -12,10 +12,7 @@ export const DisplayNameSchema = z
   .trim()
   .min(2, "Mínimo 2 caracteres")
   .max(40, "Máximo 40 caracteres")
-  .regex(
-    /^[\p{L}\p{M}'\- ]+$/u,
-    "Sólo letras, espacios, apóstrofes o guiones",
-  );
+  .regex(/^[\p{L}\p{M}'\- ]+$/u, "Sólo letras, espacios, apóstrofes o guiones");
 
 export const A11yPrefsSchema = z.object({
   textSize: z.enum(["sm", "md", "lg"]),
