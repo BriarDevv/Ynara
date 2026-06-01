@@ -28,8 +28,9 @@ from httpx import ASGITransport
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, get_embedder, get_llm_client, get_reranker
+from app.core.deps import get_db, get_embedder, get_llm_client, get_reranker, get_token_store
 from app.core.security import create_access_token, verify_access_token
+from app.core.token_store import InMemoryTokenStore, TokenStore
 from app.llm.clients.embedding import FakeEmbeddingClient
 from app.llm.clients.fakes import FakeLlmClient
 from app.llm.clients.reranker import FakeReranker
@@ -60,17 +61,24 @@ async def _delete_user_by_email(session: AsyncSession, email: str) -> None:
     await session.commit()
 
 
-async def _client(db_session: AsyncSession) -> AsyncIterator[httpx.AsyncClient]:
-    """Overridea ``get_db`` con el ``db_session`` del fixture y devuelve un AsyncClient ASGI.
+async def _client(
+    db_session: AsyncSession, *, store: TokenStore | None = None
+) -> httpx.AsyncClient:
+    """Overridea ``get_db`` + ``get_token_store`` y devuelve un AsyncClient ASGI.
 
-    El caller usa el cliente dentro de ``async with`` y limpia los overrides en
-    su ``finally`` vía ``app.dependency_overrides.clear()``.
+    ``store`` (issue #63): el ``TokenStore`` que la blocklist + rate-limit usan.
+    Por default un ``InMemoryTokenStore`` fresco (sin Redis); los tests que
+    necesitan inspeccionar/forzar el store pasan el suyo. El caller usa el cliente
+    dentro de ``async with`` y limpia los overrides en su ``finally`` vía
+    ``app.dependency_overrides.clear()``.
     """
 
     async def _override_db() -> AsyncIterator[AsyncSession]:
         yield db_session
 
+    resolved_store = store if store is not None else InMemoryTokenStore()
     app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[get_token_store] = lambda: resolved_store
     transport = ASGITransport(app=app)
     return httpx.AsyncClient(transport=transport, base_url="http://test")
 
@@ -551,3 +559,618 @@ async def test_authenticate_user_inexistente_corre_dummy_hash(
     assert result is None
     # Timing-safe: se corrió verify_password contra el dummy hash precomputado.
     spy.assert_called_once_with("loquesea12345", _DUMMY_HASH)
+
+
+# ===========================================================================
+# Issue #63 — refresh, blocklist/logout, rate-limit, higiene
+# ===========================================================================
+
+
+async def _register_and_login(
+    client: httpx.AsyncClient, *, email: str, password: str
+) -> tuple[str, str, str]:
+    """Helper: register + token. Devuelve (user_id, access_token, refresh_token)."""
+    reg = await client.post(
+        "/v1/auth/register", json={"email": email, "password": password}
+    )
+    assert reg.status_code == 201
+    user_id = reg.json()["id"]
+    tok = await client.post(
+        "/v1/auth/token", json={"email": email, "password": password}
+    )
+    assert tok.status_code == 200
+    body = tok.json()
+    return user_id, body["access_token"], body["refresh_token"]
+
+
+# ---------------------------------------------------------------------------
+# 18. /token devuelve refresh_token + access_token (TokenOut extendido)
+# ---------------------------------------------------------------------------
+
+
+async def test_token_devuelve_refresh(db_session: AsyncSession) -> None:
+    """/token ahora trae refresh_token no-nulo además del access_token."""
+    email = "refresh.issue@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            _, access, refresh = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+        assert access
+        assert refresh
+        # access y refresh son tokens distintos.
+        assert access != refresh
+        # El access sigue siendo un access válido (sub presente).
+        assert verify_access_token(access)["sub"]
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 19. Backward-compat: el access de /token sigue autenticando /me
+# ---------------------------------------------------------------------------
+
+
+async def test_access_token_sigue_autenticando_me(db_session: AsyncSession) -> None:
+    """El access_token de /token autentica /auth/me (contrato access-only intacto)."""
+    email = "compat.me@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            _, access, _ = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            me = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
+            )
+        assert me.status_code == 200
+        assert me.json()["email"] == email
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 20. /auth/refresh con refresh válido -> 200 + nuevo access autentica /me
+# ---------------------------------------------------------------------------
+
+
+async def test_refresh_ok_emite_nuevos_tokens(db_session: AsyncSession) -> None:
+    """/refresh con refresh válido -> 200, nuevo access + refresh; el nuevo access vale."""
+    email = "refresh.ok@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            _, _, refresh = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            resp = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": refresh}
+            )
+            assert resp.status_code == 200
+            body = resp.json()
+            new_access = body["access_token"]
+            new_refresh = body["refresh_token"]
+            assert new_access and new_refresh
+            assert new_refresh != refresh  # rotó
+            me = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {new_access}"}
+            )
+        assert me.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 21. Rotación: reusar el refresh viejo tras /refresh -> 401 (reuse detectado)
+# ---------------------------------------------------------------------------
+
+
+async def test_refresh_reuse_del_viejo_rechazado(db_session: AsyncSession) -> None:
+    """Tras /refresh, reusar el refresh VIEJO -> 401 (quedó blocklisteado)."""
+    email = "refresh.reuse@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            _, _, refresh = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            first = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": refresh}
+            )
+            assert first.status_code == 200
+            # Reusar el viejo: cae en la detección de reuse.
+            reuse = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": refresh}
+            )
+        assert reuse.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 22. /auth/refresh con un ACCESS token (type mismatch) -> 401 uniforme
+# ---------------------------------------------------------------------------
+
+
+async def test_refresh_con_access_token_401(db_session: AsyncSession) -> None:
+    """Mandar un access a /refresh (type mismatch) -> 401."""
+    email = "refresh.mismatch@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            _, access, _ = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            resp = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": access}
+            )
+        assert resp.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 23. /auth/refresh con token basura -> 401 y sin leak de jose/token
+# ---------------------------------------------------------------------------
+
+
+async def test_refresh_token_basura_401_sin_leak(db_session: AsyncSession) -> None:
+    """/refresh con firma mala -> 401; el response.text no filtra jose ni el token."""
+    client = await _client(db_session)
+    try:
+        async with client:
+            garbage = "no-es-un-jwt-valido-12345"
+            resp = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": garbage}
+            )
+        assert resp.status_code == 401
+        # Regla #4: ni el token crudo ni el detalle de jose en la respuesta.
+        assert garbage not in resp.text
+        assert "jose" not in resp.text.lower()
+        assert "signature" not in resp.text.lower()
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# 24. Logout: el access actual -> 204; ese mismo access da 401 en /me
+# ---------------------------------------------------------------------------
+
+
+async def test_logout_blocklistea_access(db_session: AsyncSession) -> None:
+    """/logout con el access actual -> 204; el MISMO access ahora da 401 en /me."""
+    email = "logout.access@example.com"
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            _, access, _ = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            # Antes del logout, el access vale.
+            before = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
+            )
+            assert before.status_code == 200
+            out = await client.post(
+                "/v1/auth/logout",
+                json={},
+                headers={"Authorization": f"Bearer {access}"},
+            )
+            assert out.status_code == 204
+            # Tras el logout, el access quedó blocklisteado -> 401.
+            after = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
+            )
+        assert after.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 25. Logout con refresh en el body -> ese refresh luego da 401 en /refresh
+# ---------------------------------------------------------------------------
+
+
+async def test_logout_con_refresh_lo_revoca(db_session: AsyncSession) -> None:
+    """Logout con refresh_token en el body -> ese refresh da 401 en /refresh después."""
+    email = "logout.refresh@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            _, access, refresh = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            out = await client.post(
+                "/v1/auth/logout",
+                json={"refresh_token": refresh},
+                headers={"Authorization": f"Bearer {access}"},
+            )
+            assert out.status_code == 204
+            resp = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": refresh}
+            )
+        assert resp.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 26. Logout con refresh inválido en el body -> igual 204 (best-effort)
+# ---------------------------------------------------------------------------
+
+
+async def test_logout_con_refresh_invalido_204(db_session: AsyncSession) -> None:
+    """Logout con refresh basura en el body -> 204 igual (idempotente, no rompe)."""
+    email = "logout.badrefresh@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            _, access, _ = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            out = await client.post(
+                "/v1/auth/logout",
+                json={"refresh_token": "basura-no-jwt"},
+                headers={"Authorization": f"Bearer {access}"},
+            )
+        assert out.status_code == 204
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 27. Anti-enum del rate-limit: email existente vs inexistente -> 429 idéntico
+# ---------------------------------------------------------------------------
+
+
+async def test_rate_limit_anti_enum_429_identico(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N+1 fallos contra email existente y contra inexistente -> 429 byte-idéntico.
+
+    Mismo número de intentos para llegar al lockout exista o no el email (el
+    contador sube ante CUALQUIER user is None). El 429 es idéntico (status + body
+    + Retry-After). No hay oráculo de enumeración.
+    """
+    # Threshold chico y determinista para el test.
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _ratelimit_settings(max_attempts=2),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.auth.get_settings",
+        lambda: _ratelimit_settings(max_attempts=2),
+    )
+    existing = "enum.existe@example.com"
+    # Buckets distintos: cada email tiene su propio (ip, email_hash).
+    client = await _client(db_session)
+    try:
+        async with client:
+            reg = await client.post(
+                "/v1/auth/register",
+                json={"email": existing, "password": "supersecreta1"},
+            )
+            assert reg.status_code == 201
+
+            # Camino A: email EXISTE, password mal. 2 fallos -> lockout -> 429.
+            for _ in range(2):
+                await client.post(
+                    "/v1/auth/token",
+                    json={"email": existing, "password": "mal-password"},
+                )
+            r_existing = await client.post(
+                "/v1/auth/token",
+                json={"email": existing, "password": "mal-password"},
+            )
+
+            # Camino B: email NO existe. Mismo número de intentos -> 429.
+            nonexist = "enum.no.existe@example.com"
+            for _ in range(2):
+                await client.post(
+                    "/v1/auth/token",
+                    json={"email": nonexist, "password": "mal-password"},
+                )
+            r_nonexist = await client.post(
+                "/v1/auth/token",
+                json={"email": nonexist, "password": "mal-password"},
+            )
+
+        assert r_existing.status_code == 429
+        assert r_nonexist.status_code == 429
+        # Byte-idéntico: status + body + Retry-After.
+        assert r_existing.json() == r_nonexist.json()
+        assert r_existing.headers.get("Retry-After") == r_nonexist.headers.get(
+            "Retry-After"
+        )
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, existing)
+
+
+# ---------------------------------------------------------------------------
+# 28. Rate-limit no afecta el happy-path: login OK resetea el contador
+# ---------------------------------------------------------------------------
+
+
+async def test_login_ok_resetea_contador(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Tras 2 fallos, un login OK limpia el bucket: no queda 'cerca' del lockout."""
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _ratelimit_settings(max_attempts=3),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.auth.get_settings",
+        lambda: _ratelimit_settings(max_attempts=3),
+    )
+    email = "reset.happy@example.com"
+    password = "supersecreta1"
+    client = await _client(db_session)
+    try:
+        async with client:
+            reg = await client.post(
+                "/v1/auth/register", json={"email": email, "password": password}
+            )
+            assert reg.status_code == 201
+            # 2 fallos (threshold 3, todavía no lockea).
+            for _ in range(2):
+                bad = await client.post(
+                    "/v1/auth/token",
+                    json={"email": email, "password": "mal-password"},
+                )
+                assert bad.status_code == 401
+            # Login OK: resetea el contador.
+            ok = await client.post(
+                "/v1/auth/token", json={"email": email, "password": password}
+            )
+            assert ok.status_code == 200
+            # Otros 2 fallos: como el contador se reseteó, sigue sin lockear.
+            for _ in range(2):
+                again = await client.post(
+                    "/v1/auth/token",
+                    json={"email": email, "password": "mal-password"},
+                )
+                assert again.status_code == 401  # 401, no 429
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 29. Fail-open blocklist: store que lanza en is_revoked -> /me sigue 200
+# ---------------------------------------------------------------------------
+
+
+async def test_fail_open_blocklist(db_session: AsyncSession) -> None:
+    """Con un store que lanza en is_revoked, /me con token válido sigue dando 200.
+
+    El endpoint no asume que el store nunca falla: el RedisTokenStore atrapa y
+    degrada, pero acá probamos que el HANDLER no rompe ante un store que lanza —
+    debe degradar a fail-open. Para eso usamos el RedisTokenStore (que atrapa)
+    envolviendo un cliente que tira.
+    """
+    from app.core.token_store import RedisTokenStore
+
+    class _BoomRedisClient:
+        async def exists(self, *a: object) -> int:
+            raise RuntimeError("redis down")
+
+        async def set(self, *a: object, **k: object) -> None:
+            raise RuntimeError("redis down")
+
+        async def incr(self, *a: object) -> int:
+            raise RuntimeError("redis down")
+
+        async def expire(self, *a: object, **k: object) -> None:
+            raise RuntimeError("redis down")
+
+        async def delete(self, *a: object) -> None:
+            raise RuntimeError("redis down")
+
+    email = "failopen.block@example.com"
+    store = RedisTokenStore(_BoomRedisClient())
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            _, access, _ = await _register_and_login(
+                client, email=email, password="supersecreta1"
+            )
+            me = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
+            )
+        # fail-open: Redis caído no convierte un token válido en 401/500.
+        assert me.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 30. Fail-open rate-limit: store que lanza -> /token con cred válidas sigue 200
+# ---------------------------------------------------------------------------
+
+
+async def test_fail_open_rate_limit(db_session: AsyncSession) -> None:
+    """Con un store que lanza en las reads, /token con cred válidas sigue dando 200."""
+    from app.core.token_store import RedisTokenStore
+
+    class _BoomRedisClient:
+        async def exists(self, *a: object) -> int:
+            raise RuntimeError("redis down")
+
+        async def set(self, *a: object, **k: object) -> None:
+            raise RuntimeError("redis down")
+
+        async def incr(self, *a: object) -> int:
+            raise RuntimeError("redis down")
+
+        async def expire(self, *a: object, **k: object) -> None:
+            raise RuntimeError("redis down")
+
+        async def delete(self, *a: object) -> None:
+            raise RuntimeError("redis down")
+
+    email = "failopen.rl@example.com"
+    password = "supersecreta1"
+    store = RedisTokenStore(_BoomRedisClient())
+    # Sembrar el user con un store sano para el register, luego loguear con el boom.
+    setup_client = await _client(db_session)
+    try:
+        async with setup_client:
+            reg = await setup_client.post(
+                "/v1/auth/register", json={"email": email, "password": password}
+            )
+            assert reg.status_code == 201
+        app.dependency_overrides.clear()
+
+        client = await _client(db_session, store=store)
+        async with client:
+            tok = await client.post(
+                "/v1/auth/token", json={"email": email, "password": password}
+            )
+        # fail-open: Redis caído no bloquea el login con credenciales válidas.
+        assert tok.status_code == 200
+        assert tok.json()["access_token"]
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 31. Token viejo sin jti -> /me da 200 (se saltea el chequeo de blocklist)
+# ---------------------------------------------------------------------------
+
+
+async def test_token_viejo_sin_jti_me_200(db_session: AsyncSession) -> None:
+    """Un access sin claim jti (pre-#63) autentica /me (se saltea el blocklist check)."""
+    from datetime import UTC, datetime, timedelta
+
+    from jose import jwt
+
+    from app.core.config import get_settings
+
+    email = "legacy.nojti@example.com"
+    client = await _client(db_session)
+    try:
+        async with client:
+            reg = await client.post(
+                "/v1/auth/register",
+                json={"email": email, "password": "supersecreta1"},
+            )
+            assert reg.status_code == 201
+            user_id = reg.json()["id"]
+            # Mintear a mano un access SIN jti ni type (token pre-#63).
+            settings = get_settings()
+            legacy = jwt.encode(
+                {
+                    "sub": user_id,
+                    "exp": datetime.now(UTC) + timedelta(hours=1),
+                },
+                settings.jwt_secret,
+                algorithm=settings.jwt_algorithm,
+            )
+            me = await client.get(
+                "/v1/auth/me", headers={"Authorization": f"Bearer {legacy}"}
+            )
+        assert me.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+# ---------------------------------------------------------------------------
+# 32. /register rate-limit por IP -> 429 tras el threshold
+# ---------------------------------------------------------------------------
+
+
+async def test_register_rate_limit_429(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N+1 registros desde la misma IP -> 429; shape sin oráculo."""
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _ratelimit_settings(register_max=2),
+    )
+    emails: list[str] = []
+    client = await _client(db_session)
+    try:
+        async with client:
+            # 2 registros permitidos (threshold 2).
+            for i in range(2):
+                e = f"rl.register.{i}@example.com"
+                emails.append(e)
+                r = await client.post(
+                    "/v1/auth/register", json={"email": e, "password": "supersecreta1"}
+                )
+                assert r.status_code == 201
+            # El 3ro cruza el límite por IP -> 429.
+            e3 = "rl.register.3@example.com"
+            emails.append(e3)
+            r3 = await client.post(
+                "/v1/auth/register", json={"email": e3, "password": "supersecreta1"}
+            )
+        assert r3.status_code == 429
+        assert "demasiados" in r3.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+        for e in emails:
+            await _delete_user_by_email(db_session, e)
+
+
+# ---------------------------------------------------------------------------
+# 34. no-leak extendido: ni refresh ni access crudos en errores de los endpoints nuevos
+# ---------------------------------------------------------------------------
+
+
+async def test_no_leak_tokens_en_errores(db_session: AsyncSession) -> None:
+    """Ni refresh ni access crudos aparecen en errores (422/401) de refresh/logout."""
+    leak = "Leak3dTokenMarker12345"
+    client = await _client(db_session)
+    try:
+        async with client:
+            # 401 de /refresh con un token que lleva el marker (firma mala).
+            r401 = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": leak}
+            )
+            assert r401.status_code == 401
+            assert leak not in r401.text
+            # 422 sobre el PROPIO campo refresh_token (tipo inválido: lista con el
+            # marker dentro). El scrub de _SENSITIVE_VALIDATION_FIELDS debe ocultar
+            # el eco del input del campo refresh_token (regla #4).
+            r422 = await client.post(
+                "/v1/auth/refresh", json={"refresh_token": [leak]}
+            )
+            assert r422.status_code == 422
+            assert leak not in r422.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+def _ratelimit_settings(
+    *, max_attempts: int = 5, register_max: int = 10
+):
+    """Settings determinista para los tests de rate-limit (thresholds chicos)."""
+    from app.core.config import Settings
+
+    return Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        DATABASE_URL="postgresql://test:test@localhost/test",
+        REDIS_URL="redis://localhost:6379/0",
+        JWT_SECRET="test-secret-no-usar-en-prod",
+        AUTH_LOGIN_MAX_ATTEMPTS=max_attempts,
+        AUTH_LOGIN_WINDOW_SECONDS=900,
+        AUTH_LOGIN_LOCKOUT_SECONDS=900,
+        AUTH_REGISTER_MAX_ATTEMPTS=register_max,
+        AUTH_REGISTER_WINDOW_SECONDS=3600,
+    )
