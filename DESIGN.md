@@ -10,13 +10,14 @@ corrige el código.
 > de @MateoGs013 (CODEOWNER). Para cambios que afecten identidad de marca (paleta,
 > tipografía, sistema gráfico), revisar también con @BriarDevv y @querques20.
 
-> **Estado — v2 (2026), redefinición.** Esta versión integra el **universo de marca
-> propio** (`Ynara-Universo-de-Marca.html`, Guía de identidad visual · Ynara 2026) y
-> el research de tendencias 2026 ([`docs/planning/design-research-2026.md`](./docs/planning/design-research-2026.md)).
-> Define el **sistema objetivo**; la migración del `globals.css` actual está
-> detallada en el **§14**. Cada valor está etiquetado:
-> **[marca]** = literal de la presentación · **[research]** = respaldado por evidencia ·
-> **[criterio]** = juicio de diseño a validar en review.
+> **Estado — v3 (2026), lenguaje sobrio.** Esta versión documenta el sistema
+> **realmente implementado** después de la serie de PRs #139–#148, donde la app
+> migró al **lenguaje sobrio**: light-only, ivory canvas, ink-deep para titulares,
+> azul plano de marca para CTA, sin sistema gráfico "Red de memoria" ni grano.
+> Los cambios respecto a v2 se listan en el **§14 (deltas v2 → v3)**.
+> Etiquetas: **[marca]** = literal de la guía 2026 · **[research]** = respaldado
+> por evidencia · **[criterio]** = juicio de diseño · **[sobrio]** = decisión
+> de la serie #139–#148.
 
 ---
 
@@ -53,57 +54,37 @@ Para detalle conceptual ver [`IDENTITY.md`](./IDENTITY.md).
 
 ---
 
-## 2. Sistema gráfico (la "Red de memoria")
+## 2. Sistema gráfico (histórico)
 
-El rasgo más identitario y ownable de Ynara. **Esto reemplaza al gradiente
-genérico** como recurso de profundidad/ambiente y es el antídoto principal contra
-el look "generado por IA". [marca]
+> **Estado v3: deprecado.** El sistema gráfico "Red de memoria"
+> (`MemoryField`, `GrainOverlay`, diamante como acento ambiental) vivió en
+> `packages/ui/src/graphics/` durante las fases F0.3 / F1.2 del
+> [plan de rediseño](./docs/planning/FRONTEND-REDESIGN-PLAN.md). Se removió en el
+> **PR #148** cuando la app se movió al **lenguaje sobrio**: light-only, sin
+> trama de puntos detrás del contenido, recurso ambiental reducido al
+> **brand veil** (`BrandWaves`).
 
-### 2.1 Elementos base
+### 2.1 Lo que sigue vigente del concepto
 
-| Elemento | Forma | Significado |
-|---|---|---|
-| **Nodo** | Punto / círculo pequeño con halo | Una idea o recuerdo capturado. Unidad mínima. |
-| **Vínculo** | Línea / hilo curvo entre nodos | La asociación que une dos ideas. |
-| **Bifurcación** | Ramificación — **la forma de la Y** | El pensamiento que se ramifica. |
-| **Diamante** | Rombo (acento del logo) | Foco y presencia. El acento que ordena. |
+Los símbolos **conceptuales** de marca (nodos, vínculos, bifurcación Y,
+diamante) siguen siendo el ADN de la **identidad visual** (guía 2026):
+informan los **íconos** (§9), el **logo** (`YnaraMark`) y la voz de las
+piezas editoriales. Lo que se deprecó es su materialización como **fondo
+gráfico SVG** detrás del contenido de producto.
 
-### 2.2 Patrón "Red de memoria" [marca]
+### 2.2 Recurso ambiental actual: `BrandWaves`
 
-- Módulo base de **320px** que se repite sin costura.
-- Nodos enlazados en una **red orgánica**; los diamantes son los **acentos
-  rítmicos**.
-- Versión base: **azul sobre marfil**.
-- Variaciones de densidad: **dispersa / media / densa** (según cuánto protagonismo
-  quiera la superficie).
+`BrandWaves` (en `apps/web/src/components/ui/`) reemplaza al `MemoryField`
+como capa de profundidad. Es una **veil SVG con fade-top mask**, sin nodos
+ni diamantes — coherente con el lenguaje sobrio. Consumido por
+`onboarding/layout.tsx` y `today/HoyView.tsx`.
 
-### 2.3 Trama "Continuidad" [marca]
+### 2.3 Histórico de la "Red de memoria"
 
-Líneas de **flujo paralelo** que traducen la continuidad del pensamiento.
-Variaciones: base (flujo paralelo) / abierta / densa. Útil para divisores,
-transiciones y fondos de bloques largos.
-
-### 2.4 Texturas [marca]
-
-Las texturas **se construyen con la geometría del sistema — nunca con fotografía.**
-Aportan materia sin romper la sobriedad.
-
-| Textura | Rol |
-|---|---|
-| **Grano** | Calidez y materia física (overlay de ruido — ver §3.6). |
-| **Campo de nodos** | Densidad de ideas (fondo ambiental). |
-| **Profundidad** | Atmósfera y niebla nocturna (gradiente desaturado + grano en dark). |
-
-### 2.5 Reglas de uso
-
-- ✅ Fondos ambientales de hero / onboarding / empty states, dividers, estados de
-  carga, decoración de secciones.
-- ✅ Implementado como **SVG vectorial** (como en la presentación: `<linearGradient>`
-  + paths), no como mesh-gradient CSS. [marca]
-- ✅ Densidad acorde a la jerarquía: más denso donde la superficie es protagonista,
-  disperso/sutil detrás de contenido legible.
-- ❌ Nunca detrás de texto largo sin bajar opacidad/contraste lo suficiente.
-- ❌ Nunca animar la red de forma decorativa infinita (ver §8).
+Si más adelante un consumidor necesita el subsistema gráfico anterior, el
+código vivió en `packages/ui/src/graphics/` hasta el PR #148: `MemoryField`,
+`GrainOverlay`, y `buildMemoryField` (geometría determinista con PRNG
+sembrado). La guía 2026 sigue siendo la fuente del concepto.
 
 ---
 
@@ -115,74 +96,100 @@ cálido nuevo — la paleta de sistema se mantiene fiel al universo de marca. [m
 El ámbar y el jade existen **solo como tints por-modo** (§3.5), no como acento del
 sistema.
 
-### 3.1 Superficies
+### 3.1 Superficies — light-only
 
-**Light ("marfil"):**
-
-| Rol | Token CSS | Valor | Fuente |
-|---|---|---|---|
-| Fondo base | `--color-bg` | `#FAF9F5` (marfil claro) | [marca] |
-| Fondo suave / recesado (cards, secciones) | `--color-bg-soft` | `#F3F0EA` (marfil) | [marca] |
-
-> Regla [research]: **nunca blanco puro `#FFFFFF`** como superficie. El marfil cálido
-> es uno de los cambios de mayor señal para salir del look genérico.
-
-**Dark ("nocturna"):**
+> **Decisión [sobrio]**: la app web es **light-only**. No hay variante dark, ni
+> respeto a `prefers-color-scheme`. El layering nace de la distinción
+> **canvas** (ivory tibio, el body) vs **bg** (blanco puro, las cards que
+> flotan).
 
 | Rol | Token CSS | Valor | Fuente |
 |---|---|---|---|
-| Fondo base | `--color-bg` | `#242C3F` (la nocturna de marca) | [marca] |
-| Fondo elevado (cards) | `--color-bg-soft` | `#2E3750` (un paso más claro) | [criterio] |
+| Canvas (body, fondo detrás del contenido) | `--color-bg-canvas` | `#FAF9F5` (ivory) | [marca] |
+| Fondo elevado (cards, inputs, modales) | `--color-bg` | `#FFFFFF` (blanco) | [sobrio] |
+| Fondo suave (pills, chip containers, secciones alternas) | `--color-bg-soft` | `#F3F0EA` (crema cálido) | [marca] |
 
-> Regla [research]: en dark, **nunca negro puro**; la elevación se expresa por **luz**
-> (la superficie más alta es más clara), no por sombra. El dark de Ynara es su
-> azul-tinta de siempre, no un negro nuevo — coherente con la "niebla nocturna" de
-> marca.
+> Regla [research]: **nunca blanco puro como body**. El ivory canvas es uno de
+> los cambios de mayor señal para salir del look genérico. El blanco vive solo
+> en superficies que se apoyan sobre el canvas (cards, inputs, modales), donde
+> aporta jerarquía por luz.
+>
+> Nota v3 [sobrio]: el v2 tenía ambas superficies (body + cards) en marfil.
+> El v3 separa **canvas ivory + bg blanco** para que las cards no se fundan
+> con el body — más jerarquía sin sombras pesadas.
 
 ### 3.2 Tinta (texto)
 
-| Rol | Token CSS | Light | Dark |
-|---|---|---|---|
-| Texto principal | `--color-ink` | `#242C3F` | `#E8ECF4` |
-| Texto secundario | `--color-ink-soft` | `rgb(36 44 63 / 0.65)` | `rgb(232 236 244 / 0.70)` |
-| Texto terciario | `--color-ink-muted` | `rgb(36 44 63 / 0.45)` | `rgb(232 236 244 / 0.50)` |
-| Texto desactivado | `--color-ink-faint` | `rgb(36 44 63 / 0.18)` | `rgb(232 236 244 / 0.20)` |
-| Texto sobre fondos de marca | `--color-on-dark` | `#FAF9F5` | `#FAF9F5` |
+| Rol | Token CSS | Valor |
+|---|---|---|
+| Hero / title con presencia editorial | `--color-ink-deep` | `#1B2233` |
+| Texto principal | `--color-ink` | `#242C3F` |
+| Texto secundario | `--color-ink-soft` | `rgb(36 44 63 / 0.65)` |
+| Texto terciario | `--color-ink-muted` | `rgb(36 44 63 / 0.45)` |
+| Texto desactivado | `--color-ink-faint` | `rgb(36 44 63 / 0.18)` |
+| Texto sobre fondos de marca | `--color-on-dark` | `#FFFFFF` |
 
 > Jerarquía [research]: de-enfatizar **bajando contraste** (ink-soft/muted), no
 > agrisando con un gris ajeno a la marca.
+>
+> Nuevo en v3 [sobrio]: `--color-ink-deep` para titulares con presencia
+> editorial (más oscuro que `ink`). Aplicado en h1 de `/hoy`, `/memoria`,
+> `/chat`, `/buscar`, y en piezas editoriales de onboarding.
 
 ### 3.3 Bordes y líneas
 
-| Rol | Token CSS | Light | Dark |
-|---|---|---|---|
-| Borde sutil | `--color-border` | `rgb(36 44 63 / 0.12)` | `rgb(232 236 244 / 0.12)` |
-| Borde marcado | `--color-border-strong` | `rgb(36 44 63 / 0.22)` | `rgb(232 236 244 / 0.22)` |
+| Rol | Token CSS | Valor |
+|---|---|---|
+| Borde sutil | `--color-border` | `rgb(36 44 63 / 0.12)` |
+| Borde marcado | `--color-border-strong` | `rgb(36 44 63 / 0.22)` |
 
-### 3.4 Azul de marca y rampa de memoria (violeta)
+> Override de a11y: `html.theme-high-contrast` aumenta el contraste de
+> `--color-ink-soft/muted` y `--color-border*` (ver `globals.css`).
 
-**Azul** — el rasgo más identitario, motor del CTA primario [marca]:
+### 3.4 Azul de marca
+
+> **Decisión [sobrio]**: el CTA primario usa **azul plano**, no gradiente. El
+> gradiente queda relegado a **acentos puntuales** (ProgressDots active,
+> hairlines, decoraciones de OptionCard).
+
+**Azul plano — CTA primario y motor de la marca [sobrio]:**
+
+| Token | Valor | Uso |
+|---|---|---|
+| `--color-blue-flat` | `#2F5AA6` | CTA primario, link, marca |
+| `--color-blue-flat-hover` | `#26498A` | Hover del CTA primario |
+| `--color-blue-flat-active` | `#1F3C75` | Press del CTA primario |
+| `--color-accent` | alias de `--color-blue-flat` | Focus-ring, text-link |
+
+**Gradientes como acento ambiental** [marca]:
 
 | Token | Stops | Uso |
 |---|---|---|
-| `--gradient-blue-base` | `#2F5AA6 → #1F66DB` (135°) | CTA primario, marca, modo Productividad |
-| `--gradient-blue-relief` | `#4B7EE6 → #7BA1F4` (135°) | Glow, highlights, modo Estudio |
+| `--gradient-blue-base` | `#2F5AA6 → #1F66DB` (135°) | Tint del modo Productividad, acentos puntuales |
+| `--gradient-blue-relief` | `#4B7EE6 → #7BA1F4` (135°) | Tint del modo Estudio, highlights |
+| `--gradient-violet` | `#8C63B8 → #7C4FA3` (135°) | Tint del modo Memoria |
+| `--gradient-jade` | `#4A9C8C → #6FBFAE` (135°) | Tint del modo Bienestar |
+| `--gradient-amber` | `#D9A24A → #E8C77A` (135°) | Tint del modo Vida |
 
-**Rampa de memoria (violeta)** — enriquecida con la familia real de la marca, que
-tenía más matices que el único violeta anterior [marca]:
+**Acentos violetas ambientales:**
 
-| Token | Valor | Rol |
+| Token | Valor | Uso |
 |---|---|---|
-| `--color-memory-deep` | `#434A82` (indigo) | Profundidad de la red |
-| `--color-memory` | `#5C6FB3` (violáceo) | Tono medio |
-| `--color-memory-soft` | `#8B9AD0` (periwinkle) | Acento claro / nodos |
-| `--color-memory-accent` | `#8165A3` (violeta) | Acento de memoria |
-| `--gradient-memory` | `#434A82 → #8165A3` (135°) | Símbolo de memoria, recall, modo Memoria, outro onboarding |
+| `--color-violet-glow` | `rgb(129 101 163 / 0.18)` | Glow ambiental, no para fills |
 
-> **Regla clave** [marca]: el **gradiente azul base es el rasgo más identitario**; el
-> CTA primario lo usa y no se reemplaza por sólido salvo donde el gradiente afecte la
-> legibilidad (botones muy chicos, chips densos). Los gradientes ricos (azul,
-> memoria) son **ambiente y marca**, no relleno de UI funcional.
+> **Cambio v2 → v3** [sobrio]: la v2 prescribía una **rampa de memoria** rica
+> (`--color-memory-deep/soft/accent` + `--gradient-memory`). El v3 **no la
+> implementó**: el violeta vive hoy como `--gradient-violet` (heredado de v1)
+> + `--color-violet-glow` ambiental. Si un consumidor futuro necesita la
+> rampa, sumarla en su PR.
+>
+> **Deuda preexistente reconocida**: 4 callers usan `var(--color-memory)` sin
+> que el token exista en `globals.css` (PromptChip, MemoryDetailView,
+> SearchResultRow, TimelineEntryRow). El bug se introdujo antes de la serie
+> sobria (commit `9f84c6a` bajó light-only sin migrar estos callers). En
+> runtime el `var()` cae sin fallback y los íconos terminan heredando
+> `currentColor`. **Follow-up**: definir `--color-memory` o migrar los 4
+> callers a `--color-violet-glow` / `--gradient-violet` en su propio PR.
 
 ### 3.5 Tints por modo
 
@@ -193,7 +200,7 @@ solo acá** — no son acentos del sistema [decisión validada]:
 |---|---|---|---|
 | Productividad | `--gradient-blue-base` | Azul base — acción, ejecución | [marca] |
 | Estudio | `--gradient-blue-relief` | Azul claro — claridad, expansión | [marca] |
-| Memoria | `--gradient-memory` | Violeta — el símbolo del logo | [marca] |
+| Memoria | `--gradient-violet` | Violeta — el símbolo del logo | [marca] |
 | Bienestar | `--gradient-jade` (`#4A9C8C → #6FBFAE`) | Jade — calma | [criterio] |
 | Vida | `--gradient-amber` (`#D9A24A → #E8C77A`) | Ámbar — cotidiano cálido | [criterio] |
 
@@ -203,13 +210,11 @@ solo acá** — no son acentos del sistema [decisión validada]:
 
 ### 3.6 Grano (textura de calidez)
 
-Overlay de **ruido monocromo al 3-6%** sobre superficies grandes y gradientes, para
-matar el banding y aportar "materia física". [marca][research]
-
-- Implementación: SVG `feTurbulence` tileado o PNG de ruido, como utility único
-  (`--texture-grain` / `.bg-grain`).
-- Usar con **sobriedad y propósito** (superficies amplias, hero, nocturna), no como
-  sello obligatorio en cada caja. [research]
+> **Estado v3: no implementado.** [sobrio] La v2 prescribía un overlay de
+> grano monocromo (`--texture-grain` / `.bg-grain`) para superficies grandes.
+> El v3 decidió no implementarlo: el ivory canvas + las sombras suaves
+> alcanzan para el efecto "papel" sin sumar overlay de ruido. Si una pieza
+> específica lo pide, sumarlo en su PR.
 
 ### 3.7 Estados y utilitarios
 
@@ -217,8 +222,8 @@ matar el banding y aportar "materia física". [marca][research]
 |---|---|---|
 | Error | `--color-error` | `#C0392B` |
 | Error suave (fondo) | `--color-error-soft` | `rgb(192 57 43 / 0.12)` |
-| Overlay (backdrop modales) | `--color-overlay` | `rgb(36 44 63 / 0.40)` (light) · `rgb(14 18 25 / 0.60)` (dark) |
-| Acento puntual (focus-ring) | `--color-accent` | alias de `--color-blue-base-from` (`#2F5AA6`) |
+| Overlay (backdrop modales) | `--color-overlay` | `rgb(36 44 63 / 0.40)` |
+| Acento puntual (focus-ring) | `--color-accent` | alias de `--color-blue-flat` (`#2F5AA6`) |
 
 ### 3.8 Contraste
 
@@ -273,6 +278,11 @@ Reglas por rol [research]:
 - **Measure** (ancho de línea de lectura, ej. respuesta del asistente): **60-70ch**.
 - Usar comillas curvas (« » / " ") y em-dash reales en copy, no rectas.
 
+> **Nota v3** [sobrio]: `text-display` está documentado en esta tabla pero
+> **no implementado** en `globals.css`. La app sobria topa en `text-hero` y
+> `text-title` como techo editorial; si una pieza pide el display real
+> (poster del slide 09), sumar la utility en su PR.
+
 ### 4.3 Sizing accesible
 
 El store de a11y aplica `text-size-sm` / `text-size-md` (default) / `text-size-lg`
@@ -318,10 +328,8 @@ el uso semántico.
 
 ## 7. Elevation
 
-3 niveles. Más allá de eso → revisar jerarquía, no agregar sombra.
-Implementados como utilities custom en `globals.css`.
-
-**Light** — sombra suave con una sola fuente de luz (top-down) [research]:
+3 niveles. Más allá → revisar jerarquía, no agregar sombra. Implementados como
+utilities custom en `globals.css`.
 
 | Utility | Sombra | Uso |
 |---|---|---|
@@ -329,34 +337,32 @@ Implementados como utilities custom en `globals.css`.
 | `.shadow-soft` | `0 1px 2px rgb(36 44 63 / 0.06), 0 4px 12px rgb(36 44 63 / 0.04)` | Cards interactivas, hover |
 | `.shadow-lifted` | `0 8px 24px rgb(36 44 63 / 0.08), 0 24px 48px rgb(36 44 63 / 0.06)` | Modales, toasts, dropdowns |
 
-**Dark** — la elevación se expresa por **luz, no por sombra** [research]: las
-superficies más altas usan `--color-bg-soft` (más claro) y/o un overlay blanco
-semitransparente; las sombras se reducen al mínimo.
+> Calibrado para card blanca sobre canvas ivory. Si una superficie nueva se
+> apoya sobre `--color-bg-soft` (crema), revisar los alphas — pueden verse
+> pesados.
 
 ---
 
 ## 8. Motion
 
-### 8.1 Tokens
+### 8.1 Tokens (estado v3)
 
 | Token | Valor | Uso |
 |---|---|---|
-| `--duration-instant` | `100ms` | Feedback inmediato (press) |
-| `--duration-fast` | `150ms` | Hover, focus, microinteracciones |
-| `--duration-base` | `200ms` | Transiciones de UI estándar (antes 250ms) |
-| `--duration-slow` | `300ms` | Transiciones amplias **dentro** de una vista |
-| `--duration-screen` | `350ms` | Cambio de pantalla / navegación **entre** vistas |
+| `--duration-base` | `250ms` | Transiciones de UI estándar |
+| `--duration-screen` | `350ms` | Cambio de pantalla / navegación entre vistas |
 | `--ease-out-soft` | `cubic-bezier(0.22, 1, 0.36, 1)` | Easing default |
 
-> `--duration-slow` (300ms) y `--duration-screen` (350ms) son distintos a propósito:
-> el primero para transiciones grandes dentro de la misma pantalla (acordeones,
-> expandir cards); el segundo, más largo, para la transición de ruta completa.
+> **Cambio v2 → v3** [sobrio]: la v2 prescribía 5 duraciones
+> (`--duration-instant/fast/base/slow/screen` con base bajada a 200ms) +
+> springs. El v3 mantuvo solo **base + screen** (con base en 250ms), y deja
+> los springs como objetivo futuro si llega un consumidor que los pida.
 
-**Springs** (para Motion / animaciones con física), modelo perceptual
-`visualDuration` + `bounce` [research, respaldado por Apple WWDC23 + Figma]:
+**Modelo de reduced-motion** (ver `globals.css`):
 
-- `spring-snappy`: `visualDuration 0.2`, `bounce 0` — UI utilitaria.
-- `spring-soft`: `visualDuration 0.35`, `bounce 0.15` — entradas, elementos amables.
+- OS pide `prefers-reduced-motion: reduce` + sin override → animaciones off.
+- `html.motion-off` → animaciones off (override del usuario desde a11y).
+- `html.motion-on` → animaciones on (gana siempre).
 
 ### 8.2 Microinteracciones (alto ROI) [research]
 
@@ -373,10 +379,16 @@ semitransparente; las sombras se reducen al mínimo.
 
 El movimiento **expresa el concepto**, no decora:
 
-- **Memoria** → un nodo **se enciende / pulsa** al guardar un recuerdo.
-- **Conexión** → los vínculos **se dibujan** (path draw) al cargar la red.
-- **Presencia** → el **diamante** marca el estado activo / foco (p. ej. indicador de
-  "pensando" del asistente, §10).
+- **Presencia** → el **foco editorial** (h1 con `--color-ink-deep`, hero con
+  `text-hero`) ordena la jerarquía sin sumar acentos decorativos.
+- **Estado** → el botón **Detener** durante streaming (§10.2) y el **chevron
+  "ir al final"** (§10.4) marcan estado activo sin animaciones decorativas.
+
+> **Cambio v2 → v3** [sobrio]: la v2 prescribía motion atado al sistema
+> gráfico (nodos que se encienden al guardar, vínculos que se dibujan al
+> cargar la red, diamante como indicador de "pensando"). El v3 **no las
+> implementó** al deprecar `MemoryField`. Si más adelante una pieza pide
+> motion conceptual, sumar en su PR.
 
 ### 8.4 Implementación y reglas
 
@@ -444,8 +456,7 @@ mensajería**. [research, alineado con "editorial y sereno" de marca]
   (que un `**` o ``` a medias no rompa el layout). Evitar re-layout por token.
   [research]
 - Indicadores diferenciados con voz de Ynara (pensando / buscando / generando) +
-  skeleton antes del primer token. El **diamante** (§2.1) puede ser el indicador de
-  "pensando/foco". [criterio]
+  skeleton antes del primer token. [criterio]
 - Tool-calls `memory.*` como **acordeones colapsables** ("Usando memoria…"), no texto
   crudo.
 
@@ -458,8 +469,8 @@ mensajería**. [research, alineado con "editorial y sereno" de marca]
 
 ### 10.5 Empty state / onboarding conversacional
 
-- Como las piezas de gran formato (slide 09): **big type + voz de marca**, con el
-  sistema gráfico (§2) como capa ambiental detrás.
+- Como las piezas de gran formato (slide 09): **big type + voz de marca**, con
+  `BrandWaves` (§2.2) como capa ambiental cuando el layout lo pida.
 - Welcome + **3-4 chips de prompt accionables**; nunca un placeholder genérico tipo
   "Escribí algo…". [research]
 
@@ -482,23 +493,20 @@ Los primitives web-only viven en
 
 | Componente | Variants | Notas |
 |---|---|---|
-| `Button` | `primary`, `secondary`, `ghost` | `primary` usa `--gradient-blue-base`. Hover/press según §8.2. |
+| `Button` | `primary`, `secondary`, `ghost` | `primary` usa `--color-blue-flat` + hover/active. Hover/press según §8.2. |
 | `Card` | `default`, `interactive` | `interactive`: `shadow-soft` + hover `scale(1.02)`. |
 | `OptionCard` | idle, selected | Selected: fondo ink + hairline gradient en borde. |
 | `TextField` / `Textarea` | default, error | Error inline con copy humano. |
 | `Toggle` | off, on | Switch propio con tokens. |
 | `ChipGroup` | — | Opciones segmentadas. |
-| `PromptChip` ⬚ | — | Chip de prompt accionable (empty state del chat, §10.5). |
+| `PromptChip` | — | Chip de prompt accionable (empty state del chat, §10.5). |
 | `ProgressDots` | — | current = gradient azul base; otros = ink-faint. |
 | `Toast` | info, success, error | Auto-dismiss configurable. |
 | `YnaraMark` | size | Logo SVG con gradientes. |
-| `Icon` ⬚ | nombre del set | Set propio (§9); fallback Lucide controlado. |
+| `Icon` | nombre del set | Set propio (§9); fallback Lucide controlado. |
 | `ModeChip` / `SuggestionCard` | por modo | Tint del modo (§3.5). |
-| `EmptyStateCard` | — | Estados vacíos con sistema gráfico de fondo. |
-| `GrainOverlay` / `MemoryField` ⬚ | — | Capa de grano (§3.6) / red de memoria (§2) ambiental. |
-
-> ⬚ = componente **objetivo, no implementado aún** (parte del rebuild, no del estado
-> actual del código).
+| `EmptyStateCard` | — | Estados vacíos sobrios (sin fondo gráfico) [sobrio]. |
+| `BrandWaves` | `relative`, `absolute` | Brand veil SVG con fade-top mask. Reemplazo del sistema gráfico (§2.2). |
 
 Cada componente en su propio archivo, named export, sin barrel monstruo.
 
@@ -514,8 +522,9 @@ Cada componente en su propio archivo, named export, sin barrel monstruo.
   nunca `outline: none` sin reemplazo.
 - **Mobile-first** siempre. Breakpoints: `sm:640`, `md:768`, `lg:1024`, `xl:1280`.
 - Container max-width: formularios/onboarding `480px`; conversación `~720px` (§10.1).
-- **Dark mode co-protagonista**: light y dark son ambos first-class; cada superficie,
-  sombra y textura tiene su variante (no un dark "discreto" como afterthought).
+- **Light-only declarado** [sobrio]: la app no tiene variante dark ni respeta
+  `prefers-color-scheme`. La jerarquía viene del par canvas ivory / bg blanco
+  + las sombras suaves (§7).
 
 ---
 
@@ -535,7 +544,7 @@ Errores de implementación:
 
 "Tells" del look generado por IA / amateur a evitar [research]:
 
-- ❌ **Blanco/negro puro** como superficie → marfil / nocturna (§3.1).
+- ❌ **Blanco puro como body** → ivory canvas (§3.1). El blanco sí vive en cards.
 - ❌ **Gradiente violeta-azul de relleno** + glassmorphism porque sí → sistema gráfico
   (§2) y gradientes solo como ambiente.
 - ❌ **Emojis/flechas como íconos** → set propio (§9).
@@ -548,31 +557,37 @@ Errores de implementación:
 
 ---
 
-## 14. Migración desde el sistema actual (deltas para `globals.css`)
+## 14. Migración v2 → v3 (deltas implementados)
 
-Este doc define el objetivo; el `globals.css` actual aún implementa el sistema v1.
-Cambios a aplicar (en su propio PR de implementación, con verificación visual):
+La serie de PRs **#139–#148** materializó el bump a v3. Tabla de deltas reales:
 
-| Área | Actual (v1) | Objetivo (v2) |
+| Área | v2 (objetivo histórico) | v3 (estado vivo) |
 |---|---|---|
-| `--color-bg` (light) | `#FFFFFF` | `#FAF9F5` (marfil claro) |
-| `--color-bg-soft` (light) | `#F6F6F8` | `#F3F0EA` (marfil) |
-| `--color-bg` (dark) | `#0E1219` | `#242C3F` (nocturna de marca) |
-| `--color-bg-soft` (dark) | `#161B25` | `#2E3750` |
-| `--color-on-dark` | `#FFFFFF` | `#FAF9F5` |
-| Rampa de memoria | solo `--gradient-violet` (`#8C63B8→#7C4FA3`) | `--color-memory-*` (indigo/violáceo/periwinkle/violeta) + `--gradient-memory` (`#434A82→#8165A3`) |
-| Motion tokens | `--duration-base` (250ms), `--duration-screen` (350ms), `--ease-out-soft` | `--duration-base` **250ms → 200ms** + nuevos `--duration-instant/fast/slow` + springs (§8.1) |
-| Tipografía | escala fija + clamp en hero/title | escala fluida completa (§4.2) + `text-display` |
-| Grano | — | `--texture-grain` / `.bg-grain` (§3.6) |
-| Sistema gráfico | — | componentes SVG `MemoryField` / patrón (§2) |
-| Iconografía | ad-hoc / emojis | set propio `Icon` (§9) |
-| Dark mode | "discreto" (afterthought) | co-protagonista, elevación por luz (§7) |
+| Layering de superficies | marfil body + marfil cards | ivory canvas + white cards (light-only) |
+| Dark mode | co-protagonista | **eliminado** (light-only declarado en `globals.css`) |
+| CTA primario | `--gradient-blue-base` | `--color-blue-flat` + hover/active |
+| Titulares | `--color-ink` | `--color-ink-deep` para hero/title editorial |
+| Subtítulos | `--color-ink-muted` | `--color-ink-soft` |
+| Sistema gráfico | `MemoryField` + `GrainOverlay` + diamante ambiental | **deprecado** (PR #148); reemplazado por `BrandWaves` |
+| Grano | `--texture-grain` / `.bg-grain` | **no implementado** [sobrio] |
+| Rampa de memoria | `--color-memory-*` (4 tokens) + `--gradient-memory` | **no implementada**; `--gradient-violet` legacy + `--color-violet-glow` |
+| Tipografía | `text-display` (clamp 2.6 → 3.5rem) | **no implementada**; tope en `text-hero` / `text-title` |
+| Motion | 5 duraciones + springs | 2 duraciones (`base` 250ms + `screen` 350ms) |
 
-> Nota: el ámbar y el jade (`--gradient-amber`, `--gradient-jade`) se **conservan**
-> como tints de modo (§3.5), pendientes de revalidación con marca.
->
-> Nota: por el renumerado de secciones, al migrar actualizar la referencia de
-> `apps/web/src/styles/motion.css` (`§7` → **`§8`**).
+> Migraciones canceladas a propósito: rampa de memoria, grano, `text-display`,
+> dark mode. No son deuda — son decisiones del lenguaje sobrio, documentadas
+> en los PRs de la serie. Si un consumidor futuro pide alguna, suma su token
+> en su PR.
+
+### Histórico de PRs
+
+- **PR #97** — bump v0 → v1: tokens base.
+- **PR #139** — onboarding sobrio (auth/name/mood/modes/a11y + outro).
+- **PR #140** — hoy sobrio (header + secciones + cards).
+- **PR #141** — chat sobrio (composer + empty state).
+- **PR #147** — memoria + buscar sobrios.
+- **PR #148** — deprecación de `MemoryField` + `GrainOverlay` (cierre de F0.3).
+- **Este PR** — bump del DESIGN.md a v3 (cierre editorial de la serie).
 
 ---
 
