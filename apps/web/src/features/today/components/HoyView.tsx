@@ -7,6 +7,7 @@ import { Toast } from "@/components/ui/Toast";
 import { useUserStore } from "@/stores/user";
 import { HoyHeader } from "./HoyHeader";
 import { PrioritiesSection } from "./PrioritiesSection";
+import { SuggestionsSection } from "./SuggestionsSection";
 
 /** Modo activo de Hoy: el primer modo de interés válido, o productividad. */
 function useActiveMode(): ModeId {
@@ -58,6 +59,7 @@ export function HoyView() {
       <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-8 px-6 pb-8 pt-10">
         <HoyHeader displayName={displayName} activeMode={activeMode} now={now} />
         <PrioritiesSection />
+        <SuggestionsSection />
 
         <Toast
           message="Listo, ya podés arrancar."
