@@ -15,7 +15,7 @@ export function ChatHeader({ mode }: { mode: ModeId }) {
     <header className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-3">
       <button
         type="button"
-        onClick={() => router.push("/home")}
+        onClick={() => router.push("/hoy")}
         aria-label="Volver al inicio"
         className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] text-[var(--color-ink-soft)] hover:bg-[var(--color-bg-soft)] hover:text-[var(--color-ink)]"
       >

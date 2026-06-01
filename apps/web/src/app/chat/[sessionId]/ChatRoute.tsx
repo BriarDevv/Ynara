@@ -10,7 +10,7 @@ import { useUserStore } from "@/stores/user";
  * Dispatcher cliente de la pantalla de conversación, con los guards del plan
  * §5.2:
  *  - si el usuario no completó onboarding → redirect a `/onboarding`.
- *  - si el `sessionId` de la URL no existe en el store → redirect a `/home`
+ *  - si el `sessionId` de la URL no existe en el store → redirect a `/hoy`
  *    (el toast "Conversación no encontrada" lo levanta la home con el query
  *    param `?notfound=chat`; W5 lo consume, hoy queda inerte).
  *
@@ -29,7 +29,7 @@ export function ChatRoute({ sessionId }: { sessionId: string }) {
       return;
     }
     if (!sessionExists) {
-      router.replace("/home?notfound=chat");
+      router.replace("/hoy?notfound=chat");
       return;
     }
     setChecked(true);

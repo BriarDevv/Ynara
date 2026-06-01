@@ -7,7 +7,7 @@ import { useUserStore } from "@/stores/user";
 /**
  * Guard de entrada: redirige según onboarding completion.
  *
- * - Onboarding completado → /home.
+ * - Onboarding completado → /hoy.
  * - Onboarding pendiente → /onboarding (que redirige a /onboarding/auth).
  */
 export default function RootPage() {
@@ -15,7 +15,7 @@ export default function RootPage() {
   const completed = useUserStore((s) => s.onboardingCompleted);
 
   useEffect(() => {
-    router.replace(completed ? "/home" : "/onboarding");
+    router.replace(completed ? "/hoy" : "/onboarding");
   }, [completed, router]);
 
   return (
