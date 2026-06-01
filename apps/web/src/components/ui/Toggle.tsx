@@ -29,7 +29,8 @@ export function Toggle({ label, hint, checked, onChange, disabled = false, class
         onClick={() => onChange(!checked)}
         className={cn(
           "relative h-7 w-12 shrink-0 rounded-[var(--radius-pill)] transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)] disabled:cursor-not-allowed disabled:opacity-50",
-          checked ? "bg-gradient-blue-base" : "bg-[var(--color-border-strong)]",
+          /* Azul plano de marca: coherente con Button primary y ProgressDots. */
+          checked ? "bg-[var(--color-blue-flat)]" : "bg-[var(--color-border-strong)]",
         )}
       >
         <span
