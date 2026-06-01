@@ -32,7 +32,10 @@ export function ChatInputDocked({ value }: Props) {
         >
           Próximamente
         </div>
-        <div className="flex items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-bg)] p-1.5 shadow-soft">
+        {/* Microinteracción de "promesa": lift sutil en hover/focus del grupo
+            (borde + sombra, sin scale por ser full-width), §8.2. No habilita
+            nada — el input sigue deshabilitado hasta W5. */}
+        <div className="flex items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-bg)] p-1.5 shadow-soft transition-[border-color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] group-focus-within:border-[var(--color-border-strong)] group-focus-within:shadow-lifted group-hover:border-[var(--color-border-strong)] group-hover:shadow-lifted">
           <button
             type="button"
             aria-disabled="true"
@@ -49,7 +52,7 @@ export function ChatInputDocked({ value }: Props) {
           </button>
           <span
             aria-hidden
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-gradient-blue-base text-[var(--color-on-dark)] opacity-50"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-gradient-blue-base text-[var(--color-on-dark)] opacity-50 transition-opacity duration-[var(--duration-fast)] group-hover:opacity-70"
           >
             <Icon name="enviar" size={18} />
           </span>
