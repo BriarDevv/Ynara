@@ -140,6 +140,20 @@ export function buildMemoryList(now: Date): MemoryList {
  * Espeja el aislamiento del backend de forma simplificada (el mock siempre
  * sirve el mismo dataset; el JWT real filtra por usuario).
  */
+const VALID_LAYERS = new Set(["semantic", "episodic", "procedural"]);
+
+/** Busca un ítem por capa + referencia (UUID en sem/epi, `key` en procedural). */
+function findMemoryItem(layer: string, ref: string, now: Date) {
+  const list = buildMemoryList(now);
+  if (layer === "semantic") return list.semantic.items.find((i) => i.id === ref);
+  if (layer === "episodic") return list.episodic.items.find((i) => i.id === ref);
+  if (layer === "procedural") return list.procedural.items.find((i) => i.key === ref);
+  return undefined;
+}
+
+const memoryNotFound = () =>
+  HttpResponse.json({ detail: "memoria no encontrada" }, { status: 404 });
+
 export const memoryHandlers = [
   http.get(apiUrl("/v1/memory"), ({ request }) => {
     const url = new URL(request.url);
@@ -155,5 +169,20 @@ export const memoryHandlers = [
       { error: "validation", detail: "layer inválida", field: "layer" },
       { status: 422 },
     );
+  }),
+
+  // `GET /v1/memory/{layer}/{ref}` — detalle de un ítem. 422 capa inválida,
+  // 404 ref inexistente (mismo 404 que una ajena: sin oráculo de existencia).
+  http.get(apiUrl("/v1/memory/:layer/:ref"), ({ params }) => {
+    const layer = String(params.layer);
+    const ref = decodeURIComponent(String(params.ref));
+    if (!VALID_LAYERS.has(layer)) {
+      return HttpResponse.json(
+        { error: "validation", detail: "layer inválida", field: "layer" },
+        { status: 422 },
+      );
+    }
+    const item = findMemoryItem(layer, ref, new Date());
+    return item ? HttpResponse.json(item) : memoryNotFound();
   }),
 ];
