@@ -1,3 +1,4 @@
+import { useUserStore } from "@/stores/user";
 import { env } from "./env";
 
 export class ApiError extends Error {
@@ -12,23 +13,16 @@ export class ApiError extends Error {
   }
 }
 
-/*
- * TODO(@BriarDevv) — Sesión 3 AuthStep: inyectar Authorization: Bearer
- * <token> automáticamente cuando el usuario esté autenticado.
- *
- * Patrón propuesto:
- *   - El token vive en useUserStore (campo `token: string | null`),
- *     ya agregado.
- *   - `request()` lee `useUserStore.getState().token` y si existe lo
- *     adjunta como header `Authorization`.
- *   - Para no acoplar este módulo al store, alternativa: aceptar
- *     `init.auth?: { token: string } | "skip"` y dejar que los callers
- *     decidan. Decidir junto al contrato de auth con backend.
- */
-
 type FetchInit = Omit<RequestInit, "body"> & {
   /** El body se serializa a JSON automáticamente. */
   body?: unknown;
+  /**
+   * Por default todo request adjunta `Authorization: Bearer <token>` si hay
+   * sesión. Los endpoints públicos (login/register) pueden pasar `skipAuth`
+   * para no mandarlo (igual sería no-op sin token, pero deja la intención
+   * explícita).
+   */
+  skipAuth?: boolean;
 };
 
 async function request<T>(path: string, init: FetchInit = {}): Promise<T> {
@@ -39,6 +33,13 @@ async function request<T>(path: string, init: FetchInit = {}): Promise<T> {
   }
   if (!headers.has("Accept")) {
     headers.set("Accept", "application/json");
+  }
+  // Inyección de auth: leemos el token del store (SSR-safe: en server el
+  // store no hidrató y `token` es null → sin header). No acoplamos los
+  // callers al store; el header se arma acá una sola vez.
+  if (!init.skipAuth && !headers.has("Authorization")) {
+    const token = useUserStore.getState().token;
+    if (token) headers.set("Authorization", `Bearer ${token}`);
   }
 
   const response = await fetch(url, {
