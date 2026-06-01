@@ -7,7 +7,9 @@ import {
   MemoryListSchema,
   memoryOutSchemaFor,
   type ProceduralMemoryPatch,
+  ProceduralMemoryPatchSchema,
   type SemanticMemoryPatch,
+  SemanticMemoryPatchSchema,
 } from "@ynara/shared-schemas";
 import { api } from "@/lib/api";
 import { qk } from "@/lib/queryKeys";
@@ -94,7 +96,13 @@ export function usePatchMemory(layer: MemoryLayer, ref: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (patch: MemoryPatch): Promise<MemoryItemOut> => {
-      const raw = await api.patch<unknown>(`/v1/memory/${layer}/${encodeURIComponent(ref)}`, patch);
+      // Validar el body con el schema de la capa antes de salir: el cliente
+      // rechaza lo mismo que el backend (content vacío/>4096, value no-objeto).
+      const body =
+        layer === "semantic"
+          ? SemanticMemoryPatchSchema.parse(patch)
+          : ProceduralMemoryPatchSchema.parse(patch);
+      const raw = await api.patch<unknown>(`/v1/memory/${layer}/${encodeURIComponent(ref)}`, body);
       return memoryOutSchemaFor(layer).parse(raw);
     },
     onSuccess: (updated) => {

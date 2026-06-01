@@ -38,7 +38,7 @@ export function MemoryDetailActions({ layer, item }: Props) {
 
   const saveEdit = () => {
     patch.mutate(
-      { content: draft },
+      { content: draft.trim() },
       {
         onSuccess: () => setEditOpen(false),
       },
