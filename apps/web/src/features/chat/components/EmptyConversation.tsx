@@ -7,8 +7,10 @@ import { MODE_INTRO } from "../constants";
  */
 export function EmptyConversation({ mode }: { mode: ModeId }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-      <p className="text-subtitle text-[var(--color-ink)]">Arranquemos.</p>
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+      {/* text-title + ink-deep para alinear con el title de los steps del
+          onboarding y el "Hoy" del dashboard — presencia editorial coherente. */}
+      <h2 className="text-title text-[var(--color-ink-deep)]">Arranquemos.</h2>
       <p className="max-w-[420px] text-body text-[var(--color-ink-soft)]">{MODE_INTRO[mode]}</p>
     </div>
   );
