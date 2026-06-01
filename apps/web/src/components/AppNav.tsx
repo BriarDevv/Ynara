@@ -8,31 +8,24 @@ import { cn } from "@/lib/cn";
 import { isNavItemActive, NAV_ITEMS } from "./nav-items";
 
 /**
- * Navegación principal del app shell, responsive (DESIGN.md §12, build-plan
- * §3.1):
- *  - mobile (`<lg`): bottom-tab bar fija, respetando `safe-area-inset-bottom`.
- *  - desktop (`lg+`): sidebar a la izquierda, estilo Claude/ChatGPT.
+ * Navegación principal del app shell, en dos chrome por breakpoint
+ * (DESIGN.md §12, build-plan §3.1):
+ *  - `MobileTabBar` (`<lg`): bottom-tab bar, hermano en flujo del `<main>`
+ *    del shell (no fixed) — se ancla abajo en la columna de altura fija sin
+ *    tapar el contenido (importa para el composer del chat).
+ *  - `SidebarNav` (`lg+`): sidebar a la izquierda, estilo Claude/ChatGPT.
  *
- * Se renderizan los dos `<nav>` y se muestra uno por breakpoint con
- * `display:none` (`hidden` / `lg:hidden`): el oculto sale del árbol de
- * accesibilidad, así no hay landmark "Navegación principal" duplicado.
+ * Se monta uno por breakpoint con `display:none` (`hidden` / `lg:hidden`):
+ * el oculto sale del árbol de accesibilidad, así no hay landmark
+ * "Navegación principal" duplicado.
  */
-export function AppNav() {
+
+export function MobileTabBar() {
   const pathname = usePathname();
-
-  return (
-    <>
-      <BottomTabs pathname={pathname} />
-      <Sidebar pathname={pathname} />
-    </>
-  );
-}
-
-function BottomTabs({ pathname }: { pathname: string }) {
   return (
     <nav
       aria-label="Navegación principal"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--color-border)] bg-[var(--color-bg)]/85 backdrop-blur-md lg:hidden"
+      className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-bg)]/85 backdrop-blur-md lg:hidden"
     >
       <ul className="mx-auto flex max-w-[640px] items-stretch justify-around px-2 pb-[env(safe-area-inset-bottom)]">
         {NAV_ITEMS.map((item) => {
@@ -60,11 +53,12 @@ function BottomTabs({ pathname }: { pathname: string }) {
   );
 }
 
-function Sidebar({ pathname }: { pathname: string }) {
+export function SidebarNav() {
+  const pathname = usePathname();
   return (
     <nav
       aria-label="Navegación principal"
-      className="sticky top-0 hidden h-[100dvh] w-[240px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-6 lg:flex"
+      className="hidden h-full w-[240px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-6 lg:flex"
     >
       <Link href="/hoy" aria-label="Ynara — ir a Hoy" className="mb-6 flex items-center gap-2 px-2">
         <YnaraMark size={32} />
