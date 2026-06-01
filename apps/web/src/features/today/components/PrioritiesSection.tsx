@@ -41,8 +41,9 @@ export function PrioritiesSection() {
         />
       ) : data.length === 0 ? (
         <EmptyStateCard
-          title="Nada urgente por ahora"
-          hint="Cuando agendes algo con Ynara, va a aparecer acá."
+          field
+          title="Sin urgentes esta hora"
+          hint="Aprovechá el tiempo libre, o pedile algo a Ynara."
         />
       ) : (
         <ul className="flex flex-col gap-3">
