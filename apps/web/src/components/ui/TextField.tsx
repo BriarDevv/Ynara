@@ -21,9 +21,17 @@ export const TextField = forwardRef<HTMLInputElement, Props>(function TextField(
   const invalid = Boolean(error);
 
   return (
-    <div className={cn("flex w-full flex-col gap-2", className)}>
+    <div className={cn("flex w-full flex-col gap-1.5", className)}>
       {label ? (
-        <label htmlFor={fieldId} className="text-caption text-[var(--color-ink-muted)]">
+        /*
+         * Label en text-caption + ink-soft (no muted): más presencia que
+         * el muted anterior; sigue jerárquicamente por debajo del input
+         * pero ya no se "pierde" sobre canvas ivory.
+         */
+        <label
+          htmlFor={fieldId}
+          className="text-caption text-[var(--color-ink-soft)]"
+        >
           {label}
         </label>
       ) : null}
@@ -32,12 +40,17 @@ export const TextField = forwardRef<HTMLInputElement, Props>(function TextField(
         id={fieldId}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
+        /*
+         * - py-3.5: ~52px alto efectivo; sensación premium sin pasar al
+         *   "form gigante" mobile.
+         * - border default → border-strong en hover; el focus-visible
+         *   global aplica el ring de accent encima, no duplicamos foco.
+         */
         className={cn(
-          "text-body w-full rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-4 py-3 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] transition-[border-color,box-shadow] duration-[var(--duration-fast)] ease-[var(--ease-out-soft)]",
-          // El borde toma la identidad al foco (complementa el anillo global de :focus-visible, §12).
+          "text-body w-full rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-4 py-3.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] transition-[border-color,background-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
           invalid
             ? "border-[var(--color-error)]"
-            : "border-[var(--color-border)] hover:border-[var(--color-border-strong)] focus:border-[var(--color-accent)]",
+            : "border-[var(--color-border)] hover:border-[var(--color-border-strong)]",
         )}
         {...rest}
       />
@@ -46,7 +59,7 @@ export const TextField = forwardRef<HTMLInputElement, Props>(function TextField(
           {error}
         </p>
       ) : hint ? (
-        <p id={hintId} className="text-body-sm text-[var(--color-ink-muted)]">
+        <p id={hintId} className="text-body-sm text-[var(--color-ink-soft)]">
           {hint}
         </p>
       ) : null}
