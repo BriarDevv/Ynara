@@ -217,6 +217,95 @@ async def test_complete_connect_error_mapped() -> None:
         await client.complete(model=_MODEL, messages=_messages())
 
 
+# ---------- regla #4: el str(exc) de httpx no debe filtrar URL/host (S2) ----------
+
+# httpx mete el host/URL real en el mensaje de sus excepciones (p.ej.
+# "All connection attempts failed for http://vllm-test:8001"). Si eso viajara
+# como ``detail`` de la excepcion LlmError, ``str(...)`` filtraria la base_url
+# del modelo (regla #4). Estos tests fuerzan ese mensaje sensible y verifican
+# que la etiqueta resultante es FIJA y que el httpx original solo viaja en
+# ``__cause__`` (encadenamiento ``raise ... from exc``).
+_LEAKY_HOST = "vllm-test:8001"
+
+
+@pytest.mark.asyncio
+async def test_complete_timeout_does_not_leak_host() -> None:
+    leaky = f"timed out connecting to {_BASE_URL}"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException(leaky, request=request)
+
+    client = _client(handler)
+    with pytest.raises(LlmTimeoutError) as excinfo:
+        await client.complete(model=_MODEL, messages=_messages())
+
+    rendered = str(excinfo.value)
+    assert _LEAKY_HOST not in rendered
+    assert _BASE_URL not in rendered
+    assert rendered == "timeout de inferencia LLM: timeout HTTP"
+    assert isinstance(excinfo.value.__cause__, httpx.TimeoutException)
+    assert str(excinfo.value.__cause__) == leaky
+
+
+@pytest.mark.asyncio
+async def test_complete_connect_error_does_not_leak_host() -> None:
+    leaky = f"All connection attempts failed for {_BASE_URL}"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(leaky, request=request)
+
+    client = _client(handler)
+    with pytest.raises(LlmUnavailableError) as excinfo:
+        await client.complete(model=_MODEL, messages=_messages())
+
+    rendered = str(excinfo.value)
+    assert _LEAKY_HOST not in rendered
+    assert _BASE_URL not in rendered
+    assert rendered == "instancia LLM no disponible: connect error"
+    assert isinstance(excinfo.value.__cause__, httpx.ConnectError)
+    assert str(excinfo.value.__cause__) == leaky
+
+
+@pytest.mark.asyncio
+async def test_stream_timeout_does_not_leak_host() -> None:
+    leaky = f"timed out connecting to {_BASE_URL}"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException(leaky, request=request)
+
+    client = _client(handler)
+    with pytest.raises(LlmTimeoutError) as excinfo:
+        async for _ in client.stream(model=_MODEL, messages=_messages()):
+            pass
+
+    rendered = str(excinfo.value)
+    assert _LEAKY_HOST not in rendered
+    assert _BASE_URL not in rendered
+    assert rendered == "timeout de inferencia LLM: timeout HTTP"
+    assert isinstance(excinfo.value.__cause__, httpx.TimeoutException)
+    assert str(excinfo.value.__cause__) == leaky
+
+
+@pytest.mark.asyncio
+async def test_stream_connect_error_does_not_leak_host() -> None:
+    leaky = f"All connection attempts failed for {_BASE_URL}"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(leaky, request=request)
+
+    client = _client(handler)
+    with pytest.raises(LlmUnavailableError) as excinfo:
+        async for _ in client.stream(model=_MODEL, messages=_messages()):
+            pass
+
+    rendered = str(excinfo.value)
+    assert _LEAKY_HOST not in rendered
+    assert _BASE_URL not in rendered
+    assert rendered == "instancia LLM no disponible: connect error"
+    assert isinstance(excinfo.value.__cause__, httpx.ConnectError)
+    assert str(excinfo.value.__cause__) == leaky
+
+
 # ---------- streaming ----------
 
 
