@@ -34,9 +34,10 @@ from sqlalchemy.pool import NullPool
 
 from app.core.config import Settings, get_settings
 from app.llm.clients.base import LLMClient
-from app.llm.clients.embedding import EmbeddingClient, FakeEmbeddingClient
-from app.llm.clients.fakes import FakeLlmClient
-from app.llm.clients.reranker import FakeReranker, Reranker
+from app.llm.clients.embedding import EmbeddingClient
+from app.llm.clients.factory import build_embedder, build_llm_client, build_reranker
+from app.llm.clients.reranker import Reranker
+from app.llm.config import load_llm_config
 from app.llm.memory_engine import QwenMemoryEngine, apply_ops
 from app.memory.procedural import ProceduralMemoryStore
 from app.memory.semantic import SemanticMemoryStore
@@ -58,48 +59,35 @@ def _normalize_db_url(url: str) -> str:
 
 
 def _build_embedder(settings: Settings) -> EmbeddingClient:
-    """Construye el cliente de embeddings segun ``embedding_backend``.
+    """Construye el cliente de embeddings para la consolidacion.
 
-    En M8 el backend operativo puede ser 'fake' (sin GPU). El branch 'vllm'
-    queda con un TODO para cuando el servidor de bge-m3 este disponible.
+    Delega en la factory (``build_embedder``): ``embedding_backend='fake'``
+    (default sin GPU) -> ``FakeEmbeddingClient``; ``'vllm'`` -> cliente real
+    (aun no implementado, falla fuerte). El gate vive en un solo lugar.
     """
-    if settings.embedding_backend == "vllm":
-        # TODO (Ola 3+): instanciar VllmEmbeddingClient(base_url=settings.embedding_base_url)
-        # cuando el servidor de embeddings este disponible (ADR-009).
-        # Por ahora caemos al fake tambien en este branch.
-        return FakeEmbeddingClient()
-    # 'fake' (default operativo en M8)
-    return FakeEmbeddingClient()
+    return build_embedder(settings)
 
 
-def _build_consolidation_llm(settings: Settings) -> FakeLlmClient:
+def _build_consolidation_llm(settings: Settings) -> LLMClient:
     """Construye el cliente LLM para consolidacion (Qwen).
 
-    En M8 Ola 2 el cliente real (VllmClient contra el endpoint de Qwen) no
-    esta conectado aqui: la task de consolidacion usa el mismo FakeLlmClient
-    que el test (para M8). El cliente real se conecta cuando el endpoint de
-    consolidacion se exponga en Ola 3+ (ADR-009 D4).
-
-    TODO (Ola 3+): instanciar VllmClient(base_url=settings.llm_secondary_base_url)
-    o reusar el ResilientClient del pool cuando el pool sea inyectable en el
-    worker Celery.
+    Delega en la factory (``build_llm_client``): en dev/test devuelve el
+    ``FakeLlmClient`` (sin resultados encolados -> el ``QwenMemoryEngine``
+    aplica 0 ops y commitea sin efectos, comportamiento historico de M8); en
+    production devuelve el ``ResilientClient`` real contra el pool de vLLM.
+    El served set sale de ``ynara.config.json`` (incluye 'qwen', el modelo de
+    consolidacion).
     """
-    # Served models vacio: en prod este LLM lo provee el caller via inyeccion
-    # (tests) o el pool real (futuro). Para el worker Celery real en M8 el
-    # QwenMemoryEngine con un FakeLlmClient devolvera [] (sin resultados
-    # encolados), lo que es el comportamiento correcto: la task aplica 0 ops
-    # y commitea sin efectos secundarios.
-    return FakeLlmClient(served_models=frozenset({"qwen"}))
+    return build_llm_client(settings, load_llm_config())
 
 
-def _build_reranker() -> Reranker:
-    """Construye el reranker para consolidacion.
+def _build_reranker(settings: Settings) -> Reranker:
+    """Construye el reranker para la consolidacion.
 
-    FakeReranker passthrough en M8. El reranker real (cross-encoder) se
-    conecta en un milestone separado gateado por disponibilidad de GPU.
-    TODO (Ola 3+): instanciar VllmRerankerClient cuando este disponible.
+    Delega en la factory (``build_reranker``): ``FakeReranker`` passthrough hoy;
+    el reranker real (cross-encoder) se gatea en la factory cuando exista.
     """
-    return FakeReranker()
+    return build_reranker(settings)
 
 
 def _parse_source_session_id(session_id: str) -> UUID | None:
@@ -166,7 +154,7 @@ async def _async_consolidate(
     # --- Dependencias inyectadas o construidas ---
     effective_llm = llm_client or _build_consolidation_llm(cfg)
     effective_embedder = embedder or _build_embedder(cfg)
-    effective_reranker = reranker or _build_reranker()
+    effective_reranker = reranker or _build_reranker(cfg)
 
     uid = UUID(user_id)
     # Parse defensivo del session_id: UUID valido -> FK; basura -> None (sin crash).
