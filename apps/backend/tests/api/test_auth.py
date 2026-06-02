@@ -570,14 +570,10 @@ async def _register_and_login(
     client: httpx.AsyncClient, *, email: str, password: str
 ) -> tuple[str, str, str]:
     """Helper: register + token. Devuelve (user_id, access_token, refresh_token)."""
-    reg = await client.post(
-        "/v1/auth/register", json={"email": email, "password": password}
-    )
+    reg = await client.post("/v1/auth/register", json={"email": email, "password": password})
     assert reg.status_code == 201
     user_id = reg.json()["id"]
-    tok = await client.post(
-        "/v1/auth/token", json={"email": email, "password": password}
-    )
+    tok = await client.post("/v1/auth/token", json={"email": email, "password": password})
     assert tok.status_code == 200
     body = tok.json()
     return user_id, body["access_token"], body["refresh_token"]
@@ -619,12 +615,8 @@ async def test_access_token_sigue_autenticando_me(db_session: AsyncSession) -> N
     client = await _client(db_session)
     try:
         async with client:
-            _, access, _ = await _register_and_login(
-                client, email=email, password="supersecreta1"
-            )
-            me = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
-            )
+            _, access, _ = await _register_and_login(client, email=email, password="supersecreta1")
+            me = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
         assert me.status_code == 200
         assert me.json()["email"] == email
     finally:
@@ -643,21 +635,15 @@ async def test_refresh_ok_emite_nuevos_tokens(db_session: AsyncSession) -> None:
     client = await _client(db_session)
     try:
         async with client:
-            _, _, refresh = await _register_and_login(
-                client, email=email, password="supersecreta1"
-            )
-            resp = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": refresh}
-            )
+            _, _, refresh = await _register_and_login(client, email=email, password="supersecreta1")
+            resp = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
             assert resp.status_code == 200
             body = resp.json()
             new_access = body["access_token"]
             new_refresh = body["refresh_token"]
             assert new_access and new_refresh
             assert new_refresh != refresh  # rotó
-            me = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {new_access}"}
-            )
+            me = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {new_access}"})
         assert me.status_code == 200
     finally:
         app.dependency_overrides.clear()
@@ -690,20 +676,14 @@ async def test_refresh_reuse_inmediato_es_retry_safe(db_session: AsyncSession) -
             _, access, refresh = await _register_and_login(
                 client, email=email, password="supersecreta1"
             )
-            first = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": refresh}
-            )
+            first = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
             assert first.status_code == 200
             # Reuse inmediato (dentro del grace): retry benigno -> 200 re-minteado.
-            retry = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": refresh}
-            )
+            retry = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
             assert retry.status_code == 200
             assert retry.json()["access_token"]
             # La familia NO fue revocada: el access ORIGINAL del login sigue vivo.
-            me = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
-            )
+            me = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
         assert me.status_code == 200
     finally:
         app.dependency_overrides.clear()
@@ -725,9 +705,7 @@ async def test_refresh_retry_converge_en_el_sucesor(db_session: AsyncSession) ->
     client = await _client(db_session, store=store)
     try:
         async with client:
-            _, _, refresh = await _register_and_login(
-                client, email=email, password="supersecreta1"
-            )
+            _, _, refresh = await _register_and_login(client, email=email, password="supersecreta1")
             first = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
             assert first.status_code == 200
             j1 = verify_token(first.json()["refresh_token"], expected_type="refresh")["jti"]
@@ -759,20 +737,14 @@ async def test_refresh_reuse_fuera_del_grace_revoca_familia(
             _, access, refresh = await _register_and_login(
                 client, email=email, password="supersecreta1"
             )
-            first = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": refresh}
-            )
+            first = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
             assert first.status_code == 200
             # Pasar el grace (default 30s): el grace marker expira.
             store.advance(31)
-            reuse = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": refresh}
-            )
+            reuse = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
             assert reuse.status_code == 401
             # La familia quedó revocada: el access ORIGINAL hermano da 401.
-            me = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
-            )
+            me = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
         assert me.status_code == 401
     finally:
         app.dependency_overrides.clear()
@@ -790,12 +762,8 @@ async def test_refresh_con_access_token_401(db_session: AsyncSession) -> None:
     client = await _client(db_session)
     try:
         async with client:
-            _, access, _ = await _register_and_login(
-                client, email=email, password="supersecreta1"
-            )
-            resp = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": access}
-            )
+            _, access, _ = await _register_and_login(client, email=email, password="supersecreta1")
+            resp = await client.post("/v1/auth/refresh", json={"refresh_token": access})
         assert resp.status_code == 401
     finally:
         app.dependency_overrides.clear()
@@ -813,9 +781,7 @@ async def test_refresh_token_basura_401_sin_leak(db_session: AsyncSession) -> No
     try:
         async with client:
             garbage = "no-es-un-jwt-valido-12345"
-            resp = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": garbage}
-            )
+            resp = await client.post("/v1/auth/refresh", json={"refresh_token": garbage})
         assert resp.status_code == 401
         # Regla #4: ni el token crudo ni el detalle de jose en la respuesta.
         assert garbage not in resp.text
@@ -837,13 +803,9 @@ async def test_logout_blocklistea_access(db_session: AsyncSession) -> None:
     client = await _client(db_session, store=store)
     try:
         async with client:
-            _, access, _ = await _register_and_login(
-                client, email=email, password="supersecreta1"
-            )
+            _, access, _ = await _register_and_login(client, email=email, password="supersecreta1")
             # Antes del logout, el access vale.
-            before = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
-            )
+            before = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
             assert before.status_code == 200
             out = await client.post(
                 "/v1/auth/logout",
@@ -852,9 +814,7 @@ async def test_logout_blocklistea_access(db_session: AsyncSession) -> None:
             )
             assert out.status_code == 204
             # Tras el logout, el access quedó blocklisteado -> 401.
-            after = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
-            )
+            after = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
         assert after.status_code == 401
     finally:
         app.dependency_overrides.clear()
@@ -881,9 +841,7 @@ async def test_logout_con_refresh_lo_revoca(db_session: AsyncSession) -> None:
                 headers={"Authorization": f"Bearer {access}"},
             )
             assert out.status_code == 204
-            resp = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": refresh}
-            )
+            resp = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
         assert resp.status_code == 401
     finally:
         app.dependency_overrides.clear()
@@ -901,9 +859,7 @@ async def test_logout_con_refresh_invalido_204(db_session: AsyncSession) -> None
     client = await _client(db_session)
     try:
         async with client:
-            _, access, _ = await _register_and_login(
-                client, email=email, password="supersecreta1"
-            )
+            _, access, _ = await _register_and_login(client, email=email, password="supersecreta1")
             out = await client.post(
                 "/v1/auth/logout",
                 json={"refresh_token": "basura-no-jwt"},
@@ -976,9 +932,7 @@ async def test_rate_limit_anti_enum_429_identico(
         assert r_nonexist.status_code == 429
         # Byte-idéntico: status + body + Retry-After.
         assert r_existing.json() == r_nonexist.json()
-        assert r_existing.headers.get("Retry-After") == r_nonexist.headers.get(
-            "Retry-After"
-        )
+        assert r_existing.headers.get("Retry-After") == r_nonexist.headers.get("Retry-After")
     finally:
         app.dependency_overrides.clear()
         await _delete_user_by_email(db_session, existing)
@@ -1018,9 +972,7 @@ async def test_login_ok_resetea_contador(
                 )
                 assert bad.status_code == 401
             # Login OK: resetea el contador.
-            ok = await client.post(
-                "/v1/auth/token", json={"email": email, "password": password}
-            )
+            ok = await client.post("/v1/auth/token", json={"email": email, "password": password})
             assert ok.status_code == 200
             # Otros 2 fallos: como el contador se reseteó, sigue sin lockear.
             for _ in range(2):
@@ -1073,12 +1025,8 @@ async def test_fail_open_blocklist(db_session: AsyncSession) -> None:
     client = await _client(db_session, store=store)
     try:
         async with client:
-            _, access, _ = await _register_and_login(
-                client, email=email, password="supersecreta1"
-            )
-            me = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
-            )
+            _, access, _ = await _register_and_login(client, email=email, password="supersecreta1")
+            me = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
         # fail-open: Redis caído no convierte un token válido en 401/500.
         assert me.status_code == 200
     finally:
@@ -1129,9 +1077,7 @@ async def test_fail_open_rate_limit(db_session: AsyncSession) -> None:
 
         client = await _client(db_session, store=store)
         async with client:
-            tok = await client.post(
-                "/v1/auth/token", json={"email": email, "password": password}
-            )
+            tok = await client.post("/v1/auth/token", json={"email": email, "password": password})
         # fail-open: Redis caído no bloquea el login con credenciales válidas.
         assert tok.status_code == 200
         assert tok.json()["access_token"]
@@ -1173,9 +1119,7 @@ async def test_token_viejo_sin_jti_me_200(db_session: AsyncSession) -> None:
                 settings.jwt_secret,
                 algorithm=settings.jwt_algorithm,
             )
-            me = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {legacy}"}
-            )
+            me = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {legacy}"})
         assert me.status_code == 200
     finally:
         app.dependency_overrides.clear()
@@ -1233,17 +1177,13 @@ async def test_no_leak_tokens_en_errores(db_session: AsyncSession) -> None:
     try:
         async with client:
             # 401 de /refresh con un token que lleva el marker (firma mala).
-            r401 = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": leak}
-            )
+            r401 = await client.post("/v1/auth/refresh", json={"refresh_token": leak})
             assert r401.status_code == 401
             assert leak not in r401.text
             # 422 sobre el PROPIO campo refresh_token (tipo inválido: lista con el
             # marker dentro). El scrub de _SENSITIVE_VALIDATION_FIELDS debe ocultar
             # el eco del input del campo refresh_token (regla #4).
-            r422 = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": [leak]}
-            )
+            r422 = await client.post("/v1/auth/refresh", json={"refresh_token": [leak]})
             assert r422.status_code == 422
             assert leak not in r422.text
     finally:
@@ -1328,9 +1268,7 @@ async def test_retry_after_login_usa_lockout(
         await _delete_user_by_email(db_session, email)
 
 
-def _ratelimit_settings(
-    *, max_attempts: int = 5, register_max: int = 10
-):
+def _ratelimit_settings(*, max_attempts: int = 5, register_max: int = 10):
     """Settings determinista para los tests de rate-limit (thresholds chicos)."""
     from app.core.config import Settings
 
@@ -1408,13 +1346,9 @@ async def test_refresh_propaga_sid(db_session: AsyncSession) -> None:
     client = await _client(db_session)
     try:
         async with client:
-            _, _, refresh = await _register_and_login(
-                client, email=email, password="supersecreta1"
-            )
+            _, _, refresh = await _register_and_login(client, email=email, password="supersecreta1")
             original_sid = _refresh_sid(refresh)
-            resp = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": refresh}
-            )
+            resp = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
             assert resp.status_code == 200
             body = resp.json()
         assert original_sid is not None
@@ -1442,20 +1376,14 @@ async def test_access_hermano_muere_con_la_familia(db_session: AsyncSession) -> 
                 client, email=email, password="supersecreta1"
             )
             # Antes del breach el access vale.
-            before = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
-            )
+            before = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
             assert before.status_code == 200
             # Rotar, luego reusar fuera del grace -> revoca la familia.
             await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
             store.advance(31)
-            reuse = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": refresh}
-            )
+            reuse = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
             assert reuse.status_code == 401
-            after = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
-            )
+            after = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
         assert after.status_code == 401
     finally:
         app.dependency_overrides.clear()
@@ -1479,28 +1407,20 @@ async def test_sesiones_distinto_sid_no_se_afectan(db_session: AsyncSession) -> 
             )
             assert reg.status_code == 201
             # Sesión A.
-            tok_a = await client.post(
-                "/v1/auth/token", json={"email": email, "password": password}
-            )
+            tok_a = await client.post("/v1/auth/token", json={"email": email, "password": password})
             refresh_a = tok_a.json()["refresh_token"]
             # Sesión B (otro login -> otro sid).
-            tok_b = await client.post(
-                "/v1/auth/token", json={"email": email, "password": password}
-            )
+            tok_b = await client.post("/v1/auth/token", json={"email": email, "password": password})
             access_b = tok_b.json()["access_token"]
             # Las dos sesiones tienen distinto sid.
             assert _refresh_sid(refresh_a) != _access_sid(access_b)
             # Breach en A: rotar + reusar fuera del grace.
             await client.post("/v1/auth/refresh", json={"refresh_token": refresh_a})
             store.advance(31)
-            reuse_a = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": refresh_a}
-            )
+            reuse_a = await client.post("/v1/auth/refresh", json={"refresh_token": refresh_a})
             assert reuse_a.status_code == 401
             # El access de B sigue vivo (otra familia).
-            me_b = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {access_b}"}
-            )
+            me_b = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {access_b}"})
         assert me_b.status_code == 200
     finally:
         app.dependency_overrides.clear()
@@ -1529,14 +1449,10 @@ async def test_logout_mata_la_familia(db_session: AsyncSession) -> None:
             )
             assert out.status_code == 204
             # El access de la sesión murió.
-            me = await client.get(
-                "/v1/auth/me", headers={"Authorization": f"Bearer {access}"}
-            )
+            me = await client.get("/v1/auth/me", headers={"Authorization": f"Bearer {access}"})
             assert me.status_code == 401
             # El refresh de la MISMA familia también murió, aunque no fue al body.
-            ref = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": refresh}
-            )
+            ref = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
         assert ref.status_code == 401
     finally:
         app.dependency_overrides.clear()
@@ -1549,13 +1465,9 @@ async def test_refresh_compat_token_sin_sid(db_session: AsyncSession) -> None:
     client = await _client(db_session)
     try:
         async with client:
-            user_id, _, _ = await _register_and_login(
-                client, email=email, password="supersecreta1"
-            )
+            user_id, _, _ = await _register_and_login(client, email=email, password="supersecreta1")
             legacy_refresh = _mint_refresh_with_jti_no_sid(user_id)
-            resp = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": legacy_refresh}
-            )
+            resp = await client.post("/v1/auth/refresh", json={"refresh_token": legacy_refresh})
             assert resp.status_code == 200
             body = resp.json()
         # Rama 1: arranca una familia nueva (el nuevo par tiene un sid fresco).
@@ -1579,18 +1491,12 @@ async def test_refresh_reuse_token_sin_sid_401_sin_nukear(
     client = await _client(db_session, store=store)
     try:
         async with client:
-            user_id, _, _ = await _register_and_login(
-                client, email=email, password="supersecreta1"
-            )
+            user_id, _, _ = await _register_and_login(client, email=email, password="supersecreta1")
             legacy_refresh = _mint_refresh_with_jti_no_sid(user_id)
-            first = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": legacy_refresh}
-            )
+            first = await client.post("/v1/auth/refresh", json={"refresh_token": legacy_refresh})
             assert first.status_code == 200
             # Reusar el viejo sin sid: 401 (sin sid no entra a rama 2 ni nukea nada).
-            reuse = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": legacy_refresh}
-            )
+            reuse = await client.post("/v1/auth/refresh", json={"refresh_token": legacy_refresh})
         assert reuse.status_code == 401
     finally:
         app.dependency_overrides.clear()
@@ -1604,16 +1510,12 @@ async def test_no_leak_sid_en_errores(db_session: AsyncSession) -> None:
     client = await _client(db_session, store=store)
     try:
         async with client:
-            _, _, refresh = await _register_and_login(
-                client, email=email, password="supersecreta1"
-            )
+            _, _, refresh = await _register_and_login(client, email=email, password="supersecreta1")
             sid = _refresh_sid(refresh)
             # Forzar la rama 3 (breach): rotar + reusar fuera del grace.
             await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
             store.advance(31)
-            reuse = await client.post(
-                "/v1/auth/refresh", json={"refresh_token": refresh}
-            )
+            reuse = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
         assert reuse.status_code == 401
         assert sid is not None
         # El sid no se filtra en el cuerpo del 401.
