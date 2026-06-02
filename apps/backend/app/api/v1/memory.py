@@ -50,12 +50,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
 
+from app.core.config import get_settings
 from app.core.deps import (
     CurrentUser,
     DbSession,
+    TokenStoreDep,
     get_embedder,
     get_reranker,
 )
+from app.core.ratelimit import check_memory_export_rate_limit
 from app.enums import MemoryLayer
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
@@ -105,6 +108,19 @@ _WIPE_CONFLICT_MESSAGE = (
 
 EmbedderDep = Annotated[EmbeddingClient, Depends(get_embedder)]
 RerankerDep = Annotated[Reranker, Depends(get_reranker)]
+
+
+def _too_many_requests(retry_after: int) -> HTTPException:
+    """429 del rate-limit del export de memoria (S4, P1 seguridad). Mismo shape que ``auth.py``.
+
+    ``retry_after`` (segundos) llena el header ``Retry-After`` con la ventana del bucket
+    de export. ``detail`` neutro (regla #4): ni contenido de memoria ni PII.
+    """
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="demasiados intentos, intente mas tarde",
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 async def _semantic_page(
@@ -202,6 +218,7 @@ async def list_memory(
 async def export_memory(
     session: DbSession,
     user_id: CurrentUser,
+    store: TokenStoreDep,
     embedder: EmbedderDep,
     reranker: RerankerDep,
 ) -> JSONResponse:
@@ -217,9 +234,16 @@ async def export_memory(
     ruta estática y debe matchear antes que el path param ``{layer}`` (que es un
     ``MemoryLayer`` y no incluye ``export``, pero el orden explícito lo blinda).
 
+    Rate-limit (S4, P1 seguridad): es el endpoint más caro (descifra 3 capas sin
+    paginar). Bucket por ``user_id`` (del JWT), chequeado ANTES de instanciar stores
+    o descifrar nada. fail-open si Redis cae (sin freno, baseline). 429 con
+    ``Retry-After`` (mismo shape que ``auth.py``) si se cruza el techo de la ventana.
+
     Returns:
         ``JSONResponse`` con el ``MemoryExport`` serializado y el header de descarga.
     """
+    if not await check_memory_export_rate_limit(store, user_id=str(user_id)):
+        raise _too_many_requests(get_settings().memory_export_window_seconds)
     semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
     episodic = EpisodicMemoryStore(session, user_id, embedder, reranker)
     procedural = ProceduralMemoryStore(session, user_id)

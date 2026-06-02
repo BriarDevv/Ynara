@@ -28,12 +28,12 @@ Decisiones de seguridad (criticadas adversarialmente, NO re-litigar):
     pierde la revocación anticipada pero NO se rompe auth (se vuelve al baseline
     JWT-stateless: el token vale hasta su ``exp`` natural). Ver ENDPOINTS.md.
 
-(d) Rate-limit / lockout aplicativo (issue #63). ``/auth/token`` limita por
-    ``(ip, email_hash)`` y ``/auth/register`` por ``ip`` (ver
-    ``app/core/ratelimit.py``). El 429 no da oráculo de enumeración. fail-OPEN si
-    Redis cae (login sin freno, baseline pre-#63). El rate-limit aplicativo es una
-    capa más; bcrypt (caro por intento) + WAF/reverse-proxy siguen siendo defensa
-    de fondo.
+(d) Rate-limit / lockout aplicativo (issue #63 + S4 P1 seguridad). ``/auth/token``
+    limita por ``(ip, email_hash)``, ``/auth/register`` por ``ip`` y ``/auth/refresh``
+    por ``(ip, sub)`` (ver ``app/core/ratelimit.py``). El 429 no da oráculo de
+    enumeración. fail-OPEN si Redis cae (sin freno, baseline). El rate-limit
+    aplicativo es una capa más; bcrypt (caro por intento) + WAF/reverse-proxy siguen
+    siendo defensa de fondo.
 
 (e) ``GET /auth/me`` es la PROPIA identidad, no un recurso ajeno. Si el ``sub`` del
     JWT (token válido) ya no tiene fila (user borrado, caso raro), se devuelve 401
@@ -60,6 +60,7 @@ from app.core.config import Settings, get_settings
 from app.core.deps import CurrentClaims, CurrentUser, DbSession, TokenStoreDep
 from app.core.ratelimit import (
     check_login_rate_limit,
+    check_refresh_rate_limit,
     check_register_rate_limit,
     register_login_failure,
     reset_login_rate_limit,
@@ -228,8 +229,8 @@ async def token(
 
 
 @router.post("/auth/refresh", response_model=TokenOut, status_code=status.HTTP_200_OK)
-async def refresh(body: RefreshRequest, store: TokenStoreDep) -> TokenOut:
-    """Rota un refresh token: devuelve access + refresh nuevos. 200 o 401.
+async def refresh(body: RefreshRequest, store: TokenStoreDep, request: Request) -> TokenOut:
+    """Rota un refresh token: devuelve access + refresh nuevos. 200, 401 o 429.
 
     El refresh es **single-use** con **reuse-detection a nivel familia (sid)**,
     retry-safe (item 1 de #142). Ramas:
@@ -261,6 +262,12 @@ async def refresh(body: RefreshRequest, store: TokenStoreDep) -> TokenOut:
     familia nueva; reusarlo cae a la rama 3 SIN family-revoke (no hay sid que matar)
     -> degrada al single-use de #142 sin nukear nada imposible.
 
+    Rate-limit (S4, P1 seguridad): bucket por ``(ip, sub)``. Tras validar firma +
+    ``sub`` (un token basura ya dio 401 antes), si se cruza el techo de la ventana ->
+    429 con ``Retry-After`` (mismo shape que el login). El refresh es rotación
+    legítima frecuente, así que el techo es MÁS permisivo que el del login. fail-open
+    si Redis cae (rota sin freno, baseline).
+
     fail-open: ``revoke_if_absent`` True si Redis cae (rota igual);
     ``get_grace_marker`` None si Redis cae (un retry cae a rama 3 pero
     ``revoke_family`` también es no-op -> 401 sin revocación persistente).
@@ -280,6 +287,15 @@ async def refresh(body: RefreshRequest, store: TokenStoreDep) -> TokenOut:
         raise _unauthorized()
     sid = payload.get(SID_CLAIM)
     settings = get_settings()
+
+    # Rate-limit por (ip, sub) (S4, P1 seguridad): el endpoint era público sin
+    # freno. Va DESPUÉS de validar la firma + sub (un token basura ya dio 401, no
+    # entra acá) y ANTES de tocar Redis para rotar: un sub identificado que abusa
+    # del refresh se frena temprano. fail-open si Redis cae (rota sin freno,
+    # baseline). El 429 usa el mismo shape que el login (Retry-After con la ventana
+    # del refresh). No introduce oráculo: el 401 de firma mala ya ocurrió antes.
+    if not await check_refresh_rate_limit(store, ip=_client_ip(request), sub=sub):
+        raise _too_many_requests(settings.auth_refresh_window_seconds)
 
     # --- RAMA 0: familia ya revocada (logout-de-sesión o breach previo) ---
     # /refresh NO pasa por get_current_claims, así que el family-check del access

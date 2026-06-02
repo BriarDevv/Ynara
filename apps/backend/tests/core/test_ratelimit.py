@@ -13,20 +13,29 @@ import pytest
 from app.core import ratelimit
 from app.core.config import Settings
 from app.core.ratelimit import (
+    _chat_counter_key,
     _email_hash,
     _login_counter_key,
     _login_lockout_key,
+    _memory_export_counter_key,
+    _refresh_counter_key,
+    check_chat_rate_limit,
     check_login_rate_limit,
+    check_memory_export_rate_limit,
+    check_refresh_rate_limit,
     check_register_rate_limit,
     register_login_failure,
     reset_login_rate_limit,
 )
-from app.core.token_store import InMemoryTokenStore
+from app.core.token_store import InMemoryTokenStore, RedisTokenStore
 
 # asyncio_mode = "auto" (pyproject): los `async def test_*` corren sin marker.
 
 _MAX_ATTEMPTS = 3
 _REGISTER_MAX = 2
+_REFRESH_MAX = 3
+_CHAT_MAX = 2
+_EXPORT_MAX = 2
 
 
 def _settings() -> Settings:
@@ -40,6 +49,12 @@ def _settings() -> Settings:
         AUTH_LOGIN_LOCKOUT_SECONDS=900,
         AUTH_REGISTER_MAX_ATTEMPTS=_REGISTER_MAX,
         AUTH_REGISTER_WINDOW_SECONDS=3600,
+        AUTH_REFRESH_MAX_ATTEMPTS=_REFRESH_MAX,
+        AUTH_REFRESH_WINDOW_SECONDS=900,
+        CHAT_MAX_REQUESTS=_CHAT_MAX,
+        CHAT_WINDOW_SECONDS=60,
+        MEMORY_EXPORT_MAX_REQUESTS=_EXPORT_MAX,
+        MEMORY_EXPORT_WINDOW_SECONDS=3600,
     )
 
 
@@ -123,3 +138,96 @@ def test_ratelimit_module_imports_token_store() -> None:
     # Sanity: el módulo expone los helpers públicos esperados.
     assert hasattr(ratelimit, "check_login_rate_limit")
     assert hasattr(ratelimit, "register_login_failure")
+
+
+# ---------- refresh / chat / export rate-limit (S4) ----------
+
+
+class _BoomRedisClient:
+    """Cliente Redis que lanza en toda op: para ejercitar el fail-open del store."""
+
+    async def eval(self, *a: object, **k: object) -> int:
+        raise RuntimeError("redis down")
+
+    async def exists(self, *a: object) -> int:
+        raise RuntimeError("redis down")
+
+    async def set(self, *a: object, **k: object) -> None:
+        raise RuntimeError("redis down")
+
+    async def delete(self, *a: object) -> None:
+        raise RuntimeError("redis down")
+
+
+async def test_refresh_rate_limit_by_ip_sub() -> None:
+    """Permite hasta el max; el (max+1)-ésimo se rechaza. Bucket por (ip, sub)."""
+    store = InMemoryTokenStore()
+    ip, sub = "1.2.3.4", "user-uuid-1"
+    for _ in range(_REFRESH_MAX):
+        assert await check_refresh_rate_limit(store, ip=ip, sub=sub) is True
+    assert await check_refresh_rate_limit(store, ip=ip, sub=sub) is False
+
+
+async def test_refresh_bucket_isolation_by_sub() -> None:
+    """Dos sub distintos desde la misma IP no comparten contador."""
+    store = InMemoryTokenStore()
+    ip = "1.2.3.4"
+    a, b = "sub-a", "sub-b"
+    for _ in range(_REFRESH_MAX):
+        await check_refresh_rate_limit(store, ip=ip, sub=a)
+    assert await check_refresh_rate_limit(store, ip=ip, sub=a) is False
+    assert await check_refresh_rate_limit(store, ip=ip, sub=b) is True
+
+
+async def test_chat_rate_limit_by_user() -> None:
+    """Permite hasta el max; el (max+1)-ésimo se rechaza. Bucket por user_id."""
+    store = InMemoryTokenStore()
+    user_id = "user-uuid-1"
+    for _ in range(_CHAT_MAX):
+        assert await check_chat_rate_limit(store, user_id=user_id) is True
+    assert await check_chat_rate_limit(store, user_id=user_id) is False
+
+
+async def test_chat_bucket_isolation_by_user() -> None:
+    """Dos user_id distintos no comparten contador (aislamiento por usuario)."""
+    store = InMemoryTokenStore()
+    a, b = "user-a", "user-b"
+    for _ in range(_CHAT_MAX):
+        await check_chat_rate_limit(store, user_id=a)
+    assert await check_chat_rate_limit(store, user_id=a) is False
+    assert await check_chat_rate_limit(store, user_id=b) is True
+
+
+async def test_memory_export_rate_limit_by_user() -> None:
+    """Permite hasta el max; el (max+1)-ésimo se rechaza. Bucket por user_id."""
+    store = InMemoryTokenStore()
+    user_id = "user-uuid-1"
+    for _ in range(_EXPORT_MAX):
+        assert await check_memory_export_rate_limit(store, user_id=user_id) is True
+    assert await check_memory_export_rate_limit(store, user_id=user_id) is False
+
+
+async def test_fail_open_when_store_degrades() -> None:
+    """Si el store degrada (incr_with_ttl => 0), los check_* nuevos PERMITEN (fail-open).
+
+    Un RedisTokenStore que envuelve un cliente que lanza atrapa y devuelve 0 en
+    ``incr_with_ttl``; 0 ``<=`` cualquier threshold => True (sin freno, baseline).
+    """
+    store = RedisTokenStore(_BoomRedisClient())
+    # Muchos más golpes que el threshold: igual permite porque el contador es 0.
+    for _ in range(_REFRESH_MAX + _CHAT_MAX + _EXPORT_MAX + 5):
+        assert await check_refresh_rate_limit(store, ip="1.2.3.4", sub="s") is True
+        assert await check_chat_rate_limit(store, user_id="u") is True
+        assert await check_memory_export_rate_limit(store, user_id="u") is True
+
+
+def test_user_id_buckets_keep_raw_uuid() -> None:
+    """Las keys de chat/export usan el user_id crudo (UUID opaco, NO PII como el email).
+
+    A diferencia del login (que hashea el email), el user_id/sub es un identificador
+    opaco no-personal, así que va crudo en la key — documentado a propósito.
+    """
+    user_id = "11111111-2222-3333-4444-555555555555"
+    assert user_id in _chat_counter_key(user_id)
+    assert user_id in _memory_export_counter_key(user_id)
+    assert user_id in _refresh_counter_key("1.2.3.4", user_id)

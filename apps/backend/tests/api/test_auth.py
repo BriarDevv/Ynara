@@ -1268,7 +1268,105 @@ async def test_retry_after_login_usa_lockout(
         await _delete_user_by_email(db_session, email)
 
 
-def _ratelimit_settings(*, max_attempts: int = 5, register_max: int = 10):
+# ---------------------------------------------------------------------------
+# 33. /auth/refresh rate-limit por (ip, sub) -> 429 tras el threshold (S4)
+# ---------------------------------------------------------------------------
+
+
+async def test_refresh_rate_limit_429(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N+1 /refresh del mismo (ip, sub) -> 429; shape sin oráculo, con Retry-After.
+
+    El refresh es single-use: cada rotación devuelve un refresh NUEVO con el mismo
+    sub. El bucket del rate-limit es por (ip, sub), así que rotar N+1 veces cruza el
+    techo aunque cada token sea distinto. Con refresh_max=2: 2 rotaciones OK, la 3ra
+    da 429 (NO un 401: el rate-limit corre ANTES de tocar Redis para rotar).
+    """
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _ratelimit_settings(refresh_max=2),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.auth.get_settings",
+        lambda: _ratelimit_settings(refresh_max=2),
+    )
+    email = "rl.refresh@example.com"
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            _, _, refresh = await _register_and_login(client, email=email, password="supersecreta1")
+            # 2 rotaciones permitidas (threshold 2); cada una devuelve un refresh nuevo.
+            for _ in range(2):
+                r = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
+                assert r.status_code == 200
+                refresh = r.json()["refresh_token"]
+            # La 3ra cruza el techo por (ip, sub) -> 429.
+            r429 = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
+        assert r429.status_code == 429
+        assert "demasiados" in r429.json()["detail"]
+        # Retry-After == ventana del refresh (900).
+        assert r429.headers.get("Retry-After") == "900"
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+async def test_refresh_rate_limit_fail_open(db_session: AsyncSession) -> None:
+    """Con un store que degrada (Redis caído), /refresh NO se bloquea (fail-open).
+
+    El RedisTokenStore que envuelve un cliente que lanza atrapa y degrada:
+    ``incr_with_ttl`` => 0 (no bloquea el rate-limit) y ``revoke_if_absent`` => True
+    (rota igual). Un refresh válido sigue dando 200, nunca un 429 espurio.
+    """
+    from app.core.token_store import RedisTokenStore
+
+    class _BoomRedisClient:
+        async def exists(self, *a: object) -> int:
+            raise RuntimeError("redis down")
+
+        async def set(self, *a: object, **k: object) -> None:
+            raise RuntimeError("redis down")
+
+        async def incr(self, *a: object) -> int:
+            raise RuntimeError("redis down")
+
+        async def expire(self, *a: object, **k: object) -> None:
+            raise RuntimeError("redis down")
+
+        async def eval(self, *a: object, **k: object) -> int:
+            raise RuntimeError("redis down")
+
+        async def mget(self, *a: object) -> list[None]:
+            raise RuntimeError("redis down")
+
+        async def delete(self, *a: object) -> None:
+            raise RuntimeError("redis down")
+
+    email = "rl.refresh.failopen@example.com"
+    # Sembrar + loguear con un store sano; rotar con el boom.
+    setup_client = await _client(db_session)
+    try:
+        async with setup_client:
+            _, _, refresh = await _register_and_login(
+                setup_client, email=email, password="supersecreta1"
+            )
+        app.dependency_overrides.clear()
+
+        store = RedisTokenStore(_BoomRedisClient())
+        client = await _client(db_session, store=store)
+        async with client:
+            resp = await client.post("/v1/auth/refresh", json={"refresh_token": refresh})
+        # fail-open: Redis caído no bloquea ni rompe la rotación.
+        assert resp.status_code == 200
+        assert resp.json()["access_token"]
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user_by_email(db_session, email)
+
+
+def _ratelimit_settings(*, max_attempts: int = 5, register_max: int = 10, refresh_max: int = 30):
     """Settings determinista para los tests de rate-limit (thresholds chicos)."""
     from app.core.config import Settings
 
@@ -1282,6 +1380,8 @@ def _ratelimit_settings(*, max_attempts: int = 5, register_max: int = 10):
         AUTH_LOGIN_LOCKOUT_SECONDS=900,
         AUTH_REGISTER_MAX_ATTEMPTS=register_max,
         AUTH_REGISTER_WINDOW_SECONDS=3600,
+        AUTH_REFRESH_MAX_ATTEMPTS=refresh_max,
+        AUTH_REFRESH_WINDOW_SECONDS=900,
     )
 
 
