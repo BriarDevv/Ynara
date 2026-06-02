@@ -37,6 +37,7 @@ from httpx import ASGITransport
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.chat import _STREAM_ERROR_CODE, _STREAM_ERROR_MESSAGE, _sse_event
 from app.core.deps import get_db, get_embedder, get_llm_client, get_reranker
 from app.core.security import create_access_token
 from app.enums import Mode
@@ -761,6 +762,84 @@ async def test_commit_falla_500_sin_stream_parcial(
         # El stream nunca arranco: no hay eventos token (ni SSE) en el body.
         assert "event: token" not in resp.text
         assert not resp.headers["content-type"].startswith("text/event-stream")
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+# ---------------------------------------------------------------------------
+# 17 (T4a). Error mid-stream: el except del generador emite event: error neutro
+# ---------------------------------------------------------------------------
+
+
+async def test_error_mid_stream_emite_event_error_neutro(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Si algo falla DENTRO de la iteracion del generador, sale event: error neutro.
+
+    El texto se pre-snapshotea antes del generador (paso 2 de ``chat_stream``), asi
+    que el unico modo de disparar la red de seguridad ``try/except`` de ``_gen`` es
+    forzar una falla DENTRO de la iteracion, DESPUES de que ya salio al menos un
+    token. Se monkeypatchea ``app.api.v1.chat._sse_event`` para que lance en su
+    SEGUNDA invocacion (el 2do token): la 1ra (1er token) emite normal, la 2da
+    revienta, el ``except`` captura y llama ``_sse_event("error", ...)`` (3ra
+    invocacion) que SI emite el evento error real.
+
+    Verifica que el stream NO se cae con 500 ni traceback: sigue siendo un 200
+    ``text/event-stream`` que (1) trae >= 1 ``event: token`` antes y (2) cierra con
+    un ``event: error`` con el code/message neutro esperado. El message NO contiene
+    PII ni texto de usuario (regla #4): es la constante neutra del modulo.
+    """
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    # Texto largo (>1 ventana de _TOKEN_CHUNK_SIZE=6 code-points) -> el for itera
+    # varias veces, asi hay un 1er token antes de que falle la 2da invocacion.
+    fake.queue_result(_completion(text="hola mundo, esto es largo", model_name="gemma4"))
+
+    real_sse_event = _sse_event
+    calls = {"n": 0}
+
+    def _flaky_sse_event(name: str, payload: dict) -> str:
+        # Falla SOLO en la 2da invocacion (2do token). La 1ra (1er token) y la 3ra
+        # (el event: error del except) usan el _sse_event real, asi el error sale.
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("boom mid-stream")
+        return real_sse_event(name, payload)
+
+    monkeypatch.setattr("app.api.v1.chat._sse_event", _flaky_sse_event)
+
+    client = await _client(db_session, llm_client=fake)
+    try:
+        async with client:
+            resp = await client.post(
+                "/v1/chat/stream",
+                json={"text": "hola", "mode": "vida"},
+                headers=_bearer(user.id),
+            )
+
+        # NO es un 500 ni un traceback: el stream arranco y se degrado limpio.
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+
+        events = _parse_sse(resp.text)
+        names = [name for (name, _) in events]
+        # (1) Salio >= 1 token antes del fallo.
+        assert names.count("token") >= 1
+        # (2) El ultimo bloque es el event: error de la red de seguridad.
+        assert names[-1] == "error"
+
+        error_payloads = [d for (name, d) in events if name == "error"]
+        assert len(error_payloads) == 1
+        err = error_payloads[0]
+        assert err["code"] == _STREAM_ERROR_CODE
+        assert err["message"] == _STREAM_ERROR_MESSAGE
+        # Mensaje neutro (regla #4): ni texto de usuario ni el detalle de la excepcion.
+        assert "hola" not in err["message"]
+        assert "boom" not in err["message"]
+        assert str(user.id) not in resp.text
+        # El except corto el stream antes del done: la respuesta termina en error.
+        assert "done" not in names
     finally:
         app.dependency_overrides.clear()
         await _delete_user(db_session, user.id)
