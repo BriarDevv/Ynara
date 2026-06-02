@@ -1,63 +1,63 @@
-name: CI
+name: Backend CI
 
+# CI SCOPEADA AL BACKEND a propósito: solo se dispara con cambios en
+# apps/backend (o en este workflow). Las PRs solo-frontend NO la corren, así
+# no bloquea ni "jode" al desarrollo de apps/web|apps/mobile (la CI del
+# frontend es responsabilidad aparte; este workflow no la toca).
 on:
   workflow_dispatch:
-
-# CI deshabilitado en push y pull_request hasta que existan los
-# lockfiles (pnpm-lock.yaml y apps/backend/uv.lock). Eso pasa cuando
-# se corra por primera vez "pnpm install" y "uv sync" (regla #1 de
-# AGENTS.md: requieren OK humano).
-#
-# Una vez generados y commiteados los lockfiles, reactivar push/PR
-# reemplazando el bloque "on" por:
-#
-#   on:
-#     pull_request:
-#       branches: [main]
-#     push:
-#       branches: [main]
-#
-# Mientras tanto, CI se puede correr manualmente desde la pestaña
-# Actions del repo (workflow_dispatch).
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/backend/**'
+      - '.github/workflows/ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/backend/**'
+      - '.github/workflows/ci.yml'
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-backend-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint-and-test-js:
-    name: Lint + Typecheck + Test (JS/TS)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm biome check .
-
-      - name: Typecheck
-        run: pnpm turbo run typecheck
-
-      - name: Test
-        run: pnpm turbo run test
-
   lint-and-test-py:
     name: Lint + Test (Python)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/backend
+    # Postgres + pgvector para los tests @pytest.mark.integration (DB real, sin
+    # mocks: migraciones / cifrado / endpoints / consolidación se ejercitan acá).
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: ynara_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # DB de tests DEDICADA (NUNCA prod/Supabase). El conftest la usa para
+      # db_engine/db_session; sin esto los tests -m integration se SKIPean.
+      TEST_DATABASE_URL: postgresql://postgres:test@localhost:5432/ynara_test
+      # Settings exige DATABASE_URL/REDIS_URL/JWT_SECRET (sin default). En CI no
+      # hay .env: se setean valores DUMMY de test (NUNCA secretos reales, regla
+      # #2). DATABASE_URL apunta a localhost y NO se conecta en tests (se usa
+      # TEST_DATABASE_URL; el db_guard se bypassa bajo pytest). Redis no corre:
+      # los tests usan InMemoryTokenStore (override) + fail-open, así que la URL
+      # solo satisface el Settings. El master key es base64 de 32 bytes de test.
+      DATABASE_URL: postgresql://postgres:test@localhost:5432/ynara_dev
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-test-jwt-secret-not-for-production-use
+      MEMORY_ENCRYPTION_MASTER_KEY: eW5hcmEtY2ktdGVzdC1tYXN0ZXIta2V5LTMyYnl0ZSE=
     steps:
       - uses: actions/checkout@v4
 
@@ -69,8 +69,10 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
+      # --extra dev instala el grupo dev (pytest, pytest-cov, ruff, pip-audit):
+      # son optional-dependencies, uv sync NO las trae sin pedirlas.
       - name: Install
-        run: uv sync --frozen
+        run: uv sync --frozen --extra dev
 
       - name: Lint
         run: uv run ruff check .
@@ -78,10 +80,68 @@ jobs:
       - name: Format check
         run: uv run ruff format --check .
 
-      - name: Test
-        run: uv run pytest
+      # Unit (el addopts excluye integration) con cobertura base.
+      - name: Test (unit) + coverage
+        run: uv run pytest --cov=app --cov-report=
 
-  # TODO: agregar job que falle si detecta @supabase/supabase-js
-  # en apps/web o apps/mobile (regla #5 de AGENTS.md).
-  # TODO: agregar job que valide formato Conventional Commits en
-  # español (regla #6).
+      # El Postgres del service arranca VACÍO y las fixtures de DB NO migran
+      # (asumen el schema). Se crea el schema con alembic ANTES de integración;
+      # env.py usa TEST_DATABASE_URL -> ynara_test. El roundtrip upgrade/downgrade
+      # lo re-verifica test_initial_schema dentro del run de integración.
+      - name: Migrate test DB (alembic upgrade head)
+        run: uv run alembic upgrade head
+
+      # Integration contra el Postgres service + gate de cobertura combinada.
+      # --cov-append suma a la corrida unit; el piso 85% se mide sobre el total
+      # (unit+integration). Acá corre también el round-trip de migración
+      # (upgrade -> downgrade -> upgrade, test_initial_schema).
+      - name: Test (integration) + coverage gate
+        run: uv run pytest -m integration --cov=app --cov-append --cov-report=term-missing --cov-fail-under=85
+
+  contract-guards:
+    name: Contract guards (reglas #5/#6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Regla #5: el frontend usa SOLO el SDK propio, nunca el cliente Supabase.
+      - name: Sin @supabase/supabase-js en frontend (regla #5)
+        run: |
+          if grep -rnI \
+            --include='*.ts' --include='*.tsx' --include='*.js' \
+            --include='*.jsx' --include='*.json' \
+            '@supabase/supabase-js' apps/web apps/mobile packages 2>/dev/null; then
+            echo "::error::@supabase/supabase-js está prohibido en el frontend (regla #5: solo el SDK propio)"
+            exit 1
+          fi
+          echo "OK: sin @supabase/supabase-js en apps/web|apps/mobile|packages"
+
+      # Regla #6/#8: Conventional Commits en español, tipo válido + scope
+      # obligatorio + descripción imperativa/noun-phrase (sin gerundio).
+      - name: Conventional Commits en español (regla #6/#8)
+        if: github.event_name == 'pull_request'
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          types='feat|fix|refactor|docs|chore|test|perf|style|build|ci|revert'
+          fail=0
+          for sha in $(git rev-list --no-merges "$base".."$head"); do
+            subj=$(git log -1 --format=%s "$sha")
+            # tipo(scope): descripción  — scope OBLIGATORIO (no vacío), '!' opcional.
+            if ! printf '%s' "$subj" | grep -qE "^(${types})\([a-z0-9._-]+\)!?: .+"; then
+              echo "::error::Commit ${sha}: no cumple 'tipo(scope): descripción' con scope obligatorio -> ${subj}"
+              fail=1
+              continue
+            fi
+            # Heurística regla #6: la descripción no debe arrancar en gerundio.
+            desc=$(printf '%s' "$subj" | sed -E "s/^(${types})\([a-z0-9._-]+\)!?: //")
+            first=$(printf '%s' "$desc" | awk '{print $1}')
+            if printf '%s' "$first" | grep -qiE '(ando|iendo|ándo|iéndo)$'; then
+              echo "::error::Commit ${sha}: la descripción parece gerundio ('${first}'); usar imperativo/noun-phrase -> ${subj}"
+              fail=1
+            fi
+          done
+          if [ "$fail" -eq 0 ]; then echo "OK: commits válidos"; fi
+          exit "$fail"
