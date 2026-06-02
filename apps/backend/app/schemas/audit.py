@@ -1,7 +1,8 @@
 """Schemas Pydantic para audit log de operaciones sobre memoria.
 
-El cliente puede listar su audit log via ``GET /v1/memory/audit``. La
-escritura es interna al backend — no se expone payload de creación.
+El endpoint de lectura del audit log está planificado para una ola futura;
+aún no está implementado. La escritura es interna al backend — no se expone
+payload de creación.
 """
 
 from __future__ import annotations
