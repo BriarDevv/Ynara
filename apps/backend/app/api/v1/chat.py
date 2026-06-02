@@ -54,19 +54,22 @@ from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1._sessions import resolve_chat_session
+from app.core.config import get_settings
 from app.core.deps import (
     CurrentUser,
     DbSession,
+    TokenStoreDep,
     get_embedder,
     get_llm_client,
     get_reranker,
 )
+from app.core.ratelimit import check_chat_rate_limit
 from app.llm.clients.base import LLMClient
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
@@ -90,6 +93,19 @@ _TOKEN_CHUNK_SIZE = 6
 # sin PII ni detalle tecnico (regla #4): el message viaja al cliente.
 _STREAM_ERROR_CODE = "stream_error"
 _STREAM_ERROR_MESSAGE = "No se pudo completar la respuesta"
+
+
+def _too_many_requests(retry_after: int) -> HTTPException:
+    """429 del rate-limit de chat (S4, P1 seguridad). Mismo shape que ``auth.py``.
+
+    ``retry_after`` (segundos) llena el header ``Retry-After`` con la ventana del
+    bucket de chat. ``detail`` neutro (regla #4): ni texto de usuario ni PII.
+    """
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="demasiados intentos, intente mas tarde",
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 def _to_http_actions(raw: list[dict]) -> list[Action]:
@@ -236,6 +252,7 @@ async def chat(
     body: ChatHttpRequest,
     session: DbSession,
     user_id: CurrentUser,
+    store: TokenStoreDep,
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
     embedder: Annotated[EmbeddingClient, Depends(get_embedder)],
     reranker: Annotated[Reranker, Depends(get_reranker)],
@@ -246,11 +263,17 @@ async def chat(
     y arma la respuesta wire ``ChatHttpResponse``. actions defensivas
     (decision #4): se descartan las malformadas, no se filtra basura al cliente.
 
+    Rate-limit (S4, P1 seguridad): bucket por ``user_id`` (del JWT ya autenticado),
+    ANTES de tocar la DB. fail-open si Redis cae (sin freno, baseline). 429 con
+    ``Retry-After`` (mismo shape que ``auth.py``) si se cruza el techo de la ventana.
+
     Returns:
         ``ChatHttpResponse`` con el texto final, las ``actions`` ejecutadas
         (validadas), el ``session_id`` (UUID de la ``ChatSession``) y el
         ``finish_reason`` del router.
     """
+    if not await check_chat_rate_limit(store, user_id=str(user_id)):
+        raise _too_many_requests(get_settings().chat_window_seconds)
     chat_session, resp = await _run_chat_turn(
         session=session,
         user_id=user_id,
@@ -283,6 +306,7 @@ async def chat_stream(
     body: ChatHttpRequest,
     session: DbSession,
     user_id: CurrentUser,
+    store: TokenStoreDep,
     llm_client: Annotated[LLMClient, Depends(get_llm_client)],
     embedder: Annotated[EmbeddingClient, Depends(get_embedder)],
     reranker: Annotated[Reranker, Depends(get_reranker)],
@@ -328,6 +352,12 @@ async def chat_stream(
         ``token`` (ventanas de ``_TOKEN_CHUNK_SIZE`` code-points del texto)
         seguidos de un evento ``done``. Si el texto es vacio: 0 tokens + 1 done.
     """
+    # (0) Rate-limit por user_id (S4, P1 seguridad), ANTES de tocar la DB: el 429
+    #     salta como HTTP normal (no como event: error SSE), igual que 401/404/409.
+    #     fail-open si Redis cae (sin freno, baseline). Mismo bucket que /chat.
+    if not await check_chat_rate_limit(store, user_id=str(user_id)):
+        raise _too_many_requests(get_settings().chat_window_seconds)
+
     # (1) Mismo trabajo transaccional que /chat. Si algo falla aca (incl. commit)
     #     propaga ANTES del StreamingResponse -> get_db rollback -> 500 limpio,
     #     0 bytes SSE. 422/401/404/409 saltan aca como HTTP normales.

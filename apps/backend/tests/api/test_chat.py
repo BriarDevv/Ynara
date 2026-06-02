@@ -36,8 +36,10 @@ from httpx import ASGITransport
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, get_embedder, get_llm_client, get_reranker
+from app.core.config import Settings
+from app.core.deps import get_db, get_embedder, get_llm_client, get_reranker, get_token_store
 from app.core.security import create_access_token
+from app.core.token_store import InMemoryTokenStore, RedisTokenStore, TokenStore
 from app.enums import Mode
 from app.llm.clients.embedding import FakeEmbeddingClient
 from app.llm.clients.fakes import FakeLlmClient
@@ -98,12 +100,18 @@ async def _client(
     db_session: AsyncSession,
     *,
     llm_client: FakeLlmClient,
+    store: TokenStore | None = None,
 ) -> AsyncIterator[httpx.AsyncClient]:
     """Context-ish helper: overridea las deps y devuelve un AsyncClient ASGI.
 
     El caller debe usar el cliente dentro de ``async with`` y limpiar los
     overrides despues (lo hace cada test en su ``finally`` via
     ``app.dependency_overrides.clear()``).
+
+    ``store`` (S4): el ``TokenStore`` del rate-limit. Por default NO se overridea
+    ``get_token_store`` (usa el ``InMemoryTokenStore`` sin freno del conftest); los
+    tests de rate-limit pasan el suyo para forzar un threshold chico o un store que
+    degrada (fail-open).
     """
 
     async def _override_db() -> AsyncIterator[AsyncSession]:
@@ -113,8 +121,41 @@ async def _client(
     app.dependency_overrides[get_llm_client] = lambda: llm_client
     app.dependency_overrides[get_embedder] = FakeEmbeddingClient
     app.dependency_overrides[get_reranker] = FakeReranker
+    if store is not None:
+        app.dependency_overrides[get_token_store] = lambda: store
     transport = ASGITransport(app=app)
     return httpx.AsyncClient(transport=transport, base_url="http://test")
+
+
+def _chat_ratelimit_settings(*, chat_max: int) -> Settings:
+    """Settings determinista para los tests de rate-limit del chat (threshold chico)."""
+    return Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        DATABASE_URL="postgresql://test:test@localhost/test",
+        REDIS_URL="redis://localhost:6379/0",
+        JWT_SECRET="test-secret-no-usar-en-prod",
+        CHAT_MAX_REQUESTS=chat_max,
+        CHAT_WINDOW_SECONDS=60,
+    )
+
+
+class _BoomRedisClient:
+    """Cliente Redis que lanza en toda op: ejercita el fail-open del store."""
+
+    async def eval(self, *a: object, **k: object) -> int:
+        raise RuntimeError("redis down")
+
+    async def exists(self, *a: object) -> int:
+        raise RuntimeError("redis down")
+
+    async def set(self, *a: object, **k: object) -> None:
+        raise RuntimeError("redis down")
+
+    async def mget(self, *a: object) -> list[None]:
+        raise RuntimeError("redis down")
+
+    async def delete(self, *a: object) -> None:
+        raise RuntimeError("redis down")
 
 
 # ---------------------------------------------------------------------------
@@ -456,6 +497,85 @@ async def test_mode_mismatch_returns_409(db_session: AsyncSession) -> None:
                 headers=_bearer(user.id),
             )
         assert resp.status_code == 409
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+# ---------------------------------------------------------------------------
+# Rate-limit por user_id (S4): 429 tras el threshold; fail-open si Redis cae
+# ---------------------------------------------------------------------------
+
+
+async def test_chat_rate_limit_429(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N+1 turnos del mismo user -> 429 con Retry-After (mismo shape que auth).
+
+    Bucket por user_id: con chat_max=2, 2 turnos OK reusando la misma sesion y el
+    3ro da 429 ANTES de tocar la DB/LLM. ``detail`` neutro (regla #4).
+    """
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _chat_ratelimit_settings(chat_max=2),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.chat.get_settings",
+        lambda: _chat_ratelimit_settings(chat_max=2),
+    )
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    for _ in range(2):
+        fake.queue_result(_completion(text="hola", model_name="gemma4"))
+
+    store = InMemoryTokenStore()
+    client = await _client(db_session, llm_client=fake, store=store)
+    try:
+        async with client:
+            session_id: str | None = None
+            for _ in range(2):
+                payload: dict[str, object] = {"text": "hola", "mode": "vida"}
+                if session_id is not None:
+                    payload["session_id"] = session_id
+                ok = await client.post("/v1/chat", json=payload, headers=_bearer(user.id))
+                assert ok.status_code == 200
+                session_id = ok.json()["session_id"]
+            # El 3ro cruza el techo -> 429.
+            r429 = await client.post(
+                "/v1/chat",
+                json={"text": "hola", "mode": "vida", "session_id": session_id},
+                headers=_bearer(user.id),
+            )
+        assert r429.status_code == 429
+        assert "demasiados" in r429.json()["detail"]
+        assert r429.headers.get("Retry-After") == "60"
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+async def test_chat_rate_limit_fail_open(db_session: AsyncSession) -> None:
+    """Con un store que degrada (Redis caído), /chat NO se bloquea (fail-open).
+
+    El RedisTokenStore que envuelve un cliente que lanza atrapa: ``incr_with_ttl``
+    => 0 (no bloquea) y ``auth_status`` => (False, False) (el token vale). Un turno
+    válido sigue dando 200, nunca un 429 espurio.
+    """
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_result(_completion(text="hola", model_name="gemma4"))
+
+    store = RedisTokenStore(_BoomRedisClient())
+    client = await _client(db_session, llm_client=fake, store=store)
+    try:
+        async with client:
+            resp = await client.post(
+                "/v1/chat",
+                json={"text": "hola", "mode": "vida"},
+                headers=_bearer(user.id),
+            )
+        assert resp.status_code == 200
+        assert resp.json()["text"] == "hola"
     finally:
         app.dependency_overrides.clear()
         await _delete_user(db_session, user.id)

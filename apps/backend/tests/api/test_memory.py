@@ -41,8 +41,10 @@ import pytest
 from httpx import ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db, get_embedder, get_reranker
+from app.core.config import Settings
+from app.core.deps import get_db, get_embedder, get_reranker, get_token_store
 from app.core.security import create_access_token
+from app.core.token_store import InMemoryTokenStore, RedisTokenStore, TokenStore
 from app.enums import Mode
 from app.llm.clients.embedding import FakeEmbeddingClient
 from app.llm.clients.reranker import FakeReranker
@@ -128,13 +130,20 @@ def _bearer(user_id: uuid.UUID) -> dict[str, str]:
     return {"Authorization": f"Bearer {create_access_token(str(user_id))}"}
 
 
-async def _client(db_session: AsyncSession) -> httpx.AsyncClient:
+async def _client(
+    db_session: AsyncSession, *, store: TokenStore | None = None
+) -> httpx.AsyncClient:
     """Overridea ``get_db`` + clientes Fake y devuelve el cliente ASGI.
 
     El caller usa el cliente dentro de ``async with`` y limpia los overrides en su
     ``finally`` con ``app.dependency_overrides.clear()``. Los Fake se overridean
     porque el lifespan (que los pone en ``app.state``) no corre bajo
     ``ASGITransport`` sin gestionar el startup.
+
+    ``store`` (S4): el ``TokenStore`` del rate-limit del export. Por default NO se
+    overridea ``get_token_store`` (usa el ``InMemoryTokenStore`` sin freno del
+    conftest); los tests de rate-limit pasan el suyo para forzar un threshold chico
+    o un store que degrada (fail-open).
     """
 
     async def _override_db() -> AsyncIterator[AsyncSession]:
@@ -143,8 +152,41 @@ async def _client(db_session: AsyncSession) -> httpx.AsyncClient:
     app.dependency_overrides[get_db] = _override_db
     app.dependency_overrides[get_embedder] = lambda: FakeEmbeddingClient()
     app.dependency_overrides[get_reranker] = lambda: FakeReranker()
+    if store is not None:
+        app.dependency_overrides[get_token_store] = lambda: store
     transport = ASGITransport(app=app)
     return httpx.AsyncClient(transport=transport, base_url="http://test")
+
+
+def _export_ratelimit_settings(*, export_max: int) -> Settings:
+    """Settings determinista para los tests de rate-limit del export (threshold chico)."""
+    return Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        DATABASE_URL="postgresql://test:test@localhost/test",
+        REDIS_URL="redis://localhost:6379/0",
+        JWT_SECRET="test-secret-no-usar-en-prod",
+        MEMORY_EXPORT_MAX_REQUESTS=export_max,
+        MEMORY_EXPORT_WINDOW_SECONDS=3600,
+    )
+
+
+class _BoomRedisClient:
+    """Cliente Redis que lanza en toda op: ejercita el fail-open del store."""
+
+    async def eval(self, *a: object, **k: object) -> int:
+        raise RuntimeError("redis down")
+
+    async def exists(self, *a: object) -> int:
+        raise RuntimeError("redis down")
+
+    async def set(self, *a: object, **k: object) -> None:
+        raise RuntimeError("redis down")
+
+    async def mget(self, *a: object) -> list[None]:
+        raise RuntimeError("redis down")
+
+    async def delete(self, *a: object) -> None:
+        raise RuntimeError("redis down")
 
 
 def _assert_no_raw_blob(payload: object) -> None:
@@ -395,6 +437,99 @@ async def test_export_only_own_versioned_attachment(db_session: AsyncSession) ->
         assert "de B" not in resp.text
         assert "pref.B" not in resp.text
         _assert_no_raw_blob(body)
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# 6b. Rate-limit del export por user_id (S4): 429 tras el threshold; fail-open
+# ---------------------------------------------------------------------------
+
+
+async def test_export_rate_limit_429(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N+1 exports del mismo user -> 429 con Retry-After (mismo shape que auth).
+
+    Bucket por user_id sobre el endpoint más caro: con export_max=2, 2 exports OK y
+    el 3ro da 429 ANTES de instanciar stores o descifrar. ``detail`` neutro (regla #4).
+    """
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _export_ratelimit_settings(export_max=2),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.memory.get_settings",
+        lambda: _export_ratelimit_settings(export_max=2),
+    )
+    user = await _seed_user(db_session)
+    await _seed_full_memory(db_session, user, tag="A")
+
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            for _ in range(2):
+                ok = await client.get("/v1/memory/export", headers=_bearer(user.id))
+                assert ok.status_code == 200
+            # El 3ro cruza el techo -> 429.
+            r429 = await client.get("/v1/memory/export", headers=_bearer(user.id))
+        assert r429.status_code == 429
+        assert "demasiados" in r429.json()["detail"]
+        assert r429.headers.get("Retry-After") == "3600"
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_export_rate_limit_isolation_by_user(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El lockout del export de A no afecta a B: el bucket es por user_id."""
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _export_ratelimit_settings(export_max=1),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.memory.get_settings",
+        lambda: _export_ratelimit_settings(export_max=1),
+    )
+    user_a = await _seed_user(db_session)
+    user_b = await _seed_user(db_session)
+    await _seed_full_memory(db_session, user_a, tag="A")
+    await _seed_full_memory(db_session, user_b, tag="B")
+
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            # A agota su cuota (export_max=1): el 2do export de A da 429.
+            a1 = await client.get("/v1/memory/export", headers=_bearer(user_a.id))
+            assert a1.status_code == 200
+            a2 = await client.get("/v1/memory/export", headers=_bearer(user_a.id))
+            assert a2.status_code == 429
+            # B no está afectado: su primer export sigue dando 200.
+            r_b = await client.get("/v1/memory/export", headers=_bearer(user_b.id))
+        assert r_b.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_export_rate_limit_fail_open(db_session: AsyncSession) -> None:
+    """Con un store que degrada (Redis caído), el export NO se bloquea (fail-open).
+
+    ``incr_with_ttl`` => 0 (no bloquea) y ``auth_status`` => (False, False) (el token
+    vale). Un export válido sigue dando 200, nunca un 429 espurio.
+    """
+    user = await _seed_user(db_session)
+    await _seed_full_memory(db_session, user, tag="A")
+
+    store = RedisTokenStore(_BoomRedisClient())
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            resp = await client.get("/v1/memory/export", headers=_bearer(user.id))
+        assert resp.status_code == 200
+        assert resp.json()["version"] == 1
     finally:
         app.dependency_overrides.clear()
 

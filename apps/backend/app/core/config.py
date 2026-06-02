@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -75,6 +76,21 @@ class Settings(BaseSettings):
     # Rate-limit del register, por IP (el email aun no existe). Mas laxo.
     auth_register_max_attempts: int = Field(10, alias="AUTH_REGISTER_MAX_ATTEMPTS")
     auth_register_window_seconds: int = Field(3600, alias="AUTH_REGISTER_WINDOW_SECONDS")
+    # Rate-limit de /auth/refresh, por (ip, sub). El refresh es rotacion legitima
+    # frecuente (mobile que reconecta), asi que es MAS permisivo que el login: la
+    # rama benign-retry del grace ya absorbe los reenvios sanos, este freno es solo
+    # un techo contra abuso. fail-OPEN si Redis cae.
+    auth_refresh_max_attempts: int = Field(30, alias="AUTH_REFRESH_MAX_ATTEMPTS")
+    auth_refresh_window_seconds: int = Field(900, alias="AUTH_REFRESH_WINDOW_SECONDS")
+    # Rate-limit de /chat y /chat/stream, por user_id. Decenas por minuto: cubre
+    # un uso intensivo legitimo y frena scripting abusivo. fail-OPEN si Redis cae.
+    chat_max_requests: int = Field(60, alias="CHAT_MAX_REQUESTS")
+    chat_window_seconds: int = Field(60, alias="CHAT_WINDOW_SECONDS")
+    # Rate-limit de GET /v1/memory/export, por user_id. El endpoint mas caro
+    # (descifra 3 capas sin paginar): pocas por hora alcanzan para un export
+    # legitimo y cortan el abuso. fail-OPEN si Redis cae.
+    memory_export_max_requests: int = Field(5, alias="MEMORY_EXPORT_MAX_REQUESTS")
+    memory_export_window_seconds: int = Field(3600, alias="MEMORY_EXPORT_WINDOW_SECONDS")
 
     # Storage (R2)
     r2_account_id: str = Field("", alias="R2_ACCOUNT_ID")
@@ -85,7 +101,6 @@ class Settings(BaseSettings):
     # Observabilidad
     sentry_dsn: str = Field("", alias="SENTRY_DSN")
     sentry_traces_sample_rate: float = Field(0.0, ge=0.0, le=1.0, alias="SENTRY_TRACES_SAMPLE_RATE")
-    posthog_key: str = Field("", alias="POSTHOG_KEY")
 
     # CORS — TODO: ajustar a dominios reales al desplegar
     cors_origins: list[str] = Field(
@@ -116,6 +131,41 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "JWT_SECRET débil o placeholder en production: mínimo 32 chars; "
                     "generar con `openssl rand -base64 48`"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _reject_dev_config_in_prod(self) -> Settings:
+        """Fail-fast: en production rechaza CORS dev y exige la master key de cifrado.
+
+        (a) ``cors_origins`` con ``localhost``/``127.0.0.1``: exponer un origin de dev
+            en production abriría la API a un front local del atacante (CORS es la
+            barrera del navegador contra requests cross-origin con credenciales). El
+            ``# TODO: ajustar a dominios reales`` del default deja de ser opcional en
+            prod: si quedó sin ajustar, el boot falla en vez de servir inseguro.
+
+        (b) ``MEMORY_ENCRYPTION_MASTER_KEY`` vacía: sin la key el cifrado de memoria
+            (ADR-007) no funciona y el helper de crypto recién falla al PRIMER uso (un
+            chat que escribe memoria), no al boot. En prod adelantamos ese fallo al
+            arranque (fail-fast) para no descubrir la mala config en caliente.
+
+        En development/staging NO rompe: el default de ``cors_origins`` ES localhost y
+        la master key suele estar vacía en dev (sin fricción, igual que el JWT secret).
+        """
+        if self.environment == "production":
+            # Hostname EXACTO (urlsplit), no substring: así un dominio prod legítimo
+            # que contenga 'localhost' como substring (p.ej. localhost-staging.x.com)
+            # no da falso positivo. Igual falla cerrado ante el origin de dev real.
+            dev_hosts = {"localhost", "127.0.0.1", "::1"}
+            if any(urlsplit(origin).hostname in dev_hosts for origin in self.cors_origins):
+                raise ValueError(
+                    "CORS_ORIGINS contiene un origin de desarrollo (localhost/127.0.0.1) "
+                    "en production: ajustar a los dominios reales del front"
+                )
+            if not self.memory_encryption_master_key:
+                raise ValueError(
+                    "MEMORY_ENCRYPTION_MASTER_KEY vacía en production: el cifrado de "
+                    "memoria (ADR-007) la requiere; generar con `openssl rand -base64 32`"
                 )
         return self
 
