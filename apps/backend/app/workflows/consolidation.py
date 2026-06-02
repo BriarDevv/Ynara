@@ -33,12 +33,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.core.config import Settings, get_settings
+from app.enums import LlmModel, Mode
 from app.llm.clients.base import LLMClient
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.factory import build_embedder, build_llm_client, build_reranker
 from app.llm.clients.reranker import Reranker
 from app.llm.config import load_llm_config
 from app.llm.memory_engine import QwenMemoryEngine, apply_ops
+from app.memory.audit import AuditStore
 from app.memory.procedural import ProceduralMemoryStore
 from app.memory.semantic import SemanticMemoryStore
 from app.workers.celery_app import celery_app
@@ -113,6 +115,26 @@ def _parse_source_session_id(session_id: str) -> UUID | None:
         return None
 
 
+def _parse_origin_mode(mode: str) -> Mode | None:
+    """Parsea ``mode`` (str) a ``Mode`` de forma DEFENSIVA (issue #158).
+
+    El ``origin_mode`` de ``audit_log`` es nullable y best-effort: si el ``mode``
+    del turno no es un valor valido de ``Mode`` (payload viejo/corrupto en la
+    cola), se degrada a ``None`` y la auditoria se escribe igual con
+    ``origin_mode=NULL`` en vez de tumbar la consolidacion. NO se loguea el valor
+    crudo (defensa en profundidad sobre regla #4: el modo no es PII, pero igual no
+    viaja a logs).
+
+    Returns:
+        El ``Mode`` parseado, o ``None`` si ``mode`` no es un valor valido.
+    """
+    try:
+        return Mode(mode)
+    except ValueError:
+        logger.warning("consolidation: mode no es un valor valido de Mode, origin_mode=None")
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Cuerpo async de la consolidacion (separado para inyeccion en tests)
 # ---------------------------------------------------------------------------
@@ -159,6 +181,8 @@ async def _async_consolidate(
     uid = UUID(user_id)
     # Parse defensivo del session_id: UUID valido -> FK; basura -> None (sin crash).
     source_session_id = _parse_source_session_id(session_id)
+    # Parse defensivo del mode -> origin_mode de audit_log (nullable, best-effort).
+    origin_mode = _parse_origin_mode(mode)
     engine = None
 
     try:
@@ -166,6 +190,7 @@ async def _async_consolidate(
             # Modo test: usar la sesion inyectada, no crear engine.
             sem_store = SemanticMemoryStore(session, uid, effective_embedder, effective_reranker)
             proc_store = ProceduralMemoryStore(session, uid)
+            audit_store = AuditStore(session, uid)
 
             mem_engine = QwenMemoryEngine(effective_llm)
             ops = await mem_engine.consolidate(
@@ -175,9 +200,13 @@ async def _async_consolidate(
             )
             applied = await apply_ops(
                 ops,
+                session=session,
                 semantic_store=sem_store,
                 procedural_store=proc_store,
                 source_session_id=source_session_id,
+                audit_store=audit_store,
+                origin_model=LlmModel.QWEN,
+                origin_mode=origin_mode,
             )
             # NO commitear aqui: el fixture controla el rollback.
             return applied
@@ -190,6 +219,7 @@ async def _async_consolidate(
         async with maker() as db_session:
             sem_store = SemanticMemoryStore(db_session, uid, effective_embedder, effective_reranker)
             proc_store = ProceduralMemoryStore(db_session, uid)
+            audit_store = AuditStore(db_session, uid)
 
             mem_engine = QwenMemoryEngine(effective_llm)
             ops = await mem_engine.consolidate(
@@ -199,9 +229,13 @@ async def _async_consolidate(
             )
             applied = await apply_ops(
                 ops,
+                session=db_session,
                 semantic_store=sem_store,
                 procedural_store=proc_store,
                 source_session_id=source_session_id,
+                audit_store=audit_store,
+                origin_model=LlmModel.QWEN,
+                origin_mode=origin_mode,
             )
             await db_session.commit()
 

@@ -161,8 +161,17 @@ Al cerrar la sesión, un worker Celery genera la entrada episódica.
 
 ### audit_log
 
-Registro inmutable de operaciones sobre memoria. Dos vías de
-eliminación:
+Registro inmutable de operaciones sobre memoria. **Se escribe** (issue
+#158): la consolidación (`app/llm/memory_engine.apply_ops` vía
+`app/memory/audit.AuditStore`) inserta **una fila por op de memoria
+consolidada** que cambia el estado (ADD/UPDATE/DELETE sobre semantic o
+procedural; NOOP y ops skippeadas no auditan). La fila guarda solo
+metadata + un `record_hash` SHA-256 del contenido/identificador
+afectado, **nunca el contenido en claro** (regla #4): el hash es
+unidireccional, así que cero PII llega a la tabla de auditoría.
+`apply_ops` no toca episódica (donde vive lo sensible), así que estas
+filas tienen `sensitive=false`. La escritura es atómica con la op que
+audita (mismo `commit` de la consolidación). Dos vías de eliminación:
 
 1. **Temporal (worker)**: 24 meses por worker periódico de Celery —
    retention normal para usuarios activos (`docs/product/MEMORY.md`).

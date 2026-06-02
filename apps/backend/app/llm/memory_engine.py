@@ -27,15 +27,22 @@ Decisiones (ADR-010 + critica adversarial M8, NO re-litigar):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode
 from app.llm.clients.base import LLMClient
 from app.llm.schemas import ChatMessage
 from app.schemas.memory import ProceduralMemoryUpsert, SemanticMemoryCreate
+
+if TYPE_CHECKING:
+    from app.memory.audit import AuditStore
 
 logger = logging.getLogger(__name__)
 
@@ -284,12 +291,36 @@ class FakeMemoryEngine:
 # ---------------------------------------------------------------------------
 
 
+def _record_hash(value: str) -> str:
+    """sha256 hex (64 chars) del valor para el ``record_hash`` de ``audit_log``.
+
+    REGLA #4: el digest es unidireccional — la fila de auditoría guarda este
+    hash, NO el contenido en claro. Siempre devuelve 64 chars ``[0-9a-f]``, así
+    que el CHECK ``record_hash_sha256_hex`` del modelo nunca falla.
+    """
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _procedural_hash_payload(key: str, value: dict[str, Any]) -> str:
+    """Payload canónico ``(key, value)`` para el ``record_hash`` procedural.
+
+    Sede ÚNICA del formato del digest procedural (lo reusa el test): el ``value``
+    se serializa con ``sort_keys`` para que el mismo par dé siempre el mismo hash,
+    independiente del orden de las claves del dict.
+    """
+    return f"{key}\n{json.dumps(value, sort_keys=True, ensure_ascii=False)}"
+
+
 async def apply_ops(
     ops: list[MemoryOp],
     *,
+    session: AsyncSession | None = None,
     semantic_store: Any,
     procedural_store: Any,
     source_session_id: UUID | None = None,
+    audit_store: AuditStore | None = None,
+    origin_model: LlmModel | None = None,
+    origin_mode: Mode | None = None,
 ) -> int:
     """Aplica cada op contra los stores de memoria.
 
@@ -317,71 +348,191 @@ async def apply_ops(
     lo borra. Es FK opcional a ``sessions.id`` (``ondelete=SET NULL``): si la
     ``ChatSession`` se borra, el hecho sobrevive con ``source_session_id`` NULL.
 
+    AUDIT (issue #158): si ``audit_store`` no es ``None``, tras CADA op
+    EFECTIVAMENTE aplicada se escribe una fila de ``audit_log`` con la metadata
+    de la operacion (``operation`` / ``target_layer`` / ``target_id`` /
+    ``origin_*``) + un ``record_hash`` sha256. REGLA #4: el ``record_hash`` es el
+    sha256 hex (64 chars) del contenido/identificador afectado, NUNCA el
+    contenido en claro — cero PII a la tabla de auditoria. ``apply_ops`` NUNCA
+    toca episodica (donde vive lo sensible), asi que ``sensitive=False`` siempre.
+    NOOP y ops skippeadas (target_id/key faltante, update/delete sin match) NO se
+    auditan: solo se audita lo que de verdad cambio el estado de la memoria.
+
+    ATOMICIDAD POR-OP (savepoint): cuando ``session`` se pasa (path real), cada op
+    + su fila de audit corren en un ``begin_nested()`` (SAVEPOINT). Asi la op de
+    memoria y su auditoria son ATOMICAS (las dos o ninguna) y, sobre todo, un fallo
+    NO envenena la transaccion: en Postgres un statement que falla aborta la tx
+    entera, asi que sin el savepoint el ``except`` por-op daria FALSA sensacion de
+    aislamiento (las ops siguientes fallarian con ``PendingRollbackError`` y el
+    ``commit`` final tumbaria el worker). El savepoint acota el rollback a esa sola
+    op; ``applied`` cuenta solo las que confirmaron. Con ``session=None`` (unit
+    tests con stores fake, sin transaccion real) se corre sin savepoint.
+
     Args:
         ops: Lista de ``MemoryOp`` a aplicar.
+        session: ``AsyncSession`` compartida por los stores, para el savepoint
+            por-op (``begin_nested``). ``None`` (default) = sin savepoint
+            (back-compat con los unit tests de stores fake).
         semantic_store: Instancia de ``SemanticMemoryStore`` del usuario.
         procedural_store: Instancia de ``ProceduralMemoryStore`` del usuario.
         source_session_id: UUID de la ``ChatSession`` que origino el turno, o
             ``None`` si no se pudo determinar. Se persiste SOLO en ADD semantic
             como provenance del hecho (M10 Ola 1).
+        audit_store: ``AuditStore`` del usuario (misma sesion que los stores de
+            memoria) o ``None``. Si es ``None``, no se escribe auditoria (back-compat
+            con los tests/callers que no la pasan).
+        origin_model: Modelo LLM que origino la consolidacion (``LlmModel.QWEN`` en
+            el path real). Se persiste como ``origin_model`` en cada fila de audit.
+        origin_mode: Modo activo de la sesion, ya parseado a ``Mode`` (o ``None`` si
+            el modo era invalido). Se persiste como ``origin_mode`` en cada fila.
 
     Returns:
         Cantidad de ops efectivamente aplicadas (NOOP y skips no cuentan).
     """
     applied = 0
+    op_kwargs: dict[str, Any] = {
+        "semantic_store": semantic_store,
+        "procedural_store": procedural_store,
+        "source_session_id": source_session_id,
+        "audit_store": audit_store,
+        "origin_model": origin_model,
+        "origin_mode": origin_mode,
+    }
     for op in ops:
+        if op.op == "NOOP":
+            continue
         try:
-            if op.op == "NOOP":
-                continue
-
-            if op.layer == "semantic":
-                if op.op == "ADD":
-                    if not op.content:
-                        continue
-                    # source_session_id SOLO aca (provenance del hecho nuevo).
-                    # NO en UPDATE/DELETE: un update refina el texto pero no
-                    # cambia de que sesion vino el hecho original (M10 Ola 1).
-                    await semantic_store.add(
-                        SemanticMemoryCreate(
-                            content=op.content,
-                            source_session_id=source_session_id,
-                        )
-                    )
-                    applied += 1
-
-                elif op.op == "UPDATE":
-                    if not op.target_id or not op.content:
-                        continue
-                    result = await semantic_store.update(UUID(op.target_id), op.content)
-                    if result is not None:
-                        applied += 1
-
-                elif op.op == "DELETE":
-                    if not op.target_id:
-                        continue
-                    deleted = await semantic_store.delete(UUID(op.target_id))
-                    if deleted:
-                        applied += 1
-
-            elif op.layer == "procedural":
-                if op.op in ("ADD", "UPDATE"):
-                    if not op.key or op.value is None:
-                        continue
-                    await procedural_store.upsert(
-                        ProceduralMemoryUpsert(key=op.key, value=op.value)
-                    )
-                    applied += 1
-
-                elif op.op == "DELETE":
-                    if not op.key:
-                        continue
-                    deleted = await procedural_store.delete(op.key)
-                    if deleted:
-                        applied += 1
-
+            if session is not None:
+                # SAVEPOINT por-op: aisla la op + su audit (atomico-o-nada) y evita
+                # envenenar la transaccion de las ops siguientes ante un fallo.
+                async with session.begin_nested():
+                    did_apply = await _apply_single_op(op, **op_kwargs)
+            else:
+                did_apply = await _apply_single_op(op, **op_kwargs)
+            if did_apply:
+                applied += 1
         except Exception:
-            # Op individual falla: loguear (sin contenido) y seguir.
-            logger.debug("memory_engine: op %s/%s fallida, skip", op.op, op.layer)
+            # La op (o su audit) fallo: el savepoint ya revirtio ESTA op. Se loguea
+            # SIN contenido (regla #4) a WARNING para que un fallo de auditoria NO
+            # quede invisible, y se sigue con la proxima op.
+            logger.warning("memory_engine: op %s/%s revertida (savepoint), skip", op.op, op.layer)
             continue
 
     return applied
+
+
+async def _apply_single_op(
+    op: MemoryOp,
+    *,
+    semantic_store: Any,
+    procedural_store: Any,
+    source_session_id: UUID | None,
+    audit_store: AuditStore | None,
+    origin_model: LlmModel | None,
+    origin_mode: Mode | None,
+) -> bool:
+    """Aplica UNA op (memoria + su fila de audit) y devuelve ``True`` si cambio el estado.
+
+    Corre DENTRO del savepoint del caller (ver ``apply_ops``): si la op o su audit
+    fallan, el ``begin_nested`` revierte AMBAS y el caller NO la cuenta. NOOP/skip
+    devuelven ``False`` sin escribir nada. El ``record_hash`` es siempre sha256 hex
+    (regla #4: digest, no contenido); ``sensitive=False`` (apply_ops no toca
+    episodica, donde vive lo sensible).
+    """
+
+    async def _audit(
+        *,
+        operation: AuditOperation,
+        target_layer: MemoryLayer,
+        target_id: UUID | None,
+        record_hash: str,
+    ) -> None:
+        if audit_store is not None:
+            await audit_store.record(
+                operation=operation,
+                target_layer=target_layer,
+                target_id=target_id,
+                record_hash=record_hash,
+                origin_model=origin_model,
+                origin_mode=origin_mode,
+                sensitive=False,
+            )
+
+    if op.layer == "semantic":
+        if op.op == "ADD":
+            if not op.content:
+                return False
+            # source_session_id SOLO aca (provenance del hecho nuevo). NO en
+            # UPDATE/DELETE: un update refina el texto pero no cambia de que sesion
+            # vino el hecho original (M10 Ola 1).
+            out = await semantic_store.add(
+                SemanticMemoryCreate(content=op.content, source_session_id=source_session_id)
+            )
+            await _audit(
+                operation=AuditOperation.WRITE,
+                target_layer=MemoryLayer.SEMANTIC,
+                target_id=out.id,
+                record_hash=_record_hash(op.content),
+            )
+            return True
+        if op.op == "UPDATE":
+            if not op.target_id or not op.content:
+                return False
+            result = await semantic_store.update(UUID(op.target_id), op.content)
+            if result is None:
+                return False
+            await _audit(
+                operation=AuditOperation.UPDATE,
+                target_layer=MemoryLayer.SEMANTIC,
+                target_id=result.id,
+                record_hash=_record_hash(op.content),
+            )
+            return True
+        if op.op == "DELETE":
+            if not op.target_id:
+                return False
+            deleted = await semantic_store.delete(UUID(op.target_id))
+            if not deleted:
+                return False
+            await _audit(
+                operation=AuditOperation.DELETE,
+                target_layer=MemoryLayer.SEMANTIC,
+                target_id=UUID(op.target_id),
+                record_hash=_record_hash(op.target_id),
+            )
+            return True
+        return False
+
+    if op.layer == "procedural":
+        if op.op in ("ADD", "UPDATE"):
+            if not op.key or op.value is None:
+                return False
+            out = await procedural_store.upsert(ProceduralMemoryUpsert(key=op.key, value=op.value))
+            # ADD -> WRITE, UPDATE -> UPDATE (ambos van al mismo upsert; la semantica
+            # de la op distingue la operacion auditada).
+            operation = AuditOperation.WRITE if op.op == "ADD" else AuditOperation.UPDATE
+            await _audit(
+                operation=operation,
+                target_layer=MemoryLayer.PROCEDURAL,
+                target_id=out.id,
+                record_hash=_record_hash(_procedural_hash_payload(op.key, op.value)),
+            )
+            return True
+        if op.op == "DELETE":
+            if not op.key:
+                return False
+            deleted = await procedural_store.delete(op.key)
+            if not deleted:
+                return False
+            # target_id=None: la procedural se identifica por key; el delete-by-key no
+            # retorna id, y record_hash=sha256(key) ya ata la fila a la entrada borrada.
+            await _audit(
+                operation=AuditOperation.DELETE,
+                target_layer=MemoryLayer.PROCEDURAL,
+                target_id=None,
+                record_hash=_record_hash(op.key),
+            )
+            return True
+        return False
+
+    return False

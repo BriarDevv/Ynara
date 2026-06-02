@@ -22,14 +22,13 @@ Invariante cubierto — **ON DELETE CASCADE** (``app/models/audit.py`` línea
 NOTA (regla #4): el ``audit_log`` NO guarda texto de usuario (solo metadata de la
 operación + ``record_hash``); ningún test loguea ni asierta contenido de memoria.
 
-NOTA DE SCOPE — premisa "una op de memoria escribe audit_log": a la fecha NINGÚN
-código de ``app/`` inserta filas en ``audit_log`` (ni ``app/memory/*`` ni
-``app/llm/memory_engine.apply_ops`` lo hacen; ``AuditLog`` existe solo como modelo
-+ schema ``AuditLogOut``, cuya doc dice "escritura interna al backend", aún no
-implementada). Por eso estos tests siembran la fila de ``audit_log`` directamente
-vía ORM (escribir en ``audit_log`` está permitido; lo prohibido es tocar el modelo
-o la migración) y cubren el invariante que SÍ es real y verificable: el
-``ON DELETE CASCADE``. Ver ``notes`` del entregable.
+NOTA DE SCOPE — la escritura real de ``audit_log`` ya existe (issue #158):
+``app/llm/memory_engine.apply_ops`` inserta una fila por op de memoria consolidada
+vía ``app/memory/audit.AuditStore``; esa cobertura vive en
+``tests/integration/test_audit_writes.py``. Estos tests se mantienen enfocados en
+el invariante de FK que NO depende de quién escribió la fila: siembran la fila de
+``audit_log`` directamente vía ORM (escribir en ``audit_log`` está permitido; lo
+prohibido es tocar el modelo o la migración) y cubren el ``ON DELETE CASCADE``.
 """
 
 from __future__ import annotations
