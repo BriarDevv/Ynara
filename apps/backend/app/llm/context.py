@@ -51,7 +51,7 @@ COMPLETION_RESERVE_TOKENS: int = 512
 # ---------------------------------------------------------------------------
 
 
-def _estimate_tokens(text: str) -> int:
+def estimate_tokens(text: str) -> int:
     """Estimacion rapida de tokens a partir de caracteres.
 
     Heuristica: ~3 caracteres por token (conservadora para texto en espanol).
@@ -60,17 +60,33 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 3)
 
 
-def _budget_tokens(context_window: int) -> int:
-    """Tokens disponibles para inyectar contexto de memoria.
+def context_budget(*, max_model_len: int, system_prompt: str) -> int:
+    """Presupuesto de tokens para el bloque de contexto de memoria.
 
-    Descuenta el COMPLETION_RESERVE_TOKENS y deja un margen conservador para
-    el system prompt y el mensaje del usuario. En M8 el prompt base ocupa
-    ~200-400 tokens segun el modo; dejamos el contexto competir con ese rango.
+    Funcion publica UNICA que centraliza la formula del presupuesto: el router
+    la consume (no reimplementa la cuenta). Descuenta de ``max_model_len`` la
+    estimacion del system prompt base (``estimate_tokens``) y el
+    ``COMPLETION_RESERVE_TOKENS`` (tokens reservados para la generacion). El
+    resultado nunca es negativo: en el peor caso (prompt enorme + ventana chica,
+    p.ej. Gemma 4096) devuelve 0. Con budget 0, ``render_context_block`` igual
+    incluye un PISO MINIMO de las entradas mas relevantes (hasta ~3 semantic + 1
+    episodic + 5 procedural, ~200 tokens): el ``COMPLETION_RESERVE_TOKENS``
+    garantiza espacio para ese piso aun en Gemma 4096, asi que el piso nunca
+    provoca overflow real.
+
+    La estimacion de tokens es ``estimate_tokens`` (``len // 3``), consistente
+    con el truncado de ``render_context_block``.
+
+    Args:
+        max_model_len: Ventana de contexto efectiva del modelo (de
+            ``serving.max_model_len[model_key]``).
+        system_prompt: System prompt base del modo (antes de inyectar memoria).
 
     Returns:
-        Presupuesto en tokens para el bloque de contexto de memoria.
+        Presupuesto en tokens (>= 0) para el bloque de contexto de memoria.
     """
-    return max(0, context_window - COMPLETION_RESERVE_TOKENS)
+    reserved = estimate_tokens(system_prompt) + COMPLETION_RESERVE_TOKENS
+    return max(0, max_model_len - reserved)
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +285,7 @@ def _truncate_to_budget(
 
     def _fits() -> bool:
         block = _build_block(sem, epi, proc)
-        return _estimate_tokens(block) <= budget_tokens
+        return estimate_tokens(block) <= budget_tokens
 
     if _fits():
         return sem, epi, proc
