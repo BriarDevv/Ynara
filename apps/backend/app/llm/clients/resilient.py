@@ -59,6 +59,14 @@ _PERMANENT_ERRORS: tuple[type[LlmError], ...] = (
 
 _DEFAULT_DEGRADED_TEXT = "Estoy con un problema tecnico, proba en un ratito."
 
+# Presupuesto global (en segundos) para TODA la cadena de candidatos + fallback
+# de un ``complete``. Sin este tope, el peor caso es ~timeout_per_request x
+# max_attempts x N_candidatos (p.ej. 120s x 3 x 2 -> ~12 min) antes de degradar.
+# Al vencerse el budget se corta limpio y se devuelve la respuesta degradada
+# (mismo contrato que agotar la cadena), dando ademas un punto de cancelacion
+# async cooperativo. Es una cota defensiva, no el camino feliz.
+_DEFAULT_TOTAL_BUDGET_S: float = 90.0
+
 
 class ResilientClient:
     """Envuelve un ``ClientPool`` con retry, breaker y fallback on-prem."""
@@ -70,6 +78,7 @@ class ResilientClient:
         max_attempts: int = 3,
         base_backoff_s: float = 0.5,
         max_backoff_s: float = 8.0,
+        total_budget_s: float = _DEFAULT_TOTAL_BUDGET_S,
         degraded_text: str = _DEFAULT_DEGRADED_TEXT,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
@@ -77,7 +86,12 @@ class ResilientClient:
     ) -> None:
         """Configura la politica de resiliencia.
 
-        ``clock`` y ``sleep`` son inyectables para tests deterministas; el
+        ``total_budget_s`` es el deadline global de ``complete``: envuelve toda
+        la cadena de candidatos + fallback para que la respuesta degradada
+        llegue rapido en vez de sumar el timeout de cada intento. Se mide contra
+        el reloj del event loop (``asyncio.timeout``), NO contra ``clock`` (que
+        solo gobierna backoff/breaker). ``clock`` y ``sleep`` son inyectables
+        para tests deterministas; el
         ``breaker_factory`` construye un ``CircuitBreaker`` por cada cliente
         del pool (uno por instancia, keyed por ``id(client)``).
         """
@@ -85,6 +99,7 @@ class ResilientClient:
         self._max_attempts = max_attempts
         self._base_backoff_s = base_backoff_s
         self._max_backoff_s = max_backoff_s
+        self._total_budget_s = total_budget_s
         self._degraded_text = degraded_text
         self._clock = clock
         self._sleep = sleep
@@ -95,6 +110,14 @@ class ResilientClient:
     def serves_model(self, model: str) -> bool:
         """``True`` si algun cliente del pool sirve el modelo."""
         return bool(self._pool.candidates(model))
+
+    async def aclose(self) -> None:
+        """Libera los recursos de los clientes del pool (``httpx.AsyncClient``).
+
+        Delega en ``ClientPool.aclose``; lo llama el shutdown del lifespan para
+        no filtrar conexiones de los ``VllmClient`` en produccion.
+        """
+        await self._pool.aclose()
 
     async def health(self) -> ModelHealth:
         """Salud agregada: sano si al menos un cliente del pool responde.
@@ -126,7 +149,45 @@ class ResilientClient:
         temperature: float = 0.7,
         timeout_s: float | None = None,
     ) -> CompletionResult:
-        """Completa con retry + fallback on-prem; degrada si todo falla."""
+        """Completa con retry + fallback on-prem; degrada si todo falla.
+
+        Toda la cadena de candidatos vive bajo un deadline global
+        (``total_budget_s``): si se vence, se corta y se degrada igual que al
+        agotar la cadena, evitando que el peor caso sume el timeout de cada
+        intento (P2.5).
+        """
+        try:
+            async with asyncio.timeout(self._total_budget_s):
+                result = await self._run_candidates(
+                    model=model,
+                    messages=messages,
+                    tools=tools,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    timeout_s=timeout_s,
+                )
+        except TimeoutError:
+            # Budget global agotado: misma ruta degradada que agotar la cadena.
+            return degraded_response(text=self._degraded_text, model_name=model)
+        if result is not None:
+            return result
+        return degraded_response(text=self._degraded_text, model_name=model)
+
+    async def _run_candidates(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec] | None,
+        max_tokens: int,
+        temperature: float,
+        timeout_s: float | None,
+    ) -> CompletionResult | None:
+        """Recorre los candidatos (primario -> fallback on-prem).
+
+        Devuelve el primer resultado exitoso, o ``None`` si todos se agotan /
+        tienen el breaker abierto (el caller degrada).
+        """
         for client in self._pool.candidates(model):
             breaker = self._breakers[id(client)]
             if not breaker.allow():
@@ -143,7 +204,7 @@ class ResilientClient:
             )
             if result is not None:
                 return result
-        return degraded_response(text=self._degraded_text, model_name=model)
+        return None
 
     async def _try_candidate(
         self,

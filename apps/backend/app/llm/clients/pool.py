@@ -74,6 +74,18 @@ class ClientPool:
             raise ModelNotServedError(model)
         return self._strategy.pick(candidates)
 
+    async def aclose(self) -> None:
+        """Cierra todos los clientes del pool (libera sus ``httpx.AsyncClient``).
+
+        Lo llama ``ResilientClient.aclose`` en el teardown. Defensivo: salta los
+        clientes sin ``aclose`` (p.ej. fakes minimos de tests), asi cerrar un
+        pool de Fakes es inocuo.
+        """
+        for client in self._clients:
+            aclose = getattr(client, "aclose", None)
+            if aclose is not None:
+                await aclose()
+
 
 def build_pool(
     config: LlmRuntimeConfig,

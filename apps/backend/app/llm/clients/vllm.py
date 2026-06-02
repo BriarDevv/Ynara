@@ -11,6 +11,7 @@ Mapeo de errores HTTP a la taxonomia (``app/llm/errors.py``):
 - ConnectError       -> ``LlmUnavailableError``
 - 429                -> ``LlmOverloadedError``
 - 400 / 422          -> ``LlmBadRequestError``
+- 400 con firma de overflow en el body -> ``LlmContextOverflowError``
 - 503                -> ``LlmUnavailableError``
 - otros >= 500       -> ``LlmUnavailableError``
 """
@@ -27,6 +28,7 @@ import httpx
 from app.llm.clients.base import ToolCallParser
 from app.llm.errors import (
     LlmBadRequestError,
+    LlmContextOverflowError,
     LlmError,
     LlmOverloadedError,
     LlmTimeoutError,
@@ -43,6 +45,32 @@ from app.llm.schemas import (
 
 _CHAT_PATH = "/chat/completions"
 _MODELS_PATH = "/models"
+
+# Firmas de overflow de contexto en el body de un 400 de vLLM. vLLM (y el
+# server OpenAI-compatible) devuelven un 400 plano cuando el prompt + la
+# generacion exceden la ventana; el body trae una de estas frases. Se matchea
+# en minuscula contra el texto del body para mapear a LlmContextOverflowError
+# (subclase de LlmBadRequestError) en vez del 400 generico. Regla #4: NUNCA se
+# propaga el body crudo; solo se usa para decidir el TIPO de excepcion, cuyo
+# detail es una etiqueta fija.
+_CONTEXT_OVERFLOW_SIGNATURES: tuple[str, ...] = (
+    "maximum context length",
+    "context length",
+    "reduce the length of the messages",
+)
+
+
+def _is_context_overflow(body_text: str | None) -> bool:
+    """``True`` si el body de un 400 trae una firma de overflow de contexto.
+
+    Match case-insensitive contra ``_CONTEXT_OVERFLOW_SIGNATURES``. El body NO
+    se loguea ni se propaga: solo se inspecciona para elegir el TIPO de
+    excepcion (regla #4).
+    """
+    if not body_text:
+        return False
+    lowered = body_text.lower()
+    return any(sig in lowered for sig in _CONTEXT_OVERFLOW_SIGNATURES)
 
 
 class VllmClient:
@@ -78,6 +106,15 @@ class VllmClient:
     def serves_model(self, model: str) -> bool:
         return model in self._served_models
 
+    async def aclose(self) -> None:
+        """Cierra el ``httpx.AsyncClient`` subyacente (libera el connection pool).
+
+        Lo llama el teardown del pool/lifespan al apagar la app. El cliente HTTP
+        se construye afuera (la factory) y se le cede a este ``VllmClient``, que
+        queda como su owner para el cierre — sin esto se filtran sockets en prod.
+        """
+        await self._http.aclose()
+
     async def complete(
         self,
         *,
@@ -100,7 +137,9 @@ class VllmClient:
         started = time.perf_counter()
         response = await self._post(payload, self._resolve_timeout(timeout_s))
         latency_ms = (time.perf_counter() - started) * 1000.0
-        self._raise_for_status(response)
+        # En no-streaming la response ya esta leida: pasamos el body para que
+        # un 400 de overflow se mapee a LlmContextOverflowError (P2.4).
+        self._raise_for_status(response, body_text=response.text)
         return self._parse_completion(response.json(), model, latency_ms)
 
     async def stream(
@@ -218,13 +257,18 @@ class VllmClient:
             raise LlmUnavailableError("connect error") from exc
 
     @staticmethod
-    def _raise_for_status(response: httpx.Response) -> None:
+    def _raise_for_status(response: httpx.Response, *, body_text: str | None = None) -> None:
         status = response.status_code
         if status < 400:
             return
         if status == httpx.codes.TOO_MANY_REQUESTS:
             raise LlmOverloadedError(f"HTTP {status}")
         if status in (httpx.codes.BAD_REQUEST, httpx.codes.UNPROCESSABLE_ENTITY):
+            # Un 400 cuyo body trae la firma de overflow es contexto excedido
+            # (subclase permanente especifica); el resto es un 400 generico.
+            # Regla #4: el detail es una etiqueta fija, nunca el body crudo.
+            if status == httpx.codes.BAD_REQUEST and _is_context_overflow(body_text):
+                raise LlmContextOverflowError(f"HTTP {status}")
             raise LlmBadRequestError(f"HTTP {status}")
         if status == httpx.codes.SERVICE_UNAVAILABLE:
             raise LlmUnavailableError(f"HTTP {status}")

@@ -26,7 +26,12 @@ from app.llm.schemas import (
     ToolCall,
     ToolSpec,
 )
-from app.llm.tool_loop import MAX_TOOL_ITERATIONS, _execute_anywhere, run_tool_loop
+from app.llm.tool_loop import (
+    MAX_CALLS_PER_TURN,
+    MAX_TOOL_ITERATIONS,
+    _execute_anywhere,
+    run_tool_loop,
+)
 from app.llm.tools.registry import ToolRegistry
 
 # ---------------------------------------------------------------------------
@@ -368,6 +373,67 @@ async def test_degraded_termina_inmediatamente() -> None:
     assert actions == []
     assert finish_reason == "degraded"
     assert len(fake.complete_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_cap_tool_calls_por_turno() -> None:
+    """Si el modelo emite mas de MAX_CALLS_PER_TURN, solo se ejecutan cap."""
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+
+    extra = 3
+    many = [
+        _make_tool_call("calendar.create_event", f"tc-{i}")
+        for i in range(MAX_CALLS_PER_TURN + extra)
+    ]
+    # Turno 1: el modelo emite cap+extra tool_calls. Turno 2: stop.
+    fake.queue_result(_make_result(text="", finish_reason="tool_calls", tool_calls=many))
+    fake.queue_result(_make_result(text="listo", finish_reason="stop"))
+
+    reg = ToolRegistry()
+
+    class FakeTool:
+        name = "calendar.create_event"
+        namespace = "calendar"
+        description = "crea un evento"
+
+        @property
+        def parameters(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        async def execute(self, arguments: dict) -> dict:
+            return {"status": "ok"}
+
+    reg.register(FakeTool())  # type: ignore[arg-type]
+
+    spec = ToolSpec(
+        name="calendar.create_event",
+        description="crea un evento",
+        parameters={"type": "object", "properties": {}},
+    )
+
+    msgs = _messages()
+    _text, actions, _fr = await run_tool_loop(
+        llm_client=fake,
+        served_name="qwen",
+        messages=msgs,
+        specs=[spec],
+        registries=(reg, None),
+        fallback_text="fallback",
+    )
+
+    # Solo se ejecutan las primeras cap, en orden; las extra se descartan.
+    assert len(actions) == MAX_CALLS_PER_TURN
+    assert [a["id"] for a in actions] == [f"tc-{i}" for i in range(MAX_CALLS_PER_TURN)]
+
+    # El assistant message del historial preserva SOLO las calls ejecutadas
+    # (correlacion assistant/tool consistente para el parser hermes).
+    assistant_msgs = [m for m in msgs if m.role == "assistant"]
+    assert len(assistant_msgs) == 1
+    assert assistant_msgs[0].tool_calls is not None
+    assert len(assistant_msgs[0].tool_calls) == MAX_CALLS_PER_TURN
+    # Hay un ChatMessage 'tool' por cada call ejecutada, no por las extra.
+    tool_msgs = [m for m in msgs if m.role == "tool"]
+    assert len(tool_msgs) == MAX_CALLS_PER_TURN
 
 
 @pytest.mark.asyncio
