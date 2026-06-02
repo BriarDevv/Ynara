@@ -55,7 +55,3 @@ class UUIDPKMixin:
         default=uuid.uuid4,
         server_default=func.gen_random_uuid(),
     )
-
-
-# TODO: modelos concretos (User, Session, SemanticMemory, EpisodicMemory,
-# ProceduralMemory, AuditLog) cuando se definan los esquemas finales.

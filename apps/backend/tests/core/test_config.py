@@ -97,3 +97,26 @@ def test_dev_allows_localhost_cors_and_empty_master_key() -> None:
     s = _settings(environment="development", MEMORY_ENCRYPTION_MASTER_KEY="")
     assert any("localhost" in origin for origin in s.cors_origins)
     assert s.memory_encryption_master_key == ""
+
+
+# ---------------------------------------------------------------------------
+# Fallback de las URLs de Celery hacia redis_url (P2.7)
+# ---------------------------------------------------------------------------
+
+
+def test_celery_urls_default_to_redis_when_unset() -> None:
+    """Sin CELERY_*_URL explícitas, broker y result-backend caen a redis_url."""
+    s = _settings(REDIS_URL="redis://localhost:6379/3")
+    assert s.celery_broker_url == "redis://localhost:6379/3"
+    assert s.celery_result_backend == "redis://localhost:6379/3"
+
+
+def test_celery_urls_respected_when_set() -> None:
+    """Con CELERY_*_URL explícitas, se respetan y NO se pisan con redis_url."""
+    s = _settings(
+        REDIS_URL="redis://localhost:6379/0",
+        CELERY_BROKER_URL="redis://broker:6379/1",
+        CELERY_RESULT_BACKEND="redis://backend:6379/2",
+    )
+    assert s.celery_broker_url == "redis://broker:6379/1"
+    assert s.celery_result_backend == "redis://backend:6379/2"

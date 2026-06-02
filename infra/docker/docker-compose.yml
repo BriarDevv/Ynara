@@ -17,6 +17,13 @@ services:
     # Solo expuesto a Cloudflared, no a internet
     expose:
       - "8080"
+    # Liveness: /v1/health no toca DB/Redis (barato). curl ya está en la imagen.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   worker:
     image: ${DOCKER_REGISTRY}/ynara-backend:latest
@@ -31,6 +38,17 @@ services:
       - redis
     networks:
       - ynara
+    # El worker no expone puerto: el ping va por el broker (inspect ping).
+    # CMD-SHELL para que $HOSTNAME lo resuelva el contenedor; $$ evita que compose
+    # lo interpole. El node default de celery es celery@<hostname>.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - uv run celery -A app.workers.celery_app inspect ping -d celery@$$HOSTNAME
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
 
   redis:
     image: redis:7-alpine
@@ -43,6 +61,13 @@ services:
       - redis-data:/data
     networks:
       - ynara
+    # redis-cli viene en la imagen redis:7-alpine; PING devuelve PONG si está vivo.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   cloudflared:
     image: cloudflare/cloudflared:latest

@@ -5,8 +5,8 @@ casual-rioplatense. Capa de memoria: procedural. Ver
 ``ynara.config.json[modes][vida]`` y MODES.md.
 
 Regla #14 de AI-GUIDELINES: modo conversacional, nunca clinico ni moralizante.
-Nota: la config lista ``calendar`` en ``tools_enabled``, pero por ADR-002 Gemma
-no llama tools y MODES.md lo aclara como solo lectura; el prompt no habilita
+Nota: ``ynara.config.json[modes][vida]`` tiene ``tools_enabled=[]`` y por ADR-002
+Gemma no llama tools; MODES.md lo aclara como solo lectura. El prompt no habilita
 ejecucion de tools.
 """
 
