@@ -49,6 +49,7 @@ de retornar un ``StreamingResponse`` explicito y del snapshot de primitivos.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
@@ -75,6 +76,8 @@ from app.llm.schemas import ChatRequest, ChatResponse
 from app.models.session import ChatSession
 from app.schemas.chat import Action, ChatHttpRequest, ChatHttpResponse
 from app.workflows.consolidation import consolidate_turn
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -193,23 +196,37 @@ async def _run_chat_turn(
     #
     #     MISMA condicion que tenia route() (no se re-litiga): encolar SOLO si el
     #     modelo del modo escribe memoria (writes_memory: Qwen=True, Gemma=False)
-    #     y el turno NO degrado. El finish_reason 'degraded' lo produce solo el
-    #     fallback de route() ante un error permanente del LLM; en ese turno
-    #     route() nunca encolaba (retornaba antes), asi que aca tampoco.
+    #     y el turno NO degrado. finish_reason 'degraded' lo produce el fallback de
+    #     route() (error LLM) O un CompletionResult degradado del cliente (cadena de
+    #     fallback on-prem agotada); en ambos casos NO consolidamos. Un turno con
+    #     'max_iterations' NO es degradado y SI consolida.
     #
     #     Esta es la UNICA sede de enqueue: ambos endpoints (/chat y /chat/stream)
     #     pasan por _run_chat_turn, asi que los dos heredan el enqueue post-commit.
     #     NUNCA meter el .delay() en el generator SSE del endpoint: el commit ya
     #     ocurrio aca y el closure del stream solo cierra sobre primitivos.
+    #
+    #     Fail-open (doctrina del stack, igual que el TokenStore que degrada en vez
+    #     de romper): .delay() publica al broker Redis de forma SINCRONA; si Redis
+    #     esta caido tira OperationalError / ConnectionError / errores de kombu. El
+    #     turno YA esta commiteado (paso 4): un fallo del enqueue NO debe devolver
+    #     500 con el turno persistido. La consolidacion es eventual, asi que perder
+    #     un enqueue es degradacion aceptable. Capturamos AMPLIO (Exception) porque
+    #     .delay() puede tirar varios tipos, y logueamos SOLO type(exc).__name__
+    #     (regla #4: jamas payload / args / str(exc)). Solo el enqueue va en el
+    #     try: nada anterior al commit se captura aca.
     writes_memory = load_llm_config().model_for_mode(body.mode.value).writes_memory
     if writes_memory and resp.finish_reason != "degraded":
-        consolidate_turn.delay(
-            user_id=str(user_id),
-            session_id=str(chat_session.id),
-            user_msg=body.text,
-            model_response=resp.text,
-            mode=body.mode.value,
-        )
+        try:
+            consolidate_turn.delay(
+                user_id=str(user_id),
+                session_id=str(chat_session.id),
+                user_msg=body.text,
+                model_response=resp.text,
+                mode=body.mode.value,
+            )
+        except Exception as exc:  # best-effort: el broker caido NO rompe el turno.
+            logger.warning("consolidate_turn enqueue failed: %s", type(exc).__name__)
 
     return chat_session, resp
 

@@ -216,6 +216,52 @@ async def test_happy_path_qwen_productividad_with_actions(db_session: AsyncSessi
 
 
 # ---------------------------------------------------------------------------
+# Fail-open: el enqueue de consolidacion (broker Redis caido) NO rompe el turno
+# ---------------------------------------------------------------------------
+
+
+async def test_enqueue_failure_does_not_break_turn(db_session: AsyncSession) -> None:
+    """Si ``consolidate_turn.delay`` lanza (broker caido), POST /chat sigue 200.
+
+    El turno ya esta commiteado cuando se encola; un fallo del enqueue debe
+    degradar (fail-open, igual que el TokenStore), no devolver 500 con el turno
+    ya persistido. Usa Qwen (``writes_memory=True``) para ejercitar el path de
+    enqueue y parchea ``delay`` para que tire ``RuntimeError`` (simula
+    OperationalError / ConnectionError del broker Redis).
+    """
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+    fake.queue_result(
+        _completion(text="Listo, lo agende.", finish_reason="stop", model_name="qwen")
+    )
+
+    client = await _client(db_session, llm_client=fake)
+    try:
+        with patch("app.api.v1.chat.consolidate_turn") as mock_task:
+            mock_task.delay = MagicMock(side_effect=RuntimeError("broker down"))
+            async with client:
+                resp = await client.post(
+                    "/v1/chat",
+                    json={"text": "agenda una reunion", "mode": "productividad"},
+                    headers=_bearer(user.id),
+                )
+
+        # 200 pese al fallo del enqueue: el turno se commiteo y la respuesta es valida.
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["text"] == "Listo, lo agende."
+        assert body["finish_reason"] == "stop"
+        # Se intento encolar (y fallo): el path fail-open se ejercito.
+        mock_task.delay.assert_called_once()
+        # La ChatSession quedo persistida pese al fallo del enqueue (commit previo).
+        persisted = await db_session.get(ChatSession, uuid.UUID(body["session_id"]))
+        assert persisted is not None
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+# ---------------------------------------------------------------------------
 # Reuso de session_id (mismo user, mismo mode) — NO crea una segunda sesion
 # ---------------------------------------------------------------------------
 
