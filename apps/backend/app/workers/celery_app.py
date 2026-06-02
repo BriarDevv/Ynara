@@ -1,4 +1,19 @@
-"""Instancia de Celery + autodiscovery de tasks + beat schedule."""
+"""Instancia de Celery + autodiscovery de tasks + beat schedule.
+
+POLITICA DE FIABILIDAD (explicita, no defaults implicitos): la cola corre
+tasks que escriben en tablas SAGRADAS (``consolidate_turn`` aplica ops via
+``apply_ops``; ``decay_procedural`` hace UPDATE/DELETE sobre
+``procedural_memory``). Por eso ``consolidate_turn`` es **AT-MOST-ONCE** hasta
+tener dedup: con ``task_acks_late=False`` el broker ackea ANTES de ejecutar, asi
+un crash del worker NO reencola y NO reejecuta. Esto evita el duplicado de
+hechos que hoy produciria un reintento, porque ``apply_ops`` aplica ADD semantic
+SIN dedup (search-before-add): reintentar el mismo turno insertaria el mismo
+hecho otra vez. La idempotencia real de ``apply_ops`` (search-before-add que
+hace el ADD semantic idempotente y habilita ``task_acks_late=True`` + retries)
+es **Ola 3** y queda TRACKEADA — NO se implementa aca. Hasta entonces preferimos
+perder una consolidacion ante un crash raro antes que duplicar memoria del
+usuario silenciosamente.
+"""
 
 from __future__ import annotations
 
@@ -29,7 +44,26 @@ celery_app.conf.update(
     timezone="America/Argentina/Buenos_Aires",
     enable_utc=True,
     task_track_started=True,
-    # TODO: ajustar visibilidad de timeout / retry según la tarea.
+    # --- Politica de fiabilidad EXPLICITA (ver docstring del modulo) ---
+    # AT-MOST-ONCE: ackear ANTES de ejecutar. Un crash NO reencola, asi
+    # consolidate_turn (ADD semantic sin dedup) NO duplica hechos al reintentar.
+    # task_acks_late=True + retries es Ola 3 (search-before-add idempotente).
+    task_acks_late=False,
+    # Solo surte efecto con task_acks_late=True (Ola 3): rechaza/reencola un mensaje
+    # AUN NO ackeado si el worker muere. Bajo el at-most-once actual (early-ack) es
+    # INERTE — el mensaje ya se ackeo antes de ejecutar. Se deja seteado como
+    # preparacion para Ola 3; hoy NO da proteccion de crash por si mismo.
+    task_reject_on_worker_lost=True,
+    # Sin pipelining: un mensaje por worker a la vez (tasks pesadas, no rafagas).
+    worker_prefetch_multiplier=1,
+    # Limites de tiempo: soft (90s) lanza SoftTimeLimitExceeded; hard (120s) mata.
+    task_soft_time_limit=90,
+    task_time_limit=120,
+    # Redis visibility_timeout. Con early-ack (acks_late=False) el mensaje se quita
+    # de la cola al entregarlo, asi que hoy es mayormente INOCUO para estas tasks; el
+    # techo 180s > task_time_limit (120s) solo importa el dia que Ola 3 pase a
+    # task_acks_late=True, para no re-entregar una task que todavia corre.
+    broker_transport_options={"visibility_timeout": 180},
 )
 
 # Beat schedule. El decay procedural corre cada DECAY_INTERVAL_DAYS dias, NO
@@ -44,6 +78,7 @@ celery_app.conf.beat_schedule = {
     },
 }
 
-# Autodiscovery de tasks en app.workflows.*
-# TODO: agregar los módulos cuando estén los workflows reales.
+# Autodiscovery de tasks en app.workflows.*. Hoy registra consolidation.py
+# (consolidate_turn) y decay.py (decay_procedural); ambos ya existen. Los
+# nuevos workflows que se agreguen al paquete se descubren solos.
 celery_app.autodiscover_tasks(packages=["app.workflows"])
