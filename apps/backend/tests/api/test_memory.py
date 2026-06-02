@@ -1025,7 +1025,7 @@ async def test_patch_delete_commit_only_on_success(
 
 
 # ---------------------------------------------------------------------------
-# OLA3-1. GET /memory/wipe (preview) → conteos correctos + total; NO muta
+# OLA3-1. POST /memory/wipe?dry_run=true (preview) → conteos correctos + total; NO muta
 # ---------------------------------------------------------------------------
 
 
@@ -1037,9 +1037,9 @@ async def test_wipe_preview_counts_and_does_not_mutate(db_session: AsyncSession)
     client = await _client(db_session)
     try:
         async with client:
-            resp1 = await client.get("/v1/memory/wipe", headers=_bearer(user.id))
+            resp1 = await client.post("/v1/memory/wipe?dry_run=true", headers=_bearer(user.id))
             # Segundo preview: idéntico (read-only, no mutó nada).
-            resp2 = await client.get("/v1/memory/wipe", headers=_bearer(user.id))
+            resp2 = await client.post("/v1/memory/wipe?dry_run=true", headers=_bearer(user.id))
             # GET /memory sigue intacto (la memoria no se tocó).
             after = await client.get("/v1/memory", headers=_bearer(user.id))
 
@@ -1160,7 +1160,7 @@ async def test_wipe_idempotent_empty_user(db_session: AsyncSession) -> None:
     client = await _client(db_session)
     try:
         async with client:
-            preview = await client.get("/v1/memory/wipe", headers=_bearer(user.id))
+            preview = await client.post("/v1/memory/wipe?dry_run=true", headers=_bearer(user.id))
             wipe = await client.post(
                 "/v1/memory/wipe",
                 json={
@@ -1188,13 +1188,13 @@ async def test_wipe_idempotent_empty_user(db_session: AsyncSession) -> None:
 
 
 async def test_wipe_no_token_401(db_session: AsyncSession) -> None:
-    """Sin Authorization header → 401 en GET y POST /memory/wipe (get_current_user)."""
+    """Sin Authorization header → 401 en el preview (?dry_run) y el execute (get_current_user)."""
     await _seed_user(db_session)
 
     client = await _client(db_session)
     try:
         async with client:
-            r_preview = await client.get("/v1/memory/wipe")
+            r_preview = await client.post("/v1/memory/wipe?dry_run=true")
             r_execute = await client.post(
                 "/v1/memory/wipe",
                 json={
@@ -1288,7 +1288,7 @@ async def test_wipe_toctou_stale_confirm_409_then_fresh_200(db_session: AsyncSes
     client = await _client(db_session)
     try:
         async with client:
-            preview = await client.get("/v1/memory/wipe", headers=_bearer(user.id))
+            preview = await client.post("/v1/memory/wipe?dry_run=true", headers=_bearer(user.id))
             assert preview.status_code == 200
             assert preview.json()["total"] == 3
             assert preview.json()["episodic"] == 1
@@ -1321,7 +1321,7 @@ async def test_wipe_toctou_stale_confirm_409_then_fresh_200(db_session: AsyncSes
                 headers=_bearer(user.id),
             )
             # Releer: la memoria sigue intacta (N+1 episódicas).
-            mid = await client2.get("/v1/memory/wipe", headers=_bearer(user.id))
+            mid = await client2.post("/v1/memory/wipe?dry_run=true", headers=_bearer(user.id))
             # Confirm FRESCO (episodic=2) matchea → 200 borra todo.
             fresh = await client2.post(
                 "/v1/memory/wipe",
@@ -1332,7 +1332,7 @@ async def test_wipe_toctou_stale_confirm_409_then_fresh_200(db_session: AsyncSes
                 },
                 headers=_bearer(user.id),
             )
-            after = await client2.get("/v1/memory/wipe", headers=_bearer(user.id))
+            after = await client2.post("/v1/memory/wipe?dry_run=true", headers=_bearer(user.id))
 
         # El confirm viejo dio 409 con los conteos ACTUALES (episodic ahora 2).
         assert stale.status_code == 409
@@ -1367,7 +1367,7 @@ async def test_wipe_responses_only_ints_and_extra_field_422(db_session: AsyncSes
     client = await _client(db_session)
     try:
         async with client:
-            preview = await client.get("/v1/memory/wipe", headers=_bearer(user.id))
+            preview = await client.post("/v1/memory/wipe?dry_run=true", headers=_bearer(user.id))
             # 409 (confirm que no matchea) para inspeccionar el detail.
             conflict = await client.post(
                 "/v1/memory/wipe",
@@ -1423,5 +1423,58 @@ async def test_wipe_responses_only_ints_and_extra_field_422(db_session: AsyncSes
         assert all(isinstance(v, int) for v in result_body.values())
         assert "content" not in result.text
         assert "summary" not in result.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA3-9. P2.3: el execute (sin ?dry_run) EXIGE el confirm; sin body → 422, NADA borrado
+# ---------------------------------------------------------------------------
+
+
+async def test_wipe_execute_without_body_422_no_mutation(db_session: AsyncSession) -> None:
+    """POST /memory/wipe sin ?dry_run y sin body → 422 (falta la guarda de intención); intacto.
+
+    El execute destructivo exige el confirm per-layer. Un POST sin ?dry_run=true y sin body NO
+    debe borrar nada: 422 y la memoria sigue completa.
+    """
+    user = await _seed_user(db_session)
+    await _seed_full_memory(db_session, user, tag="NB")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.post("/v1/memory/wipe", headers=_bearer(user.id))
+            after = await client.get("/v1/memory", headers=_bearer(user.id))
+
+        assert resp.status_code == 422
+        # NADA se borró: la memoria sigue completa.
+        after_body = after.json()
+        assert after_body["semantic"]["total"] == 1
+        assert after_body["episodic"]["total"] == 1
+        assert after_body["procedural"]["total"] == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# OLA3-10. P2.3: el viejo GET /memory/wipe ya NO existe (un GET no previsualiza un destructivo)
+# ---------------------------------------------------------------------------
+
+
+async def test_wipe_get_method_not_allowed(db_session: AsyncSession) -> None:
+    """GET /memory/wipe → 405: el preview se movió a POST ?dry_run=true (un GET no lo dispara).
+
+    El path existe solo para POST; un GET (prefetch / crawler) recibe 405 Method Not Allowed,
+    nunca previsualiza ni toca la operación destructiva.
+    """
+    user = await _seed_user(db_session)
+    await _seed_full_memory(db_session, user, tag="NOGET")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.get("/v1/memory/wipe", headers=_bearer(user.id))
+        assert resp.status_code == 405
     finally:
         app.dependency_overrides.clear()

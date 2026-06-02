@@ -191,19 +191,28 @@ Invariantes (regla #3 / ADR-007 / ADR-010):
   - Response 404: ref inexistente **o** de otro usuario — **mismo** 404
     (`detail: "memoria no encontrada"`), sin oráculo ni tocar data ajena.
   - Response 422: `ref` no-UUID en semantic/episodic.
-- **GET** `/v1/memory/wipe` — **dry-run** del wipe total: conteos por capa de lo
-  que se borraría. **Read-only** (no muta, no commitea, no descifra).
-  - Request: ninguno.
+- **POST** `/v1/memory/wipe?dry_run=true` — **dry-run** (preview) del wipe total:
+  conteos por capa de lo que se borraría. **Read-only** (no muta, no commitea, no
+  descifra). El body se ignora.
+  - El preview va en **POST** (no GET) **a propósito**: `/memory/wipe` es la
+    superficie de una operación **destructiva**, y un GET debe ser seguro/idempotente
+    — un prefetch / crawler que dispare un GET no debe tocarla ni para previsualizar.
+    El preview es read-only igual, pero se mueve al verbo no-seguro para que **nunca**
+    lo gatille una navegación accidental. El shape es idéntico al del viejo GET.
+  - Request: `?dry_run=true` (query); body ninguno.
   - Response 200: `MemoryWipePreview = { "semantic": N, "episodic": N,
     "procedural": N, "total": N }` (`total` = suma de las 3 capas). **Solo
     enteros** (regla #4): nunca `content` / `summary`.
   - **Siempre 200**, incluso todo en 0 (un user sin memoria es estado válido;
-    **jamás 404**). El cliente usa estos conteos como los `expected_*` del POST.
-- **POST** `/v1/memory/wipe` — **ejecuta** el wipe TOTAL de las 3 capas —
-  **DESTRUCTIVO e irreversible** (hard-delete físico). Operación SAGRADA (regla #3).
-  - Body (`MemoryWipeConfirm`, **no sagrado**): `{ "expected_semantic": int>=0,
-    "expected_episodic": int>=0, "expected_procedural": int>=0 }` — los conteos
-    per-capa que el cliente vio en el preview fresco (guarda de intención).
+    **jamás 404**). El cliente usa estos conteos como los `expected_*` del execute.
+- **POST** `/v1/memory/wipe` (sin `dry_run` / `dry_run=false`) — **ejecuta** el wipe
+  TOTAL de las 3 capas — **DESTRUCTIVO e irreversible** (hard-delete físico).
+  Operación SAGRADA (regla #3).
+  - Body (`MemoryWipeConfirm`, **no sagrado**, **obligatorio** en el execute):
+    `{ "expected_semantic": int>=0, "expected_episodic": int>=0,
+    "expected_procedural": int>=0 }` — los conteos per-capa que el cliente vio en el
+    preview fresco (guarda de intención). **Sin body y sin `dry_run` → 422** (el
+    execute exige el confirm; para solo previsualizar usá `?dry_run=true`).
   - El endpoint **reconcuenta** las 3 capas y compara con los `expected_*`:
     - **Coinciden** → `wipe()` de las 3 capas + `commit` (recount+wipe+commit en la
       **misma** transacción) → Response 200 `MemoryWipeResult = { "semantic": N,
@@ -218,8 +227,8 @@ Invariantes (regla #3 / ADR-007 / ADR-010):
     segundo wipe seguido (preview `{0,0,0}`, confirm `{0,0,0}`) → 200 `{0,0,0,0}`.
     **Jamás 404**. Un confirm viejo `{N,..}` tras ya haber wipeado → **409**
     (anti-doble-click).
-  - Response 422: body mal formado (campo faltante, negativo, o uno de más —
-    `extra=forbid`).
+  - Response 422: body ausente (sin `dry_run`), o mal formado (campo faltante,
+    negativo, o uno de más — `extra=forbid`).
   - **TOCTOU / atomicidad**: el recount y el wipe van en la **misma** transacción
     del request; el confirm es una guarda de INTENCIÓN (prueba que el humano vio el
     plan), no cirugía exacta. El `DELETE WHERE user_id` barre el estado presente
