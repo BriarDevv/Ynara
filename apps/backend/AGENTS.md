@@ -44,14 +44,19 @@ app/
 ├── enums.py           # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation)
 ├── core/
 │   ├── config.py      # Settings (pydantic-settings); get_settings() cacheado y lazy
+│   ├── crypto.py      # AES-256-GCM per-user (HKDF-SHA256); encrypt_for_user / decrypt_for_user
+│   ├── db_guard.py    # guard anti-prod en lifespan: aborta el boot si DATABASE_URL apunta a Supabase prod sin opt-in
 │   ├── deps.py        # engine async + get_db (AsyncSession por request)
-│   └── security.py    # JWT/hashing — implementado (create_access_token, verify_access_token, hash_password, verify_password)
+│   ├── observability.py  # init_sentry() con before_send que scrubea PII (cuerpo, headers auth, user, extras) — regla #4
+│   ├── ratelimit.py   # rate-limit fail-open para login/register/refresh/chat/export (contadores Redis vía TokenStore)
+│   ├── security.py    # JWT/hashing — implementado (create_access_token, verify_access_token, hash_password, verify_password)
+│   └── token_store.py # blocklist de jti + revocación por familia (sid) + contadores genéricos; Protocol + RedisTokenStore + InMemoryTokenStore (tests)
 ├── api/v1/            # rutas, un archivo por dominio (health, auth, chat, sessions, memory)
 ├── models/            # SQLAlchemy 2 (user, session, memory, audit) — base.py: mixins UUIDPK/Timestamp
 ├── schemas/           # Pydantic v2 mirror de models + payloads de API
 ├── services/          # lógica de negocio SIN framework (recibe deps por argumento)
 ├── llm/               # capa de inferencia — ver §3
-├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, implementado)
+├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, implementado); audit.py: AuditStore (único punto de inserción en audit_log — sagrado, no editar)
 ├── workers/           # Celery (celery_app.py + tasks) — autodiscovery en app.workflows
 └── workflows/         # consolidación async + decay procedural implementados
 ```
@@ -65,16 +70,22 @@ llm/
 ├── config.py          # LlmRuntimeConfig + load_llm_config() — fusiona ynara.config.json + Settings, fail-fast
 ├── schemas.py         # ChatRequest/Response, ChatMessage, ToolSpec/ToolCall, CompletionResult/Chunk, ModelHealth
 ├── errors.py          # taxonomía LlmError (transient/permanent/semantic) + degraded_response(); NUNCA filtra texto de usuario
+├── context.py         # build_memory_context() + render_context_block(): recupera capas, formatea en Markdown, aplica presupuesto de tokens
+├── memory_engine.py   # QwenMemoryEngine: extrae MemoryOp del turno, aplica contra los stores vía apply_ops(); el módulo más grande de llm/
+├── tool_loop.py       # run_tool_loop(): itera LLM call + ejecución de tools (guard MAX_TOOL_ITERATIONS=5) hasta finish_reason stop/length/degraded
 ├── clients/
 │   ├── base.py        # Protocols LLMClient + ToolCallParser
 │   ├── vllm.py        # VllmClient (httpx inyectado; default_timeout_s desde config; SSE streaming)
 │   ├── parsers.py     # OpenAIToolCallParser (parse + accumulate de tool calls OpenAI)
-│   ├── fakes.py       # FakeLlmClient programable (tests del pool/router, sin red)
+│   ├── fakes.py       # FakeLlmClient + FakeEmbeddingClient + FakeReranker (tests, sin red)
 │   ├── circuit.py     # CircuitBreaker (stdlib, sin libs)
 │   ├── pool.py        # ClientPool + RoutingStrategy + build_pool (topología → clientes)
-│   └── resilient.py   # ResilientClient: retry+backoff → fallback on-prem → respuesta degradada
+│   ├── resilient.py   # ResilientClient: retry+backoff → fallback on-prem → respuesta degradada
+│   ├── embedding.py   # Protocol EmbeddingClient + FakeEmbeddingClient determinista (bge-m3; real pende de infra-swap)
+│   ├── factory.py     # build_llm_client() / build_embedding_client() / build_reranker(): Fakes en dev, clientes reales en prod según settings
+│   └── reranker.py    # Protocol Reranker + FakeReranker passthrough (cross-encoder real pende de infra-swap)
 ├── prompts/           # shared.py (identidad/voz/seguridad) + loader.py (load_prompt(mode)) + 1 SYSTEM_PROMPT por modo
-├── tools/             # base.py (Tool Protocol, to_spec, tool_error, IsoDatetime) + registry.py + calendar.py + reminder.py
+├── tools/             # base.py (Tool Protocol, to_spec, tool_error, IsoDatetime) + registry.py + calendar.py + reminder.py + memory.py
 └── router.py          # M8 — orquesta modo→modelo→memoria→tools. Implementado.
 ```
 
@@ -96,6 +107,10 @@ llm/
 - **Services sin framework**: la lógica en `app/services/` no importa FastAPI ni SQLAlchemy directo — recibe dependencias por argumento (testeable).
 - **`get_settings()`** es el acceso a config (cacheado con `lru_cache`); no se instancia `Settings` a nivel de módulo (así los imports no exigen `.env`).
 - **Consolidación de memoria siempre async** (Celery). Nunca en el path de respuesta.
+- **Naming de schemas** — dos patrones según colisión de nombre:
+  - **Infijo `Http`** (`ChatHttpRequest` / `ChatHttpResponse`): se usa cuando el nombre pelado ya existe en un schema de dominio LLM (`app/llm/schemas.py` tiene `ChatRequest`/`ChatResponse`). El infijo evita la colisión de nombres y deja claro que es el contrato wire del endpoint HTTP.
+  - **Sufijo `Request` / `Out` pelado** (`RegisterRequest`, `LoginRequest`, `TokenOut`): se usa cuando no hay colisión con ningún schema de dominio (auth no tiene `Register`/`Login`/`Token` en otro módulo).
+  - **Envelopes de presentación** (`*Page`, `*Response`, `*Preview`, `*Confirm`, `*Result`): viven en los archivos `*_api.py` (p.ej. `memory_api.py`, `session_api.py`) y paginan / agrupan los `*Out` sagrados sin tocarlos. Ejemplos: `SemanticMemoryPage`, `MemoryGroupedResponse`, `MemoryWipePreview`, `MemoryWipeConfirm`, `MemoryWipeResult`, `SessionListPage`.
 - **Commits**: Conventional Commits en español, descripción imperativa o noun-phrase del artefacto (regla #6), **atómicos** (regla #7). Tablas sagradas en commit aislado.
 
 ---
