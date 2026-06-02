@@ -110,13 +110,18 @@ class Settings(BaseSettings):
         ]
     )
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        # Fallback: si Celery URLs no se setean, usar la de Redis
+    @model_validator(mode="after")
+    def _default_celery_urls_to_redis(self) -> Settings:
+        """Fallback: si las URLs de Celery no se setean, usar la de Redis.
+
+        Mantiene una sola fuente de verdad para el broker/result-backend cuando el
+        deploy no las define por separado. Un valor explícito SIEMPRE se respeta.
+        """
         if not self.celery_broker_url:
             self.celery_broker_url = self.redis_url
         if not self.celery_result_backend:
             self.celery_result_backend = self.redis_url
+        return self
 
     @model_validator(mode="after")
     def _reject_weak_jwt_secret_in_prod(self) -> Settings:
