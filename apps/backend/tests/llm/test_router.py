@@ -1,8 +1,10 @@
 """Tests de app/llm/router.py (M8 Ola 1).
 
-UNIT (sin DB, sin marker): testean ``_context_budget`` y los caminos de
-``route()`` que no requieren memoria sembrada (overflow -> fallback,
-session_id generado, served_name correcto). Usan ``FakeLlmClient`` +
+UNIT (sin DB, sin marker): testean los caminos de ``route()`` que no requieren
+memoria sembrada (overflow -> fallback, session_id generado, served_name
+correcto) y que ``route()`` consume el presupuesto publico ``context_budget``
+de ``app.llm.context`` (la formula del presupuesto se testea en
+``test_context.py``). Usan ``FakeLlmClient`` +
 ``FakeEmbeddingClient`` + ``FakeReranker`` + un ``AsyncSession`` mockeado
 (los stores no llegan a ejecutar query porque el modo no tiene layers o
 porque la search se mockea). La config se inyecta para no depender del
@@ -78,26 +80,78 @@ def _now() -> datetime:
 
 
 # ---------------------------------------------------------------------------
-# UNIT: _context_budget
+# UNIT: route() consume el presupuesto publico context_budget
 # ---------------------------------------------------------------------------
 
 
-def test_context_budget_subtracts_system_and_reserve() -> None:
-    from app.llm.context import COMPLETION_RESERVE_TOKENS, _estimate_tokens
-    from app.llm.router import _context_budget
+def test_router_imports_public_budget_not_private() -> None:
+    """``route()`` consume las publicas de ``app.llm.context`` (desacople P2.2).
 
-    prompt = "x" * 300
-    budget = _context_budget(max_model_len=4096, system_prompt=prompt)
-    expected = 4096 - _estimate_tokens(prompt) - COMPLETION_RESERVE_TOKENS
-    assert budget == expected
+    Guardia del refactor: el router NO debe reimplementar el presupuesto ni
+    importar el privado ``_estimate_tokens``. La unica sede de la formula es
+    ``app.llm.context.context_budget`` (testeada en ``test_context.py``).
+    """
+    from app.llm import context as ctx_mod
+    from app.llm import router as router_mod
+
+    # La pública vive en context y el router la importa (mismo objeto).
+    assert router_mod.context_budget is ctx_mod.context_budget
+    # El router ya NO expone la duplicada ni el privado promovido.
+    assert not hasattr(router_mod, "_context_budget")
+    assert not hasattr(router_mod, "_estimate_tokens")
 
 
-def test_context_budget_never_negative() -> None:
-    from app.llm.router import _context_budget
+@pytest.mark.asyncio
+async def test_route_uses_context_budget_for_render(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``route()`` calcula el budget con ``context_budget`` y se lo pasa a
+    ``render_context_block`` tal cual (sin recalcular la cuenta en el router).
+    """
+    from app.llm import router as router_mod
+    from app.llm.context import MemoryContext, context_budget
+    from app.llm.tools.registry import default_registry
 
-    # Ventana minuscula: el presupuesto cae a 0, nunca negativo.
-    budget = _context_budget(max_model_len=10, system_prompt="x" * 5000)
-    assert budget == 0
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_result(_result(text="ok", finish_reason="stop", model_name="gemma4"))
+
+    empty_ctx = MemoryContext(
+        semantic_store=None,
+        episodic_store=None,
+        procedural_store=None,
+        _default_reg=default_registry(),
+        _memory_reg=None,
+    )
+
+    captured: dict[str, int] = {}
+
+    async def _fake_render(_ctx: Any, *, query: str, budget_tokens: int) -> str:
+        captured["budget"] = budget_tokens
+        return ""
+
+    original = router_mod.build_memory_context
+    router_mod.build_memory_context = lambda **_kw: empty_ctx
+    monkeypatch.setattr(router_mod, "render_context_block", _fake_render)
+
+    cfg = _cfg()
+    model_cfg = cfg.model_for_mode(Mode.VIDA.value)
+    max_model_len = cfg.serving.max_model_len[model_cfg.key]
+    from app.llm.prompts.loader import load_prompt
+
+    expected = context_budget(max_model_len=max_model_len, system_prompt=load_prompt(Mode.VIDA))
+
+    try:
+        await route(
+            ChatRequest(text="hola", mode=Mode.VIDA, session_id="sess-budget"),
+            session=MagicMock(),
+            user_id=uuid.uuid4(),
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            config=cfg,
+        )
+    finally:
+        router_mod.build_memory_context = original
+
+    assert captured["budget"] == expected
 
 
 # ---------------------------------------------------------------------------

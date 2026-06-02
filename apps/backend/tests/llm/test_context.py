@@ -28,14 +28,14 @@ from app.llm.context import (
     PROCEDURAL_LIMIT,
     SEMANTIC_LIMIT,
     MemoryContext,
-    _budget_tokens,
     _build_block,
-    _estimate_tokens,
     _format_episodic,
     _format_procedural,
     _format_semantic,
     _truncate_to_budget,
     build_memory_context,
+    context_budget,
+    estimate_tokens,
     render_context_block,
 )
 from app.llm.tools.registry import ToolRegistry, default_registry
@@ -144,30 +144,31 @@ def _fake_ctx(
 
 
 # ---------------------------------------------------------------------------
-# UNIT: _estimate_tokens / _budget_tokens
+# UNIT: estimate_tokens / context_budget
 # ---------------------------------------------------------------------------
 
 
 def test_estimate_tokens_basic() -> None:
     # ~3 chars per token heuristic; just check it's > 0 and reasonable
     text = "hola mundo"
-    tokens = _estimate_tokens(text)
+    tokens = estimate_tokens(text)
     assert tokens >= 1
     assert tokens <= len(text)
 
 
 def test_estimate_tokens_empty_returns_one() -> None:
-    assert _estimate_tokens("") == 1
+    assert estimate_tokens("") == 1
 
 
-def test_budget_tokens_subtracts_reserve() -> None:
-    budget = _budget_tokens(4096)
-    assert budget == 4096 - COMPLETION_RESERVE_TOKENS
+def test_context_budget_subtracts_system_and_reserve() -> None:
+    prompt = "x" * 300
+    budget = context_budget(max_model_len=4096, system_prompt=prompt)
+    assert budget == 4096 - estimate_tokens(prompt) - COMPLETION_RESERVE_TOKENS
 
 
-def test_budget_tokens_floor_zero() -> None:
-    assert _budget_tokens(0) == 0
-    assert _budget_tokens(COMPLETION_RESERVE_TOKENS - 1) == 0
+def test_context_budget_floor_zero() -> None:
+    # Ventana minuscula + prompt enorme: el presupuesto cae a 0, nunca negativo.
+    assert context_budget(max_model_len=10, system_prompt="x" * 5000) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +329,7 @@ def test_truncate_semantic_after_episodic() -> None:
     proc_lines = ["- k: {}"] * 10
     # Budget que no cabe todo pero cabe con semantic recortado
     block_full = _build_block(sem_lines, epi_lines, proc_lines)
-    budget = _estimate_tokens(block_full) - _estimate_tokens(sem_lines[0]) - 1
+    budget = estimate_tokens(block_full) - estimate_tokens(sem_lines[0]) - 1
     if budget <= 0:
         pytest.skip("el bloque es demasiado pequeño para el test de truncado semantico")
     s, _e, _p = _truncate_to_budget(sem_lines, epi_lines, proc_lines, budget_tokens=budget)

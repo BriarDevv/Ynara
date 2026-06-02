@@ -89,9 +89,8 @@ from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
 from app.llm.config import LlmRuntimeConfig, load_llm_config
 from app.llm.context import (
-    COMPLETION_RESERVE_TOKENS,
-    _estimate_tokens,
     build_memory_context,
+    context_budget,
     render_context_block,
 )
 from app.llm.errors import LlmError, ModelNotServedError
@@ -110,33 +109,6 @@ _FALLBACK_TEXT = (
     "Perdon, no pude procesar tu mensaje en este momento. "
     "Proba de nuevo en un rato o reformulalo mas corto."
 )
-
-
-def _context_budget(*, max_model_len: int, system_prompt: str) -> int:
-    """Presupuesto de tokens para el bloque de contexto de memoria.
-
-    Descuenta de ``max_model_len`` la estimacion del system prompt base y el
-    ``COMPLETION_RESERVE_TOKENS`` (tokens reservados para la generacion). El
-    resultado nunca es negativo: en el peor caso (prompt enorme + ventana
-    chica, p.ej. Gemma 4096) devuelve 0. Con budget 0, ``render_context_block``
-    igual incluye un PISO MINIMO de las entradas mas relevantes (hasta ~3
-    semantic + 1 episodic + 5 procedural, ~200 tokens): el
-    ``COMPLETION_RESERVE_TOKENS`` garantiza espacio para ese piso aun en Gemma
-    4096, asi que el piso nunca provoca overflow real.
-
-    La estimacion de tokens es la heuristica de ``app.llm.context``
-    (``len // 3``), consistente con el truncado de ``render_context_block``.
-
-    Args:
-        max_model_len: Ventana de contexto efectiva del modelo (de
-            ``serving.max_model_len[model_key]``).
-        system_prompt: System prompt base del modo (antes de inyectar memoria).
-
-    Returns:
-        Presupuesto en tokens (>= 0) para el bloque de contexto de memoria.
-    """
-    reserved = _estimate_tokens(system_prompt) + COMPLETION_RESERVE_TOKENS
-    return max(0, max_model_len - reserved)
 
 
 async def route(
@@ -202,7 +174,7 @@ async def route(
         reranker=reranker,
         mode_cfg=mode_cfg,
     )
-    budget = _context_budget(max_model_len=max_model_len, system_prompt=system_prompt)
+    budget = context_budget(max_model_len=max_model_len, system_prompt=system_prompt)
     context_block = await render_context_block(mem_ctx, query=request.text, budget_tokens=budget)
 
     # Concatenar el bloque al system prompt en un STRING NUEVO (decision #6: no
