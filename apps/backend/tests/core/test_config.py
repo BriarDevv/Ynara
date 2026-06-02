@@ -89,7 +89,11 @@ def test_prod_accepts_clean_config() -> None:
 
 def test_dev_allows_localhost_cors_and_empty_master_key() -> None:
     """En development el default localhost + master key vacía NO rompen (sin fricción)."""
-    # No se pasa cors_origins ni master key: usa los defaults de dev (localhost / "").
-    s = _settings(environment="development")
+    # master key EXPLÍCITA "" (no se hereda del ambiente): _env_file=None ignora el
+    # archivo .env pero NO las env vars reales del proceso (p.ej. la
+    # MEMORY_ENCRYPTION_MASTER_KEY de test que la CI exporta para el cifrado). El
+    # kwarg explícito tiene prioridad sobre la env var, así el test queda hermético.
+    # cors_origins se omite a propósito: usa el default de dev (localhost).
+    s = _settings(environment="development", MEMORY_ENCRYPTION_MASTER_KEY="")
     assert any("localhost" in origin for origin in s.cors_origins)
     assert s.memory_encryption_master_key == ""
