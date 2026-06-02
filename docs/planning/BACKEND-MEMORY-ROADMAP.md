@@ -80,6 +80,7 @@ Se apoya en cuatro fuentes:
 | Auth hardening (#63) | Refresh single-use (rota el `jti` consumido) + logout vía blocklist Redis por `jti` + rate-limit de `/auth/token` (por ip+email_hash) y `/auth/register` (por IP), estado en `app.state.redis`, fail-open si Redis cae |
 | Auth hardening (#142) | Reuse-detection a nivel familia/`sid` en `/refresh` con grace (`AUTH_REFRESH_REUSE_GRACE_SECONDS=30s`): retry benigno idempotente dentro del grace, breach fuera del grace → `revoke_family`. Logout revoca la familia entera (`revoke_family`). Claim `sid` en access + refresh; `get_current_claims` chequea blocklist-jti + family-revocation en 1 RTT (`auth_status` MGET). Sentry rate-limitado en el fail-open |
 | Workers Celery — consolidación + decay | Consolidación post-turno y decay procedural implementados |
+| Escritura de `audit_log` (#158) | `apply_ops` audita cada op de memoria consolidada vía `AuditStore` (una fila write/update/delete por op aplicada; `record_hash` SHA-256, sin contenido — regla #4). Antes el modelo existía pero nada escribía la tabla |
 | Endpoints FastAPI | `/v1/health`, `/v1/auth` (register/token/me/refresh/logout), `/v1/chat` (sync + SSE), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual, wipe) |
 | Supabase conectado | Session pooler (5432), schema aplicado, DB en `head` |
 
