@@ -22,9 +22,7 @@ from app.core.config import get_settings
 from app.core.db_guard import guard_against_prod_db_in_dev
 from app.core.observability import init_sentry
 from app.core.token_store import RedisTokenStore
-from app.llm.clients.embedding import FakeEmbeddingClient
-from app.llm.clients.fakes import FakeLlmClient
-from app.llm.clients.reranker import FakeReranker
+from app.llm.clients.factory import build_llm_clients
 from app.llm.config import load_llm_config
 
 settings = get_settings()
@@ -96,11 +94,11 @@ async def lifespan(app: FastAPI):
 
     Construye los clientes LLM/embedder/reranker como singletons en
     ``app.state`` para que las deps de FastAPI los inyecten sin recrearlos
-    por request.  Usando los *served_name* del config (p.ej. 'qwen', 'gemma4'),
-    NO las keys del dict de modelos.
+    por request.  La ``factory`` decide Fakes (dev/test, default) vs. clientes
+    reales (``ResilientClient(build_pool(VllmClient...))`` en production); los
+    *served_name* salen del config (p.ej. 'qwen', 'gemma4'), NO las keys del
+    dict de modelos.
 
-    TODO: swap por ResilientClient / VllmEmbeddingClient cuando vLLM esté
-    disponible — solo cambia este bloque; el resto del stack no toca.
     TODO: warm-up del LLM router, etc.
 
     Redis (issue #63): se construye UN solo cliente ``app.state.redis`` acá
@@ -117,12 +115,14 @@ async def lifespan(app: FastAPI):
         database_url=settings.database_url,
     )
 
-    # startup — clientes como singletons
+    # startup — clientes como singletons. La factory gatea Fakes (dev/test) vs.
+    # ResilientClient/VllmClient reales (production); el resto del stack no cambia.
     cfg = load_llm_config()
-    served_models = frozenset(m.served_name for m in cfg.models.values())
-    app.state.llm_client = FakeLlmClient(served_models=served_models)
-    app.state.embedder = FakeEmbeddingClient()
-    app.state.reranker = FakeReranker()
+    (
+        app.state.llm_client,
+        app.state.embedder,
+        app.state.reranker,
+    ) = build_llm_clients(settings, cfg)
 
     # Redis singleton + token store (blocklist + rate-limit, issue #63). UN solo
     # cliente para toda la app: lo reusan las deps de auth y health.check_redis.
@@ -131,7 +131,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # shutdown — cerrar la conexión a Redis (las demás son Fakes en memoria).
+    # shutdown — liberar recursos. El llm_client puede ser un ResilientClient REAL
+    # (un httpx.AsyncClient por instancia vLLM) en production; aclose() cierra esos
+    # connection pools (en dev/test es el no-op del Fake), evitando fuga de sockets.
+    # embedder/reranker hoy son Fakes sin recursos; cuando tengan cliente real,
+    # cerrarlos acá también. Redis se cierra siempre.
+    await app.state.llm_client.aclose()
     await app.state.redis.aclose()
 
 
