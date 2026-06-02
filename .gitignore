@@ -24,6 +24,8 @@ out/
 coverage/
 .nyc_output/
 htmlcov/
+.coverage
+.coverage.*
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
