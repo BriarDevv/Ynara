@@ -50,6 +50,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
 
+from app.api.v1._http import too_many_requests
 from app.core.config import get_settings
 from app.core.deps import (
     CurrentUser,
@@ -106,21 +107,12 @@ _WIPE_CONFLICT_MESSAGE = (
     "los conteos confirmados no coinciden con el estado actual; reintentá con un preview fresco"
 )
 
+# Detail del 422 de ``POST /v1/memory/wipe`` sin ``dry_run`` y sin body: el execute destructivo
+# EXIGE el confirm per-layer (guarda de intención). El dry-run (``?dry_run=true``) no lo pide.
+_WIPE_CONFIRM_REQUIRED = "el wipe destructivo requiere el confirm per-layer (o usá ?dry_run=true)"
+
 EmbedderDep = Annotated[EmbeddingClient, Depends(get_embedder)]
 RerankerDep = Annotated[Reranker, Depends(get_reranker)]
-
-
-def _too_many_requests(retry_after: int) -> HTTPException:
-    """429 del rate-limit del export de memoria (S4, P1 seguridad). Mismo shape que ``auth.py``.
-
-    ``retry_after`` (segundos) llena el header ``Retry-After`` con la ventana del bucket
-    de export. ``detail`` neutro (regla #4): ni contenido de memoria ni PII.
-    """
-    return HTTPException(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail="demasiados intentos, intente mas tarde",
-        headers={"Retry-After": str(retry_after)},
-    )
 
 
 async def _semantic_page(
@@ -129,7 +121,9 @@ async def _semantic_page(
     """Arma la ``SemanticMemoryPage``: ``items`` paginados + ``total`` del user."""
     items = await store.list_all(limit=limit, offset=offset)
     total = await store.count()
-    return SemanticMemoryPage(items=items, total=total)
+    # ``total or 0`` por consistencia con sessions.py (el COUNT siempre da int acá, pero
+    # el patrón uniforme de las *Page del repo blinda un None hipotético).
+    return SemanticMemoryPage(items=items, total=total or 0)
 
 
 async def _episodic_page(
@@ -138,7 +132,8 @@ async def _episodic_page(
     """Arma la ``EpisodicMemoryPage``: ``items`` paginados + ``total`` del user."""
     items = await store.list_all(limit=limit, offset=offset)
     total = await store.count()
-    return EpisodicMemoryPage(items=items, total=total)
+    # ``total or 0`` por consistencia con sessions.py (ver nota en ``_semantic_page``).
+    return EpisodicMemoryPage(items=items, total=total or 0)
 
 
 async def _procedural_page(
@@ -243,7 +238,7 @@ async def export_memory(
         ``JSONResponse`` con el ``MemoryExport`` serializado y el header de descarga.
     """
     if not await check_memory_export_rate_limit(store, user_id=str(user_id)):
-        raise _too_many_requests(get_settings().memory_export_window_seconds)
+        raise too_many_requests(get_settings().memory_export_window_seconds)
     semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
     episodic = EpisodicMemoryStore(session, user_id, embedder, reranker)
     procedural = ProceduralMemoryStore(session, user_id)
@@ -264,60 +259,47 @@ async def export_memory(
     )
 
 
-@router.get("/memory/wipe", status_code=200)
-async def preview_wipe_memory(
+@router.post("/memory/wipe", response_model=None, status_code=200)
+async def wipe_memory(
     session: DbSession,
     user_id: CurrentUser,
     embedder: EmbedderDep,
     reranker: RerankerDep,
-) -> MemoryWipePreview:
-    """Dry-run del wipe total: cuenta las 3 capas del usuario SIN borrar nada.
+    body: MemoryWipeConfirm | None = None,
+    dry_run: Annotated[bool, Query()] = False,
+) -> MemoryWipePreview | MemoryWipeResult:
+    """Previsualiza (``?dry_run=true``) o ejecuta el wipe TOTAL de la memoria del usuario.
 
-    Read-only: cuenta las 3 capas del user con ``count()`` por store (no muta, no commitea, no
-    descifra) y devuelve los conteos por capa + ``total`` (la suma). Es el plan que el humano
-    revisa antes de confirmar el wipe destructivo; el cliente usa estos números como los
-    ``expected_*`` del ``POST /v1/memory/wipe``.
+    **Un solo POST** para las dos operaciones, distinguidas por ``?dry_run``:
 
+    - ``?dry_run=true`` → **PREVIEW** (read-only): cuenta las 3 capas del user
+      (``count()`` por store; no muta, no commitea, no descifra) y devuelve
+      ``MemoryWipePreview`` con los conteos por capa + ``total`` (la suma). El ``body``
+      se ignora (no hace falta confirm para previsualizar). El cliente usa estos números
+      como los ``expected_*`` del execute.
+    - ``dry_run`` ausente o ``false`` → **EXECUTE** (destructivo, irreversible): exige el
+      ``body`` (``MemoryWipeConfirm``); si falta → **422**. Reconcuenta + compara contra
+      los ``expected_*`` y borra o aborta (ver flujo abajo).
+
+    El preview vive en un POST (no en un GET) A PROPÓSITO: un GET debe ser seguro e
+    idempotente, pero ``/memory/wipe`` es la superficie de una operación DESTRUCTIVA; un
+    prefetch / crawler que dispare un GET no debe tocarla siquiera para previsualizar. El
+    preview es read-only igual, pero se mueve al verbo no-seguro para que NUNCA lo gatille
+    una navegación accidental. El shape del preview es idéntico al del viejo GET.
+
+    Esta ruta estática va ANTES de ``/memory/{layer}/{ref}`` en el router (igual que
+    ``export``): no hay POST sobre el path param, pero el orden explícito lo blinda y queda
+    legible.
+
+    --- PREVIEW (``?dry_run=true``) ---
     Siempre 200, incluso todo en 0: un user sin memoria es un estado VÁLIDO, jamás 404 (un
-    preview ``{0,0,0,0}`` es una respuesta legítima, no un "no encontrado"). Todo filtra por el
-    ``user_id`` del JWT (aislamiento estructural: los stores ligan ``user_id`` en su
-    ``__init__``). Solo viajan enteros (regla #4): ningún ``content`` / ``summary``.
+    preview ``{0,0,0,0}`` es una respuesta legítima). Solo viajan enteros (regla #4): ningún
+    ``content`` / ``summary``.
 
-    Esta ruta va ANTES de ``/memory/{layer}/{ref}`` en el router (igual que ``export``):
-    ``/memory/wipe`` es estática y debe matchear antes que el path param ``{layer}`` (que es un
-    ``MemoryLayer`` y no incluye ``wipe``, pero el orden explícito lo blinda y queda legible).
-
-    Returns:
-        ``MemoryWipePreview`` con los conteos por capa + ``total`` de lo que se borraría.
-    """
-    semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
-    episodic = EpisodicMemoryStore(session, user_id, embedder, reranker)
-    procedural = ProceduralMemoryStore(session, user_id)
-
-    sem_count = await semantic.count()
-    epi_count = await episodic.count()
-    proc_count = await procedural.count()
-    return MemoryWipePreview(
-        semantic=sem_count,
-        episodic=epi_count,
-        procedural=proc_count,
-        total=sem_count + epi_count + proc_count,
-    )
-
-
-@router.post("/memory/wipe", status_code=200)
-async def execute_wipe_memory(
-    body: MemoryWipeConfirm,
-    session: DbSession,
-    user_id: CurrentUser,
-    embedder: EmbedderDep,
-    reranker: RerankerDep,
-) -> MemoryWipeResult:
-    """Ejecuta el wipe TOTAL de la memoria del usuario (las 3 capas) — DESTRUCTIVO e irreversible.
-
-    Operación SAGRADA (toca ``app/memory/``, regla #3): hard-delete físico de TODO lo del user
-    en las 3 capas, con una guarda de intención (el confirm per-layer) para evitar borrados
-    accidentales / doble-click.
+    --- EXECUTE (sin ``dry_run``) ---
+    Operación SAGRADA (toca ``app/memory/``, regla #3): hard-delete físico de TODO lo del
+    user en las 3 capas, con una guarda de intención (el confirm per-layer) para evitar
+    borrados accidentales / doble-click.
 
     Flujo (atomicidad: recount + wipe + commit en la MISMA transacción del request):
 
@@ -345,16 +327,36 @@ async def execute_wipe_memory(
     recount ni el wipe descifran ni logean contenido (regla #4: solo enteros viajan).
 
     Returns:
-        ``MemoryWipeResult`` con los conteos REALMENTE borrados por capa + ``total``.
+        ``MemoryWipePreview`` (con ``?dry_run=true``) o ``MemoryWipeResult`` (execute) con
+        los conteos por capa + ``total``.
     """
     semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
     episodic = EpisodicMemoryStore(session, user_id, embedder, reranker)
     procedural = ProceduralMemoryStore(session, user_id)
 
-    # 1. Recontar el estado ACTUAL de las 3 capas (en la misma transacción del wipe).
+    # 1. Recontar el estado ACTUAL de las 3 capas (en la misma transacción del wipe, así el
+    #    preview y el execute ven exactamente el mismo COUNT).
     sem_count = await semantic.count()
     epi_count = await episodic.count()
     proc_count = await procedural.count()
+
+    # --- PREVIEW: read-only, no muta ni commitea, ignora el body. ---
+    if dry_run:
+        return MemoryWipePreview(
+            semantic=sem_count,
+            episodic=epi_count,
+            procedural=proc_count,
+            total=sem_count + epi_count + proc_count,
+        )
+
+    # --- EXECUTE: el confirm per-layer es obligatorio (guarda de intención). ---
+    if body is None:
+        # Sin dry_run y sin body: el execute destructivo no tiene la guarda de intención. 422
+        # (no muta nada): el cliente debe mandar el confirm o pedir ?dry_run=true.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_WIPE_CONFIRM_REQUIRED,
+        )
 
     # 2. Guarda de intención: el confirm per-layer debe matchear el recount o se aborta.
     if (

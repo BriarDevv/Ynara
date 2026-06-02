@@ -25,6 +25,14 @@ from app.llm.clients.reranker import Reranker
 
 settings = get_settings()
 
+# Detail ÚNICO del 401 de credenciales, compartido por ``get_current_claims`` /
+# ``get_current_user`` (acá) y por ``auth.py`` (login/refresh/me). Vive en ``deps.py``
+# (capa core, sin imports de ``app.api`` -> sin ciclo) y lo importa ``auth.py``. Mismo
+# shape A PROPÓSITO: el 401 de un token malo y el 401 de credenciales de login deben ser
+# indistinguibles (anti-enumeración, regla #4). detail estático: NUNCA se arma con
+# ``str(exc)`` ni con el token/jti/sid crudo.
+UNAUTHORIZED_DETAIL = "credenciales invalidas"
+
 # Engine async (Postgres con asyncpg). `database_url` puede venir en formato
 # sync (`postgresql://...`); SQLAlchemy async necesita `postgresql+asyncpg://`.
 _url = settings.database_url
@@ -108,12 +116,12 @@ async def get_current_claims(
     ``(False, False)`` y el token se acepta hasta su ``exp`` natural, nunca una
     caída total de auth.
 
-    Regla #4: el ``detail`` es estático (``"credenciales inválidas"``); NUNCA se
+    Regla #4: el ``detail`` es estático (``UNAUTHORIZED_DETAIL``); NUNCA se
     construye con ``str(exc)`` ni con el token/jti/sid crudo.
     """
     _unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="credenciales inválidas",
+        detail=UNAUTHORIZED_DETAIL,
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
@@ -148,7 +156,7 @@ async def get_current_user(
     except (KeyError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="credenciales inválidas",
+            detail=UNAUTHORIZED_DETAIL,
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 

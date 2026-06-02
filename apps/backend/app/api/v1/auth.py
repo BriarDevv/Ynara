@@ -56,8 +56,15 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
+from app.api.v1._http import too_many_requests
 from app.core.config import Settings, get_settings
-from app.core.deps import CurrentClaims, CurrentUser, DbSession, TokenStoreDep
+from app.core.deps import (
+    UNAUTHORIZED_DETAIL,
+    CurrentClaims,
+    CurrentUser,
+    DbSession,
+    TokenStoreDep,
+)
 from app.core.ratelimit import (
     check_login_rate_limit,
     check_refresh_rate_limit,
@@ -100,26 +107,15 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _too_many_requests(retry_after: int) -> HTTPException:
-    """429 uniforme del rate-limit, sin oráculo de enumeración (ver docstring del módulo).
+def _unauthorized() -> HTTPException:
+    """401 uniforme (mismo shape que ``get_current_user``). detail estático (regla #4).
 
-    ``retry_after`` (segundos) llena el header ``Retry-After``: cada call site pasa
-    la ventana real de SU límite (lockout del login, ventana del register) para que
-    el cliente sepa cuánto esperar. El ``detail`` sigue siendo el string uniforme
-    (no se introduce oráculo de enumeración por cuerpo).
+    Reusa ``UNAUTHORIZED_DETAIL`` (en ``deps.py``) a propósito: el 401 de un token malo
+    y el de credenciales de login deben ser indistinguibles (anti-enumeración).
     """
     return HTTPException(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail="demasiados intentos, intente mas tarde",
-        headers={"Retry-After": str(retry_after)},
-    )
-
-
-def _unauthorized() -> HTTPException:
-    """401 uniforme (mismo shape que ``get_current_user``). detail estático (regla #4)."""
-    return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="credenciales invalidas",
+        detail=UNAUTHORIZED_DETAIL,
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -164,7 +160,7 @@ async def register(
     """
     settings = get_settings()
     if not await check_register_rate_limit(store, ip=_client_ip(request)):
-        raise _too_many_requests(settings.auth_register_window_seconds)
+        raise too_many_requests(settings.auth_register_window_seconds)
     try:
         user = await register_user(
             session,
@@ -211,7 +207,7 @@ async def token(
     """
     ip = _client_ip(request)
     if not await check_login_rate_limit(store, ip=ip, email=body.email):
-        raise _too_many_requests(get_settings().auth_login_lockout_seconds)
+        raise too_many_requests(get_settings().auth_login_lockout_seconds)
     user = await authenticate_user(session, email=body.email, password=body.password)
     if user is None:
         await register_login_failure(store, ip=ip, email=body.email)
@@ -295,7 +291,7 @@ async def refresh(body: RefreshRequest, store: TokenStoreDep, request: Request) 
     # baseline). El 429 usa el mismo shape que el login (Retry-After con la ventana
     # del refresh). No introduce oráculo: el 401 de firma mala ya ocurrió antes.
     if not await check_refresh_rate_limit(store, ip=_client_ip(request), sub=sub):
-        raise _too_many_requests(settings.auth_refresh_window_seconds)
+        raise too_many_requests(settings.auth_refresh_window_seconds)
 
     # --- RAMA 0: familia ya revocada (logout-de-sesión o breach previo) ---
     # /refresh NO pasa por get_current_claims, así que el family-check del access
@@ -418,7 +414,7 @@ async def me(session: DbSession, user_id: CurrentUser) -> UserOut:
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="credenciales invalidas",
+            detail=UNAUTHORIZED_DETAIL,
             headers={"WWW-Authenticate": "Bearer"},
         )
     return UserOut.model_validate(user)

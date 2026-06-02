@@ -54,11 +54,12 @@ from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1._http import too_many_requests
 from app.api.v1._sessions import resolve_chat_session
 from app.core.config import get_settings
 from app.core.deps import (
@@ -93,19 +94,6 @@ _TOKEN_CHUNK_SIZE = 6
 # sin PII ni detalle tecnico (regla #4): el message viaja al cliente.
 _STREAM_ERROR_CODE = "stream_error"
 _STREAM_ERROR_MESSAGE = "No se pudo completar la respuesta"
-
-
-def _too_many_requests(retry_after: int) -> HTTPException:
-    """429 del rate-limit de chat (S4, P1 seguridad). Mismo shape que ``auth.py``.
-
-    ``retry_after`` (segundos) llena el header ``Retry-After`` con la ventana del
-    bucket de chat. ``detail`` neutro (regla #4): ni texto de usuario ni PII.
-    """
-    return HTTPException(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail="demasiados intentos, intente mas tarde",
-        headers={"Retry-After": str(retry_after)},
-    )
 
 
 def _to_http_actions(raw: list[dict]) -> list[Action]:
@@ -273,7 +261,7 @@ async def chat(
         ``finish_reason`` del router.
     """
     if not await check_chat_rate_limit(store, user_id=str(user_id)):
-        raise _too_many_requests(get_settings().chat_window_seconds)
+        raise too_many_requests(get_settings().chat_window_seconds)
     chat_session, resp = await _run_chat_turn(
         session=session,
         user_id=user_id,
@@ -356,7 +344,7 @@ async def chat_stream(
     #     salta como HTTP normal (no como event: error SSE), igual que 401/404/409.
     #     fail-open si Redis cae (sin freno, baseline). Mismo bucket que /chat.
     if not await check_chat_rate_limit(store, user_id=str(user_id)):
-        raise _too_many_requests(get_settings().chat_window_seconds)
+        raise too_many_requests(get_settings().chat_window_seconds)
 
     # (1) Mismo trabajo transaccional que /chat. Si algo falla aca (incl. commit)
     #     propaga ANTES del StreamingResponse -> get_db rollback -> 500 limpio,
