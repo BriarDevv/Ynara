@@ -35,7 +35,12 @@ from app.llm.config import load_llm_config
 from app.llm.errors import (
     LlmBadRequestError,
     LlmContextOverflowError,
+    LlmError,
+    LlmOverloadedError,
     LlmTimeoutError,
+    LlmUnavailableError,
+    ModelNotServedError,
+    ToolParsingError,
 )
 from app.llm.router import route
 from app.llm.schemas import ChatRequest, CompletionResult, ToolCall
@@ -141,7 +146,7 @@ async def test_overflow_returns_fallback_not_exception() -> None:
     assert resp.text == _FALLBACK_TEXT
     assert resp.actions == []
     assert resp.session_id == "sess-1"
-    # Overflow se captura como LlmBadRequestError -> finish_reason='degraded'
+    # Overflow se captura via `except LlmError` (raiz) -> finish_reason='degraded'
     assert resp.finish_reason == "degraded"
 
 
@@ -183,11 +188,27 @@ async def test_bad_request_error_returns_fallback() -> None:
 
 
 @pytest.mark.asyncio
-async def test_transient_error_propagates() -> None:
-    """Un error transitorio (timeout) NO se captura: se propaga (lo maneja el
-    ResilientClient/pool aguas arriba, no el router)."""
+@pytest.mark.parametrize(
+    "transient_exc",
+    [
+        LlmTimeoutError("timeout"),
+        LlmUnavailableError("instancia caida"),
+        LlmOverloadedError("429"),
+    ],
+)
+async def test_transient_error_returns_fallback(transient_exc: LlmError) -> None:
+    """Un error transitorio (timeout / instancia caida / sobrecarga) tambien degrada.
+
+    P0.2: con un cliente LLM pelado (sin ResilientClient de por medio) que lanza
+    directamente un error transitorio, ``route()`` lo captura via ``except
+    LlmError`` y DEVUELVE una ``ChatResponse`` degradada en vez de propagar la
+    excepcion (que aguas arriba seria un 500). Asi la promesa "route() nunca
+    propaga una excepcion de infra al caller" se cumple con cualquier cliente.
+    """
+    from app.llm.router import _FALLBACK_TEXT
+
     fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
-    fake.queue_error(LlmTimeoutError("timeout"))
+    fake.queue_error(transient_exc)
 
     from app.llm import router as router_mod
     from app.llm.context import MemoryContext
@@ -203,9 +224,52 @@ async def test_transient_error_propagates() -> None:
     original = router_mod.build_memory_context
     router_mod.build_memory_context = lambda **_kw: empty_ctx
     try:
-        with pytest.raises(LlmTimeoutError):
+        resp = await route(
+            ChatRequest(text="hola", mode=Mode.VIDA, session_id="sess-transient"),
+            session=MagicMock(),
+            user_id=uuid.uuid4(),
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+        )
+    finally:
+        router_mod.build_memory_context = original
+
+    assert resp.text == _FALLBACK_TEXT
+    assert resp.actions == []
+    assert resp.session_id == "sess-transient"
+    assert resp.finish_reason == "degraded"
+
+
+@pytest.mark.asyncio
+async def test_model_not_served_propagates() -> None:
+    """P0.2: ``ModelNotServedError`` NO degrada — propaga (config/deploy roto).
+
+    Un modelo no servido es una misconfiguracion de deploy, no una degradacion del
+    modelo: debe subir como 500 alertable, no enmascararse como un turno 'degraded'
+    que el usuario veria como respuesta normal. ``route()`` lo RE-LANZA (a diferencia
+    del resto de la familia ``LlmError``, que degrada).
+    """
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_error(ModelNotServedError("qwen"))
+
+    from app.llm import router as router_mod
+    from app.llm.context import MemoryContext
+    from app.llm.tools.registry import default_registry
+
+    empty_ctx = MemoryContext(
+        semantic_store=None,
+        episodic_store=None,
+        procedural_store=None,
+        _default_reg=default_registry(),
+        _memory_reg=None,
+    )
+    original = router_mod.build_memory_context
+    router_mod.build_memory_context = lambda **_kw: empty_ctx
+    try:
+        with pytest.raises(ModelNotServedError):
             await route(
-                ChatRequest(text="hola", mode=Mode.VIDA),
+                ChatRequest(text="hola", mode=Mode.VIDA, session_id="sess-notserved"),
                 session=MagicMock(),
                 user_id=uuid.uuid4(),
                 llm_client=fake,
@@ -214,6 +278,49 @@ async def test_transient_error_propagates() -> None:
             )
     finally:
         router_mod.build_memory_context = original
+
+
+@pytest.mark.asyncio
+async def test_semantic_tool_parsing_error_degrades() -> None:
+    """P0.2: un error SEMANTICO (``ToolParsingError``) tambien degrada.
+
+    Una tool call malformada del modelo (parser hermes/gemma4) sale de
+    ``complete()`` como ``ToolParsingError`` (subclase de ``LlmError``); ``route()``
+    la captura y degrada en vez de propagar un 500, dejando constancia en el log
+    (solo ``type(exc).__name__``). Fija el contrato de la familia semantica.
+    """
+    from app.llm.router import _FALLBACK_TEXT
+
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_error(ToolParsingError("hermes"))
+
+    from app.llm import router as router_mod
+    from app.llm.context import MemoryContext
+    from app.llm.tools.registry import default_registry
+
+    empty_ctx = MemoryContext(
+        semantic_store=None,
+        episodic_store=None,
+        procedural_store=None,
+        _default_reg=default_registry(),
+        _memory_reg=None,
+    )
+    original = router_mod.build_memory_context
+    router_mod.build_memory_context = lambda **_kw: empty_ctx
+    try:
+        resp = await route(
+            ChatRequest(text="hola", mode=Mode.VIDA, session_id="sess-semantic"),
+            session=MagicMock(),
+            user_id=uuid.uuid4(),
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+        )
+    finally:
+        router_mod.build_memory_context = original
+
+    assert resp.text == _FALLBACK_TEXT
+    assert resp.finish_reason == "degraded"
 
 
 @pytest.mark.asyncio

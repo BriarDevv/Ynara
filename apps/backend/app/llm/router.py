@@ -50,12 +50,22 @@ Decisiones de diseno documentadas (M8 Ola 1 + Ola 2):
     (system + user actual) en cada llamada. El historial vivo de la sesion es
     M9 (``ChatSession`` persistida). Limitacion conocida de M8.
 
-(c) Captura de overflow / errores permanentes. La llamada al modelo se envuelve
-    en ``try/except``: el ``ResilientClient`` RE-LANZA
-    ``LlmContextOverflowError`` (error permanente, NO degrada) -> sin captura
-    seria un 500 sin fallback en el caso Gemma 4096 ajustado. ``route()``
-    captura el overflow (y los errores permanentes del LLM) y devuelve un
-    ``ChatResponse`` con texto de fallback en vez de propagar la excepcion.
+(c) Captura de la familia ``LlmError`` con UNA excepcion. La llamada al modelo se
+    envuelve en ``try/except``: ``route()`` degrada (``ChatResponse`` con
+    ``finish_reason="degraded"``) ante los transitorios (``LlmTimeoutError``/
+    ``LlmUnavailableError``/``LlmOverloadedError``), permanentes
+    (``LlmBadRequestError``/``LlmContextOverflowError``) y semanticos
+    (``ToolParsingError``/``ToolExecutionError``), logueando SOLO
+    ``type(exc).__name__`` (regla #4) para no degradar a ciegas. La UNICA excepcion
+    es ``ModelNotServedError``: NO es degradacion del modelo sino una
+    misconfiguracion de deploy (ningun backend del pool sirve el modelo del modo),
+    asi que se RE-LANZA (500 + alerta) en vez de enmascararse como un turno
+    degradado que el usuario veria como respuesta normal. El ``ResilientClient``
+    degrada los transitorios por su cuenta pero RE-LANZA los permanentes y
+    ``ModelNotServedError`` (estan en sus ``_PERMANENT_ERRORS``); un ``VllmClient``
+    pelado RE-LANZA todo. Asi la promesa "``route()`` nunca propaga un error
+    transitorio/permanente del modelo al caller" se cumple con cualquier cliente, y
+    un deploy roto sigue siendo ruidoso.
 
 (d) Encolado de consolidacion (Ola 2; movido en M10 Ola 0). El
     ``consolidate_turn.delay()`` ya NO vive en ``route()``: se movio al endpoint
@@ -69,6 +79,7 @@ Decisiones de diseno documentadas (M8 Ola 1 + Ola 2):
 
 from __future__ import annotations
 
+import logging
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,12 +94,14 @@ from app.llm.context import (
     build_memory_context,
     render_context_block,
 )
-from app.llm.errors import LlmBadRequestError
+from app.llm.errors import LlmError, ModelNotServedError
 from app.llm.prompts.loader import load_prompt
 from app.llm.schemas import ChatMessage, ChatRequest, ChatResponse
 from app.llm.tool_loop import run_tool_loop
 
 __all__ = ["ChatRequest", "ChatResponse", "route"]
+
+logger = logging.getLogger(__name__)
 
 # Texto que se devuelve cuando el modelo no puede responder (overflow / error
 # permanente). Neutro, sin filtrar detalle tecnico (regla #4: ninguna respuesta
@@ -168,8 +181,8 @@ async def route(
             como ``source_session_id`` en el ADD semantic.
         (b) sin historial multi-turno: ``messages`` desde cero; historial
             vivo = M9.
-        (c) overflow / error permanente del LLM -> ``ChatResponse`` con
-            fallback (no se propaga la excepcion).
+        (c) cualquier error de la familia ``LlmError`` (permanente O transitorio)
+            -> ``ChatResponse`` degradado con fallback (no se propaga la excepcion).
     """
     cfg = config if config is not None else load_llm_config()
 
@@ -209,9 +222,16 @@ async def route(
 
     session_id = request.session_id or str(uuid4())
 
-    # Envolver el tool loop: el ResilientClient RE-LANZA LlmContextOverflowError
-    # y demas errores permanentes (LlmBadRequestError) -> devolvemos fallback en
-    # vez de propagar un 500 (ver nota (c)).
+    # Envolver el tool loop capturando la familia LlmError, con UNA excepcion: un
+    # ModelNotServedError NO es degradacion del modelo sino misconfiguracion de
+    # deploy (ningun backend del pool sirve el modelo del modo) -> debe propagar
+    # (500 + alerta), no enmascararse como turno degradado que el usuario ve normal.
+    # El resto de la familia (transitorios timeout/unavailable/overloaded,
+    # permanentes bad-request/overflow, semanticos parse/exec) significa "el turno no
+    # se pudo completar" -> fallback degradado. El ResilientClient degrada los
+    # transitorios solo, pero RE-LANZA los permanentes y ModelNotServedError (estan en
+    # sus _PERMANENT_ERRORS) y un VllmClient pelado RE-LANZA todo: este except es la
+    # red real. Se loguea SOLO type(exc).__name__ (regla #4) para no degradar a ciegas.
     try:
         final_text, actions, finish_reason = await run_tool_loop(
             llm_client=llm_client,
@@ -221,7 +241,12 @@ async def route(
             registries=mem_ctx.registries,
             fallback_text=_FALLBACK_TEXT,
         )
-    except LlmBadRequestError:
+    except ModelNotServedError:
+        # Config/deploy roto: alertar, NO degradar en silencio.
+        logger.error("route: modelo no servido (config/deploy)")
+        raise
+    except LlmError as exc:
+        logger.warning("route degrado por error LLM: %s", type(exc).__name__)
         return ChatResponse(
             text=_FALLBACK_TEXT, actions=[], session_id=session_id, finish_reason="degraded"
         )
