@@ -134,9 +134,9 @@ class VllmClient:
                     if chunk is not None:
                         yield chunk
         except httpx.TimeoutException as exc:
-            raise LlmTimeoutError(str(exc)) from exc
+            raise LlmTimeoutError("timeout HTTP") from exc
         except httpx.ConnectError as exc:
-            raise LlmUnavailableError(str(exc)) from exc
+            raise LlmUnavailableError("connect error") from exc
 
     async def health(self) -> ModelHealth:
         # ``min`` da un nombre estable aunque el set tuviera >1 (ver __init__).
@@ -213,9 +213,9 @@ class VllmClient:
         try:
             return await self._http.post(url, json=payload, timeout=timeout_s)
         except httpx.TimeoutException as exc:
-            raise LlmTimeoutError(str(exc)) from exc
+            raise LlmTimeoutError("timeout HTTP") from exc
         except httpx.ConnectError as exc:
-            raise LlmUnavailableError(str(exc)) from exc
+            raise LlmUnavailableError("connect error") from exc
 
     @staticmethod
     def _raise_for_status(response: httpx.Response) -> None:
