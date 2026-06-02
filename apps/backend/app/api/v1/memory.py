@@ -51,6 +51,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
 
 from app.api.v1._http import too_many_requests
+from app.api.v1._memory_stores import build_memory_stores
 from app.core.config import get_settings
 from app.core.deps import (
     CurrentUser,
@@ -190,9 +191,9 @@ async def list_memory(
     Returns:
         ``MemoryGroupedResponse`` (sin ``layer``) o la ``*Page`` de la capa pedida.
     """
-    semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
-    episodic = EpisodicMemoryStore(session, user_id, embedder, reranker)
-    procedural = ProceduralMemoryStore(session, user_id)
+    semantic, episodic, procedural = build_memory_stores(
+        session, user_id, embedder=embedder, reranker=reranker
+    )
 
     if layer is MemoryLayer.SEMANTIC:
         return await _semantic_page(semantic, limit=limit, offset=offset)
@@ -239,9 +240,9 @@ async def export_memory(
     """
     if not await check_memory_export_rate_limit(store, user_id=str(user_id)):
         raise too_many_requests(get_settings().memory_export_window_seconds)
-    semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
-    episodic = EpisodicMemoryStore(session, user_id, embedder, reranker)
-    procedural = ProceduralMemoryStore(session, user_id)
+    semantic, episodic, procedural = build_memory_stores(
+        session, user_id, embedder=embedder, reranker=reranker
+    )
 
     # Capas completas, sin paginar y en UN query por capa (``list_all`` sin
     # ``limit`` trae todo): evita el ``count()``-para-el-limit y su TOCTOU (una
@@ -330,9 +331,9 @@ async def wipe_memory(
         ``MemoryWipePreview`` (con ``?dry_run=true``) o ``MemoryWipeResult`` (execute) con
         los conteos por capa + ``total``.
     """
-    semantic = SemanticMemoryStore(session, user_id, embedder, reranker)
-    episodic = EpisodicMemoryStore(session, user_id, embedder, reranker)
-    procedural = ProceduralMemoryStore(session, user_id)
+    semantic, episodic, procedural = build_memory_stores(
+        session, user_id, embedder=embedder, reranker=reranker
+    )
 
     # 1. Recontar el estado ACTUAL de las 3 capas (en la misma transacción del wipe, así el
     #    preview y el execute ven exactamente el mismo COUNT).
