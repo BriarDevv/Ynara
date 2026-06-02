@@ -38,6 +38,8 @@ import uuid
 import pytest
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
+from sqlalchemy import update as sa_update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode
@@ -179,3 +181,37 @@ async def test_audit_log_cascade_isolated_per_user(db_session: AsyncSession) -> 
     assert await _audit_exists(db_session, audit_b.id) is True, (
         "el audit de B no debe verse afectado por el DELETE de A"
     )
+
+
+# ---------------------------------------------------------------------------
+# 4. Inmutabilidad — el trigger BEFORE UPDATE rechaza cualquier UPDATE
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_audit_log_update_is_blocked_by_trigger(db_session: AsyncSession) -> None:
+    """Un UPDATE sobre ``audit_log`` lo rechaza el trigger ``trg_audit_log_block_update``.
+
+    La inmutabilidad se enforcea a nivel DB (no solo ORM): cualquier UPDATE levanta
+    una excepción con SQLSTATE 23514 (``check_violation``). El intento se aísla en un
+    savepoint (``begin_nested``) para que su rollback NO tumbe la sesión del fixture y
+    se pueda confirmar que la fila quedó intacta. DELETE (cascade/retention) NO se ve
+    afectado: el trigger es BEFORE UPDATE únicamente.
+    """
+    user = await _seed_user(db_session)
+    audit = await _seed_audit_row(db_session, user)
+
+    with pytest.raises(DBAPIError) as exc:
+        async with db_session.begin_nested():
+            await db_session.execute(
+                sa_update(AuditLog).where(AuditLog.id == audit.id).values(sensitive=True)
+            )
+
+    # SQLSTATE 23514 (check_violation): el trigger lo levanta a propósito.
+    assert getattr(exc.value.orig, "sqlstate", None) == "23514"
+    # Regla #4: el mensaje del trigger NO filtra contenido de fila.
+    assert "inmutable" in str(exc.value.orig).lower()
+
+    # La fila quedó intacta: el UPDATE no se aplicó (la sesión sigue usable).
+    row = (await db_session.execute(select(AuditLog).where(AuditLog.id == audit.id))).scalar_one()
+    assert row.sensitive is False
