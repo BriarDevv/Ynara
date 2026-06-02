@@ -232,9 +232,7 @@ class RedisTokenStore:
     async def is_family_revoked(self, sid: str) -> bool:
         return await self.has_flag(_family_key(sid))
 
-    async def set_grace_marker(
-        self, old_jti: str, successor_jti: str, *, ttl_seconds: int
-    ) -> None:
+    async def set_grace_marker(self, old_jti: str, successor_jti: str, *, ttl_seconds: int) -> None:
         if ttl_seconds <= 0:
             return  # ya expirado: no escribir basura.
         try:
@@ -377,9 +375,7 @@ class InMemoryTokenStore:
     async def is_family_revoked(self, sid: str) -> bool:
         return await self.has_flag(_family_key(sid))
 
-    async def set_grace_marker(
-        self, old_jti: str, successor_jti: str, *, ttl_seconds: int
-    ) -> None:
+    async def set_grace_marker(self, old_jti: str, successor_jti: str, *, ttl_seconds: int) -> None:
         if ttl_seconds <= 0:
             return
         self._grace[_grace_key(old_jti)] = (successor_jti, self._now() + ttl_seconds)

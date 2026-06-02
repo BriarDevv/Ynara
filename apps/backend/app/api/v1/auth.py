@@ -306,9 +306,7 @@ async def refresh(body: RefreshRequest, store: TokenStoreDep) -> TokenOut:
         new_sid = sid if sid is not None else uuid4().hex
         return TokenOut(
             access_token=create_access_token(sub, {SID_CLAIM: new_sid}),
-            refresh_token=create_refresh_token(
-                sub, {SID_CLAIM: new_sid}, jti=new_refresh_jti
-            ),
+            refresh_token=create_refresh_token(sub, {SID_CLAIM: new_sid}, jti=new_refresh_jti),
         )
 
     # Llegamos acá: revoke_if_absent devolvió False => old_jti YA estaba revocado.
@@ -374,9 +372,7 @@ async def logout(
         except InvalidTokenError:
             refresh_payload = None  # best-effort: refresh basura no rompe el logout.
         if refresh_payload is not None and refresh_payload.get("jti") is not None:
-            await store.revoke(
-                refresh_payload["jti"], ttl_seconds=_ttl_from_exp(refresh_payload)
-            )
+            await store.revoke(refresh_payload["jti"], ttl_seconds=_ttl_from_exp(refresh_payload))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -144,9 +144,7 @@ def test_refresh_token_type_and_longer_exp(patched_settings: Settings) -> None:
 
 def test_refresh_token_acepta_extra_claims(patched_settings: Settings) -> None:
     """create_refresh_token(extra_claims) propaga el sid (item 1 de #142)."""
-    refresh = verify_token(
-        create_refresh_token("user-123", {"sid": "S"}), expected_type="refresh"
-    )
+    refresh = verify_token(create_refresh_token("user-123", {"sid": "S"}), expected_type="refresh")
     assert refresh["sid"] == "S"
     assert refresh["type"] == "refresh"
 
@@ -154,9 +152,7 @@ def test_refresh_token_acepta_extra_claims(patched_settings: Settings) -> None:
 def test_refresh_extra_claims_no_falsifica_control(patched_settings: Settings) -> None:
     """extra_claims NO puede falsificar type/jti/exp en el refresh (van DESPUÉS)."""
     refresh = verify_token(
-        create_refresh_token(
-            "user-123", {"type": "access", "jti": "falsificado", "sid": "S"}
-        ),
+        create_refresh_token("user-123", {"type": "access", "jti": "falsificado", "sid": "S"}),
         expected_type="refresh",
     )
     # type/jti se imponen sobre el override; el sid legítimo sí entra.
