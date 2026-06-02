@@ -89,4 +89,15 @@ markers = [
     "integration: requiere servicios externos (DB real, etc.); excluido del run default",
 ]
 
-# TODO: agregar coverage threshold cuando estabilicemos el code base.
+# -------------------- Coverage --------------------
+
+# El piso (--cov-fail-under) NO va acá: se aplica en CI sobre la cobertura
+# COMBINADA unit+integration (ci.yml). En addopts rompería el run default
+# (solo unit), que no ejercita endpoints/DB y mide bajo a propósito.
+[tool.coverage.run]
+source = ["app"]
+branch = false
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
