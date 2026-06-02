@@ -8,6 +8,9 @@ controlar el orden primario -> secundario on-prem.
 
 from __future__ import annotations
 
+import asyncio
+import time
+
 import pytest
 
 from app.llm.clients.circuit import CircuitBreaker, CircuitState
@@ -16,6 +19,7 @@ from app.llm.clients.pool import ClientPool, FirstHealthy
 from app.llm.clients.resilient import ResilientClient
 from app.llm.errors import (
     LlmBadRequestError,
+    LlmContextOverflowError,
     LlmError,
     LlmTimeoutError,
     LlmUnavailableError,
@@ -299,6 +303,139 @@ async def test_all_breakers_open_returns_degraded_without_calls() -> None:
     result = await resilient.complete(model=_MODEL, messages=_messages())
     assert result.finish_reason == "degraded"
     assert len(primary.complete_calls) == calls_after_open
+
+
+# ---------- deadline global (P2.5) ----------
+
+
+class _SlowClient:
+    """Cliente cuyo ``complete`` duerme ``delay_s`` real antes de responder.
+
+    Sirve para verificar el deadline global del ``ResilientClient`` sin
+    depender de timeouts HTTP reales.
+    """
+
+    def __init__(self, *, delay_s: float, model: str = _MODEL) -> None:
+        self._delay_s = delay_s
+        self._model = model
+        self.complete_calls = 0
+
+    def serves_model(self, model: str) -> bool:
+        return model == self._model
+
+    async def complete(self, **_kwargs: object) -> CompletionResult:
+        self.complete_calls += 1
+        await asyncio.sleep(self._delay_s)
+        return _result("tarde")
+
+    async def health(self) -> ModelHealth:
+        return ModelHealth(model_name=self._model, healthy=True)
+
+
+async def test_global_budget_degrades_within_budget() -> None:
+    # Un cliente que tarda mucho mas que el budget global debe degradar al
+    # vencerse el deadline, no tras sumar el timeout de cada intento.
+    slow = _SlowClient(delay_s=5.0)
+    pool = ClientPool([slow], FirstHealthy())  # type: ignore[list-item]
+    resilient = ResilientClient(
+        pool,
+        max_attempts=3,
+        total_budget_s=0.05,
+        sleep=_FakeSleep(),
+        clock=_Clock(),
+    )
+
+    started = time.monotonic()
+    result = await resilient.complete(model=_MODEL, messages=_messages())
+    elapsed = time.monotonic() - started
+
+    assert result.finish_reason == "degraded"
+    assert result.model_name == _MODEL
+    # Degrada cerca del budget, muy por debajo del delay del cliente (5s).
+    assert elapsed < 1.0
+
+
+async def test_global_budget_does_not_sum_all_candidates() -> None:
+    # Con dos clientes lentos y max_attempts alto, el peor caso sin budget seria
+    # delay x attempts x candidatos. El budget corta antes de recorrerlos.
+    slow_primary = _SlowClient(delay_s=5.0)
+    slow_secondary = _SlowClient(delay_s=5.0)
+    pool = ClientPool([slow_primary, slow_secondary], FirstHealthy())  # type: ignore[list-item]
+    resilient = ResilientClient(
+        pool,
+        max_attempts=5,
+        total_budget_s=0.05,
+        sleep=_FakeSleep(),
+        clock=_Clock(),
+    )
+
+    started = time.monotonic()
+    result = await resilient.complete(model=_MODEL, messages=_messages())
+    elapsed = time.monotonic() - started
+
+    assert result.finish_reason == "degraded"
+    assert elapsed < 1.0
+    # No llego a recorrer todos los intentos de todos los candidatos.
+    assert slow_primary.complete_calls + slow_secondary.complete_calls < 5 * 2
+
+
+async def test_within_budget_returns_normal_result() -> None:
+    # Camino feliz: si el cliente responde dentro del budget, el resultado pasa
+    # sin tocar la ruta degradada.
+    client = _fake()
+    client.queue_result(_result("a tiempo"))
+    pool = ClientPool([client], FirstHealthy())
+    resilient = ResilientClient(
+        pool,
+        total_budget_s=5.0,
+        sleep=_FakeSleep(),
+        clock=_Clock(),
+    )
+    result = await resilient.complete(model=_MODEL, messages=_messages())
+    assert result.text == "a tiempo"
+    assert result.finish_reason == "stop"
+
+
+async def test_global_budget_does_not_swallow_permanent_error() -> None:
+    # Un error PERMANENTE (overflow) lanzado dentro de un candidato debe PROPAGAR
+    # aun con el budget global activo: el asyncio.timeout solo coerce a degradado
+    # su PROPIO TimeoutError, NUNCA un LlmContextOverflowError (no es Timeout).
+    client = _fake()
+    client.queue_error(LlmContextOverflowError("contexto excedido"))
+    pool = ClientPool([client], FirstHealthy())
+    resilient = ResilientClient(pool, total_budget_s=5.0, sleep=_FakeSleep(), clock=_Clock())
+
+    with pytest.raises(LlmContextOverflowError):
+        await resilient.complete(model=_MODEL, messages=_messages())
+
+
+# ---------- aclose (teardown) ----------
+
+
+class _ClosableClient:
+    """Cliente minimo que registra su cierre (proxy del VllmClient real)."""
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    def serves_model(self, model: str) -> bool:
+        return True
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+async def test_aclose_closes_every_pool_client() -> None:
+    # El teardown del lifespan cierra el ResilientClient -> debe cerrar CADA
+    # cliente del pool (sus httpx.AsyncClient en prod), sin filtrar conexiones.
+    c1, c2 = _ClosableClient(), _ClosableClient()
+    pool = ClientPool([c1, c2], FirstHealthy())  # type: ignore[list-item]
+    resilient = ResilientClient(pool)
+
+    await resilient.aclose()
+
+    assert c1.closed is True
+    assert c2.closed is True
 
 
 # ---------- serves_model / health ----------

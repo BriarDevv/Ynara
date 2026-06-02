@@ -107,3 +107,11 @@ class FakeLlmClient:
     async def health(self) -> ModelHealth:
         model_name = next(iter(self._served_models), "")
         return ModelHealth(model_name=model_name, healthy=self._healthy)
+
+    async def aclose(self) -> None:
+        """No-op: el Fake no tiene recursos de red que liberar.
+
+        Existe para que el teardown del lifespan/pool cierre el cliente LLM de
+        forma uniforme sea Fake o real (``ResilientClient``/``VllmClient``).
+        """
+        return None

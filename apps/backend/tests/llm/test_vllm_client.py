@@ -20,6 +20,7 @@ from app.llm.clients.parsers import OpenAIToolCallParser
 from app.llm.clients.vllm import VllmClient
 from app.llm.errors import (
     LlmBadRequestError,
+    LlmContextOverflowError,
     LlmOverloadedError,
     LlmTimeoutError,
     LlmUnavailableError,
@@ -195,6 +196,62 @@ async def test_complete_http_error_mapping(status: int, expected: type[Exception
     client = _client(lambda req: httpx.Response(status, json={"error": "x"}))
     with pytest.raises(expected):
         await client.complete(model=_MODEL, messages=_messages())
+
+
+# ---------- 400 overflow -> LlmContextOverflowError (P2.4) ----------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "overflow_msg",
+    [
+        "This model's maximum context length is 8192 tokens, however you requested 9000.",
+        "The input exceeds the context length of the model.",
+        "Please reduce the length of the messages.",
+        "MAXIMUM CONTEXT LENGTH exceeded",  # case-insensitive
+    ],
+)
+async def test_complete_400_overflow_maps_to_context_overflow(overflow_msg: str) -> None:
+    body = {"error": {"message": overflow_msg, "type": "BadRequestError"}}
+    client = _client(lambda req: httpx.Response(400, json=body))
+    with pytest.raises(LlmContextOverflowError):
+        await client.complete(model=_MODEL, messages=_messages())
+
+
+@pytest.mark.asyncio
+async def test_complete_400_generic_stays_bad_request() -> None:
+    # Un 400 sin firma de overflow sigue siendo LlmBadRequestError plano y NO
+    # la subclase de overflow.
+    body = {"error": {"message": "invalid value for parameter 'temperature'"}}
+    client = _client(lambda req: httpx.Response(400, json=body))
+    with pytest.raises(LlmBadRequestError) as excinfo:
+        await client.complete(model=_MODEL, messages=_messages())
+    assert not isinstance(excinfo.value, LlmContextOverflowError)
+
+
+@pytest.mark.asyncio
+async def test_complete_overflow_detail_does_not_leak_body() -> None:
+    # Regla #4: el detail de la excepcion es una etiqueta fija (status), nunca
+    # el body crudo del request del usuario.
+    leaky = "your prompt 'mi secreto 4111-1111' exceeds the maximum context length"
+    client = _client(lambda req: httpx.Response(400, json={"error": {"message": leaky}}))
+    with pytest.raises(LlmContextOverflowError) as excinfo:
+        await client.complete(model=_MODEL, messages=_messages())
+    rendered = str(excinfo.value)
+    assert "mi secreto" not in rendered
+    assert "4111-1111" not in rendered
+    assert rendered == "contexto excedido: HTTP 400"
+
+
+@pytest.mark.asyncio
+async def test_complete_422_overflow_signature_stays_bad_request() -> None:
+    # La deteccion de overflow es solo para 400 (no 422): un 422 con la firma
+    # sigue siendo LlmBadRequestError plano.
+    body = {"error": {"message": "maximum context length"}}
+    client = _client(lambda req: httpx.Response(422, json=body))
+    with pytest.raises(LlmBadRequestError) as excinfo:
+        await client.complete(model=_MODEL, messages=_messages())
+    assert not isinstance(excinfo.value, LlmContextOverflowError)
 
 
 @pytest.mark.asyncio

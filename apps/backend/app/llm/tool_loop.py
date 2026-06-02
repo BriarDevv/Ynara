@@ -24,6 +24,12 @@ from app.llm.tools.registry import ToolRegistry
 
 MAX_TOOL_ITERATIONS: int = 5
 
+# Tope defensivo de tool_calls a ejecutar por turno. Si el modelo emite mas, se
+# ejecutan solo las primeras ``MAX_CALLS_PER_TURN`` (las extra se descartan).
+# Acota el fan-out de un turno patologico (modelo en loop emitiendo decenas de
+# calls) sin cambiar el camino feliz, donde un turno trae pocas calls.
+MAX_CALLS_PER_TURN: int = 8
+
 # finish_reason que indica que el loop debe terminar (con o sin tool_calls).
 _TERMINAL_REASONS = frozenset({"stop", "length", "degraded"})
 
@@ -121,19 +127,24 @@ async def run_tool_loop(
         if not result.tool_calls or result.finish_reason in _TERMINAL_REASONS:
             break
 
+        # Cap defensivo: ejecutar a lo sumo MAX_CALLS_PER_TURN por turno. Las
+        # extra se descartan; el assistant message refleja SOLO las que se van a
+        # ejecutar para mantener la correlacion assistant/tool del parser hermes.
+        calls_this_turn = list(result.tool_calls[:MAX_CALLS_PER_TURN])
+
         # Agregar turno del assistant al historial CON tool_calls preservado
         # (necesario para multi-turno correcto con Qwen/hermes parser).
         messages.append(
             ChatMessage(
                 role="assistant",
                 content=result.text or None,
-                tool_calls=list(result.tool_calls),
+                tool_calls=calls_this_turn,
             )
         )
 
         # Ejecutar cada tool call y acumular en actions + historial.
         tool_call: ToolCall
-        for tool_call in result.tool_calls:
+        for tool_call in calls_this_turn:
             tool_result = await _execute_anywhere(tool_call.name, tool_call.arguments, registries)
             actions.append(
                 {
