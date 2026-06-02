@@ -13,6 +13,8 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app import __version__
 from app.api.v1 import auth, chat, health, memory, sessions
@@ -30,6 +32,62 @@ settings = get_settings()
 # Error tracking: no-op si no hay SENTRY_DSN. Antes de crear la app para
 # capturar errores de startup. El before_send limpia PII (regla #4).
 init_sentry()
+
+# Headers de seguridad base que aplican a TODA respuesta, en cualquier
+# environment. Valores fijos (no dependen de settings):
+#   - X-Content-Type-Options: nosniff  -> el browser no adivina el MIME type.
+#   - X-Frame-Options: DENY            -> no se puede embeber en un <iframe>.
+#   - Referrer-Policy: no-referrer     -> nunca se filtra la URL de origen.
+_BASE_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+}
+# HSTS: fuerza HTTPS por 1 año (incluyendo subdominios). SOLO en production:
+# en dev/local se sirve por HTTP y un HSTS cacheado rompería el acceso local.
+_HSTS_HEADER_VALUE = "max-age=31536000; includeSubDomains"
+
+
+class SecurityHeadersMiddleware:
+    """Middleware ASGI puro: inyecta los headers de seguridad en TODA respuesta.
+
+    Implementado como ASGI puro (envuelve ``send`` y agrega los headers en el
+    mensaje ``http.response.start``) en vez de ``BaseHTTPMiddleware`` a propósito:
+    (1) no bufferea el body, así NO rompe el stream SSE de ``/chat/stream``;
+    (2) cubre cualquier respuesta normal (2xx-4xx, incluidos 401/404/409/422/429).
+
+    Los 3 headers base van siempre; ``Strict-Transport-Security`` solo cuando
+    ``settings.environment == "production"``. El environment se lee en cada request
+    (módulo-global ``settings``) para que los tests lo parcheen sin recrear la app.
+
+    Limitación conocida y ACEPTADA: un 500 NO MANEJADO lo genera el
+    ``ServerErrorMiddleware`` de Starlette, que está POR FUERA de los
+    user-middlewares (este incluido), así que ese 500 crudo NO lleva estos headers.
+    Se acepta el gap porque (a) un 500 es un JSON genérico sin contenido del usuario
+    sniffable/embebible, y (b) cubrirlo exigiría envolver por fuera del
+    ``ServerErrorMiddleware`` o un handler de ``Exception`` que podría interferir con
+    la captura de Sentry (``before_send``, regla #4) — riesgo que no compensa el bajo
+    impacto de unos headers sobre un 500 genérico.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                for header, value in _BASE_SECURITY_HEADERS.items():
+                    headers[header] = value
+                if settings.environment == "production":
+                    headers["Strict-Transport-Security"] = _HSTS_HEADER_VALUE
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
 
 
 @asynccontextmanager
@@ -94,6 +152,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Security headers en cada respuesta normal (ver gap de 500-crudo en el docstring
+# del middleware). CORS se agrega antes y sigue intacto: Starlette ejecuta los
+# middlewares en orden inverso al de registro, así que este queda "por dentro" del
+# de CORS y ninguno pisa los headers del otro.
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Campos cuyo valor (``input``) JAMÁS debe ecoarse en un 422 (regla #4). El
 # RequestValidationError de Pydantic adjunta el ``input`` que falló; para un
