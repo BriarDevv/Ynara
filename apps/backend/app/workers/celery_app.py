@@ -76,6 +76,13 @@ celery_app.conf.beat_schedule = {
         "task": "workflows.decay_procedural",
         "schedule": timedelta(days=_DECAY_INTERVAL_DAYS),
     },
+    # Retention del audit_log: borra entradas > 24 meses (AUDIT_RETENTION_DAYS).
+    # Cadencia mensual: para una retention de 24 meses no hace falta correr a
+    # diario; mensual mantiene la tabla acotada sin scheduling innecesario.
+    "purge-audit-log-monthly": {
+        "task": "workflows.purge_audit_log",
+        "schedule": timedelta(days=30),
+    },
 }
 
 # Autodiscovery de tasks en app.workflows.*. Hoy registra consolidation.py
