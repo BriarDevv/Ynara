@@ -6,12 +6,13 @@ se agrega acá + en ``apps/backend/.env.example``.
 
 from __future__ import annotations
 
+import ipaddress
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -92,6 +93,23 @@ class Settings(BaseSettings):
     memory_export_max_requests: int = Field(5, alias="MEMORY_EXPORT_MAX_REQUESTS")
     memory_export_window_seconds: int = Field(3600, alias="MEMORY_EXPORT_WINDOW_SECONDS")
 
+    # Reverse-proxy / IP real del cliente (issue #151). El rate-limit anti-fuerza-bruta
+    # cuenta por IP; detrás de Cloudflare Tunnel el peer que ve uvicorn es el conector
+    # cloudflared (todos los clientes colapsan a una IP) -> el freno por IP se neutraliza.
+    # FIX SEGURO: leer la IP real del header SOLO cuando el peer inmediato está en esta
+    # allowlist de proxies confiables. Default VACÍO = no confiar ningún proxy = se usa el
+    # peer host (comportamiento actual, cero riesgo). NUNCA confiar el header si el peer
+    # NO está en la allowlist: un atacante spoofearía el header y se daría una IP nueva por
+    # intento, evadiendo el rate-limit por completo (PEOR que el status quo).
+    # ``NoDecode`` desactiva el JSON-decode que ``EnvSettingsSource`` aplicaría a un
+    # ``list[str]`` (que crashea ante ``TRUSTED_PROXY_IPS=`` o ``=127.0.0.1,10.0.0.0/8``):
+    # el string crudo del env llega tal cual al ``field_validator`` de abajo, que lo
+    # splittea por comas. Así el formato del .env es human-friendly (una IP/CIDR o CSV).
+    trusted_proxy_ips: Annotated[list[str], NoDecode] = Field(
+        default_factory=list, alias="TRUSTED_PROXY_IPS"
+    )
+    real_ip_header: str = Field("CF-Connecting-IP", alias="REAL_IP_HEADER")
+
     # Storage (R2)
     r2_account_id: str = Field("", alias="R2_ACCOUNT_ID")
     r2_access_key_id: str = Field("", alias="R2_ACCESS_KEY_ID")
@@ -109,6 +127,22 @@ class Settings(BaseSettings):
             "http://localhost:8081",
         ]
     )
+
+    @field_validator("trusted_proxy_ips", mode="before")
+    @classmethod
+    def _split_trusted_proxy_ips(cls, v: object) -> object:
+        """Acepta CSV/vacío desde env (pydantic-settings parsea ``list[str]`` como JSON).
+
+        Sin esto, ``TRUSTED_PROXY_IPS=`` (lo que documenta ``.env.example``) o
+        ``TRUSTED_PROXY_IPS=127.0.0.1,10.0.0.0/8`` (la sintaxis human-friendly del
+        comentario) crashean el boot porque el parser de env espera un JSON-array.
+        Normaliza un string separado por comas a lista (vacío -> ``[]``); una lista ya
+        parseada (kwargs / JSON) pasa intacta. El ``_validate_trusted_proxy_ips`` de
+        después valida que cada entry sea un IP/CIDR real.
+        """
+        if isinstance(v, str):
+            return [part.strip() for part in v.split(",") if part.strip()]
+        return v
 
     @model_validator(mode="after")
     def _default_celery_urls_to_redis(self) -> Settings:
@@ -172,6 +206,27 @@ class Settings(BaseSettings):
                     "MEMORY_ENCRYPTION_MASTER_KEY vacía en production: el cifrado de "
                     "memoria (ADR-007) la requiere; generar con `openssl rand -base64 32`"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_trusted_proxy_ips(self) -> Settings:
+        """Fail-fast: cada entry de ``trusted_proxy_ips`` debe ser un IP/CIDR válido.
+
+        La allowlist gobierna cuándo se confía el header de IP real (anti-spoof, issue
+        #151): una entry malformada que silenciosamente no matchee dejaría el freno por
+        IP roto sin aviso. Validar al boot (consistente con los demás validators fail-fast
+        del módulo) convierte una mala config en un error de arranque, no en un agujero
+        de seguridad latente. ``strict=False`` acepta tanto IPs sueltas (``127.0.0.1``)
+        como redes CIDR (``10.0.0.0/8``).
+        """
+        for entry in self.trusted_proxy_ips:
+            try:
+                ipaddress.ip_network(entry, strict=False)
+            except ValueError as exc:
+                raise ValueError(
+                    f"TRUSTED_PROXY_IPS contiene una entry inválida ({entry!r}): "
+                    "cada valor debe ser un IP o CIDR parseable (p.ej. 127.0.0.1 o 10.0.0.0/8)"
+                ) from exc
         return self
 
 
