@@ -27,6 +27,7 @@ Acá vive el "porqué" detrás de las decisiones técnicas del proyecto.
 | 008 | Modelo de embedding — BAAI bge-m3 (1024-dim, on-prem) | Aceptado |
 | 009 | Topología de serving vLLM y parsers de tool-calling | Aceptado |
 | 010 | Arquitectura de memoria v2 — engine in-house sobre storage cifrado propio (supersede ADR-003) | Aceptado |
+| 011 | Auth permanece layer-split — criterio de feature-packages vs dominios ordinarios | Aceptado |
 
 ## Cómo crear un ADR nuevo
 
