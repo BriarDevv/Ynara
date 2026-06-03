@@ -29,7 +29,10 @@ cualquier migración que las afecte (regla #3 de `AGENTS.md`):
 - `episodic_memory`
 - `procedural_memory`
 - `audit_log`
-- `users`
+
+(`users` / `sessions` son **operativas**: review normal en el PR, sin el gate extra
+de regla #3. El perímetro sagrado es la memoria cifrada del moat + el `audit_log`
+inmutable — la misma lista que AGENTS §0 / `app/models/{memory,audit}.py`.)
 
 Esto es regla #3 de [`AGENTS.md`](../../../AGENTS.md).
 
