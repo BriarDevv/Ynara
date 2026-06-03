@@ -51,7 +51,9 @@ neutraliza con un exception handler de validación montado en ``app/main.py``
 
 from __future__ import annotations
 
+import ipaddress
 from datetime import UTC, datetime
+from functools import lru_cache
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
@@ -97,14 +99,80 @@ from app.services.auth import (
 router = APIRouter()
 
 
+_TrustedNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+
+@lru_cache
+def _trusted_networks(raw: tuple[str, ...]) -> tuple[_TrustedNetwork, ...]:
+    """Parsea la allowlist de proxies (IPs/CIDRs) a redes ``ipaddress``, cacheado.
+
+    Recibe una tupla (hashable) para poder cachear por ``lru_cache``: ``Settings`` ya
+    validó al boot que cada entry es parseable (``_validate_trusted_proxy_ips``), así
+    que acá no puede fallar. La caché evita re-parsear en cada request (no es hot-path
+    crítico, pero es gratis).
+    """
+    return tuple(ipaddress.ip_network(entry, strict=False) for entry in raw)
+
+
+def resolve_client_ip(
+    peer: str,
+    header_value: str | None,
+    *,
+    trusted_networks: tuple[_TrustedNetwork, ...],
+) -> str:
+    """Resuelve la IP del cliente para el rate-limit (pura, testeable; issue #151).
+
+    Anti-spoof: el header de IP real SOLO se confía cuando el peer inmediato (el que ve
+    uvicorn) pertenece a la allowlist de proxies confiables. Reglas:
+
+    - ``peer`` es ``"unknown"`` o NO matchea ninguna ``trusted_networks`` -> devuelve
+      ``peer`` SIN leer el header. Si se leyera, un atacante directo spoofearía el header
+      y se daría una IP nueva por intento, evadiendo el rate-limit (PEOR que el status quo).
+    - ``peer`` confiable y ``header_value`` es una IP válida -> devuelve esa IP (la del
+      cliente que el proxy confiable adelantó).
+    - ``peer`` confiable pero header ausente, vacío o con basura (proxy mal configurado)
+      -> cae al ``peer``, NUNCA a un XFF crudo ni a una key de rate-limit envenenada.
+    """
+    if peer == "unknown":
+        return peer
+    try:
+        peer_addr = ipaddress.ip_address(peer)
+    except ValueError:
+        # peer no parseable como IP (no debería pasar con request.client.host, pero
+        # ante la duda no confiamos: tratamos como no-allowlisteado).
+        return peer
+    if not any(peer_addr in net for net in trusted_networks):
+        return peer
+    # El proxy confiable adelantó la IP real en el header. Belt-and-suspenders: validamos
+    # que sea una IP bien formada -> un header vacío ("") o con basura/lista (proxy mal
+    # configurado) cae al peer en vez de envenenar la key del rate-limit con un valor raro.
+    if header_value is not None:
+        candidate = header_value.strip()
+        try:
+            ipaddress.ip_address(candidate)
+        except ValueError:
+            return peer
+        return candidate
+    return peer
+
+
 def _client_ip(request: Request) -> str:
     """IP del cliente para el rate-limit. ``"unknown"`` si no hay client info.
 
-    Caveat (TODO): detrás de un reverse-proxy esto puede ser la IP del proxy; el
-    fix real (parsear ``X-Forwarded-For`` con allowlist de proxies confiables) se
-    difiere. Por ahora es una defensa aplicativa básica.
+    Resuelto config-driven y anti-spoof (issue #151): el peer inmediato es
+    ``request.client.host``; solo si ese peer está en la allowlist
+    ``settings.trusted_proxy_ips`` se lee la IP real del cliente del header
+    ``settings.real_ip_header`` (default ``CF-Connecting-IP``). Default allowlist vacía =
+    se usa el peer host (comportamiento legacy, cero riesgo). La lógica vive en la pura
+    ``resolve_client_ip`` (testeable sin Request). Ver su docstring para las ramas.
     """
-    return request.client.host if request.client else "unknown"
+    peer = request.client.host if request.client else "unknown"
+    settings = get_settings()
+    return resolve_client_ip(
+        peer,
+        request.headers.get(settings.real_ip_header),
+        trusted_networks=_trusted_networks(tuple(settings.trusted_proxy_ips)),
+    )
 
 
 def _unauthorized() -> HTTPException:
