@@ -42,8 +42,12 @@ schemas Pydantic.
 
 Cualquier cambio aquí requiere tests + **1 aprobación humana explícita**
 (review formal en el PR, además del operador autor — regla #3 de
-[`AGENTS.md`](../../../AGENTS.md)). Schema definido en
-[`ADR-007`](../../../docs/architecture/adrs/ADR-007-memory-decay-retention-encryption.md).
+[`AGENTS.md`](../../../AGENTS.md)). El set sagrado son las 3 capas de la **memoria
+cifrada** del moat (schema en
+[`ADR-007`](../../../docs/architecture/adrs/ADR-007-memory-decay-retention-encryption.md))
+más el **`audit_log` inmutable** — el mismo set que AGENTS §0 /
+`app/models/{memory,audit}.py`. (`users` / `sessions` son operativas: review normal,
+sin el gate extra.)
 
 ### 🔴 semantic_memory
 
@@ -117,49 +121,10 @@ Decay exponencial sobre `confidence`; worker Celery diario aplica
 
 **Borrado físico**: cuando `confidence < 0.1` y `last_reinforced_at > 90 días` (worker periódico). Ver ADR-007 D1.
 
-## Tablas operativas
+### 🔴 audit_log
 
-### users
-
-Usuario de Ynara. Auth JWT implementada (`app/core/security.py`:
-`create_access_token`, `verify_access_token`, `create_refresh_token`,
-`verify_token`, `hash_password`, `verify_password`). Endpoints activos:
-`/v1/auth/register`, `/v1/auth/token`, `/v1/auth/me`, `/v1/auth/refresh`,
-`/v1/auth/logout`. Refresh/logout implementados (#63): POST
-`/v1/auth/refresh` (rotación single-use con reuse-detection a nivel
-familia/`sid`, retry-safe — #142) + POST `/v1/auth/logout` (revoca la
-familia entera vía `sid` + blocklist por `jti` — #142).
-
-| Columna | Tipo | Notas |
-|---|---|---|
-| `id` | UUID PK | |
-| `email` | VARCHAR(254) UNIQUE | Nullable hasta que auth real esté implementada (ephemeral users no tienen email) |
-| `password_hash` | VARCHAR(255) | Nullable hasta auth real |
-| `display_name` | VARCHAR(40) | Nullable hasta que onboarding lo capture |
-| `is_ephemeral` | BOOLEAN NOT NULL DEFAULT false | Modo "probar sin cuenta" |
-| `onboarding_completed` | BOOLEAN NOT NULL DEFAULT false | Setea el frontend al final del onboarding |
-| `retention_sensitive_days` | INTEGER NOT NULL DEFAULT 180 | TTL configurable por usuario para episódica con `is_sensitive=true`. Rango 30-365 (constraint) |
-| `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
-
-**Constraint**: `retention_sensitive_days BETWEEN 30 AND 365`.
-
-### sessions
-
-Una sesión es una conversación contigua de un usuario en un modo fijo.
-
-| Columna | Tipo | Notas |
-|---|---|---|
-| `id` | UUID PK | |
-| `user_id` | UUID FK → users.id, ON DELETE CASCADE | indexed |
-| `mode` | `mode_enum` NOT NULL | Inmutable post-creación (un modo por sesión) |
-| `started_at` | TIMESTAMPTZ NOT NULL DEFAULT now() | |
-| `ended_at` | TIMESTAMPTZ | NULL hasta que se cierre |
-| `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
-
-**Relación con `episodic_memory`**: 1-a-1 (UNIQUE en `episodic_memory.session_id`).
-Al cerrar la sesión, un worker Celery genera la entrada episódica.
-
-### audit_log
+Sagrada por **inmutabilidad / integridad de auditoría** (regla #3), no por cifrado:
+no es una tabla del moat ADR-007 (guarda metadata + hash, sin contenido en claro).
 
 Registro inmutable de operaciones sobre memoria. **Se escribe** (issue
 #158): la consolidación (`app/llm/memory_engine.apply_ops` vía
@@ -207,6 +172,48 @@ GDPR + worker de retention).
 | `record_hash` | VARCHAR(64) NOT NULL | SHA-256 hex del contenido afectado (texto plano antes de cifrar). CHECK constraint `record_hash ~ '^[0-9a-f]{64}$'` enforce el formato a nivel DB |
 | `sensitive` | BOOLEAN NOT NULL DEFAULT false | `true` para ops sobre episódica con `is_sensitive=true` |
 | `created_at` | TIMESTAMPTZ NOT NULL DEFAULT now() | Indexed (queries por rango temporal) |
+
+## Tablas operativas
+
+### users
+
+Usuario de Ynara. Auth JWT implementada (`app/core/security.py`:
+`create_access_token`, `verify_access_token`, `create_refresh_token`,
+`verify_token`, `hash_password`, `verify_password`). Endpoints activos:
+`/v1/auth/register`, `/v1/auth/token`, `/v1/auth/me`, `/v1/auth/refresh`,
+`/v1/auth/logout`. Refresh/logout implementados (#63): POST
+`/v1/auth/refresh` (rotación single-use con reuse-detection a nivel
+familia/`sid`, retry-safe — #142) + POST `/v1/auth/logout` (revoca la
+familia entera vía `sid` + blocklist por `jti` — #142).
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | |
+| `email` | VARCHAR(254) UNIQUE | Nullable hasta que auth real esté implementada (ephemeral users no tienen email) |
+| `password_hash` | VARCHAR(255) | Nullable hasta auth real |
+| `display_name` | VARCHAR(40) | Nullable hasta que onboarding lo capture |
+| `is_ephemeral` | BOOLEAN NOT NULL DEFAULT false | Modo "probar sin cuenta" |
+| `onboarding_completed` | BOOLEAN NOT NULL DEFAULT false | Setea el frontend al final del onboarding |
+| `retention_sensitive_days` | INTEGER NOT NULL DEFAULT 180 | TTL configurable por usuario para episódica con `is_sensitive=true`. Rango 30-365 (constraint) |
+| `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
+
+**Constraint**: `retention_sensitive_days BETWEEN 30 AND 365`.
+
+### sessions
+
+Una sesión es una conversación contigua de un usuario en un modo fijo.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | |
+| `user_id` | UUID FK → users.id, ON DELETE CASCADE | indexed |
+| `mode` | `mode_enum` NOT NULL | Inmutable post-creación (un modo por sesión) |
+| `started_at` | TIMESTAMPTZ NOT NULL DEFAULT now() | |
+| `ended_at` | TIMESTAMPTZ | NULL hasta que se cierre |
+| `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
+
+**Relación con `episodic_memory`**: 1-a-1 (UNIQUE en `episodic_memory.session_id`).
+Al cerrar la sesión, un worker Celery genera la entrada episódica.
 
 ## Migración inicial
 
