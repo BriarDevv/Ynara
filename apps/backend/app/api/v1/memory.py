@@ -1,7 +1,9 @@
-"""Endpoints HTTP de la memoria privada del usuario: ``/v1/memory`` (Ola 1, READ-ONLY).
+"""Endpoints HTTP de la memoria privada del usuario: ``/v1/memory``.
 
-La superficie privacy-first donde el **dueño** ve y exporta su propia memoria con
-su JWT. Tres GET en esta ola; PATCH/DELETE/wipe son Olas 2-3.
+La superficie privacy-first donde el **dueño** ve, exporta, edita y borra su propia
+memoria con su JWT: tres GET (list/detail/export) + PATCH/DELETE individual por capa
++ wipe total (dry-run + confirm). Las mutaciones (PATCH/DELETE/wipe) escriben en
+``audit_log`` (issue #161).
 
 Decisiones de diseño (cerradas con producto, NO re-litigar):
 
