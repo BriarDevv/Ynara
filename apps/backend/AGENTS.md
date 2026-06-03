@@ -61,6 +61,17 @@ app/
 └── workflows/         # consolidación async + decay procedural implementados
 ```
 
+**Auth está layer-split a propósito (ADR-011).** Su superficie se reparte por capa —
+`api/v1/auth.py` (router), `services/auth.py` (dominio), `schemas/auth.py` (wire),
+`core/security.py` (JWT/bcrypt) y los auth-deps de `core/deps.py` (`get_current_user`,
+`get_token_store`, `UNAUTHORIZED_DETAIL`, …)— porque auth es un **dominio ordinario**
+(1 router + 1 service + 1 schema), no un subsistema pesado. Los feature-packages
+(`llm/`, `memory/`) se reservan a subsistemas **pesados y autocontenidos**.
+`core/token_store.py` y `core/ratelimit.py` se quedan en `core/` por ser **infra
+compartida** (el rate-limit lo usan chat y memory-export, no solo auth): moverlos a un
+paquete de auth invertiría la dependencia `core→dominio`. No crear `app/auth/` salvo que
+auth cruce el umbral de peso (ver ADR-011 D5).
+
 ---
 
 ## 3. La capa LLM (`app/llm/`) — cómo está armada
