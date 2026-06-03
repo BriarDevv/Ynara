@@ -48,7 +48,7 @@
 - **Parámetros**:
   - `from_dt: datetime`
   - `to_dt: datetime`
-- **Habilitada en modos**: productividad, vida.
+- **Habilitada en modos**: productividad.
 
 ### reminder.set
 
@@ -86,12 +86,12 @@
 ### memory.update
 
 - **Parámetros**: `id: str`, `content: str`.
-- **Habilitada en modos**: memoria.
+- **Habilitada en modos**: productividad, memoria.
 
 ### memory.delete
 
 - **Parámetros**: `id: str`.
-- **Habilitada en modos**: memoria.
+- **Habilitada en modos**: productividad, memoria.
 
 ### mode.switch
 
