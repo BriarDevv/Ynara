@@ -20,6 +20,7 @@ from app import __version__
 from app.api.v1 import auth, chat, health, memory, sessions
 from app.core.config import get_settings
 from app.core.db_guard import guard_against_prod_db_in_dev
+from app.core.deps import get_engine
 from app.core.observability import init_sentry
 from app.core.token_store import RedisTokenStore
 from app.llm.clients.factory import build_llm_clients
@@ -138,6 +139,13 @@ async def lifespan(app: FastAPI):
     # cerrarlos acá también. Redis se cierra siempre.
     await app.state.llm_client.aclose()
     await app.state.redis.aclose()
+    # Engine de DB: get_engine() es lazy (lru_cache), así que sólo lo disponemos si
+    # llegó a construirse (alguna request/health-probe lo materializó). dispose() cierra
+    # el connection pool de asyncpg; sin esto, con pool_size>0 (session pooler / conexión
+    # directa) cada restart de worker dejaría sockets colgados (con NullPool es inocuo).
+    # El guard cache_info().currsize evita construir el engine sólo para destruirlo.
+    if get_engine.cache_info().currsize:
+        await get_engine().dispose()
 
 
 app = FastAPI(
