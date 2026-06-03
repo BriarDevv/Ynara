@@ -61,9 +61,11 @@ from app.core.deps import (
     get_reranker,
 )
 from app.core.ratelimit import check_memory_export_rate_limit
-from app.enums import MemoryLayer
+from app.enums import AuditOperation, MemoryLayer
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
+from app.llm.memory_engine import _procedural_hash_payload, _record_hash
+from app.memory.audit import AuditStore
 from app.memory.episodic import EpisodicMemoryStore
 from app.memory.procedural import ProceduralMemoryStore
 from app.memory.semantic import SemanticMemoryStore
@@ -382,6 +384,42 @@ async def wipe_memory(
     sem_wiped = await semantic.wipe()
     epi_wiped = await episodic.wipe()
     proc_wiped = await procedural.wipe()
+
+    # AUDIT (issue #161): una fila por CADA capa con borrado EFECTIVO (rowcount > 0). El wipe
+    # es DELETE-by-user masivo: no hay target_id ni record per-entry, así que target_id=None y el
+    # record_hash ata la fila a "el wipe de esta capa" (sha256 de ``wipe:<capa>``). Las capas con
+    # 0 borrados NO generan fila (no hubo destrucción que auditar). EPISODIC va sensitive=True de
+    # forma CONSERVADORA: el wipe pudo arrasar episodios sensibles y no podemos chequear per-entry
+    # (es un DELETE masivo, no leemos is_sensitive fila por fila); semantic/procedural nunca son
+    # sensibles. origin_* quedan None (acción del usuario por HTTP, sin LLM/tool: distingue el
+    # audit de endpoint del de consolidación, que lleva origin_model=QWEN). La fila va en la MISMA
+    # transacción que el wipe, antes del único commit -> wipe + audit son ATÓMICOS (todo o nada).
+    audit = AuditStore(session, user_id)
+    if sem_wiped > 0:
+        await audit.record(
+            operation=AuditOperation.DELETE,
+            target_layer=MemoryLayer.SEMANTIC,
+            target_id=None,
+            record_hash=_record_hash(f"wipe:{MemoryLayer.SEMANTIC.value}"),
+            sensitive=False,
+        )
+    if epi_wiped > 0:
+        await audit.record(
+            operation=AuditOperation.DELETE,
+            target_layer=MemoryLayer.EPISODIC,
+            target_id=None,
+            record_hash=_record_hash(f"wipe:{MemoryLayer.EPISODIC.value}"),
+            sensitive=True,
+        )
+    if proc_wiped > 0:
+        await audit.record(
+            operation=AuditOperation.DELETE,
+            target_layer=MemoryLayer.PROCEDURAL,
+            target_id=None,
+            record_hash=_record_hash(f"wipe:{MemoryLayer.PROCEDURAL.value}"),
+            sensitive=False,
+        )
+
     # Persistir el wipe (los stores solo hacen flush; get_db no commitea -> sin esto el borrado
     # no persistiría en prod). Va solo en el happy path: un 409/422 no muta y no debe commitear.
     await session.commit()
@@ -498,6 +536,17 @@ async def update_memory(
         if sem_item is None:
             # Inexistente o ajeno: mismo 404 que un GET (sin oráculo, no mutó nada).
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+        # AUDIT (issue #161): tras el UPDATE EFECTIVO, antes del commit. record_hash = sha256 del
+        # nuevo content (regla #4: digest, no plaintext); sensitive=False (semantic nunca lleva
+        # contenido sensible). origin_* None: acción del usuario por HTTP. Misma transacción que
+        # el update -> atómicos por el único commit del request (igual que memory_engine:484).
+        await AuditStore(session, user_id).record(
+            operation=AuditOperation.UPDATE,
+            target_layer=MemoryLayer.SEMANTIC,
+            target_id=sem_item.id,
+            record_hash=_record_hash(body.content),
+            sensitive=False,
+        )
         # El store solo hace flush(): el commit del request lo da el endpoint (igual que
         # sessions.py:163 / chat.py:185 / auth.py:91). get_db NO commitea —cierra ->
         # rollback—, así que sin este commit la edición no persistiría en prod. Va solo
@@ -516,6 +565,16 @@ async def update_memory(
     if proc_item is None:
         # Key inexistente o ajena: 404 (NUNCA se crea vía PATCH — eso sería upsert).
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+    # AUDIT (issue #161): tras el UPDATE EFECTIVO, antes del commit. record_hash = sha256 del
+    # payload canónico (key, value) — misma sede que la consolidación (memory_engine:518), así el
+    # digest del mismo par da siempre lo mismo. sensitive=False; origin_* None (acción HTTP).
+    await AuditStore(session, user_id).record(
+        operation=AuditOperation.UPDATE,
+        target_layer=MemoryLayer.PROCEDURAL,
+        target_id=proc_item.id,
+        record_hash=_record_hash(_procedural_hash_payload(ref, body.value)),
+        sensitive=False,
+    )
     await session.commit()  # persistir la edición (ver nota en la rama semantic).
     return proc_item
 
@@ -544,12 +603,24 @@ async def delete_memory(
     Returns:
         ``Response`` 204 No Content (sin cuerpo) en éxito.
     """
+    audit = AuditStore(session, user_id)
+
     if layer is MemoryLayer.PROCEDURAL:
         # Procedural: la ref es la ``key`` (str), no un UUID.
         procedural = ProceduralMemoryStore(session, user_id)
         deleted = await procedural.delete(ref)
         if not deleted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+        # AUDIT (issue #161): tras el DELETE EFECTIVO, antes del commit. target_id=None (el
+        # delete-by-key no retorna id; mismo criterio que memory_engine:527-534) y record_hash =
+        # sha256 de la key ata la fila a la entrada borrada. sensitive=False; origin_* None.
+        await audit.record(
+            operation=AuditOperation.DELETE,
+            target_layer=MemoryLayer.PROCEDURAL,
+            target_id=None,
+            record_hash=_record_hash(ref),
+            sensitive=False,
+        )
         await session.commit()  # persistir el borrado (ver nota en update_memory).
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -566,5 +637,18 @@ async def delete_memory(
 
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+    # AUDIT (issue #161): tras el DELETE EFECTIVO, antes del commit. record_hash = sha256 del id
+    # (el contenido ya no existe; el id identifica la fila borrada, mismo criterio que
+    # memory_engine:497-502). sensitive=True SOLO para episodic: es la única capa con contenido
+    # sensible y se marca conservador SIN descifrar la entrada — sobre-marcar es fail-safe para
+    # auditoría y consistente con el wipe episódico (evita descifrar la capa sensible solo para
+    # leer un bool). origin_* None (acción del usuario por HTTP).
+    await audit.record(
+        operation=AuditOperation.DELETE,
+        target_layer=layer,
+        target_id=memory_id,
+        record_hash=_record_hash(str(memory_id)),
+        sensitive=(layer is MemoryLayer.EPISODIC),
+    )
     await session.commit()  # persistir el borrado (ver nota en update_memory).
     return Response(status_code=status.HTTP_204_NO_CONTENT)
