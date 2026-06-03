@@ -98,18 +98,22 @@ seguridad en el docstring de [`../app/api/v1/auth.py`](../app/api/v1/auth.py).
     exista o no el email.
   - `POST /auth/register`: por IP (`AUTH_REGISTER_MAX_ATTEMPTS` 10,
     `AUTH_REGISTER_WINDOW_SECONDS` 3600s).
+  - `POST /auth/refresh`: por `(ip, sub)` (`AUTH_REFRESH_MAX_ATTEMPTS` 30,
+    `AUTH_REFRESH_WINDOW_SECONDS` 900s) — más permisivo que el login (rotación
+    legítima frecuente). El 429 va DESPUÉS de validar firma + `sub`, así no
+    introduce oráculo.
   - Al pasar el umbral responde **429** con header `Retry-After`.
   - **fail-open**: si Redis cae, el rate-limit se desactiva (auth sigue
     funcionando, sin throttling aplicativo).
 
-## /v1/chat (TODO — M9)
+## /v1/chat
 
 Dos endpoints: uno no-streaming (JSON) y uno SSE. Contrato + justificación en
 [`../../../docs/planning/RESPUESTAS-CONTRATO-CHAT.md`](../../../docs/planning/RESPUESTAS-CONTRATO-CHAT.md).
 
 - **POST** `/v1/chat` (no-streaming):
   - Request: `{ text: string (límite ~4000 chars), mode: Mode, session_id?: UUID }`
-  - Response: `{ text: string, actions: Action[], session_id: UUID }`
+  - Response: `{ text: string, actions: Action[], session_id: UUID, finish_reason: string | null }`
     - `actions` **siempre presente** (lista vacía si no hubo acciones; los modos
       Gemma nunca ejecutan tools). El Pydantic es `actions = []`, no opcional.
     - `Action = { id, name, arguments, result }` — `result` es el resultado
@@ -120,7 +124,7 @@ Dos endpoints: uno no-streaming (JSON) y uno SSE. Contrato + justificación en
   - Sin fallback mid-stream (M3); la infra caída se sirve como respuesta
     degradada (texto degradado por `token` + `done`), no como `error`.
 - Permisos: usuario autenticado.
-- Rate limit: TODO (probablemente 30/min por usuario).
+- Rate limit: por `user_id` (del JWT), `CHAT_MAX_REQUESTS` (60) por `CHAT_WINDOW_SECONDS` (60s); 429 con `Retry-After` al cruzar el techo. fail-open si Redis cae. Aplica a `/chat` y `/chat/stream`.
 - Modos: todos.
 
 ## /v1/memory
@@ -184,10 +188,18 @@ Invariantes (regla #3 / ADR-007 / ADR-010):
   - Response 422: `layer` inválida, `ref` no-UUID (semantic/episodic), body que no
     aplica a la capa (semantic sin `content`, procedural sin `value`), o `content`
     vacío / >4096.
+  - **Audit (issue #161)**: tras un UPDATE efectivo (semantic/procedural), antes del
+    commit, escribe una fila en `audit_log` (`operation=UPDATE`, `target_layer`,
+    `target_id`, `record_hash` = SHA-256 del nuevo `content`/`value` canónico;
+    `sensitive=false`, `origin_*=None`) en la **misma** transacción que el update.
 - **DELETE** `/v1/memory/{layer}/{ref}` — borra **un** ítem de memoria del usuario.
   - Path: igual que PATCH (`layer` + `ref` UUID|key). Aplica a las **3** capas
     (incluida episodic: el dueño sí puede borrar un episodio, aunque no editarlo).
   - Response **204** No Content (sin body) en éxito; el blob cifrado nunca viaja.
+  - **Audit (issue #161)**: tras un DELETE efectivo, antes del commit, escribe una fila
+    en `audit_log` (`operation=DELETE`, `target_layer`, `target_id`, `record_hash` =
+    SHA-256 de la ref/key; `sensitive=true` **solo** para episodic, `origin_*=None`) en
+    la **misma** transacción que el borrado.
   - Response 404: ref inexistente **o** de otro usuario — **mismo** 404
     (`detail: "memoria no encontrada"`), sin oráculo ni tocar data ajena.
   - Response 422: `ref` no-UUID en semantic/episodic.
@@ -218,7 +230,11 @@ Invariantes (regla #3 / ADR-007 / ADR-010):
       **misma** transacción) → Response 200 `MemoryWipeResult = { "semantic": N,
       "episodic": N, "procedural": N, "total": N }` con los **rowcounts REALES**
       borrados (pueden diferir del preview si el worker insertó en el ínterin; ese
-      número siempre es verdad). **Solo enteros** (regla #4).
+      número siempre es verdad). **Solo enteros** (regla #4). **Audit (issue #161)**:
+      por cada capa con rowcount > 0 escribe una fila en `audit_log`
+      (`operation=DELETE`, `target_id=None`, `record_hash` = SHA-256 de `wipe:<capa>`;
+      episodic `sensitive=true` conservador, semantic/procedural `sensitive=false`), en
+      la misma transacción que el wipe.
     - **No coinciden** → Response **409** Conflict con los **conteos ACTUALES** en el
       `detail` (para re-confirmar con un preview fresco); **nada** se borra ni
       commitea. `detail = { "message": str, "semantic": N, "episodic": N,
@@ -235,7 +251,10 @@ Invariantes (regla #3 / ADR-007 / ADR-010):
     completo; el receipt reporta el rowcount real. No descifra ni logea contenido.
 - Response 401 (todos): sin token / token inválido (`get_current_user`).
 - Permisos: **usuario autenticado**, solo su propia memoria.
-- Rate limit: TODO.
+- Rate limit: solo `GET /v1/memory/export` (el endpoint más caro) está limitado, por
+  `user_id`, `MEMORY_EXPORT_MAX_REQUESTS` (5) por `MEMORY_EXPORT_WINDOW_SECONDS`
+  (3600s); 429 con `Retry-After`. fail-open si Redis cae. El resto de `/v1/memory` no
+  tiene rate-limit aplicativo.
 
 ## /v1/sessions
 

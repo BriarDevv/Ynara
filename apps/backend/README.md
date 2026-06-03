@@ -22,15 +22,15 @@ ningún dato de usuario sale del perímetro (regla #4).
 app/
 ├── main.py          # entrypoint FastAPI (lifespan, CORS, routers v1)
 ├── enums.py         # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation)
-├── core/            # config (Settings lazy), deps (engine async), security (auth JWT implementado), db_guard
+├── core/            # config (Settings lazy), deps (engine async lazy: get_engine/get_sessionmaker), security (auth JWT implementado), db_guard
 ├── api/v1/          # rutas FastAPI, un archivo por dominio
 ├── models/          # SQLAlchemy 2 (user, session, memory 🔴, audit 🔴)
 ├── schemas/         # Pydantic v2 (mirror de models + payloads de API)
 ├── services/        # lógica de negocio sin framework (deps por argumento)
 ├── llm/             # capa de inferencia — config, clients/, prompts/, tools/, router (M8)
-├── memory/          # 🔴 wrappers de las 3 capas sagradas (M7, implementado)
+├── memory/          # 🔴 wrappers de las 3 capas sagradas + AuditStore (escritura de audit_log)
 ├── workers/         # Celery (consolidación async)
-└── workflows/       # consolidación + decay implementados
+└── workflows/       # consolidación + decay + retention de audit_log implementados
 
 alembic/             # Migraciones (env.py acepta TEST_DATABASE_URL)
 docs/                # Catálogos vivos (MODELS, ENDPOINTS, TOOLS, MIGRATIONS)

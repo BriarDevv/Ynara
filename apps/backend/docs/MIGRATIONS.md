@@ -28,6 +28,7 @@ cualquier migración que las afecte (regla #3 de `AGENTS.md`):
 - `semantic_memory`
 - `episodic_memory`
 - `procedural_memory`
+- `audit_log`
 - `users`
 
 Esto es regla #3 de [`AGENTS.md`](../../../AGENTS.md).
@@ -63,6 +64,11 @@ uv run alembic downgrade <rev>  # bajar a revisión específica
 ```
 
 ## Verificar antes de mergear
+
+> ⚠️ El roundtrip `downgrade` **destruye datos**: corré estos comandos SOLO contra
+> una DB de tests (`TEST_DATABASE_URL`, p.ej. `localhost:5433/ynara_test`), **nunca**
+> contra el `DATABASE_URL` de dev — que resuelve a la **Supabase de prod**. `env.py`
+> apunta el roundtrip a `TEST_DATABASE_URL` justamente por esto.
 
 ```sh
 uv run alembic check            # ¿el modelo coincide con la última migración?

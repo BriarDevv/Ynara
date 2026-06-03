@@ -57,7 +57,7 @@ producto). Lectura por ambos modelos vía `search()` por similitud.
 | `user_id` | UUID FK → users.id, ON DELETE CASCADE | indexed btree |
 | `content` | BYTEA NOT NULL | Cifrado AES-256-GCM (key derivada por usuario, ver ADR-007 D3) |
 | `content_embedding` | VECTOR(1024) NOT NULL | bge-m3, sin cifrar (necesario para pgvector) |
-| `importance` | SMALLINT | 0-100, nullable. Constraint: `importance IS NULL OR BETWEEN 0 AND 100` |
+| `importance` | INTEGER | 0-100, nullable. Constraint: `importance IS NULL OR BETWEEN 0 AND 100` |
 | `source_session_id` | UUID FK → sessions.id, ON DELETE SET NULL | Trazabilidad opcional |
 | `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
 
@@ -169,9 +169,13 @@ procedural; NOOP y ops skippeadas no auditan). La fila guarda solo
 metadata + un `record_hash` SHA-256 del contenido/identificador
 afectado, **nunca el contenido en claro** (regla #4): el hash es
 unidireccional, así que cero PII llega a la tabla de auditoría.
-`apply_ops` no toca episódica (donde vive lo sensible), así que estas
-filas tienen `sensitive=false`. La escritura es atómica con la op que
-audita (mismo `commit` de la consolidación). Dos vías de eliminación:
+Además, las **mutaciones por endpoint** (`PATCH`/`DELETE`/`wipe` en
+`/v1/memory`, issue #161) escriben una fila por operación efectiva, en la
+**misma** transacción del request. Las filas de consolidación van
+`sensitive=false` (`apply_ops` no toca episódica); en las mutaciones por
+endpoint, un `DELETE` sobre episódica va `sensitive=true` (conservador, sin
+descifrar el `summary`). La escritura es siempre atómica con la op que audita
+(mismo `commit`). Dos vías de eliminación:
 
 1. **Temporal (worker)**: 24 meses por worker periódico de Celery —
    retention normal para usuarios activos (`docs/product/MEMORY.md`).
@@ -183,7 +187,12 @@ audita (mismo `commit` de la consolidación). Dos vías de eliminación:
    colgados). Si en V2 hace falta audit anonimizado por compliance,
    evaluar `ON DELETE SET NULL` + `user_id NULL`.
 
-No usa `TimestampMixin` — una vez creada, una entrada no se modifica.
+No usa `TimestampMixin` — una vez creada, una entrada no se modifica. La
+inmutabilidad se enforcea **a nivel DB**: el trigger `trg_audit_log_block_update`
+(BEFORE UPDATE, función `ynara_audit_log_block_update`, migración `20260602_1015`)
+aborta cualquier UPDATE con una EXCEPTION (SQLSTATE 23514), aunque el SQL venga por
+fuera del ORM. Solo se bloquea UPDATE: el DELETE queda permitido a propósito (cascade
+GDPR + worker de retention).
 
 | Columna | Tipo | Notas |
 |---|---|---|

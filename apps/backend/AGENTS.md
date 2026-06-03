@@ -26,7 +26,7 @@
 
 **Construido y mergeado** (capa LLM M0–M8 completa):
 
-- Config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Workers Celery: consolidación async + decay procedural. Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migración inicial (6 tablas, 4 enums, pgvector).
+- Config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Workers Celery: consolidación async + decay procedural + retention de audit_log (24 meses). Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migración inicial (6 tablas, 4 enums, pgvector).
 
 **Pendiente** (no empezar sin leer el plan):
 
@@ -46,7 +46,7 @@ app/
 │   ├── config.py      # Settings (pydantic-settings); get_settings() cacheado y lazy
 │   ├── crypto.py      # AES-256-GCM per-user (HKDF-SHA256); encrypt_for_user / decrypt_for_user
 │   ├── db_guard.py    # guard anti-prod en lifespan: aborta el boot si DATABASE_URL apunta a Supabase prod sin opt-in
-│   ├── deps.py        # engine async + get_db (AsyncSession por request)
+│   ├── deps.py        # engine async LAZY (get_engine/get_sessionmaker cacheados, no module-level) + get_db (AsyncSession por request); dispose en el shutdown del lifespan
 │   ├── observability.py  # init_sentry() con before_send que scrubea PII (cuerpo, headers auth, user, extras) — regla #4
 │   ├── ratelimit.py   # rate-limit fail-open para login/register/refresh/chat/export (contadores Redis vía TokenStore)
 │   ├── security.py    # JWT/hashing — implementado (create_access_token, verify_access_token, hash_password, verify_password)
@@ -58,7 +58,7 @@ app/
 ├── llm/               # capa de inferencia — ver §3
 ├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, implementado); audit.py: AuditStore (único punto de inserción en audit_log — sagrado, no editar)
 ├── workers/           # Celery (celery_app.py + tasks) — autodiscovery en app.workflows
-└── workflows/         # consolidación async + decay procedural implementados
+└── workflows/         # consolidación async + decay procedural + retention de audit_log (purge_audit_log) implementados
 ```
 
 **Auth está layer-split a propósito (ADR-011).** Su superficie se reparte por capa —
@@ -88,7 +88,7 @@ llm/
 │   ├── base.py        # Protocols LLMClient + ToolCallParser
 │   ├── vllm.py        # VllmClient (httpx inyectado; default_timeout_s desde config; SSE streaming)
 │   ├── parsers.py     # OpenAIToolCallParser (parse + accumulate de tool calls OpenAI)
-│   ├── fakes.py       # FakeLlmClient + FakeEmbeddingClient + FakeReranker (tests, sin red)
+│   ├── fakes.py       # FakeLlmClient (tests, sin red)
 │   ├── circuit.py     # CircuitBreaker (stdlib, sin libs)
 │   ├── pool.py        # ClientPool + RoutingStrategy + build_pool (topología → clientes)
 │   ├── resilient.py   # ResilientClient: retry+backoff → fallback on-prem → respuesta degradada
