@@ -74,6 +74,15 @@ jobs:
       - name: Install
         run: uv sync --frozen --extra dev
 
+      # Auditoría de vulnerabilidades de dependencias (pip-audit, ya en el extra dev).
+      # Falla el build ante una CVE/PYSEC conocida en el árbol INSTALADO (base+dev), así
+      # una dependencia vulnerable no entra silenciosamente a main. Audita el env ya
+      # instalado (no resuelve sdists, por eso no necesita compilador), corre tras el sync.
+      # Si aparece una vuln sin fix y se decide aceptar el riesgo, agregar acá un
+      # `--ignore-vuln <ID>` con un comentario que documente el porqué (hoy: ninguna).
+      - name: Dependency audit (pip-audit)
+        run: uv run pip-audit
+
       - name: Lint
         run: uv run ruff check .
 
