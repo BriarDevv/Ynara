@@ -2,14 +2,11 @@
 
 Mini-app FastAPI + TestClient sincrónico (httpx transport).  No toca DB.
 El JWT se mintea con create_access_token y se verifica con verify_access_token;
-ambas leen get_settings().  Para que usen el mismo secret determinista,
-parcheamos *ambas* rutas de importación:
-
-  - app.core.security.get_settings  (usada por create_access_token / verify_access_token)
-  - app.core.deps.get_settings      (usada en el módulo-level de deps.py para el engine;
-                                     get_current_user llama a verify_access_token que ya
-                                     usa el patch de security, así que este patch es
-                                     precautorio pero no rompe nada)
+ambas leen get_settings().  Para que usen el mismo secret determinista parcheamos
+app.core.security.get_settings (la ruta que consumen create_access_token /
+verify_access_token).  deps.py NO necesita patch: get_current_user delega en
+verify_access_token (ya parcheada) y el get_settings de deps sólo se usa dentro de
+get_engine() (lazy), que estos tests nunca tocan (no hay DB).
 """
 
 from __future__ import annotations

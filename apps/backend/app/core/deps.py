@@ -7,13 +7,19 @@ reranker leídos desde ``app.state`` (singletons construidos en el lifespan).
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from functools import lru_cache
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
@@ -23,8 +29,6 @@ from app.llm.clients.base import LLMClient
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
 
-settings = get_settings()
-
 # Detail ÚNICO del 401 de credenciales, compartido por ``get_current_claims`` /
 # ``get_current_user`` (acá) y por ``auth.py`` (login/refresh/me). Vive en ``deps.py``
 # (capa core, sin imports de ``app.api`` -> sin ciclo) y lo importa ``auth.py``. Mismo
@@ -33,36 +37,50 @@ settings = get_settings()
 # ``str(exc)`` ni con el token/jti/sid crudo.
 UNAUTHORIZED_DETAIL = "credenciales invalidas"
 
-# Engine async (Postgres con asyncpg). `database_url` puede venir en formato
-# sync (`postgresql://...`); SQLAlchemy async necesita `postgresql+asyncpg://`.
-_url = settings.database_url
-if _url.startswith("postgresql://"):
-    _url = _url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-# Compatibilidad con los poolers de Supabase (pgbouncer): el transaction
-# pooler (puerto 6543) no soporta prepared statements, que asyncpg cachea por
-# default -> los desactivamos siempre (inocuo para el session pooler 5432 y la
-# conexion directa). Con el transaction pooler ademas conviene NullPool: el
-# pooling lo hace pgbouncer, SQLAlchemy no debe retener conexiones.
-_is_transaction_pooler = urlsplit(_url).port == 6543
-_engine_kwargs: dict[str, Any] = {
-    "pool_pre_ping": True,
-    "echo": False,
-    "connect_args": {"statement_cache_size": 0},
-}
-if _is_transaction_pooler:
-    _engine_kwargs["poolclass"] = NullPool
-else:
-    _engine_kwargs["pool_size"] = settings.database_pool_size
+# Engine async (Postgres con asyncpg) construido LAZY: importar deps.py NO debe
+# materializar un engine apuntando a ``settings.database_url`` (que en dev resuelve
+# a PROD — jamás conectar sin override). ``get_engine()`` lo construye on-demand en
+# el primer ``get_db()``/health-check, ya dentro del event loop, y lo cachea: un
+# único engine/pool por proceso (mismo singleton que antes, sólo que diferido).
+@lru_cache(maxsize=1)
+def get_engine() -> AsyncEngine:
+    """Construye (1 sola vez, cacheado) el engine async de la app.
 
-engine = create_async_engine(_url, **_engine_kwargs)
+    ``database_url`` puede venir en formato sync (``postgresql://...``); SQLAlchemy
+    async necesita ``postgresql+asyncpg://``.
 
-SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    Compatibilidad con los poolers de Supabase (pgbouncer): el transaction pooler
+    (puerto 6543) no soporta prepared statements, que asyncpg cachea por default ->
+    los desactivamos siempre (inocuo para el session pooler 5432 y la conexion
+    directa). Con el transaction pooler ademas conviene NullPool: el pooling lo hace
+    pgbouncer, SQLAlchemy no debe retener conexiones.
+    """
+    settings = get_settings()
+    url = settings.database_url
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    engine_kwargs: dict[str, Any] = {
+        "pool_pre_ping": True,
+        "echo": False,
+        "connect_args": {"statement_cache_size": 0},
+    }
+    if urlsplit(url).port == 6543:
+        engine_kwargs["poolclass"] = NullPool
+    else:
+        engine_kwargs["pool_size"] = settings.database_pool_size
+    return create_async_engine(url, **engine_kwargs)
+
+
+@lru_cache(maxsize=1)
+def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
+    """Sessionmaker async (cacheado) atado al engine lazy de ``get_engine()``."""
+    return async_sessionmaker(get_engine(), expire_on_commit=False, class_=AsyncSession)
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
     """Yield de AsyncSession para inyección en endpoints."""
-    async with SessionLocal() as session:
+    async with get_sessionmaker()() as session:
         try:
             yield session
         except Exception:

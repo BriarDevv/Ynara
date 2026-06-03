@@ -134,8 +134,9 @@ class _BoomRedis:
 
 async def test_check_database_error_is_class_name_not_dsn(monkeypatch: pytest.MonkeyPatch) -> None:
     # Ejercita el path real except->type(exc).__name__: el str(exc) trae el DSN,
-    # el reporte no.
-    monkeypatch.setattr(health, "engine", _BoomEngine())
+    # el reporte no. get_engine() es lazy: parcheamos el accessor para devolver un
+    # engine cuyo connect() explota, sin construir ni tocar la DB real.
+    monkeypatch.setattr(health, "get_engine", lambda: _BoomEngine())
     result = await check_database()
     assert result.ok is False
     assert result.error == "RuntimeError"

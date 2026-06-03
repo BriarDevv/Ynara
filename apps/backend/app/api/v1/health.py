@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from app import __version__
-from app.core.deps import engine
+from app.core.deps import get_engine
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
@@ -57,7 +57,7 @@ async def health() -> HealthResponse:
 async def check_database() -> DependencyCheck:
     """Pinga la DB con ``SELECT 1``. Reporta solo el tipo de error (no el DSN)."""
     try:
-        async with asyncio.timeout(_CHECK_TIMEOUT_SECONDS), engine.connect() as conn:
+        async with asyncio.timeout(_CHECK_TIMEOUT_SECONDS), get_engine().connect() as conn:
             await conn.execute(text("SELECT 1"))
         return DependencyCheck(ok=True)
     except Exception as exc:
