@@ -38,11 +38,7 @@ export function OnboardingHeader({ total, current, onSkipAll, className }: Props
         <ProgressDots total={total} current={current} ariaLabel="Progreso del onboarding" />
         {onSkipAll ? (
           <>
-            <Button
-              variant="subtle"
-              onClick={() => setConfirmOpen(true)}
-              className="text-body-sm"
-            >
+            <Button variant="subtle" onClick={() => setConfirmOpen(true)} className="text-body-sm">
               Saltar
             </Button>
             {confirmOpen ? (
@@ -99,9 +95,9 @@ function SkipConfirmDialog({
   };
 
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape cierra vía onCancel; el click en el backdrop es enhancement de mouse, no la única vía de cierre.
     <dialog
       ref={dialogRef}
-      role="dialog"
       aria-modal="true"
       aria-labelledby="skip-title"
       onClick={handleBackdropClick}
