@@ -248,7 +248,7 @@ body {
        42px en 320px → 56px en >=768px. Ver DESIGN.md §4. */
     font-size: clamp(2.625rem, 2rem + 3.125vw, 3.5rem);
     line-height: 1.04;
-    letter-spacing: -0.045em;
+    letter-spacing: -0.04em;
   }
 
   .text-hero {
