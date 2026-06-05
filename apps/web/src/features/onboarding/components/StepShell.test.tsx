@@ -76,7 +76,14 @@ describe("StepShell", () => {
 
   it("renderiza el footer slot cuando se pasa", () => {
     render(
-      <StepShell title="T" footer={<button data-testid="step-footer">Siguiente</button>}>
+      <StepShell
+        title="T"
+        footer={
+          <button type="button" data-testid="step-footer">
+            Siguiente
+          </button>
+        }
+      >
         <p>Body</p>
       </StepShell>,
     );
