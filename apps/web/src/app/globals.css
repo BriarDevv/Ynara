@@ -56,6 +56,23 @@
   --color-amber-to: #e8c77a;
 
   /*
+   * ---- Paleta oficial (v4) ----
+   * Los 8 stops del manual de marca 2026 + el lavanda oscuro AA-safe para
+   * fills/texto de Memoria (#565f81: blanco encima 6.3:1). Fuente única del
+   * clima del canvas (LivingField), stops del logo y tints de modo.
+   * Ver DESIGN.md §3.4 / §3.5. Los consumidores migran en PRs siguientes.
+   */
+  --color-azul: #2f5aa6;
+  --color-indigo: #434a82;
+  --color-violaceo: #5c6fb3;
+  --color-violeta: #8165a3;
+  --color-celeste: #6e92cc;
+  --color-lavanda: #8b9ad0;
+  --color-lavanda-deep: #565f81;
+  --color-noche: #242c3f;
+  --color-marfil: #f3f0ea;
+
+  /*
    * ---- Azul plano de marca (CTA primary) ----
    * Antes el primary usaba gradient-blue-base; quedaba saturado y "genérico".
    * Ahora se usa azul plano + sombras suaves. El gradiente se reserva para
@@ -142,7 +159,10 @@
 
   /* ---- Motion ---- */
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
   --duration-base: 250ms;
+  --duration-slow: 300ms;
   --duration-screen: 350ms;
 }
 
@@ -168,6 +188,15 @@
   --color-blue-flat-active: var(--color-blue-flat-active);
   --color-violet-glow: var(--color-violet-glow);
   --color-memory: var(--color-memory);
+  --color-azul: var(--color-azul);
+  --color-indigo: var(--color-indigo);
+  --color-violaceo: var(--color-violaceo);
+  --color-violeta: var(--color-violeta);
+  --color-celeste: var(--color-celeste);
+  --color-lavanda: var(--color-lavanda);
+  --color-lavanda-deep: var(--color-lavanda-deep);
+  --color-noche: var(--color-noche);
+  --color-marfil: var(--color-marfil);
 
   /* Tipografía — fallback chain */
   --font-display: var(--font-display), "Space Grotesk", system-ui, sans-serif;
@@ -212,6 +241,16 @@ body {
  * ============================================================ */
 
 @layer utilities {
+  .text-display {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 700;
+    /* Big type editorial (poster): auth, outro de onboarding, welcome del chat.
+       42px en 320px → 56px en >=768px. Ver DESIGN.md §4. */
+    font-size: clamp(2.625rem, 2rem + 3.125vw, 3.5rem);
+    line-height: 1.04;
+    letter-spacing: -0.045em;
+  }
+
   .text-hero {
     font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
     font-weight: 700;
