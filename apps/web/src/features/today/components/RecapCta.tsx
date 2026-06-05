@@ -20,9 +20,7 @@ export function RecapCta({ onOpen }: Props) {
       className="group flex w-full items-center gap-4 rounded-[var(--radius-lg)] bg-[var(--color-blue-flat)] p-4 text-left shadow-soft transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:bg-[var(--color-blue-flat-hover)]"
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-caption text-[var(--color-on-dark)] opacity-80">
-          Recap pendiente
-        </span>
+        <span className="text-caption text-[var(--color-on-dark)] opacity-80">Recap pendiente</span>
         <span className="text-body font-medium text-[var(--color-on-dark)]">
           Cerrá el día con Ynara
         </span>

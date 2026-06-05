@@ -26,10 +26,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea
   return (
     <div className={cn("flex w-full flex-col gap-1.5", className)}>
       {label ? (
-        <label
-          htmlFor={fieldId}
-          className="text-caption text-[var(--color-ink-soft)]"
-        >
+        <label htmlFor={fieldId} className="text-caption text-[var(--color-ink-soft)]">
           {label}
         </label>
       ) : null}

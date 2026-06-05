@@ -15,8 +15,8 @@
  * apps → root` = 4 niveles arriba.
  */
 
-import { z } from "zod";
 import { type Mode, ModeSchema } from "@ynara/shared-schemas";
+import { z } from "zod";
 import config from "../../../../ynara.config.json";
 
 const ConfigModeSchema = z.object({

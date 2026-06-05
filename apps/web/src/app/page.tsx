@@ -32,12 +32,10 @@ export default function RootPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[var(--color-bg-canvas)] px-6">
         <div className="flex max-w-[420px] flex-col items-center gap-3 text-center">
-          <h1 className="text-title text-[var(--color-ink-deep)]">
-            ¡Listo!
-          </h1>
+          <h1 className="text-title text-[var(--color-ink-deep)]">¡Listo!</h1>
           <p className="text-body text-[var(--color-ink-soft)]">
-            Tu perfil quedó guardado. La pantalla principal todavía está en
-            construcción — volvé pronto.
+            Tu perfil quedó guardado. La pantalla principal todavía está en construcción — volvé
+            pronto.
           </p>
         </div>
       </main>

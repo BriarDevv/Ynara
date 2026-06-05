@@ -28,10 +28,7 @@ export const TextField = forwardRef<HTMLInputElement, Props>(function TextField(
          * el muted anterior; sigue jerárquicamente por debajo del input
          * pero ya no se "pierde" sobre canvas ivory.
          */
-        <label
-          htmlFor={fieldId}
-          className="text-caption text-[var(--color-ink-soft)]"
-        >
+        <label htmlFor={fieldId} className="text-caption text-[var(--color-ink-soft)]">
           {label}
         </label>
       ) : null}

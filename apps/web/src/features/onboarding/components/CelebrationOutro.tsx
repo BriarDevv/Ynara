@@ -28,8 +28,7 @@ export function CelebrationOutro({ onComplete }: Props) {
     typeof window !== "undefined" &&
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-  const reduceMotion =
-    motion === "reduce" || (motion === "auto" && prefersReducedMotion);
+  const reduceMotion = motion === "reduce" || (motion === "auto" && prefersReducedMotion);
 
   useEffect(() => {
     const timer = window.setTimeout(onComplete, HOLD_MS);
@@ -38,14 +37,9 @@ export function CelebrationOutro({ onComplete }: Props) {
 
   return (
     <div className="mx-auto flex min-h-[80vh] w-full max-w-[480px] flex-1 flex-col items-center justify-center gap-10 px-6 py-12 text-center">
-      <YnaraMark
-        size={112}
-        className={reduceMotion ? undefined : "anim-pulse-violet"}
-      />
+      <YnaraMark size={112} className={reduceMotion ? undefined : "anim-pulse-violet"} />
       <div className="flex flex-col items-center gap-2">
-        <p className="text-title text-[var(--color-ink-deep)]">
-          Listo, te estoy esperando.
-        </p>
+        <p className="text-title text-[var(--color-ink-deep)]">Listo, te estoy esperando.</p>
         <p className="text-body text-[var(--color-ink-soft)]">
           Tu perfil queda guardado. Volvé cuando quieras.
         </p>

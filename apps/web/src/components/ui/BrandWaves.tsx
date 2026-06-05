@@ -40,10 +40,8 @@ export function BrandWaves({ variant = "fixed", className }: Props) {
       style={{
         // Fade superior: transparente en los primeros 28% y opaco hacia
         // abajo. Mantiene el header limpio sobre canvas ivory.
-        WebkitMaskImage:
-          "linear-gradient(to bottom, transparent 0%, black 28%, black 100%)",
-        maskImage:
-          "linear-gradient(to bottom, transparent 0%, black 28%, black 100%)",
+        WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 28%, black 100%)",
+        maskImage: "linear-gradient(to bottom, transparent 0%, black 28%, black 100%)",
       }}
     >
       {/* biome-ignore lint/performance/noImgElement: SVG decorativo cacheable, no necesita next/image (no LCP, sin layout shift, sin srcset). */}
