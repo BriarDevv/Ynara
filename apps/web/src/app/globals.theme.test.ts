@@ -57,4 +57,33 @@ describe("globals.css — puente de tokens :root ↔ @theme inline", () => {
     const faltantes = themeRefs.filter((name) => !rootDefs.has(name));
     expect(faltantes).toEqual([]);
   });
+
+  it("define la paleta oficial v4 en :root y la expone en @theme inline", () => {
+    const oficiales = [
+      "color-azul",
+      "color-indigo",
+      "color-violaceo",
+      "color-violeta",
+      "color-celeste",
+      "color-lavanda",
+      "color-lavanda-deep",
+      "color-noche",
+      "color-marfil",
+    ];
+    const sinDefinir = oficiales.filter((t) => !rootDefs.has(t));
+    const sinExponer = oficiales.filter((t) => !themeRefs.includes(t));
+    expect({ sinDefinir, sinExponer }).toEqual({ sinDefinir: [], sinExponer: [] });
+  });
+
+  it("define todas las duraciones de motion (ningún componente anima en 0ms)", () => {
+    const duraciones = [
+      "duration-instant",
+      "duration-fast",
+      "duration-base",
+      "duration-slow",
+      "duration-screen",
+    ];
+    const faltantes = duraciones.filter((t) => !rootDefs.has(t));
+    expect(faltantes).toEqual([]);
+  });
 });
