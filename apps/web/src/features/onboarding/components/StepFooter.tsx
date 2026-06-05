@@ -42,10 +42,7 @@ export function StepFooter({
      * derecho sin estirar arbitrariamente la separación.
      */
     <div
-      className={cn(
-        "flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:gap-4",
-        className,
-      )}
+      className={cn("flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:gap-4", className)}
     >
       {onBack ? (
         /*

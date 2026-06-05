@@ -129,11 +129,7 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
       <div className="flex flex-col gap-3 pt-2">
         <AuthModeSwitchLink mode="signup" onChange={onSwitch} />
         <div className="flex flex-col gap-1">
-          <Button
-            variant="subtle"
-            onClick={handleEphemeral}
-            className="text-body-sm self-start"
-          >
+          <Button variant="subtle" onClick={handleEphemeral} className="text-body-sm self-start">
             Probar sin cuenta
           </Button>
           <p className="text-caption text-[var(--color-ink-muted)]">

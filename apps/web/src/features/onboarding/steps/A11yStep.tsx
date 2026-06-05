@@ -9,8 +9,8 @@ import { CelebrationOutro } from "../components/CelebrationOutro";
 import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
 import { STEP_COPY } from "../constants";
-import { useOnboardingNav } from "../hooks/useOnboardingNav";
 import { useCompleteOnboarding } from "../hooks/useCompleteOnboarding";
+import { useOnboardingNav } from "../hooks/useOnboardingNav";
 
 const TEXT_SIZE_OPTIONS = [
   { value: "sm" as const, label: "Chico" },

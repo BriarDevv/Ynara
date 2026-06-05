@@ -90,9 +90,7 @@ const initialState: OnboardingDraft = {
  * semánticamente: persist() no escribe en server.
  */
 const sessionJsonStorage =
-  typeof window === "undefined"
-    ? undefined
-    : createJSONStorage(() => sessionStorage);
+  typeof window === "undefined" ? undefined : createJSONStorage(() => sessionStorage);
 
 export const useOnboardingStore = create<OnboardingDraft & OnboardingActions>()(
   persist(

@@ -62,10 +62,6 @@ function OnboardingHeaderWithProgress() {
   };
 
   return (
-    <OnboardingHeader
-      total={ONBOARDING_STEPS.length}
-      current={index}
-      onSkipAll={handleSkipAll}
-    />
+    <OnboardingHeader total={ONBOARDING_STEPS.length} current={index} onSkipAll={handleSkipAll} />
   );
 }

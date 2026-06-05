@@ -51,12 +51,8 @@ export function OptionCard({
       <div className="relative flex items-center gap-3">
         {leading ? <span className="shrink-0">{leading}</span> : null}
         <span className="flex flex-1 flex-col">
-          <span className="text-body font-medium text-[var(--color-ink-deep)]">
-            {title}
-          </span>
-          {hint ? (
-            <span className="text-body-sm text-[var(--color-ink-soft)]">{hint}</span>
-          ) : null}
+          <span className="text-body font-medium text-[var(--color-ink-deep)]">{title}</span>
+          {hint ? <span className="text-body-sm text-[var(--color-ink-soft)]">{hint}</span> : null}
         </span>
       </div>
     </button>

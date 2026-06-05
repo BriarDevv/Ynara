@@ -24,14 +24,7 @@ type Props = {
  *  - Animación de entrada `anim-fade-up` (respeta prefers-reduced-motion
  *    + override del a11y store).
  */
-export function StepShell({
-  eyebrow,
-  title,
-  subtitle,
-  children,
-  footer,
-  className,
-}: Props) {
+export function StepShell({ eyebrow, title, subtitle, children, footer, className }: Props) {
   return (
     <div
       /*
@@ -48,13 +41,9 @@ export function StepShell({
       )}
     >
       <header className="flex flex-col gap-3">
-        {eyebrow ? (
-          <p className="text-caption text-[var(--color-ink-muted)]">{eyebrow}</p>
-        ) : null}
+        {eyebrow ? <p className="text-caption text-[var(--color-ink-muted)]">{eyebrow}</p> : null}
         <h1 className="text-title text-[var(--color-ink-deep)]">{title}</h1>
-        {subtitle ? (
-          <p className="text-body text-[var(--color-ink-soft)]">{subtitle}</p>
-        ) : null}
+        {subtitle ? <p className="text-body text-[var(--color-ink-soft)]">{subtitle}</p> : null}
       </header>
       <div className="flex flex-1 flex-col gap-6">{children}</div>
       {footer ? <div className="pt-2">{footer}</div> : null}
