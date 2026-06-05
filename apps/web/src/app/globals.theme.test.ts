@@ -17,7 +17,9 @@ import { describe, expect, it } from "vitest";
  * referenciado en `@theme inline` debe estar definido en `:root`.
  */
 
-const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "globals.css"), "utf8");
+const rawCss = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "globals.css"), "utf8");
+// Sin comentarios CSS: evita que llaves dentro de un comentario rompan el balanceo de `block()`.
+const css = rawCss.replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** Devuelve el contenido (con llaves balanceadas) del primer bloque que abre `opening`. */
 function block(opening: RegExp): string {
