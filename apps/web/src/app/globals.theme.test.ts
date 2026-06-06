@@ -116,3 +116,72 @@ describe("globals.css — puente de tokens :root ↔ @theme inline", () => {
     expect(faltantes).toEqual([]);
   });
 });
+
+describe("globals.css — tema Noche (§3.1 / §16 #4)", () => {
+  const darkBlock = block(/html\.theme-dark\s*\{/);
+  const darkDefs = new Set([...darkBlock.matchAll(/--([\w-]+)\s*:/g)].map((m) => m[1] ?? ""));
+
+  it("re-declara superficies, tintas, bordes, memoria y elevación", () => {
+    const esperados = [
+      "color-bg",
+      "color-bg-canvas",
+      "color-bg-soft",
+      "color-ink",
+      "color-ink-deep",
+      "color-ink-soft",
+      "color-ink-muted",
+      "color-ink-faint",
+      "color-on-dark",
+      "color-border",
+      "color-border-strong",
+      "color-memory",
+      "shadow-soft",
+      "shadow-lifted",
+    ];
+    const faltantes = esperados.filter((t) => !darkDefs.has(t));
+    expect(faltantes).toEqual([]);
+  });
+
+  it("usa las superficies oficiales de Noche (nunca negro puro)", () => {
+    expect(darkBlock).toMatch(/--color-bg-canvas\s*:\s*#242c3f/);
+    expect(darkBlock).toMatch(/--color-bg\s*:\s*#2b3346/);
+    expect(darkBlock).toMatch(/--color-bg-soft\s*:\s*#313a52/);
+    expect(darkBlock).not.toMatch(/#000\b|#000000/);
+  });
+
+  it("la tinta pasa a la familia marfil", () => {
+    expect(darkBlock).toMatch(/--color-ink\s*:\s*#f3f0ea/);
+    expect(darkBlock).toMatch(/--color-ink-deep\s*:\s*#ffffff/);
+    expect(darkBlock).toMatch(/--color-ink-soft\s*:\s*rgb\(243 240 234 \/ 0\.65\)/);
+  });
+
+  it("--color-memory en Noche vuelve al lavanda claro (§3.5)", () => {
+    expect(darkBlock).toMatch(/--color-memory\s*:\s*var\(--color-lavanda\)/);
+  });
+
+  it("todo token re-declarado en Noche existe también en :root (sin tokens nuevos)", () => {
+    const soloEnDark = [...darkDefs].filter((t) => !rootDefs.has(t));
+    expect(soloEnDark).toEqual([]);
+  });
+
+  it("no crea un segundo @theme (el @theme inline relee var() en runtime)", () => {
+    expect(css.match(/@theme/g)).toHaveLength(1);
+  });
+
+  it("declara color-scheme por tema (light en :root, dark en Noche)", () => {
+    expect(rootBlock).toMatch(/color-scheme\s*:\s*light/);
+    expect(darkBlock).toMatch(/color-scheme\s*:\s*dark/);
+  });
+
+  it("el alto contraste también cubre Noche (§3.3)", () => {
+    const hcDark = block(/html\.theme-dark\.theme-high-contrast\s*\{/);
+    for (const token of [
+      "color-ink-soft",
+      "color-ink-muted",
+      "color-border",
+      "color-border-strong",
+    ]) {
+      expect(hcDark).toMatch(new RegExp(`--${token}\\s*:\\s*rgb\\(243 240 234`));
+    }
+  });
+});
