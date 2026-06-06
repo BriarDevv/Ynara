@@ -152,7 +152,8 @@ describe("globals.css — tema Noche (§3.1 / §16 #4)", () => {
   it("la tinta pasa a la familia marfil", () => {
     expect(darkBlock).toMatch(/--color-ink\s*:\s*#f3f0ea/);
     expect(darkBlock).toMatch(/--color-ink-deep\s*:\s*#ffffff/);
-    expect(darkBlock).toMatch(/--color-ink-soft\s*:\s*rgb\(243 240 234 \/ 0\.65\)/);
+    // Tolerante al espaciado interno del rgb() (no hay formatter de CSS).
+    expect(darkBlock).toMatch(/--color-ink-soft\s*:\s*rgb\(\s*243\s+240\s+234\s*\/\s*0\.65\s*\)/);
   });
 
   it("--color-memory en Noche vuelve al lavanda claro (§3.5)", () => {
@@ -181,7 +182,7 @@ describe("globals.css — tema Noche (§3.1 / §16 #4)", () => {
       "color-border",
       "color-border-strong",
     ]) {
-      expect(hcDark).toMatch(new RegExp(`--${token}\\s*:\\s*rgb\\(243 240 234`));
+      expect(hcDark).toMatch(new RegExp(`--${token}\\s*:\\s*rgb\\(\\s*243\\s+240\\s+234`));
     }
   });
 });

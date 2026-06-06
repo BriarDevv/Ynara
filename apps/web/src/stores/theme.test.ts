@@ -2,12 +2,17 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { applyThemeClass, useThemeStore } from "./theme";
 
 describe("useThemeStore", () => {
+  // jsdom provee localStorage real y el persist de zustand lo usa directo:
+  // limpiar entre casos para no dejar residuo a otros archivos de test
+  // (mismo patrón que features/chat/store.test.ts).
   beforeEach(() => {
     useThemeStore.getState().reset();
+    localStorage.clear();
   });
 
   afterEach(() => {
     useThemeStore.getState().reset();
+    localStorage.clear();
     document.documentElement.classList.remove("theme-dark");
     delete document.documentElement.dataset.theme;
   });
