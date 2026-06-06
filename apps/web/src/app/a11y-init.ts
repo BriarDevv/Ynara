@@ -33,17 +33,22 @@ else if(s.motion==='normal') root.classList.add('motion-on');
 /**
  * Pre-paint del tema (DESIGN.md §3.1 / §16 #4): si el usuario eligió
  * Noche, la clase y el data-theme se aplican antes del primer paint —
- * sin esto hay flash claro→oscuro garantizado en cada carga.
- * Solo "dark" muta el DOM: el default claro ya viene server-rendered.
+ * sin esto hay flash claro→oscuro garantizado en cada carga. La rama
+ * "light" limpia explícito por idempotencia (defensa ante un <html>
+ * que ya traiga la clase, p. ej. bfcache).
  */
 export const themeInitScript = `(function(){try{
 var raw = localStorage.getItem('ynara.theme');
 if(!raw) return;
 var parsed = JSON.parse(raw);
 var s = parsed && parsed.state ? parsed.state : null;
-if(s && s.theme==='dark'){
-  var root = document.documentElement;
+if(!s) return;
+var root = document.documentElement;
+if(s.theme==='dark'){
   root.classList.add('theme-dark');
   root.setAttribute('data-theme','dark');
+}else if(s.theme==='light'){
+  root.classList.remove('theme-dark');
+  root.setAttribute('data-theme','light');
 }
 }catch(e){}})();`;
