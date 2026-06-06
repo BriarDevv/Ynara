@@ -1,6 +1,6 @@
-import type { ModeId } from "@/components/ui/modes";
+import { ModeChip } from "@/components/ui/ModeChip";
+import { MODE_BY_ID, type ModeId } from "@/components/ui/modes";
 import { formatHoyDate } from "../format";
-import { ModeChip } from "./ModeChip";
 
 type Props = {
   displayName: string;
@@ -19,7 +19,11 @@ export function HoyHeader({ displayName, activeMode, now }: Props) {
   return (
     <header className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <ModeChip mode={activeMode} />
+        <ModeChip
+          modeId={activeMode}
+          variant="soft"
+          label={`Modo: ${MODE_BY_ID[activeMode].label}`}
+        />
         <span
           aria-hidden
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-soft)] text-body-sm font-medium text-[var(--color-ink-soft)]"

@@ -1,25 +1,65 @@
+import type { CSSProperties } from "react";
 import { cn } from "@/lib/cn";
 import { MODE_BY_ID, type ModeId } from "./modes";
 
 type Props = {
-  modeId: ModeId;
+  /** null/undefined → acento neutro (sugerencia transversal, sin modo). */
+  modeId?: ModeId | null;
   title: string;
   subtitle?: string;
-  /** Handler obligatorio: una SuggestionCard sin acción es un botón muerto. */
-  onClick: () => void;
+  /** Con handler es un botón accionable; sin handler, ítem display (`<li>`). */
+  onClick?: () => void;
+  /** Solo aplica a la variante accionable. */
   disabled?: boolean;
+  /** Índice para el stagger de entrada (§8.2). Solo variante display. */
+  staggerIndex?: number;
   className?: string;
 };
 
+/**
+ * Sugerencia tintada por modo (DESIGN.md §3.5/§11). Dos variantes según el
+ * uso: con `onClick` es un botón accionable (grid de recomendaciones); sin
+ * handler es un ítem display-only (`<li>`, lista "Ynara sugiere" de Hoy).
+ * Unificadas acá al deduplicar la copia divergente de `features/today`.
+ */
 export function SuggestionCard({
   modeId,
   title,
   subtitle,
   onClick,
   disabled = false,
+  staggerIndex,
   className,
 }: Props) {
-  const mode = MODE_BY_ID[modeId];
+  const mode = modeId ? MODE_BY_ID[modeId] : null;
+  const accentColor = mode ? mode.tintVar : "var(--color-border-strong)";
+
+  if (!onClick) {
+    return (
+      // Mismo lenguaje papel-sobre-canvas que PriorityRow: bg blanco + border
+      // sutil. El acento de modo queda como hairline a la izquierda.
+      <li
+        className={cn(
+          "anim-stagger-up flex items-stretch gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4",
+          className,
+        )}
+        style={{ "--stagger-index": Math.min(staggerIndex ?? 0, 5) } as CSSProperties}
+      >
+        <span
+          aria-hidden
+          className="w-1 shrink-0 rounded-full"
+          style={{ backgroundColor: accentColor }}
+        />
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="text-body font-medium text-[var(--color-ink-deep)]">{title}</span>
+          {subtitle ? (
+            <span className="text-body-sm text-[var(--color-ink-soft)]">{subtitle}</span>
+          ) : null}
+        </span>
+      </li>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -36,15 +76,17 @@ export function SuggestionCard({
       <span
         aria-hidden
         className="absolute inset-x-0 top-0 h-[3px]"
-        style={{ backgroundColor: mode.tintVar }}
+        style={{ backgroundColor: accentColor }}
       />
       <span className="flex items-center gap-2">
         <span
           aria-hidden
           className="h-2 w-2 rounded-[var(--radius-pill)]"
-          style={{ backgroundColor: mode.tintVar }}
+          style={{ backgroundColor: accentColor }}
         />
-        <span className="text-caption text-[var(--color-ink-muted)]">{mode.label}</span>
+        {mode ? (
+          <span className="text-caption text-[var(--color-ink-muted)]">{mode.label}</span>
+        ) : null}
       </span>
       <span className="text-subtitle text-[var(--color-ink)]">{title}</span>
       {subtitle ? (

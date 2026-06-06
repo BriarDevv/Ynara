@@ -19,4 +19,12 @@ describe("ModeChip", () => {
     expect(dot).not.toBeNull();
     expect(dot?.style.backgroundColor).toBe("var(--mode-memoria)");
   });
+
+  it("variante soft: pill sobre bg-soft, sin borde (header de Hoy)", () => {
+    const { container } = render(<ModeChip modeId="vida" variant="soft" label="Modo: Vida" />);
+    expect(screen.getByText("Modo: Vida")).toBeInTheDocument();
+    const pill = container.firstElementChild as HTMLElement;
+    expect(pill.className).toContain("bg-[var(--color-bg-soft)]");
+    expect(pill.className).not.toContain("border-[var(--color-border)]");
+  });
 });
