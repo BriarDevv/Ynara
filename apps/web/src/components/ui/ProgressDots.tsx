@@ -46,10 +46,10 @@ export function ProgressDots({ total, current, className, ariaLabel = "Progreso"
             "h-1.5 rounded-[var(--radius-pill)] transition-[width,background-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
             dot.isCurrent
               ? /*
-                 * Azul plano de marca (--color-blue-flat). Antes era
-                 * `bg-gradient-blue-base` saturado, que peleaba con el
-                 * canvas ivory + BrandWaves; con plano se lee como acento,
-                 * no como CTA pegado al header.
+                 * Azul plano de marca (--color-blue-flat). Antes era el
+                 * gradiente azul saturado, que peleaba con el canvas
+                 * ivory + BrandWaves; con plano se lee como acento, no
+                 * como CTA pegado al header.
                  */
                 "bg-[var(--color-blue-flat)] w-8"
               : dot.active

@@ -22,12 +22,11 @@ const COLOR_TOKENS = [
   { name: "border-strong", value: "var(--color-border-strong)" },
 ] as const;
 
+/* Gradientes que sobreviven en v4: solo los del logo/acento azul (§3.4).
+   Jade, ámbar y violeta se retiraron al realinear los modos a la paleta. */
 const GRADIENT_TOKENS = [
   { name: "blue-base", className: "bg-gradient-blue-base" },
   { name: "blue-relief", className: "bg-gradient-blue-relief" },
-  { name: "violet", className: "bg-gradient-violet" },
-  { name: "jade", className: "bg-gradient-jade" },
-  { name: "amber", className: "bg-gradient-amber" },
 ] as const;
 
 const TYPE_TOKENS = [
