@@ -17,7 +17,8 @@ type Props = {
 
 const VARIANTS: Record<Variant, string> = {
   info: "bg-[var(--color-ink)] text-[var(--color-on-dark)]",
-  success: "bg-gradient-blue-base text-[var(--color-on-dark)]",
+  // Azul plano de marca: el gradiente como fill de superficie es anti-patrón (§3.4).
+  success: "bg-[var(--color-blue-flat)] text-[var(--color-on-dark)]",
   error: "bg-[var(--color-error)] text-[var(--color-on-dark)]",
 };
 
