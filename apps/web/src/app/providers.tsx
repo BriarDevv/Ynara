@@ -36,14 +36,19 @@ function A11yApplier(): null {
 
 /**
  * Mantiene la clase `theme-dark` y el `data-theme` del <html> en sync
- * con el store de tema tras hidratar (el pre-paint de a11y-init.ts ya
- * aplicó la preferencia persistida antes del primer paint).
+ * con el store de tema. Aplica desde `getState()` + `subscribe`, NO desde
+ * el valor renderizado: en el render de hidratación useSyncExternalStore
+ * sirve `getInitialState()` (el default "light") aunque persist ya haya
+ * rehidratado "dark", y un efecto colgado de ese valor pisaría la clase
+ * que el pre-paint (a11y-init.ts) puso antes del primer paint — flash
+ * oscuro→claro→oscuro. Con getState() el primer apply ya ve el estado
+ * hidratado (persist sobre localStorage rehidrata sincrónico).
  */
 function ThemeApplier(): null {
-  const theme = useThemeStore((s) => s.theme);
   useEffect(() => {
-    applyThemeClass({ theme });
-  }, [theme]);
+    applyThemeClass(useThemeStore.getState());
+    return useThemeStore.subscribe((state) => applyThemeClass({ theme: state.theme }));
+  }, []);
   return null;
 }
 
