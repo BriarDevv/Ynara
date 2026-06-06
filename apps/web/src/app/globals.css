@@ -7,17 +7,23 @@
 /* ============================================================
  * Tokens — single source of truth.
  *
- * Decisión de marca (DESIGN.md §3): la app web es LIGHT-ONLY. No hay
- * variante dark ni respeto a `prefers-color-scheme`. El sistema usa:
+ * Tema dual (DESIGN.md §3.1): marfil (claro, default) + Noche (oscuro).
+ * El tema se togglea por clase en <html> (html.theme-dark), controlado
+ * por el store de tema — sin depender de `prefers-color-scheme`. En claro:
  *   - `--color-bg-canvas` (ivory tibio) para el body / fondo detrás del
  *     contenido — pareado al fondo del poster de marca.
  *   - `--color-bg` (blanco puro) para cards, inputs y superficies elevadas
  *     que se apoyan sobre el canvas.
+ * Noche re-declara los tokens afectados en su bloque html.theme-dark
+ * (más abajo) — el @theme inline lee var() en runtime, así que las
+ * utilities cambian solas al togglear la clase.
  *
  * Cualquier cambio acá requiere PR con review de @MateoGs013.
  * ============================================================ */
 
 :root {
+  color-scheme: light;
+
   /* ---- Texto (ink) ---- */
   --color-ink: #242c3f;
   /* Más oscuro que ink, reservado para hero/title con presencia editorial. */
@@ -327,8 +333,51 @@ body {
 }
 
 /* ============================================================
+ * Tema Noche — superficies oscuras de marca (DESIGN.md §3.1).
+ * Re-declara los --color-* afectados; como el @theme inline lee
+ * var(--color-*) en runtime, las utilities cambian solas al togglear
+ * la clase. NO crear un segundo @theme ni duplicar tokens.
+ * Controlado por el store de tema (pre-paint en app/a11y-init.ts).
+ * ============================================================ */
+
+html.theme-dark {
+  color-scheme: dark;
+
+  /* Tinta (§3.2): de-enfatizar bajando contraste del marfil, no gris ajeno. */
+  --color-ink: #f3f0ea;
+  --color-ink-deep: #ffffff;
+  --color-ink-soft: rgb(243 240 234 / 0.65);
+  --color-ink-muted: rgb(243 240 234 / 0.45);
+  --color-ink-faint: rgb(243 240 234 / 0.18);
+  --color-on-dark: #ffffff;
+
+  /* Superficies (§3.1): nunca negro puro — Noche es color de la paleta. */
+  --color-bg: #2b3346;
+  --color-bg-canvas: #242c3f;
+  --color-bg-soft: #313a52;
+
+  /* Bordes (§3.3): en Noche la profundidad viene del borde hairline. */
+  --color-border: rgb(243 240 234 / 0.1);
+  --color-border-strong: rgb(243 240 234 / 0.18);
+
+  /* Memoria (§3.5): el texto/icono de modo va claro sobre oscuro —
+     lavanda claro (4.1:1 sobre #313a52, ok para icono/acento >=3:1). */
+  --color-memory: var(--color-lavanda);
+
+  /* Elevation (§7): card y canvas se separan por superficie + borde;
+     las sombras quedan sutiles, con alphas recalibrados sobre Noche. */
+  --shadow-soft:
+    0 1px 2px rgb(0 0 0 / 0.2),
+    0 4px 12px rgb(0 0 0 / 0.16);
+  --shadow-lifted:
+    0 8px 24px rgb(0 0 0 / 0.28),
+    0 24px 48px rgb(0 0 0 / 0.2);
+}
+
+/* ============================================================
  * A11y — override de alto contraste aplicable desde el store.
- * Aplica solo en light (la app no tiene variante dark).
+ * Se re-declara por tema: primero claro, después Noche (la clase
+ * theme-dark + theme-high-contrast gana por specificity).
  * ============================================================ */
 
 html.theme-high-contrast {
@@ -336,6 +385,14 @@ html.theme-high-contrast {
   --color-ink-muted: rgb(36 44 63 / 0.65);
   --color-border: rgb(36 44 63 / 0.25);
   --color-border-strong: rgb(36 44 63 / 0.45);
+}
+
+/* Alto contraste sobre Noche: mismas subas, en la tinta marfil. */
+html.theme-dark.theme-high-contrast {
+  --color-ink-soft: rgb(243 240 234 / 0.85);
+  --color-ink-muted: rgb(243 240 234 / 0.65);
+  --color-border: rgb(243 240 234 / 0.25);
+  --color-border-strong: rgb(243 240 234 / 0.45);
 }
 
 /*
