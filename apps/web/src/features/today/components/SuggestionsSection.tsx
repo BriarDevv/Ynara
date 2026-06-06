@@ -1,7 +1,7 @@
 "use client";
 
+import { SuggestionCard } from "@/components/ui/SuggestionCard";
 import { useSuggestions } from "../api";
-import { SuggestionCard } from "./SuggestionCard";
 import { SuggestionsSkeleton } from "./SuggestionsSkeleton";
 
 /**
@@ -43,7 +43,13 @@ export function SuggestionsSection() {
       ) : (
         <ul className="flex flex-col gap-3">
           {data.map((suggestion, index) => (
-            <SuggestionCard key={suggestion.id} suggestion={suggestion} index={index} />
+            <SuggestionCard
+              key={suggestion.id}
+              modeId={suggestion.mode}
+              title={suggestion.title}
+              subtitle={suggestion.why}
+              staggerIndex={index}
+            />
           ))}
         </ul>
       )}
