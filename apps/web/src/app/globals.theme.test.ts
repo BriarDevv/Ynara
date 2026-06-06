@@ -75,6 +75,26 @@ describe("globals.css — puente de tokens :root ↔ @theme inline", () => {
     expect({ sinDefinir, sinExponer }).toEqual({ sinDefinir: [], sinExponer: [] });
   });
 
+  it("los tints de modo son color plano de la paleta oficial, no gradientes (§3.5)", () => {
+    const tintEsperado: Record<string, string> = {
+      productividad: "color-azul",
+      estudio: "color-indigo",
+      bienestar: "color-violeta",
+      vida: "color-violaceo",
+      memoria: "color-lavanda",
+    };
+    for (const [modo, token] of Object.entries(tintEsperado)) {
+      expect(rootBlock).toMatch(new RegExp(`--mode-${modo}\\s*:\\s*var\\(--${token}\\)`));
+    }
+    // Fill: el único modo con dos tonos es Memoria (lavanda-deep, AA con blanco).
+    for (const [modo, token] of Object.entries(tintEsperado)) {
+      const fill = modo === "memoria" ? "color-lavanda-deep" : token;
+      expect(rootBlock).toMatch(new RegExp(`--mode-${modo}-fill\\s*:\\s*var\\(--${fill}\\)`));
+    }
+    // Ningún tint de modo apunta a un gradiente (anti-patrón §3.4).
+    expect(rootBlock).not.toMatch(/--mode-[\w-]+\s*:\s*var\(--gradient/);
+  });
+
   it("define todas las duraciones de motion (ningún componente anima en 0ms)", () => {
     const duraciones = [
       "duration-instant",

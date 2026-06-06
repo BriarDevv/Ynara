@@ -15,10 +15,10 @@ type Props = {
  * prefill) es parte de la integración Hoy→Chat (Fase D / W5).
  */
 export function SuggestionCard({ suggestion, index }: Props) {
-  // El acento toma el gradiente del modo; transversal (mode null) → neutro.
-  const accentClass = suggestion.mode
-    ? MODE_BY_ID[suggestion.mode].gradientClass
-    : "bg-[var(--color-border-strong)]";
+  // El acento toma el tint plano del modo; transversal (mode null) → neutro.
+  const accentColor = suggestion.mode
+    ? MODE_BY_ID[suggestion.mode].tintVar
+    : "var(--color-border-strong)";
   return (
     <li
       // Mismo lenguaje papel-sobre-canvas que PriorityRow: bg blanco + border
@@ -27,7 +27,11 @@ export function SuggestionCard({ suggestion, index }: Props) {
       className="anim-stagger-up flex items-stretch gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4"
       style={{ "--stagger-index": Math.min(index, 5) } as CSSProperties}
     >
-      <span aria-hidden className={`w-1 shrink-0 rounded-full ${accentClass}`} />
+      <span
+        aria-hidden
+        className="w-1 shrink-0 rounded-full"
+        style={{ backgroundColor: accentColor }}
+      />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="text-body font-medium text-[var(--color-ink-deep)]">
           {suggestion.title}

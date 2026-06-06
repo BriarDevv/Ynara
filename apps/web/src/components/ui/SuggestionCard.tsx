@@ -32,12 +32,17 @@ export function SuggestionCard({
         className,
       )}
     >
-      {/* Tint sutil arriba — barra de 3px con el gradient del modo */}
-      <span aria-hidden className={cn("absolute inset-x-0 top-0 h-[3px]", mode.gradientClass)} />
+      {/* Tint sutil arriba — barra de 3px con el color plano del modo (§3.5) */}
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-[3px]"
+        style={{ backgroundColor: mode.tintVar }}
+      />
       <span className="flex items-center gap-2">
         <span
           aria-hidden
-          className={cn("h-2 w-2 rounded-[var(--radius-pill)]", mode.gradientClass)}
+          className="h-2 w-2 rounded-[var(--radius-pill)]"
+          style={{ backgroundColor: mode.tintVar }}
         />
         <span className="text-caption text-[var(--color-ink-muted)]">{mode.label}</span>
       </span>

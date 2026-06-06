@@ -101,12 +101,23 @@ export default function TestDsPage() {
       </Section>
 
       <Section title="Modos">
+        {/* Tint plano por modo (§3.5): dot ambiental + fill con texto blanco
+            (el fill de Memoria es lavanda-deep, único modo con dos tonos). */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {MODES.map((mode) => (
             <Card key={mode.id}>
-              <div
-                className={`mb-4 h-12 w-12 rounded-[var(--radius-pill)] ${mode.gradientClass}`}
-              />
+              <div className="mb-4 flex items-center gap-3">
+                <div
+                  className="h-12 w-12 rounded-[var(--radius-pill)]"
+                  style={{ backgroundColor: mode.tintVar }}
+                />
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-pill)] text-caption text-[var(--color-on-dark)]"
+                  style={{ backgroundColor: mode.fillVar }}
+                >
+                  Aa
+                </div>
+              </div>
               <p className="text-subtitle">{mode.label}</p>
               <p className="text-body-sm text-[var(--color-ink-soft)]">{mode.blurb}</p>
             </Card>
