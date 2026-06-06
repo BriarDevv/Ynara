@@ -99,6 +99,11 @@ describe("globals.css — puente de tokens :root ↔ @theme inline", () => {
     expect(rootBlock).toMatch(/--color-memory\s*:\s*var\(--color-lavanda-deep\)/);
   });
 
+  it("jade, ámbar y el gradiente violeta quedaron retirados (fuera del manual)", () => {
+    expect(css).not.toMatch(/--color-(jade|amber)-(from|to)/);
+    expect(css).not.toMatch(/--gradient-(jade|amber|violet)/);
+  });
+
   it("define todas las duraciones de motion (ningún componente anima en 0ms)", () => {
     const duraciones = [
       "duration-instant",

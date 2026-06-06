@@ -50,10 +50,6 @@
   --color-blue-relief-to: #7ba1f4;
   --color-violet-from: #8c63b8;
   --color-violet-to: #7c4fa3;
-  --color-jade-from: #4a9c8c;
-  --color-jade-to: #6fbfae;
-  --color-amber-from: #d9a24a;
-  --color-amber-to: #e8c77a;
 
   /*
    * ---- Paleta oficial (v4) ----
@@ -115,21 +111,6 @@
     135deg,
     var(--color-blue-relief-from),
     var(--color-blue-relief-to)
-  );
-  --gradient-violet: linear-gradient(
-    135deg,
-    var(--color-violet-from),
-    var(--color-violet-to)
-  );
-  --gradient-jade: linear-gradient(
-    135deg,
-    var(--color-jade-from),
-    var(--color-jade-to)
-  );
-  --gradient-amber: linear-gradient(
-    135deg,
-    var(--color-amber-from),
-    var(--color-amber-to)
   );
 
   /*
@@ -328,25 +309,9 @@ body {
   .bg-gradient-blue-relief {
     background-image: var(--gradient-blue-relief);
   }
-  .bg-gradient-violet {
-    background-image: var(--gradient-violet);
-  }
-  .bg-gradient-jade {
-    background-image: var(--gradient-jade);
-  }
-  .bg-gradient-amber {
-    background-image: var(--gradient-amber);
-  }
-
   /* Gradiente aplicado a texto */
   .text-gradient-blue-base {
     background-image: var(--gradient-blue-base);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-  .text-gradient-violet {
-    background-image: var(--gradient-violet);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;

@@ -111,7 +111,7 @@ export function ChatComposer({ onSend, busy, initialText = "" }: Props) {
           disabled={!canSend}
           aria-label="Enviar"
           // Azul plano de marca, alineado con Button primary del sistema sobrio
-          // (antes bg-gradient-blue-base saturado). Hover suave a blue-flat-hover.
+          // (antes el gradiente azul saturado). Hover suave a blue-flat-hover.
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--color-blue-flat)] text-[var(--color-on-dark)] transition-[background-color,opacity] duration-[var(--duration-fast)] hover:bg-[var(--color-blue-flat-hover)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[var(--color-blue-flat)]"
         >
           <Icon name="enviar" size={18} />
