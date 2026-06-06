@@ -1,17 +1,18 @@
 /**
- * Snippet inline ejecutado en el <head> antes del primer paint.
+ * Snippets inline ejecutados en el <head> antes del primer paint.
  *
- * Lee el estado persistido del store de a11y desde localStorage y aplica
- * las clases al <html> sincronicamente. Esto evita el FOUC entre el HTML
- * server-rendered (que aplica `text-size-md` default) y el render del
- * client (que conoce la preferencia real del usuario).
+ * Leen el estado persistido de los stores (a11y y tema) desde
+ * localStorage y aplican las clases al <html> sincronicamente. Esto
+ * evita el FOUC entre el HTML server-rendered (text-size-md default,
+ * data-theme="light") y el render del client (que conoce la
+ * preferencia real del usuario).
  *
  * Patrón inspirado en next-themes / tailwindcss-next-themes.
  *
- * IMPORTANTE: la key (`ynara.a11y`) y los campos (`textSize`,
- * `highContrast`, `motion`) deben mantenerse en sync con
- * `stores/a11y.ts`. Si alguno cambia, este script rompe silenciosamente
- * y vuelve el FOUC.
+ * IMPORTANTE: las keys (`ynara.a11y`, `ynara.theme`) y sus campos
+ * (`textSize`, `highContrast`, `motion`, `theme`) deben mantenerse en
+ * sync con `stores/a11y.ts` y `stores/theme.ts`. Si alguno cambia,
+ * estos scripts rompen silenciosamente y vuelve el FOUC.
  */
 export const a11yInitScript = `(function(){try{
 var raw = localStorage.getItem('ynara.a11y');
@@ -27,4 +28,22 @@ if(s.textSize){
 if(s.highContrast===true) root.classList.add('theme-high-contrast');
 if(s.motion==='reduce') root.classList.add('motion-off');
 else if(s.motion==='normal') root.classList.add('motion-on');
+}catch(e){}})();`;
+
+/**
+ * Pre-paint del tema (DESIGN.md §3.1 / §16 #4): si el usuario eligió
+ * Noche, la clase y el data-theme se aplican antes del primer paint —
+ * sin esto hay flash claro→oscuro garantizado en cada carga.
+ * Solo "dark" muta el DOM: el default claro ya viene server-rendered.
+ */
+export const themeInitScript = `(function(){try{
+var raw = localStorage.getItem('ynara.theme');
+if(!raw) return;
+var parsed = JSON.parse(raw);
+var s = parsed && parsed.state ? parsed.state : null;
+if(s && s.theme==='dark'){
+  var root = document.documentElement;
+  root.classList.add('theme-dark');
+  root.setAttribute('data-theme','dark');
+}
 }catch(e){}})();`;

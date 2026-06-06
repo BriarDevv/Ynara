@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { siteConfig } from "@/config/site";
-import { a11yInitScript } from "./a11y-init";
+import { a11yInitScript, themeInitScript } from "./a11y-init";
 import { fontBody, fontDisplay } from "./fonts";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -19,24 +19,25 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="es-AR"
-      // `data-theme="light"` fija el tema en light: el sistema de tokens en
-      // globals.css es light-only por decisión de marca (ver DESIGN.md). Sin
-      // esto, el browser podría aplicar `prefers-color-scheme: dark` del OS
-      // antes de la primera ronda de CSS. El atributo es estable (no cambia
-      // por client), así que es seguro renderizarlo en el server.
+      // `data-theme="light"` es el DEFAULT server-rendered (tema claro,
+      // DESIGN.md §3.1). Si el usuario eligió Noche, el pre-paint de abajo
+      // lo pisa a "dark" + html.theme-dark ANTES del primer paint, y el
+      // ThemeApplier (providers.tsx) lo mantiene en sync tras hidratar.
+      // `color-scheme` por tema vive en globals.css, así el browser nunca
+      // aplica `prefers-color-scheme` por su cuenta.
       data-theme="light"
       suppressHydrationWarning
       className={fontClasses}
     >
       <head>
         {/*
-          Script inline pre-paint para aplicar preferencias de a11y antes
-          del primer render. Evita FOUC entre el default server-rendered
-          (text-size-md) y la preferencia persistida del usuario.
-          Sincronizado con stores/a11y.ts.
+          Scripts inline pre-paint para aplicar preferencias persistidas
+          (a11y + tema) antes del primer render. Evitan FOUC entre el
+          default server-rendered (text-size-md, claro) y la preferencia
+          del usuario. Sincronizados con stores/a11y.ts y stores/theme.ts.
         */}
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: snippet inline necesario para correr antes del primer paint y evitar FOUC; contenido es código propio en a11y-init.ts, no input del usuario. */}
-        <script dangerouslySetInnerHTML={{ __html: a11yInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: a11yInitScript + themeInitScript }} />
       </head>
       <body className="min-h-screen antialiased">
         <Providers>{children}</Providers>
