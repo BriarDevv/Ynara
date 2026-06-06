@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { MODES } from "@/components/ui/modes";
 import { YnaraMark } from "@/components/ui/YnaraMark";
 import { InteractiveShowcase } from "./InteractiveShowcase";
+import { ThemeToggle } from "./ThemeToggle";
 
 export const metadata: Metadata = {
   title: "Design System · Test",
@@ -42,6 +43,11 @@ const TYPE_TOKENS = [
 export default function TestDsPage() {
   return (
     <main className="mx-auto max-w-[1120px] px-6 py-16">
+      {/* Switch claro/Noche (§3.1) — el sandbox se revisa en ambos temas. */}
+      <div className="mb-10 flex justify-end">
+        <ThemeToggle />
+      </div>
+
       <Section title="Marca">
         <div className="flex items-end gap-8">
           <YnaraMark size={120} />
