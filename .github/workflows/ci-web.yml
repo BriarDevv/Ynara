@@ -1,0 +1,91 @@
+name: Web CI
+
+# CI SCOPEADA AL FRONTEND WEB: se dispara con cambios en apps/web, en los
+# packages compartidos o en el toolchain JS del monorepo (lockfile, turbo,
+# biome). Espejo del patrón de ci.yml (Backend CI): las PRs solo-backend NO
+# la corren. Cierra la "responsabilidad aparte" que ci.yml declara en su
+# header. Gates según AGENTS.md (Validation expectations) y DESIGN.md §16:
+# biome · tsc · vitest · next build.
+#
+# apps/mobile queda fuera a propósito: no está en los paths del trigger ni
+# en los gates (es un esqueleto sin CI propio todavía, y su typecheck falla
+# hoy — los types de NativeWind no exponen className; deuda del track
+# mobile). Cuando ese track arranque, tendrá su workflow.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'turbo.json'
+      - 'biome.json'
+      - '.github/workflows/ci-web.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'turbo.json'
+      - 'biome.json'
+      - '.github/workflows/ci-web.yml'
+
+concurrency:
+  group: ci-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-typecheck-test-build:
+    name: Lint + Typecheck + Test + Build (web)
+    runs-on: ubuntu-latest
+    env:
+      # Valores DUMMY de CI (NUNCA secretos reales, regla #2).
+      # src/lib/env.ts valida NEXT_PUBLIC_API_URL con Zod en import time:
+      # sin una URL válida, next build falla fail-fast (hoy el schema trae
+      # default, el dummy explícito protege si ese default se quita).
+      # AUTH_SECRET y NEXTAUTH_URL anticipan el cableado de Auth.js v5
+      # (la dep está instalada pero aún sin uso); cuando se configure,
+      # el build los va a necesitar.
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_ENABLE_MOCKS: 'false'
+      AUTH_SECRET: ci-test-auth-secret-not-for-production-use
+      NEXTAUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm/action-setup lee la versión del campo packageManager del
+      # package.json root (pnpm@10) — no duplicar la versión acá.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Los 4 gates en el mismo orden que la cadena de calidad local
+      # (AGENTS.md): biome repo-wide (igual que `pnpm lint` del root),
+      # typecheck/test vía turbo, build de producción de apps/web.
+      # --filter='!@ynara/mobile' excluye el esqueleto mobile, coherente
+      # con los paths del trigger (ver header).
+      - name: Lint (biome)
+        run: pnpm biome check .
+
+      - name: Typecheck (tsc)
+        run: pnpm turbo run typecheck --filter='!@ynara/mobile'
+
+      - name: Test (vitest)
+        run: pnpm turbo run test --filter='!@ynara/mobile'
+
+      # --filter scopea el build a apps/web (+ sus deps del workspace via
+      # ^build). Mobile no buildea en CI (esqueleto Expo, sin script build).
+      - name: Build (next build)
+        run: pnpm turbo run build --filter=@ynara/web
