@@ -95,6 +95,10 @@ describe("globals.css — puente de tokens :root ↔ @theme inline", () => {
     expect(rootBlock).not.toMatch(/--mode-[\w-]+\s*:\s*var\(--gradient/);
   });
 
+  it("--color-memory usa lavanda-deep (fill/texto de Memoria, AA — §3.5)", () => {
+    expect(rootBlock).toMatch(/--color-memory\s*:\s*var\(--color-lavanda-deep\)/);
+  });
+
   it("define todas las duraciones de motion (ningún componente anima en 0ms)", () => {
     const duraciones = [
       "duration-instant",

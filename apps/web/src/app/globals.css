@@ -86,14 +86,14 @@
   --color-violet-glow: rgb(129 101 163 / 0.18);
 
   /*
-   * Violeta sólido de la "capa memoria" — tinta para íconos del badge de
+   * Color sólido de la "capa memoria" — tinta para íconos del badge de
    * layer (PromptChip, MemoryDetailView, SearchResultRow, TimelineEntryRow).
-   * Alias al stop "to" del gradiente violeta para mantener coherencia con la
-   * rampa: el "color de memoria" es el lado profundo del violeta de marca.
-   * Si en el futuro se necesita rampa completa (deep/soft/accent), sumarla
-   * en su PR (ver DESIGN.md §3.4).
+   * Alias al lavanda oscuro de la paleta oficial (DESIGN.md §3.5): el
+   * lavanda claro es solo ambiente; cualquier fill/texto de Memoria usa
+   * lavanda-deep (AA con blanco 6.3:1, y 4.4:1 como tinta sobre blanco).
+   * En tema Noche se re-declara al lavanda claro (PR del tema dual).
    */
-  --color-memory: var(--color-violet-to);
+  --color-memory: var(--color-lavanda-deep);
 
   /* Acento puntual (focus-ring, text-link). Alineado al CTA primary. */
   --color-accent: var(--color-blue-flat);
