@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { shouldEnableMocks } from "@/lib/env";
 import { applyA11yClasses, useA11yStore } from "@/stores/a11y";
+import { applyThemeClass, useThemeStore } from "@/stores/theme";
 
 function makeQueryClient() {
   return new QueryClient({
@@ -30,6 +31,19 @@ function A11yApplier(): null {
   useEffect(() => {
     applyA11yClasses({ textSize, highContrast, motion });
   }, [textSize, highContrast, motion]);
+  return null;
+}
+
+/**
+ * Mantiene la clase `theme-dark` y el `data-theme` del <html> en sync
+ * con el store de tema tras hidratar (el pre-paint de a11y-init.ts ya
+ * aplicó la preferencia persistida antes del primer paint).
+ */
+function ThemeApplier(): null {
+  const theme = useThemeStore((s) => s.theme);
+  useEffect(() => {
+    applyThemeClass({ theme });
+  }, [theme]);
   return null;
 }
 
@@ -66,6 +80,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={client}>
       <A11yApplier />
+      <ThemeApplier />
       {mocksReady ? children : null}
     </QueryClientProvider>
   );
