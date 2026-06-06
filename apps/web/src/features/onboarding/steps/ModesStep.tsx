@@ -7,7 +7,6 @@ import { z } from "zod";
 import { Button } from "@/components/ui/Button";
 import { MODE_BY_ID } from "@/components/ui/modes";
 import { OptionCard } from "@/components/ui/OptionCard";
-import { cn } from "@/lib/cn";
 import { AVAILABLE_MODES } from "@/lib/modes";
 import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
@@ -94,14 +93,12 @@ export function ModesStep() {
                       key={modeId}
                       // Dot color del modo como leading — el chip completo con label
                       // duplicaba el title del card. Acá sólo necesitamos la pista
-                      // visual de color (gradient del modo).
+                      // visual de color (tint plano del modo).
                       leading={
                         <span
                           aria-hidden
-                          className={cn(
-                            "h-2.5 w-2.5 rounded-[var(--radius-pill)]",
-                            descriptor.gradientClass,
-                          )}
+                          className="h-2.5 w-2.5 rounded-[var(--radius-pill)]"
+                          style={{ backgroundColor: descriptor.tintVar }}
                         />
                       }
                       title={descriptor.label}

@@ -33,7 +33,8 @@ export function ModeChip({ modeId, label, size = "md", className }: Props) {
     >
       <span
         aria-hidden
-        className={cn("rounded-[var(--radius-pill)]", SIZE_CLASSES[size], mode.gradientClass)}
+        className={cn("rounded-[var(--radius-pill)]", SIZE_CLASSES[size])}
+        style={{ backgroundColor: mode.tintVar }}
       />
       <span className="text-[var(--color-ink)]">{label ?? mode.label}</span>
     </span>

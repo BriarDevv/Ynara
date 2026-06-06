@@ -7,7 +7,7 @@
  * `AVAILABLE_MODES` (orden de declaración) y `MODE_TONE`.
  *
  * NO confundir con `@/components/ui/modes` — ese sólo expone datos
- * visuales (label, blurb, gradientClass) para componentes UI. Si en
+ * visuales (label, blurb, tintVar/fillVar) para componentes UI. Si en
  * algún momento divergen los IDs, este archivo es el canónico y
  * `components/ui/modes.ts` debe alinearse.
  *

@@ -59,8 +59,8 @@
    * ---- Paleta oficial (v4) ----
    * Los 8 stops del manual de marca 2026 + el lavanda oscuro AA-safe para
    * fills/texto de Memoria (#565f81: blanco encima 6.3:1). Fuente única del
-   * clima del canvas (LivingField), stops del logo y tints de modo.
-   * Ver DESIGN.md §3.4 / §3.5. Los consumidores migran en PRs siguientes.
+   * clima del canvas (LivingField), stops del logo y tints de modo
+   * (--mode-* ya consumen esta paleta). Ver DESIGN.md §3.4 / §3.5.
    */
   --color-azul: #2f5aa6;
   --color-indigo: #434a82;
@@ -132,12 +132,23 @@
     var(--color-amber-to)
   );
 
-  /* Tints por modo */
-  --mode-productividad: var(--gradient-blue-base);
-  --mode-estudio: var(--gradient-blue-relief);
-  --mode-bienestar: var(--gradient-jade);
-  --mode-vida: var(--gradient-amber);
-  --mode-memoria: var(--gradient-violet);
+  /*
+   * ---- Tints por modo — color plano (DESIGN.md §3.5) ----
+   * El tint es el tono ambiental del modo (dot, hairline, tint de chip);
+   * el fill es el tono que puede llevar texto blanco encima (AA >=4.5:1).
+   * Solo Memoria separa ambos: lavanda claro como ambiente (2.75:1 con
+   * blanco, falla AA) y lavanda-deep para fill/texto.
+   */
+  --mode-productividad: var(--color-azul);
+  --mode-estudio: var(--color-indigo);
+  --mode-bienestar: var(--color-violeta);
+  --mode-vida: var(--color-violaceo);
+  --mode-memoria: var(--color-lavanda);
+  --mode-productividad-fill: var(--color-azul);
+  --mode-estudio-fill: var(--color-indigo);
+  --mode-bienestar-fill: var(--color-violeta);
+  --mode-vida-fill: var(--color-violaceo);
+  --mode-memoria-fill: var(--color-lavanda-deep);
 
   /* ---- Radius ---- */
   --radius-sm: 0.5rem;
@@ -325,23 +336,6 @@ body {
   }
   .bg-gradient-amber {
     background-image: var(--gradient-amber);
-  }
-
-  /* Tints por modo */
-  .bg-mode-productividad {
-    background-image: var(--mode-productividad);
-  }
-  .bg-mode-estudio {
-    background-image: var(--mode-estudio);
-  }
-  .bg-mode-bienestar {
-    background-image: var(--mode-bienestar);
-  }
-  .bg-mode-vida {
-    background-image: var(--mode-vida);
-  }
-  .bg-mode-memoria {
-    background-image: var(--mode-memoria);
   }
 
   /* Gradiente aplicado a texto */

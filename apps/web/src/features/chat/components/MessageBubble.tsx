@@ -62,10 +62,8 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
       <div className="flex max-w-[85%] gap-3">
         <span
           aria-hidden
-          className={cn(
-            "mt-1 w-0.5 shrink-0 self-stretch rounded-[var(--radius-pill)]",
-            MODE_BY_ID[mode].gradientClass,
-          )}
+          className="mt-1 w-0.5 shrink-0 self-stretch rounded-[var(--radius-pill)]"
+          style={{ backgroundColor: MODE_BY_ID[mode].tintVar }}
         />
         <div className="text-body text-[var(--color-ink)]">
           <Markdown>{message.text}</Markdown>
