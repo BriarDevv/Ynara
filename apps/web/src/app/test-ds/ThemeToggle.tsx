@@ -15,6 +15,9 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggleTheme}
+      // Nombre accesible ESTABLE (la acción): el estado lo porta
+      // aria-pressed, no el nombre — el texto visible sí muestra el tema.
+      aria-label="Cambiar tema"
       aria-pressed={dark}
       className="inline-flex items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-2 text-body-sm text-[var(--color-ink)] transition-[border-color,background-color] duration-[var(--duration-fast)] hover:border-[var(--color-border-strong)]"
     >
