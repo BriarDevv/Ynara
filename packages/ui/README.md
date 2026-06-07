@@ -87,5 +87,6 @@ Transitions con progressive enhancement + respeto de reduced-motion).
 - El subsistema `graphics/` (`MemoryField`, `GrainOverlay`,
   `buildMemoryField`) vivió en este package durante la fase F0.3 del
   rediseño y se deprecó al migrar la app al **lenguaje sobrio**
-  (PRs #139–#147). Si más adelante hace falta un recurso ambiental, la
-  línea actual es `BrandWaves` (vive en `apps/web/src/components/ui/`).
+  (PRs #139–#147). El recurso ambiental actual es `LivingField`, el
+  fondo vivo en canvas del sistema v4 (vive en
+  `apps/web/src/components/ui/`; DESIGN.md §2).

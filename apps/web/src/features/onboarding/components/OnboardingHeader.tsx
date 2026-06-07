@@ -19,9 +19,9 @@ type Props = {
  * un skip por step, ver §4.8 del plan).
  *
  * Layout: contenedor centrado (max-w 640) con mismo eje que el StepShell.
- * Background semi-transparente con `backdrop-blur-sm` para que las
- * BrandWaves del layout se atenúen detrás del header sin ocultarse del
- * todo. `sticky top-0 z-20` lo deja ahí mientras se scrollea.
+ * Background semi-transparente con `backdrop-blur-sm` para que el campo
+ * vivo del layout se atenúe detrás del header sin ocultarse del todo.
+ * `sticky top-0 z-20` lo deja ahí mientras se scrollea.
  */
 export function OnboardingHeader({ total, current, onSkipAll, className }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);

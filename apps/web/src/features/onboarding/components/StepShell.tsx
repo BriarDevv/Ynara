@@ -18,7 +18,7 @@ type Props = {
  *  - Desktop (≥640): max-width 560, padding extra (px-10 py-14) y más
  *    aire vertical entre header / body. NO usamos card blanca en
  *    desktop — el lenguaje del onboarding es "papel sobre canvas
- *    ivory + BrandWaves"; un card-in-card mata la respiración.
+ *    ivory + LivingField"; un card-in-card mata la respiración.
  *  - Header con jerarquía clara: eyebrow opcional → title (ink-deep) →
  *    subtitle (ink-soft).
  *  - Animación de entrada `anim-fade-up` (respeta prefers-reduced-motion
@@ -32,7 +32,7 @@ export function StepShell({ eyebrow, title, subtitle, children, footer, classNam
        * Desktop (≥640): se vuelve card blanca con shadow-soft + radius-lg
        * + margen vertical para separar del header sticky. Resuelve el
        * "sparse" de columna angosta sobre canvas; la card ancla el
-       * contenido y deja BrandWaves visible alrededor.
+       * contenido y deja el fondo vivo visible alrededor.
        */
       className={cn(
         "anim-fade-up mx-auto flex w-full max-w-[480px] flex-1 flex-col gap-10 px-6 py-8",
