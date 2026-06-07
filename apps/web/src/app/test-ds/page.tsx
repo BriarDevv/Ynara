@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { LivingField } from "@/components/ui/LivingField";
 import { MODES } from "@/components/ui/modes";
 import { YnaraMark } from "@/components/ui/YnaraMark";
+import { YnaraOrb } from "@/components/ui/YnaraOrb";
 import { InteractiveShowcase } from "./InteractiveShowcase";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -28,6 +30,17 @@ const COLOR_TOKENS = [
 const GRADIENT_TOKENS = [
   { name: "blue-base", className: "bg-gradient-blue-base" },
   { name: "blue-relief", className: "bg-gradient-blue-relief" },
+] as const;
+
+/* Vitrina del fondo vivo (DESIGN.md §2.2): una caja por variante, cada una
+   teñida por un modo distinto para ver el clima de dos tonos. `paper` y
+   `depth` esperan a Agenda y Tu — acá ya se pueden revisar igual. */
+const FIELD_VARIANTS = [
+  { variant: "aurora", modeId: "productividad", note: "Hoy — ondas + atmósfera" },
+  { variant: "constellation", modeId: "bienestar", note: "Hablar y onboarding — estrellas" },
+  { variant: "network", modeId: "memoria", note: "Memoria — red enlazada" },
+  { variant: "paper", modeId: "vida", note: "Agenda (pendiente) — grano" },
+  { variant: "depth", modeId: "estudio", note: "Tu (pendiente) — profundidad" },
 ] as const;
 
 const TYPE_TOKENS = [
@@ -126,6 +139,46 @@ export default function TestDsPage() {
               <p className="text-subtitle">{mode.label}</p>
               <p className="text-body-sm text-[var(--color-ink-soft)]">{mode.blurb}</p>
             </Card>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Fondo vivo">
+        {/* Cada caja es un contenedor relative+isolate, el mismo contrato de
+            montaje que las vistas reales (§16 #5: absolute, nunca fixed). */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {FIELD_VARIANTS.map((f) => (
+            <div
+              key={f.variant}
+              className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)]"
+            >
+              <div className="relative isolate h-[220px]">
+                <LivingField variant={f.variant} modeId={f.modeId} />
+              </div>
+              <div className="border-t border-[var(--color-border)] px-4 py-3">
+                <p className="text-body-sm">{f.variant}</p>
+                <p className="text-caption text-[var(--color-ink-muted)]">{f.note}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Orbe de presencia">
+        <div className="flex flex-wrap items-end gap-10">
+          <div className="flex flex-col items-center gap-3">
+            <YnaraOrb size={72} />
+            <p className="text-caption text-[var(--color-ink-muted)]">calmo</p>
+          </div>
+          <div className="flex flex-col items-center gap-3">
+            <YnaraOrb size={72} thinking />
+            <p className="text-caption text-[var(--color-ink-muted)]">pensando</p>
+          </div>
+          {MODES.map((mode) => (
+            <div key={mode.id} className="flex flex-col items-center gap-3">
+              <YnaraOrb size={44} modeId={mode.id} />
+              <p className="text-caption text-[var(--color-ink-muted)]">{mode.label}</p>
+            </div>
           ))}
         </div>
       </Section>
