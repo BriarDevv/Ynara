@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import type { AnchorHTMLAttributes } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { useThemeStore } from "@/stores/theme";
 import { isNavItemActive } from "./nav-items";
 
 // Pathname controlable por test. El prefijo `mock` lo habilita dentro del
@@ -60,11 +61,37 @@ describe("MobileTabBar", () => {
 });
 
 describe("SidebarNav", () => {
-  it("renderiza el logo + las 4 tabs y marca la activa", () => {
+  // El store de tema es singleton de módulo: resetear para no arrastrar el
+  // "dark" que persisten otros archivos (theme.test.ts) y aislar las ramas.
+  afterEach(() => {
+    useThemeStore.getState().reset();
+    localStorage.clear();
+  });
+
+  it("renderiza el lockup + las 4 tabs y marca la activa", () => {
     mockPathname = "/agenda";
     render(<SidebarNav />);
     expect(screen.getByRole("link", { name: "Ynara — ir a Hoy" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Agenda" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Tú" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("en claro monta el wordmark a color (símbolo con gradiente)", () => {
+    mockPathname = "/hoy";
+    useThemeStore.getState().setTheme("light");
+    const { container } = render(<SidebarNav />);
+    const lockup = screen.getByRole("link", { name: "Ynara — ir a Hoy" });
+    expect(within(lockup).getByRole("img", { name: "Ynara" })).toBeInTheDocument();
+    expect(container.querySelector("linearGradient")).toBeInTheDocument();
+    expect(container.innerHTML).toContain("var(--color-azul");
+  });
+
+  it("en Noche monta el wordmark mono-light (silueta marfil, sin gradiente)", () => {
+    mockPathname = "/hoy";
+    useThemeStore.getState().setTheme("dark");
+    const { container } = render(<SidebarNav />);
+    // Tras montar (useEffect), la variante pasa a mono-light.
+    expect(container.innerHTML).toContain("var(--color-marfil");
+    expect(container.querySelector("linearGradient")).not.toBeInTheDocument();
   });
 });
