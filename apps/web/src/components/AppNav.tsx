@@ -3,6 +3,7 @@
 import { Icon } from "@ynara/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { YnaraWordmark } from "@/components/ui/YnaraWordmark";
 import { cn } from "@/lib/cn";
 import { useThemeStore } from "@/stores/theme";
@@ -58,17 +59,26 @@ export function SidebarNav() {
   const pathname = usePathname();
   // El lockup se elige por fondo (§11.1): color sobre el sidebar claro,
   // mono-light cuando el tema es Noche (el símbolo a color perdería contraste).
+  // `mounted` evita el hydration mismatch: el server siempre renderiza light
+  // (no hay localStorage), así que el primer paint del cliente también usa
+  // `color`; recién tras montar leemos el tema persistido. Mismo espíritu que
+  // el ThemeApplier (providers.tsx). El flash es un detalle decorativo.
   const dark = useThemeStore((s) => s.theme === "dark");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const wordmarkVariant = mounted && dark ? "mono-light" : "color";
   return (
     <nav
       aria-label="Navegación principal"
       className="hidden h-full w-[240px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-6 lg:flex"
     >
-      {/* Lockup oficial (§11.1): YnaraWordmark con baseline compartida, en
-          vez del símbolo + span armado a mano. El aria-label del Link nombra
-          el destino; el wordmark queda decorativo dentro (no duplica). */}
+      {/* Lockup oficial (§11.1): YnaraWordmark con baseline compartida, en vez
+          del símbolo + span armado a mano. El Link lleva su propio aria-label
+          ("Ynara — ir a Hoy"), que es el que nombra el control; el role=img
+          del wordmark no se concatena al nombre del Link (un aria-label
+          explícito en el ancestro lo gana), así que no hay doble anuncio. */}
       <Link href="/hoy" aria-label="Ynara — ir a Hoy" className="mb-6 flex px-2">
-        <YnaraWordmark height={28} variant={dark ? "mono-light" : "color"} />
+        <YnaraWordmark height={28} variant={wordmarkVariant} />
       </Link>
       <ul className="flex flex-col gap-1">
         {NAV_ITEMS.map((item) => {
