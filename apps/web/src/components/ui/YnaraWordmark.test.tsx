@@ -43,4 +43,12 @@ describe("YnaraWordmark", () => {
     // Tono fijo, no `--color-ink-*` que seguiría el tema (se elige por fondo).
     expect(container.querySelector("text")).toHaveAttribute("fill", "var(--color-noche, #242c3f)");
   });
+
+  it("la variante mono-dark es silueta + texto Noche (mono sobre claro, §11.1)", () => {
+    const { container } = render(<YnaraWordmark variant="mono-dark" />);
+    const html = container.innerHTML;
+    expect(html).toContain("var(--color-noche");
+    expect(html).not.toContain("linearGradient");
+    expect(container.querySelector("text")).toHaveAttribute("fill", "var(--color-noche, #242c3f)");
+  });
 });
