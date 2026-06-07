@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
-import { BrandWaves } from "@/components/ui/BrandWaves";
+import { LivingField } from "@/components/ui/LivingField";
 import { OnboardingHeader } from "@/features/onboarding/components/OnboardingHeader";
 import { ONBOARDING_STEPS, STEP_INDEX } from "@/features/onboarding/constants";
 import { useOnboardingStore } from "@/features/onboarding/store";
@@ -33,10 +33,12 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
   if (completed) return null;
 
   return (
-    <div className="relative flex min-h-screen flex-col">
-      {/* Velo de marca: ondas violet/blue suaves detrás de todo. Vive fixed
-          inset-0 con z-negativo. No interfiere con focus ni pointer. */}
-      <BrandWaves />
+    <div className="relative isolate flex min-h-screen flex-col">
+      {/* Fondo vivo del onboarding (constellation: campo de nodos, la primera
+          impresión — DESIGN.md §2.2). Absolute dentro del layout (isolate
+          scopea su -z-10); modo default azul de marca: el usuario todavía no
+          eligió modos. No interfiere con focus ni pointer. */}
+      <LivingField variant="constellation" />
       <OnboardingHeaderWithProgress />
       <main className="flex flex-1 flex-col pb-12">{children}</main>
     </div>
