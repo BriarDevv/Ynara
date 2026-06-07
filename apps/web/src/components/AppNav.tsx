@@ -3,7 +3,7 @@
 import { Icon } from "@ynara/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { YnaraMark } from "@/components/ui/YnaraMark";
+import { YnaraWordmark } from "@/components/ui/YnaraWordmark";
 import { cn } from "@/lib/cn";
 import { isNavItemActive, NAV_ITEMS } from "./nav-items";
 
@@ -60,9 +60,11 @@ export function SidebarNav() {
       aria-label="Navegación principal"
       className="hidden h-full w-[240px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-6 lg:flex"
     >
-      <Link href="/hoy" aria-label="Ynara — ir a Hoy" className="mb-6 flex items-center gap-2 px-2">
-        <YnaraMark size={32} />
-        <span className="text-subtitle text-[var(--color-ink)]">Ynara</span>
+      {/* Lockup oficial (§11.1): YnaraWordmark con baseline compartida, en
+          vez del símbolo + span armado a mano. El aria-label del Link nombra
+          el destino; el wordmark queda decorativo dentro (no duplica). */}
+      <Link href="/hoy" aria-label="Ynara — ir a Hoy" className="mb-6 flex px-2">
+        <YnaraWordmark height={28} className="text-[var(--color-ink)]" />
       </Link>
       <ul className="flex flex-col gap-1">
         {NAV_ITEMS.map((item) => {
