@@ -568,7 +568,10 @@ export function LivingField({
       if (document.hidden) {
         running = false;
         cancelAnimationFrame(raf);
-      } else if (!reduced) {
+      } else if (!reduced && !running) {
+        // `!running` defiende de un "visible" duplicado (webviews disparan
+        // visibilitychange junto con focus/pageshow): sin el guard se
+        // encadenaria un segundo rAF y el campo correria a 2x para siempre.
         running = true;
         last = 0; // evita un dt gigante al volver
         raf = requestAnimationFrame(loop);
@@ -587,6 +590,9 @@ export function LivingField({
     let onLeave: (() => void) | null = null;
     if (cfg.pointer && !reduced) {
       onMove = (e) => {
+        // §2.1: en touch/mobile no hay cursor — queda el campo en deriva.
+        // Un tap o un scroll tactil no deben prender el halo de presencia.
+        if (e.pointerType === "touch") return;
         if (!host) return;
         const r = host.getBoundingClientRect();
         tpcx = e.clientX - r.left;
