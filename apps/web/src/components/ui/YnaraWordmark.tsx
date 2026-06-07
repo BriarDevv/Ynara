@@ -43,7 +43,7 @@ type Props = {
  *
  * El símbolo natural va de y=48 (punta del diamante) a y=590 (pies). La
  * transformación lo lleva a una altura visual ~18 con los pies en 19.8 y el
- * borde izquierdo en x≈1; el texto arranca después con aire de marca.
+ * borde izquierdo en x≈0.6; el texto arranca después con aire de marca.
  *
  * Decorativo o de marca: el `<svg>` lleva `role="img"` + `aria-label="Ynara"`,
  * así el lockup se anuncia una sola vez (el símbolo interno no compite).
@@ -67,7 +67,7 @@ export function YnaraWordmark({ height = 22, variant = "color", className }: Pro
       style={{ overflow: "visible", display: "block" }}
     >
       {/* Símbolo: escala 0.0332 (alto 542 → ~18), pies (y=590) sobre la
-          baseline 19.8, borde izquierdo en x≈1. */}
+          baseline 19.8, borde izquierdo en x≈0.6. */}
       <g transform="translate(-4.58 0.21) scale(0.03321)">
         <YnaraSymbol variant={SYMBOL_VARIANT[variant]} idPrefix={id} />
       </g>

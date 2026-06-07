@@ -101,6 +101,11 @@ export default function TestDsPage() {
             <LogoSwatch label="wordmark · mono-light" dark>
               <YnaraWordmark height={32} variant="mono-light" />
             </LogoSwatch>
+            {/* Tamaño grande para inspección de geometría (relieve, diamante)
+                — lo que antes daba el "ladder" de snap-logo. */}
+            <LogoSwatch label="símbolo · 112">
+              <YnaraMark size={112} variant="color" />
+            </LogoSwatch>
           </div>
         </div>
       </Section>

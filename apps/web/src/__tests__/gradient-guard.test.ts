@@ -21,9 +21,15 @@ const SCAN_DIRS = ["components", "features"] as const;
 const FORBIDDEN =
   /bg-mode-|bg-gradient-|text-gradient-|gradientClass|(?:linear|radial|conic)-gradient\(/;
 
-/** Únicos archivos donde el gradiente es legítimo (§3.4): el fondo vivo,
- *  el logo y el glow ambiental del orbe. */
-const ALLOWLIST = new Set(["LivingField.tsx", "YnaraMark.tsx", "YnaraOrb.tsx"]);
+/** Únicos archivos donde el gradiente es legítimo (§3.4): el fondo vivo, el
+ *  logo (YnaraMark + YnaraWordmark, que compone el símbolo del logo) y el
+ *  glow ambiental del orbe. */
+const ALLOWLIST = new Set([
+  "LivingField.tsx",
+  "YnaraMark.tsx",
+  "YnaraWordmark.tsx",
+  "YnaraOrb.tsx",
+]);
 
 function* walk(dir: string): Generator<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
