@@ -5,6 +5,7 @@ import { LivingField } from "@/components/ui/LivingField";
 import { MODES } from "@/components/ui/modes";
 import { YnaraMark } from "@/components/ui/YnaraMark";
 import { YnaraOrb } from "@/components/ui/YnaraOrb";
+import { YnaraWordmark } from "@/components/ui/YnaraWordmark";
 import { InteractiveShowcase } from "./InteractiveShowcase";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -25,8 +26,9 @@ const COLOR_TOKENS = [
   { name: "border-strong", value: "var(--color-border-strong)" },
 ] as const;
 
-/* Gradientes que sobreviven en v4: solo los del logo/acento azul (§3.4).
-   Jade, ámbar y violeta se retiraron al realinear los modos a la paleta. */
+/* Gradientes que sobreviven en v4: el azul de acento del sandbox (§3.4). El
+   logo ya no depende de estos — desde el PR #6 sus stops salen directo de la
+   paleta oficial (azul/celeste/violeta/violáceo). */
 const GRADIENT_TOKENS = [
   { name: "blue-base", className: "bg-gradient-blue-base" },
   { name: "blue-relief", className: "bg-gradient-blue-relief" },
@@ -70,6 +72,35 @@ export default function TestDsPage() {
               Sandbox visual del sistema. Cada cambio en <code>globals.css</code> o{" "}
               <code>DESIGN.md</code> tiene que verse acá.
             </p>
+          </div>
+        </div>
+
+        {/* Variantes del símbolo y el lockup (§11.1). `data-logo-gallery` es el
+            anclaje del snapshot visual (scripts/snap-logo.mjs). El símbolo a
+            color jamás va sobre Noche; ahí van las variantes mono-light. */}
+        <div data-logo-gallery className="mt-10 flex flex-col gap-6">
+          <div className="flex flex-wrap items-end gap-8">
+            <LogoSwatch label="color">
+              <YnaraMark size={56} variant="color" />
+            </LogoSwatch>
+            <LogoSwatch label="mono-dark">
+              <YnaraMark size={56} variant="mono-dark" />
+            </LogoSwatch>
+            <LogoSwatch label="mono-light" dark>
+              <YnaraMark size={56} variant="mono-light" />
+            </LogoSwatch>
+            <LogoSwatch label="avatar">
+              <YnaraMark size={56} variant="avatar" />
+            </LogoSwatch>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-8">
+            <LogoSwatch label="wordmark · color">
+              <YnaraWordmark height={32} variant="color" />
+            </LogoSwatch>
+            <LogoSwatch label="wordmark · mono-light" dark>
+              <YnaraWordmark height={32} variant="mono-light" />
+            </LogoSwatch>
           </div>
         </div>
       </Section>
@@ -248,5 +279,32 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">{title}</h2>
       {children}
     </section>
+  );
+}
+
+/**
+ * Celda de muestra del logo: el logo sobre su fondo correcto + label. `dark`
+ * pone fondo Noche para revisar las variantes mono-light (§11.1: el símbolo a
+ * color jamás sobre Noche).
+ */
+function LogoSwatch({
+  label,
+  dark,
+  children,
+}: {
+  label: string;
+  dark?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <div
+        className="flex min-h-[88px] min-w-[112px] items-center justify-center rounded-[var(--radius-lg)] border border-[var(--color-border)] px-5 py-4"
+        style={dark ? { backgroundColor: "var(--color-noche)" } : undefined}
+      >
+        {children}
+      </div>
+      <span className="text-caption text-[var(--color-ink-muted)]">{label}</span>
+    </div>
   );
 }
