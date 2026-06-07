@@ -15,11 +15,15 @@ import { describe, expect, it } from "vitest";
 const SRC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SCAN_DIRS = ["components", "features"] as const;
 
-/** Clases/campos del lenguaje v3 que no deben reaparecer. */
-const FORBIDDEN = /bg-mode-|bg-gradient-|text-gradient-|gradientClass/;
+/** Clases/campos del lenguaje v3 que no deben reaparecer, más cualquier
+ *  gradiente CSS inline (`style`/`background`) — la regex de clases sola
+ *  dejaba pasar un `radial-gradient(...)` escrito en JS. */
+const FORBIDDEN =
+  /bg-mode-|bg-gradient-|text-gradient-|gradientClass|(?:linear|radial|conic)-gradient\(/;
 
-/** Únicos archivos donde el gradiente es legítimo (§3.4). */
-const ALLOWLIST = new Set(["LivingField.tsx", "YnaraMark.tsx"]);
+/** Únicos archivos donde el gradiente es legítimo (§3.4): el fondo vivo,
+ *  el logo y el glow ambiental del orbe. */
+const ALLOWLIST = new Set(["LivingField.tsx", "YnaraMark.tsx", "YnaraOrb.tsx"]);
 
 function* walk(dir: string): Generator<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

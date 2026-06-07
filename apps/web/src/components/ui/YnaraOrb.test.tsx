@@ -32,9 +32,12 @@ describe("YnaraOrb", () => {
     expect(sinModo.innerHTML).toContain("var(--color-azul)");
   });
 
-  it("el diamante central conserva la rotación de marca como fallback estático", () => {
-    // Bajo reduced-motion la animación (que rota en sus keyframes) se
-    // neutraliza: la clase rotate-45 es lo que mantiene el rombo.
+  it("el diamante central lleva la clase rotate-45 además del keyframe", () => {
+    // La rotación vive dos veces a propósito: en los keyframes (mientras
+    // anima) y como clase estática. Este test solo fija la presencia de la
+    // clase — que es la que sostiene el rombo cuando la cascada de
+    // reduced-motion (globals.css) neutraliza la animación. La cascada en
+    // sí es CSS y no se puede ejercitar acá (vitest corre con css:false).
     const { container } = render(<YnaraOrb />);
     expect(container.querySelector(".anim-orb-core")?.className).toContain("rotate-45");
   });
