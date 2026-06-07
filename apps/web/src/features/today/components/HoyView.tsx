@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BrandWaves } from "@/components/ui/BrandWaves";
+import { LivingField } from "@/components/ui/LivingField";
 import { Toast } from "@/components/ui/Toast";
 import { useActiveMode } from "@/hooks/useActiveMode";
 import { useUserStore } from "@/stores/user";
@@ -13,10 +13,9 @@ import { SuggestionsSection } from "./SuggestionsSection";
 
 /**
  * Vista **Hoy** — la home real de la app (wireframe 06, build-plan Fase E):
- * header + Prioridades + Sugerencias + Recap. El fondo es el velo de marca
- * (`BrandWaves`) sobre canvas ivory, alineado con el onboarding — reemplaza
- * el sistema editorial "Red de memoria + grano + wash de modo" por un velo
- * sobrio coherente con el resto de la app rediseñada.
+ * header + Prioridades + Sugerencias + Recap. El fondo es el campo vivo
+ * (`LivingField`, variante `aurora`: ondas que fluyen + atmósfera, DESIGN.md
+ * §2.2), teñido por el modo activo del usuario.
  *
  * El modo y el nombre salen del onboarding (`useUserStore`); `now` se fija una
  * vez por montaje para anclar la fecha del header sin drift.
@@ -43,11 +42,10 @@ export function HoyView() {
 
   return (
     <div className="relative isolate flex min-h-full flex-col">
-      {/* Ambiente de marca sobrio: velo de ondas violet/blue sobre canvas
-          ivory. Reemplaza el sistema editorial v2 (Red de memoria + grano +
-          wash de modo). Usa variant="absolute" para vivir dentro del area de
-          scroll del shell (no fixed, que se escapaba del stacking del shell). */}
-      <BrandWaves variant="absolute" />
+      {/* Fondo vivo de Hoy (aurora): vive absolute dentro del área de scroll
+          del shell — nunca fixed, que se escapa del stacking `isolate` del
+          AppShell (DESIGN.md §16 #5). */}
+      <LivingField variant="aurora" modeId={activeMode} />
 
       <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-8 px-6 pb-8 pt-10">
         <OfflineBanner />

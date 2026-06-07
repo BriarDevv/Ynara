@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
+import { LivingField } from "@/components/ui/LivingField";
 import { ApiError } from "@/lib/api";
 import { sendChatMessage } from "@/lib/chat";
 import { useChatStore } from "../store";
@@ -59,13 +60,20 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   // `h-full`: calza exacto en el área de contenido del shell (que es de
   // altura fija con scroll interno); la `MessageList` scrollea adentro y el
   // composer queda anclado abajo, arriba de la tab bar. No declara `<main>`:
-  // el landmark lo provee el AppShell.
+  // el landmark lo provee el AppShell. El wrapper exterior ancla el fondo
+  // vivo a todo el ancho del área de contenido (no al max-w del hilo).
   return (
-    <div className="mx-auto flex h-full w-full max-w-[720px] flex-col">
-      <ChatHeader mode={session.mode} />
-      <MessageList messages={messages ?? []} mode={session.mode} onRetry={handleRetry} />
-      <div className="px-4 pb-4">
-        <ChatComposer onSend={handleSend} busy={mutation.isPending} />
+    <div className="relative isolate h-full">
+      {/* Fondo vivo de Hablar (constellation, DESIGN.md §2.2), teñido por el
+          modo de ESTA sesión — acá el modo preciso no es el global del
+          onboarding sino el que el usuario eligió para la conversación. */}
+      <LivingField variant="constellation" modeId={session.mode} />
+      <div className="mx-auto flex h-full w-full max-w-[720px] flex-col">
+        <ChatHeader mode={session.mode} />
+        <MessageList messages={messages ?? []} mode={session.mode} onRetry={handleRetry} />
+        <div className="px-4 pb-4">
+          <ChatComposer onSend={handleSend} busy={mutation.isPending} />
+        </div>
       </div>
     </div>
   );
