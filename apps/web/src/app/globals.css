@@ -47,15 +47,15 @@
 
   /*
    * ---- Stops individuales ----
-   * Fuente única para gradientes y usos puntuales (focus-ring, stops del
-   * logo SVG). Si cambia uno, cambia todo lo derivado.
+   * Fuente única de los gradientes azules `--gradient-blue-*` (showcase del
+   * sandbox). Los stops del logo SVG (YnaraMark) migraron a la paleta oficial
+   * (azul/celeste/violeta/violáceo) en el PR #6, así que ya no dependen de
+   * acá. Si cambia uno, cambia todo lo derivado.
    */
   --color-blue-base-from: #2f5aa6;
   --color-blue-base-to: #1f66db;
   --color-blue-relief-from: #4b7ee6;
   --color-blue-relief-to: #7ba1f4;
-  --color-violet-from: #8c63b8;
-  --color-violet-to: #7c4fa3;
 
   /*
    * ---- Paleta oficial (v4) ----
