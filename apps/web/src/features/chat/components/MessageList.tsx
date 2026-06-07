@@ -43,7 +43,16 @@ export function MessageList({ messages, mode, onRetry }: Props) {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4" aria-live="polite">
+    // `data-lenis-prevent`: este es un scroller propio (la conversación), no el
+    // del shell. El atributo evita que Lenis (§16 #7) capture el wheel/touch
+    // acá, así la lista scrollea nativa y el `scrollIntoView` del auto-scroll no
+    // pelea con Lenis. El no-encadenado al `<main>` lo da el `overscroll-behavior:
+    // contain` que el stylesheet de Lenis aplica a `[data-lenis-prevent]`.
+    <div
+      className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4"
+      aria-live="polite"
+      data-lenis-prevent
+    >
       {messages.map((message) => (
         <MessageBubble
           key={message.id}

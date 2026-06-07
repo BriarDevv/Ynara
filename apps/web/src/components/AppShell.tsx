@@ -1,4 +1,7 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { type ReactNode, useRef } from "react";
+import { useSmoothScroll } from "@/hooks/useSmoothScroll";
 import { MobileTabBar, SidebarNav } from "./AppNav";
 
 /**
@@ -9,12 +12,19 @@ import { MobileTabBar, SidebarNav } from "./AppNav";
  *  - `SidebarNav` (desktop) a la izquierda; `MobileTabBar` (mobile) como
  *    hermano en flujo DEBAJO del `<main>` (no fixed) — así el composer del
  *    chat nunca queda tapado por la tab bar.
- *  - `<main>`: `flex-1 min-h-0 overflow-y-auto`, único landmark de contenido.
- *    Las vistas que scrollean (Hoy) lo hacen acá adentro; las de altura fija
- *    (Chat: `h-full`, lista interna scrolleable) calzan exacto sin scroll del
- *    main. Las páginas no vuelven a declarar `<main>`.
+ *  - `<main>`: `flex-1 min-h-0 overflow-y-auto`, único landmark de contenido y
+ *    **contenedor de scroll** de la app. Las vistas que scrollean (Hoy,
+ *    Memoria, Buscar) lo hacen acá adentro; las de altura fija (Chat: `h-full`,
+ *    lista interna scrolleable) calzan exacto sin scroll del main. Las páginas
+ *    no vuelven a declarar `<main>`.
+ *  - **Smooth-scroll** (Lenis, §16 #7): `useSmoothScroll` lo monta sobre el
+ *    `<main>` (gateado por reduced-motion, con cleanup). Vive en el shell, no
+ *    por-vista; el onboarding tiene su propio layout, así que queda afuera.
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  const mainRef = useRef<HTMLElement>(null);
+  useSmoothScroll(mainRef);
+
   return (
     <div className="relative isolate flex h-[100dvh] flex-col overflow-hidden bg-[var(--color-bg)] lg:flex-row">
       {/* Skip-link: primer foco tabbable, salta la nav y va directo al
@@ -26,7 +36,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         Saltar al contenido
       </a>
       <SidebarNav />
-      <main id="contenido" className="relative flex min-h-0 w-full flex-1 flex-col overflow-y-auto">
+      <main
+        ref={mainRef}
+        id="contenido"
+        className="relative flex min-h-0 w-full flex-1 flex-col overflow-y-auto"
+      >
         {children}
       </main>
       <MobileTabBar />
