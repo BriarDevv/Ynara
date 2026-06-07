@@ -255,8 +255,15 @@ export function LivingField({
     function resize() {
       if (!canvas || !ctx || !host) return;
       const r = host.getBoundingClientRect();
-      w = Math.max(1, r.width);
-      h = Math.max(1, r.height);
+      const nw = Math.max(1, r.width);
+      const nh = Math.max(1, r.height);
+      // El ResizeObserver dispara un callback inicial (y reflows de fuentes
+      // disparan más) con el MISMO tamaño: sin este guard, cada uno
+      // re-randomizaría el campo — y bajo reduce, re-dibujaría el frame
+      // "estático" una y otra vez.
+      if (nw === w && nh === h) return;
+      w = nw;
+      h = nh;
       // DPR capado a 2 (§2.3): a 3x el costo de fill sube sin ganancia visible.
       dpr = Math.min(2, window.devicePixelRatio || 1);
       canvas.width = Math.round(w * dpr);
