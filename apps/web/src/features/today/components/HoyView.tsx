@@ -1,24 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { BrandWaves } from "@/components/ui/BrandWaves";
-import { MODE_BY_ID, type ModeId } from "@/components/ui/modes";
 import { Toast } from "@/components/ui/Toast";
+import { useActiveMode } from "@/hooks/useActiveMode";
 import { useUserStore } from "@/stores/user";
 import { HoyHeader } from "./HoyHeader";
 import { OfflineBanner } from "./OfflineBanner";
 import { PrioritiesSection } from "./PrioritiesSection";
 import { RecapSection } from "./RecapSection";
 import { SuggestionsSection } from "./SuggestionsSection";
-
-/** Modo activo de Hoy: el primer modo de interés válido, o productividad. */
-function useActiveMode(): ModeId {
-  const interestedModes = useUserStore((s) => s.interestedModes);
-  return useMemo<ModeId>(() => {
-    const first = interestedModes.find((m) => m in MODE_BY_ID);
-    return first ?? "productividad";
-  }, [interestedModes]);
-}
 
 /**
  * Vista **Hoy** — la home real de la app (wireframe 06, build-plan Fase E):
