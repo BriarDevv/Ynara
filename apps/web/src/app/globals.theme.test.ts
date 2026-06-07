@@ -103,6 +103,9 @@ describe("globals.css — puente de tokens :root ↔ @theme inline", () => {
   it("jade, ámbar y el gradiente violeta quedaron retirados (fuera del manual)", () => {
     expect(css).not.toMatch(/--color-(jade|amber)-(from|to)/);
     expect(css).not.toMatch(/--gradient-(jade|amber|violet)/);
+    // Los stops legacy del violeta se retiraron en el PR #6: el logo migró a
+    // los tokens oficiales (violeta/violáceo), nadie más los usaba.
+    expect(css).not.toMatch(/--color-violet-(from|to)/);
   });
 
   it("define todas las duraciones de motion (ningún componente anima en 0ms)", () => {
