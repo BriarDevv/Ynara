@@ -104,21 +104,23 @@ secciones [v4]:
 
 | Pantalla | Variante | Textura dominante | Estado en el repo |
 |---|---|---|---|
-| Hoy | `aurora` | Ondas que fluyen + atmósfera | **migrar** (`HoyView.tsx:59` monta `BrandWaves`) |
-| Hablar (chat) | `constellation` | Campo de nodos denso (estrellas) | montaje **nuevo** (hoy sin fondo) |
-| Memoria | `network` | Red de nodos con hilos marcados | montaje **nuevo** (hoy sin fondo) |
-| Onboarding (layout) | `constellation` | Campo de nodos (primera impresión) | **migrar** (`app/onboarding/layout.tsx:39`) |
-| Paywall | `constellation` | ídem | montaje **nuevo** |
+| Hoy | `aurora` | Ondas que fluyen + atmósfera | **montado** (`HoyView.tsx`, teñido por el modo activo) |
+| Hablar (chat) | `constellation` | Campo de nodos denso (estrellas) | **montado** (`ChatScreen.tsx`, teñido por `session.mode`) |
+| Memoria | `network` | Red de nodos con hilos marcados | **montado** (`MemoryView.tsx`, teñido por el modo activo) |
+| Onboarding (layout) | `constellation` | Campo de nodos (primera impresión) | **montado** (`app/onboarding/layout.tsx`, modo default) |
+| Paywall | `constellation` | ídem | montaje **pendiente** (la pantalla aún no existe) |
 | Agenda | `paper` | Grano — limpio, casi quieto, sin cursor | **pendiente** — la feature aún no existe |
 | Tu (perfil) | `depth` | Profundidad pura (blooms, sin partículas) | **pendiente** — la feature aún no existe |
 
-> **Call sites reales.** Hoy `BrandWaves` se monta en **solo dos** lugares:
-> `app/onboarding/layout.tsx:39` y `features/today/components/HoyView.tsx:59`.
-> `StepShell.tsx` y `OnboardingHeader.tsx` **solo lo mencionan en comentarios**
-> (heredan el velo del layout). Las demás variantes son **montajes nuevos** en
-> pantallas que hoy no tienen fondo (Chat, Memoria, Paywall) o en features que
-> **todavía no existen** (Agenda, Tu/Perfil — `features/` solo tiene `chat`,
-> `memory`, `onboarding`, `today`). Detalle de migración en §16.
+> **Call sites reales.** `LivingField` se monta hoy en **cuatro** lugares
+> (PR #5): `app/onboarding/layout.tsx` (`constellation`),
+> `features/today/components/HoyView.tsx` (`aurora`),
+> `features/chat/components/ChatScreen.tsx` (`constellation`) y
+> `features/memory/components/MemoryView.tsx` (`network`). `StepShell.tsx` y
+> `OnboardingHeader.tsx` heredan el fondo del layout (solo lo mencionan en
+> comentarios). Las variantes `paper`/`depth` ya existen en el componente pero
+> no tienen pantalla montada: esperan a Agenda y Tu/Perfil (`features/` solo
+> tiene `chat`, `memory`, `onboarding`, `today`). El Paywall tampoco existe aún.
 
 ### 2.3 Reglas no negociables del fondo vivo
 
@@ -143,6 +145,11 @@ El subsistema "Red de memoria" original (`MemoryField`, `GrainOverlay`,
 `buildMemoryField` con PRNG sembrado) vivió en `packages/ui/src/graphics/` hasta
 el PR #148. v4 **no lo restaura tal cual**: lo reescribe como `LivingField`
 (canvas, reactivo, variantes). La guía 2026 sigue siendo la fuente del concepto.
+
+El velo SVG estático `BrandWaves` (+ `waves-light.svg`) que v3 había puesto en su
+lugar quedó **retirado** en el PR #5, reemplazado por `LivingField` en sus dos
+call-sites originales (Hoy y onboarding) más los montajes nuevos de Chat y
+Memoria.
 
 ---
 

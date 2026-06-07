@@ -234,6 +234,14 @@ export function LivingField({
     const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
     function init() {
+      // `depth` es profundidad pura (solo blooms): no dibuja nodos ni
+      // diamantes, así que no tiene sentido generarlos (trabajo muerto +
+      // entradas inútiles en el snapshot).
+      if (!cfg.particles) {
+        nodes = [];
+        diamonds = [];
+        return;
+      }
       // Densidad acotada por área (§2.3): cap duro de 130 nodos. Los hilos
       // son O(N²), pero a N=130 son ~8.4k pares/frame — y en mobile el área
       // chica baja el count solo.
