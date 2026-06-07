@@ -36,13 +36,11 @@ describe("YnaraWordmark", () => {
     expect(html).not.toContain("linearGradient");
   });
 
-  it("la variante color usa los stops oficiales en el símbolo y tinta el texto", () => {
+  it("la variante color usa los stops oficiales y texto en Noche fijo (fondo claro)", () => {
     const { container } = render(<YnaraWordmark variant="color" />);
     const html = container.innerHTML;
     expect(html).toContain("var(--color-azul");
-    expect(container.querySelector("text")).toHaveAttribute(
-      "fill",
-      "var(--color-ink-deep, #242c3f)",
-    );
+    // Tono fijo, no `--color-ink-*` que seguiría el tema (se elige por fondo).
+    expect(container.querySelector("text")).toHaveAttribute("fill", "var(--color-noche, #242c3f)");
   });
 });

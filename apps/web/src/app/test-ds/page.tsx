@@ -283,9 +283,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /**
- * Celda de muestra del logo: el logo sobre su fondo correcto + label. `dark`
- * pone fondo Noche para revisar las variantes mono-light (§11.1: el símbolo a
- * color jamás sobre Noche).
+ * Celda de muestra del logo: cada variante sobre su fondo correcto + label.
+ * El fondo es FIJO (no sigue el tema): las variantes de logo son por-fondo,
+ * no por-tema (§11.1). `dark` pone Noche (para mono-light/avatar); el resto va
+ * sobre marfil — así el símbolo a color nunca cae sobre Noche y el mono-dark
+ * nunca queda invisible, en cualquier tema del sandbox.
  */
 function LogoSwatch({
   label,
@@ -300,7 +302,7 @@ function LogoSwatch({
     <div className="flex flex-col items-start gap-2">
       <div
         className="flex min-h-[88px] min-w-[112px] items-center justify-center rounded-[var(--radius-lg)] border border-[var(--color-border)] px-5 py-4"
-        style={dark ? { backgroundColor: "var(--color-noche)" } : undefined}
+        style={{ backgroundColor: dark ? "var(--color-noche)" : "var(--color-marfil)" }}
       >
         {children}
       </div>
