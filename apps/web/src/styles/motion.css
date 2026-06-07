@@ -63,6 +63,46 @@
   }
 }
 
+/* Orbe de presencia (YnaraOrb, DESIGN.md §2/§8): latido lento de glow,
+   anillo y diamante. La duración viene de la var `--orb-beat` (4.2s calmo,
+   1.5s "pensando") para que el modo thinking no necesite un selector
+   descendente que le gane a la cascada de reduced-motion. El diamante
+   mantiene rotate(45deg) en todos los frames: la rotación es identidad de
+   marca, el scale es el latido. */
+@keyframes ynara-orb-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes ynara-orb-ring {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes ynara-orb-core {
+  0%,
+  100% {
+    transform: rotate(45deg) scale(1);
+  }
+  50% {
+    transform: rotate(45deg) scale(1.18);
+  }
+}
+
 /* Toast: entrada 300ms / salida 200ms (DESIGN.md §8.2). */
 @keyframes ynara-toast-in {
   from {
@@ -120,6 +160,18 @@
     animation: ynara-fade-up var(--duration-screen, 350ms)
       var(--ease-out-soft, ease-out) both;
     animation-delay: calc(var(--stagger-index, 0) * 40ms);
+  }
+
+  .anim-orb-pulse {
+    animation: ynara-orb-pulse var(--orb-beat, 4200ms) ease-in-out infinite;
+  }
+
+  .anim-orb-ring {
+    animation: ynara-orb-ring var(--orb-beat, 4200ms) ease-in-out infinite;
+  }
+
+  .anim-orb-core {
+    animation: ynara-orb-core var(--orb-beat, 4200ms) ease-in-out infinite;
   }
 
   .anim-toast-in {
