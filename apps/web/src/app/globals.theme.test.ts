@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { MODE_CLIMATE } from "@/components/ui/modes";
 
 /**
  * Guarda la coherencia del puente de tokens entre `:root` y `@theme inline`.
@@ -184,5 +185,29 @@ describe("globals.css — tema Noche (§3.1 / §16 #4)", () => {
     ]) {
       expect(hcDark).toMatch(new RegExp(`--${token}\\s*:\\s*rgb\\(\\s*243\\s+240\\s+234`));
     }
+  });
+});
+
+describe("clima del canvas (§3.5) — sincronía MODE_CLIMATE ↔ paleta", () => {
+  /**
+   * Valor hex de un token de la paleta oficial declarado en `:root`.
+   * `MODE_CLIMATE` (modes.ts) duplica estos hex porque el canvas 2D no
+   * resuelve `var(--color-*)`; este guard mantiene la paleta como fuente
+   * única: si un stop cambia en globals.css, el clima desincronizado falla.
+   */
+  function paletteHex(token: string): string {
+    const m = rootBlock.match(new RegExp(`--color-${token}\\s*:\\s*(#[0-9a-fA-F]{6})`));
+    if (!m?.[1]) throw new Error(`token --color-${token} sin valor hex en :root`);
+    return m[1].toLowerCase();
+  }
+
+  it("cada par del clima usa los stops oficiales (§3.5, columna gradiente)", () => {
+    expect(MODE_CLIMATE).toEqual({
+      productividad: { a: paletteHex("azul"), b: paletteHex("celeste") },
+      estudio: { a: paletteHex("indigo"), b: paletteHex("celeste") },
+      bienestar: { a: paletteHex("violeta"), b: paletteHex("lavanda") },
+      vida: { a: paletteHex("violaceo"), b: paletteHex("violeta") },
+      memoria: { a: paletteHex("celeste"), b: paletteHex("lavanda") },
+    });
   });
 });
