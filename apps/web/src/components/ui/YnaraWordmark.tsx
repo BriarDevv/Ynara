@@ -1,0 +1,84 @@
+import { useId } from "react";
+import { YnaraSymbol } from "./YnaraMark";
+
+/**
+ * Variante por fondo del lockup (DESIGN.md §11.1):
+ * - `color`: símbolo a color + "Ynara" en tinta. Sobre claro/neutro.
+ * - `mono-light`: símbolo + texto marfil. Sobre Noche o fondos de marca.
+ * - `mono-dark`: símbolo + texto Noche. Mono sobre claro.
+ */
+export type YnaraWordmarkVariant = "color" | "mono-light" | "mono-dark";
+
+/**
+ * Color del texto por variante. El símbolo lo resuelve `YnaraSymbol`.
+ */
+const TEXT_FILL: Record<YnaraWordmarkVariant, string> = {
+  color: "var(--color-ink-deep, #242c3f)",
+  "mono-light": "var(--color-marfil, #f3f0ea)",
+  "mono-dark": "var(--color-noche, #242c3f)",
+};
+
+const SYMBOL_VARIANT = {
+  color: "color",
+  "mono-light": "mono-light",
+  "mono-dark": "mono-dark",
+} as const;
+
+type Props = {
+  /** Altura del lockup en px. El ancho sale del viewBox. */
+  height?: number;
+  variant?: YnaraWordmarkVariant;
+  className?: string;
+};
+
+/**
+ * `YnaraWordmark` — el lockup oficial símbolo + "Ynara" (§11.1). Un solo SVG
+ * con **baseline compartida**: el símbolo (geometría 800×700 de `YnaraSymbol`)
+ * se escala y traslada para que **los pies de la "Y" caigan sobre la baseline
+ * del texto** (y≈19.8 en el viewBox de 22 de alto), nunca alineado a mano con
+ * `align-items:center`.
+ *
+ * El símbolo natural va de y=48 (punta del diamante) a y=590 (pies). La
+ * transformación lo lleva a una altura visual ~18 con los pies en 19.8 y el
+ * borde izquierdo en x≈1; el texto arranca después con aire de marca.
+ *
+ * Decorativo o de marca: el `<svg>` lleva `role="img"` + `aria-label="Ynara"`,
+ * así el lockup se anuncia una sola vez (el símbolo interno no compite).
+ */
+export function YnaraWordmark({ height = 22, variant = "color", className }: Props) {
+  const id = useId();
+  const VIEWBOX_W = 65.5;
+  const VIEWBOX_H = 22;
+  const width = height * (VIEWBOX_W / VIEWBOX_H);
+
+  return (
+    <svg
+      viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}
+      width={width}
+      height={height}
+      role="img"
+      aria-label="Ynara"
+      className={className}
+      // overflow visible: el ancho del texto depende de la fuente; si "Ynara"
+      // excede el viewBox por unas décimas, igual se ve (no se recorta).
+      style={{ overflow: "visible", display: "block" }}
+    >
+      {/* Símbolo: escala 0.0332 (alto 542 → ~18), pies (y=590) sobre la
+          baseline 19.8, borde izquierdo en x≈1. */}
+      <g transform="translate(-4.58 0.21) scale(0.03321)">
+        <YnaraSymbol variant={SYMBOL_VARIANT[variant]} idPrefix={id} />
+      </g>
+      <text
+        x="20.4"
+        y="19.8"
+        fontSize="14.3"
+        fontWeight="600"
+        letterSpacing="-0.2"
+        fill={TEXT_FILL[variant]}
+        style={{ fontFamily: "var(--font-display), 'Space Grotesk', system-ui, sans-serif" }}
+      >
+        Ynara
+      </text>
+    </svg>
+  );
+}
