@@ -220,11 +220,18 @@ claro de v3)*
 > textual: *"Sin gradientes decorativos: el color trabaja por jerarquía, no por
 > adorno."* [marca] El fondo vivo (§2) **no contradice** esa regla: es atmósfera
 > ambiental contenida en el canvas, no adorno de relleno. De ahí la disciplina —
-> **el gradiente vive solo en (1) el fondo vivo (§2) y (2) el logo (isotipo).
-> Nada más.** Todo lo demás —CTA, fills, bordes, texto, dots, tint de modo— es
-> **color plano**. El **tint de modo** (`ModeChip`/`SuggestionCard`) es color
-> plano a baja opacidad, no gradiente. **Nunca** gradiente como fill o borde de
-> botón, card, dot, texto o superficie. [marca + v4]
+> **el gradiente vive solo en (1) el fondo vivo (§2), (2) el logo (isotipo) y
+> (3) el glow ambiental del `YnaraOrb` (§8.3) — el orbe es presencia de marca,
+> su halo es atmósfera radial, no relleno de UI. Nada más.** Todo lo demás —CTA,
+> fills, bordes, texto, dots, tint de modo— es **color plano**. El **tint de
+> modo** (`ModeChip`/`SuggestionCard`) es color plano a baja opacidad, no
+> gradiente. **Nunca** gradiente como fill o borde de botón, card, dot, texto o
+> superficie. [marca + v4]
+>
+> El guard `apps/web/src/__tests__/gradient-guard.test.ts` hace cumplir esto:
+> prohíbe clases de gradiente y `linear/radial/conic-gradient(` inline en
+> `components/`/`features/`, con allowlist exacto = los tres portadores de
+> arriba (`LivingField.tsx`, `YnaraMark.tsx`, `YnaraOrb.tsx`).
 
 | Token | Valor | Uso |
 |---|---|---|
