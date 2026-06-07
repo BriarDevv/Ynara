@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { HeroReveal } from "@/components/ui/HeroReveal";
 import { LivingField } from "@/components/ui/LivingField";
 import { Toast } from "@/components/ui/Toast";
 import { useActiveMode } from "@/hooks/useActiveMode";
@@ -47,12 +48,24 @@ export function HoyView() {
           AppShell (DESIGN.md §16 #5). */}
       <LivingField variant="aurora" modeId={activeMode} />
 
-      <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-8 px-6 pb-8 pt-10">
+      {/* Entrada del hero (momento-firma GSAP, §16 #7): el header y cada
+          sección entran con un stagger sutil. `data-hero-reveal` marca los
+          bloques que se revelan; el banner y el toast quedan afuera (uno es
+          condicional, el otro es overlay). Sin motion, todo aparece directo. */}
+      <HeroReveal className="mx-auto flex w-full max-w-[640px] flex-1 flex-col gap-8 px-6 pb-8 pt-10">
         <OfflineBanner />
-        <HoyHeader displayName={displayName} activeMode={activeMode} now={now} />
-        <PrioritiesSection />
-        <SuggestionsSection />
-        <RecapSection />
+        <div data-hero-reveal>
+          <HoyHeader displayName={displayName} activeMode={activeMode} now={now} />
+        </div>
+        <div data-hero-reveal>
+          <PrioritiesSection />
+        </div>
+        <div data-hero-reveal>
+          <SuggestionsSection />
+        </div>
+        <div data-hero-reveal>
+          <RecapSection />
+        </div>
 
         <Toast
           message="Listo, ya podés arrancar."
@@ -60,7 +73,7 @@ export function HoyView() {
           onDismiss={() => setShowWelcome(false)}
           variant="success"
         />
-      </div>
+      </HeroReveal>
     </div>
   );
 }
