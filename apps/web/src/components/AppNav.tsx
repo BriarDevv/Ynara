@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { YnaraWordmark } from "@/components/ui/YnaraWordmark";
 import { cn } from "@/lib/cn";
+import { useThemeStore } from "@/stores/theme";
 import { isNavItemActive, NAV_ITEMS } from "./nav-items";
 
 /**
@@ -55,6 +56,9 @@ export function MobileTabBar() {
 
 export function SidebarNav() {
   const pathname = usePathname();
+  // El lockup se elige por fondo (§11.1): color sobre el sidebar claro,
+  // mono-light cuando el tema es Noche (el símbolo a color perdería contraste).
+  const dark = useThemeStore((s) => s.theme === "dark");
   return (
     <nav
       aria-label="Navegación principal"
@@ -64,7 +68,7 @@ export function SidebarNav() {
           vez del símbolo + span armado a mano. El aria-label del Link nombra
           el destino; el wordmark queda decorativo dentro (no duplica). */}
       <Link href="/hoy" aria-label="Ynara — ir a Hoy" className="mb-6 flex px-2">
-        <YnaraWordmark height={28} className="text-[var(--color-ink)]" />
+        <YnaraWordmark height={28} variant={dark ? "mono-light" : "color"} />
       </Link>
       <ul className="flex flex-col gap-1">
         {NAV_ITEMS.map((item) => {

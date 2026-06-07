@@ -3,17 +3,20 @@ import { YnaraSymbol } from "./YnaraMark";
 
 /**
  * Variante por fondo del lockup (DESIGN.md §11.1):
- * - `color`: símbolo a color + "Ynara" en tinta. Sobre claro/neutro.
+ * - `color`: símbolo a color + "Ynara" en Noche. Sobre claro/neutro.
  * - `mono-light`: símbolo + texto marfil. Sobre Noche o fondos de marca.
  * - `mono-dark`: símbolo + texto Noche. Mono sobre claro.
  */
 export type YnaraWordmarkVariant = "color" | "mono-light" | "mono-dark";
 
 /**
- * Color del texto por variante. El símbolo lo resuelve `YnaraSymbol`.
+ * Color del texto por variante. El símbolo lo resuelve `YnaraSymbol`. Tonos
+ * FIJOS, no tokens que sigan el tema (`--color-ink-*`): la variante se elige
+ * por el fondo, no por el tema, así `color`/`mono-dark` siempre leen oscuro
+ * sobre claro y `mono-light` siempre marfil sobre Noche.
  */
 const TEXT_FILL: Record<YnaraWordmarkVariant, string> = {
-  color: "var(--color-ink-deep, #242c3f)",
+  color: "var(--color-noche, #242c3f)",
   "mono-light": "var(--color-marfil, #f3f0ea)",
   "mono-dark": "var(--color-noche, #242c3f)",
 };
