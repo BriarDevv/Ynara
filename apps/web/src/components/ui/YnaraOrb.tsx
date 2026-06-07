@@ -12,10 +12,12 @@ import { cn } from "@/lib/cn";
  * el color sale del tint del modo (`--mode-*`) vía `color-mix`, así el orbe
  * se tiñe con el modo activo y sobrevive a cambios de paleta sin tocar JS.
  *
- * El glow usa un gradiente radial **ambiental** (como el canvas, §3.4 lo
- * permite para atmósfera de marca; lo prohibido es el gradiente como fill
- * de UI). Decorativo puro: `aria-hidden` — el estado "pensando" lo anuncia
- * el contexto (p. ej. el indicador del chat), no el orbe.
+ * El glow usa un gradiente radial **ambiental**: §3.4 lista los portadores
+ * legítimos de gradiente — el fondo vivo, el logo y este glow — y el guard
+ * anti-gradiente allowlistea este archivo explícitamente. Cualquier otro
+ * gradiente como fill de UI sigue prohibido. Decorativo puro: `aria-hidden`
+ * — el estado "pensando" lo anuncia el contexto (p. ej. el indicador del
+ * chat), no el orbe.
  */
 
 type Props = {

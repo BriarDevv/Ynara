@@ -358,7 +358,10 @@ export function LivingField({
       //    finos que las siguen (la estética literal del poster, §2.1). ──
       if (cfg.waves) {
         // Acento, clima y tres stops oficiales (§3.4): lavanda, violeta,
-        // celeste — referenciados vía MODE_CLIMATE para quedar bajo el guard.
+        // celeste — referenciados vía MODE_CLIMATE para quedar bajo el
+        // guard de la paleta. No es port 1:1: el prototipo usaba un violeta
+        // claro (#a88fc4) que no está en el manual; acá se realinea al
+        // --color-violeta oficial. Lavanda y celeste sí coinciden exacto.
         const cols: ReadonlyArray<readonly [number, number, number]> = [
           [R, G, B],
           [R2, G2, B2],
