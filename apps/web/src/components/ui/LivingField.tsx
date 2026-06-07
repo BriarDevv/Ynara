@@ -155,6 +155,22 @@ type FieldDiamond = {
   filled: boolean;
 };
 
+/**
+ * Geometría persistente del campo: sobrevive a los remounts del efecto.
+ * `dark` y `modeId` solo afectan colores — si re-corren el efecto, el guard
+ * de resize() encuentra la geometría intacta y NO re-randomiza: el campo se
+ * re-tiñe sin saltar. `factor` entra al snapshot porque un cambio de
+ * densidad sí exige re-generar los nodos.
+ */
+type FieldState = {
+  w: number;
+  h: number;
+  factor: number;
+  t: number;
+  nodes: FieldNode[];
+  diamonds: FieldDiamond[];
+};
+
 type Props = {
   /** Textura dominante de la pantalla (§2.2). */
   variant: LivingFieldVariant;
@@ -175,6 +191,7 @@ export function LivingField({
   className,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stateRef = useRef<FieldState>({ w: 0, h: 0, factor: 0, t: 0, nodes: [], diamonds: [] });
   const reduced = useReducedMotion();
   const dark = useThemeStore((s) => s.theme === "dark");
   const cfg = VARIANTS[variant];
@@ -189,13 +206,11 @@ export function LivingField({
     const host = canvas.parentElement;
     if (!host) return;
 
-    let w = 0;
-    let h = 0;
+    // Geometría sembrada desde el snapshot del mount anterior (ver
+    // FieldState): un remount por cambio de tema/modo no rebaraja nada.
+    let { w, h, t, nodes, diamonds } = stateRef.current;
     let dpr = 1;
-    let nodes: FieldNode[] = [];
-    let diamonds: FieldDiamond[] = [];
     let raf = 0;
-    let t = 0;
     let running = true;
     let last = 0;
 
@@ -258,10 +273,12 @@ export function LivingField({
       const nw = Math.max(1, r.width);
       const nh = Math.max(1, r.height);
       // El ResizeObserver dispara un callback inicial (y reflows de fuentes
-      // disparan más) con el MISMO tamaño: sin este guard, cada uno
-      // re-randomizaría el campo — y bajo reduce, re-dibujaría el frame
-      // "estático" una y otra vez.
-      if (nw === w && nh === h) return;
+      // disparan más) con el MISMO tamaño, y los remounts del efecto por
+      // cambio de tema/modo llegan acá con la geometría sembrada: sin este
+      // guard, cada uno re-randomizaría el campo — y bajo reduce,
+      // re-dibujaría el frame "estático" una y otra vez. Solo un cambio
+      // real de tamaño o de densidad re-genera.
+      if (nw === w && nh === h && stateRef.current.factor === factor) return;
       w = nw;
       h = nh;
       // DPR capado a 2 (§2.3): a 3x el costo de fill sube sin ganancia visible.
@@ -588,6 +605,9 @@ export function LivingField({
     return () => {
       running = false;
       cancelAnimationFrame(raf);
+      // Snapshot para el próximo mount del efecto: mismas posiciones y
+      // mismo tiempo — un cambio de color re-tiñe con cero salto visual.
+      stateRef.current = { w, h, factor, t, nodes, diamonds };
       if (ro) ro.disconnect();
       else window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);

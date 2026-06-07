@@ -1,6 +1,7 @@
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useA11yStore } from "@/stores/a11y";
+import { useThemeStore } from "@/stores/theme";
 import { LivingField } from "./LivingField";
 
 /**
@@ -89,6 +90,7 @@ describe("LivingField", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     useA11yStore.getState().reset();
+    useThemeStore.getState().reset();
     localStorage.clear();
   });
 
@@ -184,5 +186,20 @@ describe("LivingField", () => {
     const { container } = render(<LivingField variant="paper" />);
     expect(container.querySelector("canvas")).toBeInTheDocument();
     expect(container.querySelector(".field-grain")).toBeInTheDocument();
+  });
+
+  it("cambiar el tema re-tiñe pero NO re-randomiza la geometría del campo", () => {
+    useA11yStore.getState().setMotion("normal");
+    render(<LivingField variant="aurora" />);
+
+    // El init() del montaje ya corrió (randomizó los nodos). Desde acá, el
+    // remount del efecto por cambio de color no debe volver a tocar
+    // Math.random: la geometría persiste en el snapshot (FieldState) y el
+    // campo solo se re-tiñe, sin rebarajarse.
+    const randomSpy = vi.spyOn(Math, "random");
+    act(() => {
+      useThemeStore.getState().setTheme("dark");
+    });
+    expect(randomSpy).not.toHaveBeenCalled();
   });
 });
