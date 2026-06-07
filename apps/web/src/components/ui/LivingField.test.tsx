@@ -157,6 +157,11 @@ describe("LivingField", () => {
     document.dispatchEvent(new Event("visibilitychange"));
     expect(rafCallbacks.size).toBe(1); // retoma al volver
 
+    // Un "visible" duplicado (webviews lo disparan junto con focus) no debe
+    // encadenar un segundo loop: seguiría corriendo a 2x para siempre.
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(rafCallbacks.size).toBe(1);
+
     unmount();
     expect(rafCallbacks.size).toBe(0);
   });
