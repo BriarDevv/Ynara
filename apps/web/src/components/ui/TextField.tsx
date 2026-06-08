@@ -44,7 +44,7 @@ export const TextField = forwardRef<HTMLInputElement, Props>(function TextField(
          *   global aplica el ring de accent encima, no duplicamos foco.
          */
         className={cn(
-          "text-body w-full rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-4 py-3.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] transition-[border-color,background-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
+          "text-body w-full rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-4 py-3.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-soft)] transition-[border-color,background-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
           invalid
             ? "border-[var(--color-error)]"
             : "border-[var(--color-border)] hover:border-[var(--color-border-strong)]",

@@ -95,11 +95,11 @@ export function MemoryDetailView({ layer, item, related, relatedPending, now, ac
         <section className="flex flex-col gap-3 border-t border-[var(--color-border)] pt-6">
           <h2 className="text-caption text-[var(--color-ink-soft)]">Relacionado</h2>
           {relatedPending ? (
-            <p className="text-body-sm text-[var(--color-ink-muted)]">
+            <p className="text-body-sm text-[var(--color-ink-soft)]">
               Buscando recuerdos cercanos…
             </p>
           ) : related.length === 0 ? (
-            <p className="text-body-sm text-[var(--color-ink-muted)]">
+            <p className="text-body-sm text-[var(--color-ink-soft)]">
               Nada más de esta conversación, por ahora.
             </p>
           ) : (

@@ -49,7 +49,7 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Buscá en tu memoria…"
           aria-label="Buscar en tu memoria"
-          className="text-body min-h-[48px] w-full bg-transparent text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
+          className="text-body min-h-[48px] w-full bg-transparent text-[var(--color-ink)] placeholder:text-[var(--color-ink-soft)] focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
         />
         {input.length > 0 ? (
           <button

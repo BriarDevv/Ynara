@@ -41,7 +41,7 @@ export function TimelineEntryRow({ entry, now, index }: Props) {
           <Icon name={layer.icon} size={20} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="text-caption text-[var(--color-ink-muted)]">{layer.label}</span>
+          <span className="text-caption text-[var(--color-ink-soft)]">{layer.label}</span>
           <span className="line-clamp-2 text-body text-[var(--color-ink)]">{entry.title}</span>
           <span className="text-body-sm tabular-nums text-[var(--color-ink-soft)]">
             {formatEntryDate(entry.date, now)}

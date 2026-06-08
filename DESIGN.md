@@ -323,11 +323,15 @@ modo); debe pasar **WCAG AA (≥4.5:1) con blanco**:
   blanco salvo el lavanda claro de Memoria (`#8B9AD0`, 2.75:1) — por eso su fill
   usa `--color-lavanda-deep` `#565F81` (§3.5). El **tint ambiental** (chip a baja
   opacidad, canvas) no lleva texto y no entra en esta regla.
-- **Deuda conocida [v4]:** `--color-ink-muted` (`rgb(36 44 63 / .45)`) se usa hoy
-  como texto/placeholder/label y da ~3.4:1 sobre blanco — **falla AA**. Es la
-  violation `serious` que axe reporta y que el gate hoy ignora. El PR de QA
-  (§16 #11) la corrige (el texto real pasa a `ink-soft` 0.65) **antes** de endurecer
-  el gate.
+- **Contraste de texto secundario [v4, resuelto en §16 #11]:** `--color-ink-muted`
+  (`rgb(36 44 63 / .45)` ≈ **2.6:1**) NO alcanza AA para texto → queda **solo para
+  decoración / íconos `aria-hidden`** (exentos de WCAG 1.4.11). Todo texto/label/
+  placeholder usa `--color-ink-soft`, subido a **0.70** en claro: a 0.65 caía bajo
+  AA sobre el canvas marfil (4.45:1) y bg-soft (4.31:1); a 0.70 pasa en las tres
+  superficies. El gate de axe (`onboarding.spec`/`a11y.spec`) falla ante
+  `color-contrast` `serious`. Límite conocido: axe no puede medir el texto sobre el
+  fondo vivo (LivingField translúcido → lo marca `incomplete`); ese caso lo
+  garantiza la calibración del token, no axe.
 
 ---
 

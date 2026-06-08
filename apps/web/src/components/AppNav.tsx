@@ -41,7 +41,7 @@ export function MobileTabBar() {
                   "flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] py-2 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-soft)]",
                   active
                     ? "text-[var(--color-ink)]"
-                    : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink-soft)]",
+                    : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
                 )}
               >
                 <Icon name={item.icon} size={24} strokeWidth={active ? 2.6 : 2.2} />

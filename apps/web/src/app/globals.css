@@ -28,7 +28,17 @@
   --color-ink: #242c3f;
   /* Más oscuro que ink, reservado para hero/title con presencia editorial. */
   --color-ink-deep: #1b2233;
-  --color-ink-soft: rgb(36 44 63 / 0.65);
+  /*
+   * Texto secundario (captions, labels, metadata, placeholders). Alpha 0.70
+   * (PR #11, QA de contraste): a 0.65 caía bajo AA sobre el canvas marfil
+   * (4.45:1) y sobre bg-soft (4.31:1); a 0.70 pasa AA en las tres superficies
+   * (blanco ~5.0, canvas 4.99, bg-soft 4.99). Es el mínimo para texto.
+   */
+  --color-ink-soft: rgb(36 44 63 / 0.7);
+  /*
+   * Solo para DECORACIÓN / íconos `aria-hidden` (exentos de WCAG 1.4.11):
+   * a 0.45 da ~2.6:1, NO alcanza para texto. Nunca usar en texto/label.
+   */
   --color-ink-muted: rgb(36 44 63 / 0.45);
   --color-ink-faint: rgb(36 44 63 / 0.18);
   --color-on-dark: #ffffff;

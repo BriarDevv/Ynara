@@ -37,7 +37,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         className={cn(
-          "text-body w-full resize-y rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-4 py-3.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] transition-[border-color,background-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
+          "text-body w-full resize-y rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-4 py-3.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-soft)] transition-[border-color,background-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
           invalid
             ? "border-[var(--color-error)]"
             : "border-[var(--color-border)] hover:border-[var(--color-border-strong)]",
