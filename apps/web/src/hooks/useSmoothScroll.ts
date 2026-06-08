@@ -31,9 +31,9 @@ import { useReducedMotion } from "./useReducedMotion";
  *    inútil con wrapper custom. El contenido real es el hijo directo del
  *    `<main>`, que **cambia en cada navegación** del App Router → recreamos por
  *    `pathname` para no quedar con un `content` stale (su ResizeObserver mediría
- *    un nodo desprendido). Asume que el hijo directo es el contenedor scrolleable
- *    (hoy lo es: no hay `loading.tsx`/Suspense en `(app)`). Cuando #8 sume
- *    `loading.tsx`, revisar esto (el spinner no debe quedar como `content`).
+ *    un nodo desprendido). El hijo directo es el `template` del grupo `(app)`
+ *    (#8), que envuelve tanto al `loading.tsx` como a la page — así el `content`
+ *    es siempre el div del template, nunca el spinner, y el supuesto se mantiene.
  *  - **teclado**: Lenis no intercepta el teclado (solo wheel/touch), así que
  *    PageUp/Down/Home/End/flechas siguen siendo nativos (landmine (d)).
  *  - **chat / formularios**: el scroll del chat NO se smoothea (landmine (a),

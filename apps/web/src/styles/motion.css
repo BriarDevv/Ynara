@@ -137,6 +137,17 @@
       var(--ease-out-soft, ease-out) both;
   }
 
+  /* Entrada de pantalla (template del grupo (app), §8.3 "cambio de pantalla").
+     Opacidad PURA a propósito: un `transform` residual (el `both` deja el frame
+     final aplicado) convertiría al template en containing block / stacking
+     context de los overlays `position: fixed` que cuelgan adentro (ej. el Toast
+     de Hoy), desanclándolos del viewport. `opacity: 1` es inerte. Duración de
+     pantalla (350ms) para diferenciarla de los micro-fades (250ms). */
+  .anim-screen-in {
+    animation: ynara-fade-in var(--duration-screen, 350ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
   .anim-slide-in-right {
     animation: ynara-slide-in-right var(--duration-screen, 350ms)
       var(--ease-out-soft, ease-out) both;
