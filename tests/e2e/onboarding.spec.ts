@@ -1,5 +1,5 @@
-import AxeBuilder from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
+import { gatedViolations } from "./axe-utils";
 
 /**
  * E2E del onboarding completo de Ynara web (plan Sesión 6 §2).
@@ -13,11 +13,11 @@ import { expect, type Page, test } from "@playwright/test";
  *   (b) error inline en auth (email inválido, validación cliente)
  *   (c) axe sin violations CRÍTICAS en /onboarding/auth y /hoy
  *
- * Nota sobre axe (plan §2): el gate son violations de impacto `critical`.
- * Las páginas hoy tienen violations `serious` de `color-contrast` (tokens
- * del DS con contraste por debajo de AA en textos "soft"/placeholder); eso
- * es un tema de diseño abierto, no se gatea acá. Si querés endurecer el
- * gate a `serious`, sumá "serious" a IMPACTS_TO_FAIL una vez resuelto el DS.
+ * Nota sobre axe (plan §2 / PR #11): el gate son violations de impacto
+ * `critical` MÁS las de `color-contrast` de impacto `serious`. Tras el QA de
+ * contraste (PR #11) el texto "soft"/placeholder ya pasa AA, así que las
+ * regresiones de contraste vuelven a gatear. El resto de las `serious`
+ * (no-contraste) siguen fuera del gate por ahora.
  */
 
 const STEP_TITLES = {
@@ -27,8 +27,6 @@ const STEP_TITLES = {
   modos: "¿Para qué te puedo servir?",
   a11y: "Ajustemos cómo se lee.",
 } as const;
-
-const IMPACTS_TO_FAIL = new Set(["critical"]);
 
 /** Recorre signup + nombre + día + modos + a11y hasta llegar al /hoy. */
 async function completeOnboarding(page: Page): Promise<void> {
@@ -62,11 +60,6 @@ async function completeOnboarding(page: Page): Promise<void> {
   await page.waitForURL(/\/hoy/, { timeout: 20_000 });
 }
 
-async function criticalViolations(page: Page) {
-  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
-  return results.violations.filter((v) => IMPACTS_TO_FAIL.has(v.impact ?? ""));
-}
-
 test.describe("Onboarding", () => {
   test("happy path: recorre todos los steps y aterriza en /hoy", async ({ page }) => {
     await completeOnboarding(page);
@@ -93,15 +86,15 @@ test.describe("Onboarding", () => {
     await page.goto("/onboarding/auth");
     await expect(page.getByRole("heading", { name: STEP_TITLES.auth })).toBeVisible();
 
-    const critical = await criticalViolations(page);
-    expect(critical, JSON.stringify(critical, null, 2)).toEqual([]);
+    const violations = await gatedViolations(page);
+    expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
   });
 
   test("no tiene violations críticas de a11y en /hoy", async ({ page }) => {
     await completeOnboarding(page);
     await expect(page).toHaveURL(/\/hoy/);
 
-    const critical = await criticalViolations(page);
-    expect(critical, JSON.stringify(critical, null, 2)).toEqual([]);
+    const violations = await gatedViolations(page);
+    expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
   });
 });
