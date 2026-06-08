@@ -443,6 +443,21 @@ html.motion-off *::after {
 }
 
 /* ============================================================
+ * View Transitions (DESIGN.md §8.3 / §16 #8).
+ * El crossfade lo dispara `lib/viewTransition.ts` (hoy: el toggle de tema,
+ * un update síncrono del DOM). Ese helper es la única fuente de verdad del
+ * reduced-motion (lee la cascada motion-off/on + OS-pref y, si corresponde,
+ * NI siquiera arranca la transición) — por eso acá no duplicamos el gate en
+ * CSS (duplicarlo contradiría el override `motion-on`). Solo afinamos el
+ * crossfade root al timing del DS para "cambio de pantalla".
+ * ============================================================ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--duration-screen, 350ms);
+  animation-timing-function: var(--ease-out-soft, ease-out);
+}
+
+/* ============================================================
  * Focus rings — accesibles y con identidad.
  * El ring usa --color-accent (azul plano de marca), separado del fondo
  * por un anillo de --color-bg para legibilidad sobre cualquier surface.
