@@ -36,11 +36,12 @@ export function SuggestionCard({
 
   if (!onClick) {
     return (
-      // Mismo lenguaje papel-sobre-canvas que PriorityRow: bg blanco + border
-      // sutil. El acento de modo queda como hairline a la izquierda.
+      // Fila des-encajonada (§12): sin caja, separada por el hairline del `<ul>`
+      // padre (`divide-y`). El acento de modo queda como marcador de barra a la
+      // izquierda — el único resto cromático de la sugerencia.
       <li
         className={cn(
-          "anim-stagger-up flex items-stretch gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4",
+          "anim-stagger-up flex min-h-[44px] items-stretch gap-3 px-2 py-3.5",
           className,
         )}
         style={{ "--stagger-index": Math.min(staggerIndex ?? 0, 5) } as CSSProperties}

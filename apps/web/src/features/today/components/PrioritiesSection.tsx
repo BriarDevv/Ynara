@@ -45,7 +45,7 @@ export function PrioritiesSection() {
           hint="Aprovechá el tiempo libre, o pedile algo a Ynara."
         />
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="flex flex-col divide-y divide-[var(--color-border)]">
           {data.map((task, index) => (
             <PriorityRow key={task.id} task={task} index={index} onToggle={toggle.mutate} />
           ))}

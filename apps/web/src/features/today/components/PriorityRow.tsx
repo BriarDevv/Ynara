@@ -21,7 +21,7 @@ export function PriorityRow({ task, onToggle, index }: Props) {
   const meta = formatTaskMeta(task);
   return (
     <li
-      className="anim-stagger-up flex items-start gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg)] p-4"
+      className="anim-stagger-up flex min-h-[44px] items-start gap-3 px-2 py-3.5"
       style={{ "--stagger-index": Math.min(index, 5) } as CSSProperties}
     >
       {/* biome-ignore lint/a11y/useSemanticElements: <input type="checkbox"> no acepta el relleno custom (anillo → punto) ni el spacing/transición del check. Conserva a11y vía role="checkbox" + aria-checked + aria-label + foco nativo del <button>. */}
