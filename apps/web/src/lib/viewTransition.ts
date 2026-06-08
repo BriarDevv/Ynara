@@ -1,4 +1,4 @@
-// Helper de View Transitions (DESIGN.md §8.4) con progressive
+// Helper de View Transitions (DESIGN.md §8.3) con progressive
 // enhancement: si el navegador no soporta la API o el usuario pidió menos
 // movimiento, aplica el cambio sin animar. No es un hook (se puede llamar
 // desde handlers); por eso lee la preferencia del DOM, no de React.
