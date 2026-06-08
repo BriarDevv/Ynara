@@ -17,7 +17,7 @@ export function EmptyStateCard({ title, hint, action, className }: Props) {
       )}
     >
       <p className="text-body text-[var(--color-ink-soft)]">{title}</p>
-      {hint ? <p className="text-body-sm text-[var(--color-ink-muted)]">{hint}</p> : null}
+      {hint ? <p className="text-body-sm text-[var(--color-ink-soft)]">{hint}</p> : null}
       {action ? <div className="mt-2">{action}</div> : null}
     </div>
   );

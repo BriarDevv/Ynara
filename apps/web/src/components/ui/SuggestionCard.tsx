@@ -85,7 +85,7 @@ export function SuggestionCard({
           style={{ backgroundColor: accentColor }}
         />
         {mode ? (
-          <span className="text-caption text-[var(--color-ink-muted)]">{mode.label}</span>
+          <span className="text-caption text-[var(--color-ink-soft)]">{mode.label}</span>
         ) : null}
       </span>
       <span className="text-subtitle text-[var(--color-ink)]">{title}</span>

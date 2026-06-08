@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 type Props = {
-  /** Caption opcional encima del title (text-caption, ink-muted). */
+  /** Caption opcional encima del title (text-caption, ink-soft). */
   eyebrow?: string;
   title: string;
   subtitle?: string;
@@ -41,7 +41,7 @@ export function StepShell({ eyebrow, title, subtitle, children, footer, classNam
       )}
     >
       <header className="flex flex-col gap-3">
-        {eyebrow ? <p className="text-caption text-[var(--color-ink-muted)]">{eyebrow}</p> : null}
+        {eyebrow ? <p className="text-caption text-[var(--color-ink-soft)]">{eyebrow}</p> : null}
         <h1 className="text-title text-[var(--color-ink-deep)]">{title}</h1>
         {subtitle ? <p className="text-body text-[var(--color-ink-soft)]">{subtitle}</p> : null}
       </header>

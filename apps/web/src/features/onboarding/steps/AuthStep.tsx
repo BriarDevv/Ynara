@@ -132,7 +132,7 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
           <Button variant="subtle" onClick={handleEphemeral} className="text-body-sm self-start">
             Probar sin cuenta
           </Button>
-          <p className="text-caption text-[var(--color-ink-muted)]">
+          <p className="text-caption text-[var(--color-ink-soft)]">
             Cuenta efímera — no se guarda entre sesiones.
           </p>
         </div>

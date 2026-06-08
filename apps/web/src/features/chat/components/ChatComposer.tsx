@@ -103,7 +103,7 @@ export function ChatComposer({ onSend, busy, initialText = "" }: Props) {
           aria-label="Escribí tu mensaje"
           placeholder="Escribí algo…"
           style={{ maxHeight: `${MAX_HEIGHT_PX}px` }}
-          className="text-body flex-1 resize-none bg-transparent px-2 py-1.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-muted)] outline-none disabled:opacity-60"
+          className="text-body flex-1 resize-none bg-transparent px-2 py-1.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-soft)] outline-none disabled:opacity-60"
         />
         <button
           type="button"
@@ -121,7 +121,7 @@ export function ChatComposer({ onSend, busy, initialText = "" }: Props) {
         <p
           className={cn(
             "px-2 text-right text-caption",
-            tooLong ? "text-[var(--color-error)]" : "text-[var(--color-ink-muted)]",
+            tooLong ? "text-[var(--color-error)]" : "text-[var(--color-ink-soft)]",
           )}
         >
           {text.length} / {CHAT_TEXT_MAX_LENGTH}

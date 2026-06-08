@@ -75,7 +75,7 @@ export function ChipGroup<T extends string>({
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       {label ? (
-        <span id={`${groupId}-label`} className="text-caption text-[var(--color-ink-muted)]">
+        <span id={`${groupId}-label`} className="text-caption text-[var(--color-ink-soft)]">
           {label}
         </span>
       ) : null}

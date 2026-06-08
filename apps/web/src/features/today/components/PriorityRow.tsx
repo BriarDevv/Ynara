@@ -52,7 +52,7 @@ export function PriorityRow({ task, onToggle, index }: Props) {
           {task.title}
         </span>
         {meta ? (
-          <span className="text-body-sm tabular-nums text-[var(--color-ink-muted)]">{meta}</span>
+          <span className="text-body-sm tabular-nums text-[var(--color-ink-soft)]">{meta}</span>
         ) : null}
       </span>
     </li>

@@ -46,7 +46,7 @@ describe("StepShell", () => {
     expect(header.querySelectorAll("p").length).toBe(0);
   });
 
-  it("renderiza el eyebrow opcional como caption ink-muted encima del title", () => {
+  it("renderiza el eyebrow opcional como caption ink-soft encima del title", () => {
     render(
       <StepShell eyebrow="Paso 1 — Mood" title="¿Cómo viene tu día?">
         <p>Body</p>
@@ -55,7 +55,10 @@ describe("StepShell", () => {
 
     const eyebrow = screen.getByText("Paso 1 — Mood");
     expect(eyebrow.className).toContain("text-caption");
-    expect(eyebrow.className).toContain("text-[var(--color-ink-muted)]");
+    // ink-soft (no muted): el eyebrow es TEXTO y debe pasar AA (PR #11, QA de
+    // contraste). ink-muted (~2.6:1) queda solo para decoración / íconos
+    // aria-hidden (exentos de WCAG 1.4.11).
+    expect(eyebrow.className).toContain("text-[var(--color-ink-soft)]");
 
     // El eyebrow debe estar antes del h1 dentro del mismo header.
     const heading = screen.getByRole("heading", { level: 1 });

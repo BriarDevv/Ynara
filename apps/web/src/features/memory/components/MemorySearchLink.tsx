@@ -19,7 +19,7 @@ export function MemorySearchLink({ className }: { className?: string }) {
       )}
     >
       <Icon name="buscar" size={20} className="shrink-0 text-[var(--color-ink-muted)]" />
-      <span className="text-body text-[var(--color-ink-muted)]">Buscar en tu memoria…</span>
+      <span className="text-body text-[var(--color-ink-soft)]">Buscar en tu memoria…</span>
     </Link>
   );
 }
