@@ -41,7 +41,7 @@ export function SuggestionsSection() {
       {isPending ? (
         <SuggestionsSkeleton />
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="flex flex-col divide-y divide-[var(--color-border)]">
           {data.map((suggestion, index) => (
             <SuggestionCard
               key={suggestion.id}
