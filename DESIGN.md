@@ -328,7 +328,8 @@ modo); debe pasar **WCAG AA (≥4.5:1) con blanco**:
   decoración / íconos `aria-hidden`** (exentos de WCAG 1.4.11). Todo texto/label/
   placeholder usa `--color-ink-soft`, subido a **0.70** en claro: a 0.65 caía bajo
   AA sobre el canvas marfil (4.45:1) y bg-soft (4.31:1); a 0.70 pasa en las tres
-  superficies. El gate de axe (`onboarding.spec`/`a11y.spec`) falla ante
+  superficies (canvas 5.16, bg-soft 4.99, blanco 5.32). El gate de axe
+  (`onboarding.spec`/`a11y.spec`) falla ante
   `color-contrast` `serious`. Límite conocido: axe no puede medir el texto sobre el
   fondo vivo (LivingField translúcido → lo marca `incomplete`); ese caso lo
   garantiza la calibración del token, no axe.
