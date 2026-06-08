@@ -32,7 +32,7 @@
    * Texto secundario (captions, labels, metadata, placeholders). Alpha 0.70
    * (PR #11, QA de contraste): a 0.65 caía bajo AA sobre el canvas marfil
    * (4.45:1) y sobre bg-soft (4.31:1); a 0.70 pasa AA en las tres superficies
-   * (blanco ~5.0, canvas 4.99, bg-soft 4.99). Es el mínimo para texto.
+   * (canvas 5.16, bg-soft 4.99, blanco 5.32). bg-soft es la más ajustada.
    */
   --color-ink-soft: rgb(36 44 63 / 0.7);
   /*
