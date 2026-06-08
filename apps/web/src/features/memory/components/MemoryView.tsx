@@ -90,7 +90,7 @@ export function MemoryView() {
               return groups.map((group) => (
                 <section key={group.bucket} className="flex flex-col gap-3">
                   <h2 className="text-caption text-[var(--color-ink-soft)]">{group.bucket}</h2>
-                  <ul className="flex flex-col gap-3">
+                  <ul className="flex flex-col divide-y divide-[var(--color-border)]">
                     {group.entries.map((entry) => (
                       <TimelineEntryRow
                         key={`${entry.layer}:${entry.ref}`}
