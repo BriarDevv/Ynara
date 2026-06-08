@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import AppTemplate from "./template";
 
 describe("AppTemplate", () => {
-  it("envuelve a los hijos con la transición de pantalla (anim-fade-up)", () => {
+  it("envuelve a los hijos con la transición de pantalla (anim-screen-in)", () => {
     const { container, getByText } = render(
       <AppTemplate>
         <p>contenido</p>

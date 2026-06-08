@@ -5,7 +5,7 @@ import { expect, type Page, test } from "@playwright/test";
  *
  *   (a) navegación entre rutas del shell: el `template` del grupo `(app)`
  *       envuelve el contenido y se re-monta en cada navegación → la nueva
- *       pantalla entra con `anim-fade-up`;
+ *       pantalla entra con `anim-screen-in`;
  *   (b) toggle de tema: el cambio pasa por `document.startViewTransition`
  *       (crossfade root claro↔Noche) en un browser que lo soporta.
  *
