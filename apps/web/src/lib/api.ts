@@ -1,6 +1,22 @@
 import { useUserStore } from "@/stores/user";
 import { env } from "./env";
 
+/**
+ * Adjunta `Authorization: Bearer <token>` a `headers` si hay sesión y el
+ * `url` apunta a NUESTRA API (perímetro reglas #2/#4: el token nunca viaja a
+ * un host ajeno). SSR-safe: en server el store no hidrató y `token` es null.
+ *
+ * Se exporta para que el cliente de streaming (`useChatStream`, W3) arme el
+ * mismo header con `fetch` crudo sin reimplementar el guard de perímetro ni
+ * acoplarse al store por su cuenta.
+ */
+export function applyAuthHeader(headers: Headers, url: string): void {
+  if (headers.has("Authorization")) return;
+  if (!url.startsWith(env.NEXT_PUBLIC_API_URL)) return;
+  const token = useUserStore.getState().token;
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+}
+
 export class ApiError extends Error {
   readonly status: number;
   readonly body: unknown;
@@ -34,18 +50,12 @@ async function request<T>(path: string, init: FetchInit = {}): Promise<T> {
   if (!headers.has("Accept")) {
     headers.set("Accept", "application/json");
   }
-  // Inyección de auth: leemos el token del store (SSR-safe: en server el
-  // store no hidrató y `token` es null → sin header). No acoplamos los
-  // callers al store; el header se arma acá una sola vez.
-  //
-  // Perímetro (reglas #2/#4): el Bearer SOLO se manda a nuestra API. Si el
-  // `path` fuera una URL absoluta a un host ajeno, el token del usuario NO
-  // viaja afuera. Los paths relativos se prefijan con NEXT_PUBLIC_API_URL,
-  // así que pasan el guard naturalmente.
-  const targetsOurApi = url.startsWith(env.NEXT_PUBLIC_API_URL);
-  if (!init.skipAuth && !headers.has("Authorization") && targetsOurApi) {
-    const token = useUserStore.getState().token;
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+  // Inyección de auth: el header se arma una sola vez en `applyAuthHeader`
+  // (compartido con el cliente de streaming). Perímetro (reglas #2/#4): el
+  // Bearer SOLO viaja a nuestra API. `skipAuth` lo omite explícitamente en
+  // endpoints públicos (login/register).
+  if (!init.skipAuth) {
+    applyAuthHeader(headers, url);
   }
 
   const response = await fetch(url, {
