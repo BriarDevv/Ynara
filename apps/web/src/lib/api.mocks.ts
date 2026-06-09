@@ -127,6 +127,64 @@ export const handlers = [
     return HttpResponse.json(response);
   }),
 
+  // POST /v1/chat/stream (streaming SSE, W3). Pseudo-streamea la misma
+  // respuesta canned del handler no-streaming, pero token a token: parte el
+  // texto en ventanas chicas (~6 chars) emitidas como eventos `token`, y
+  // cierra con un evento `done` (con `actions` solo en modos Qwen). El wire
+  // sigue el contrato cerrado en #61 que consume `createSseParser` (sse.ts).
+  http.post(apiUrl("/v1/chat/stream"), async ({ request }) => {
+    const json = await request.json().catch(() => null);
+    const parsed = ChatRequestSchema.safeParse(json);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      // El backend (FastAPI) responde 422 a validación de request, igual que
+      // el handler no-streaming.
+      return errorResponse(
+        {
+          error: "validation",
+          detail: first?.message ?? "body inválido",
+          field: first?.path[0] !== undefined ? String(first.path[0]) : undefined,
+        },
+        422,
+      );
+    }
+
+    const { text, mode, session_id } = parsed.data;
+    const reply = cannedReply(mode, text);
+    const sessionId = session_id ?? crypto.randomUUID();
+    const actions = isAgentMode(mode) ? cannedActions(mode) : [];
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // Ventanas fijas de 6 chars: determinista (no usa timers ni random),
+        // así si estos handlers se reusan en tests el output es estable.
+        const WINDOW = 6;
+        for (let i = 0; i < reply.length; i += WINDOW) {
+          const delta = reply.slice(i, i + WINDOW);
+          controller.enqueue(
+            encoder.encode(`event: token\ndata: ${JSON.stringify({ delta })}\n\n`),
+          );
+        }
+        const done = { session_id: sessionId, actions, finish_reason: "stop" };
+        controller.enqueue(encoder.encode(`event: done\ndata: ${JSON.stringify(done)}\n\n`));
+        controller.close();
+      },
+    });
+
+    return new HttpResponse(stream, {
+      // Espejo de los headers del StreamingResponse real (apps/backend):
+      // `Cache-Control: no-cache` evita que un proxy cachee el SSE y
+      // `X-Accel-Buffering: no` desactiva el buffering de nginx, para que los
+      // tokens lleguen en vivo y el mock sea byte-fiel a producción.
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+      },
+    });
+  }),
+
   // Memoria — Fase C. Handlers + fixtures viven con la feature.
   ...memoryHandlers,
 
