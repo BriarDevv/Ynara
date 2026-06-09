@@ -19,18 +19,27 @@ function makeQueryClient() {
 }
 
 /**
- * Aplica las clases del store de a11y al <html> tras hidratar.
- * Subscribe sólo a los campos relevantes para evitar re-renders
- * innecesarios cuando se llaman setters/reset (anti-patrón de Zustand
- * sin selector).
+ * Mantiene las clases de a11y del <html> (text-size, alto contraste, motion)
+ * en sync con el store. Aplica desde `getState()` + `subscribe`, NO desde el
+ * valor renderizado: en el render de hidratación useSyncExternalStore sirve
+ * `getInitialState()` (los defaults md/false/auto) aunque persist ya haya
+ * rehidratado otra preferencia, y un efecto colgado de ese valor pisaría las
+ * clases que el pre-paint (a11y-init.ts) puso antes del primer paint — flash
+ * lg→md→lg (issue #182). Con getState() el primer apply ya ve el estado
+ * hidratado (persist sobre localStorage rehidrata sincrónico). Mismo patrón
+ * que ThemeApplier.
  */
 function A11yApplier(): null {
-  const textSize = useA11yStore((s) => s.textSize);
-  const highContrast = useA11yStore((s) => s.highContrast);
-  const motion = useA11yStore((s) => s.motion);
   useEffect(() => {
-    applyA11yClasses({ textSize, highContrast, motion });
-  }, [textSize, highContrast, motion]);
+    applyA11yClasses(useA11yStore.getState());
+    return useA11yStore.subscribe((state) =>
+      applyA11yClasses({
+        textSize: state.textSize,
+        highContrast: state.highContrast,
+        motion: state.motion,
+      }),
+    );
+  }, []);
   return null;
 }
 
