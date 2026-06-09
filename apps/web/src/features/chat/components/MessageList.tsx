@@ -15,7 +15,10 @@ import { MessageBubble } from "./MessageBubble";
  * token a token y la UX se vuelve crítica.
  *
  * `aria-live="polite"` para que el lector de pantalla anuncie la respuesta
- * del assistant sin interrumpir; se refina en W3 (streaming).
+ * del assistant sin interrumpir. Como el streaming muta el texto token a token,
+ * W3 agrega `aria-busy` mientras hay un mensaje creciendo, para que el lector no
+ * lea cada fragmento parcial; el refinamiento completo (región de status
+ * dedicada que anuncia solo al cerrar + auto-scroll inteligente) es PR #9.
  */
 type Props = {
   messages: ChatUiMessage[];
@@ -29,6 +32,10 @@ export function MessageList({ messages, mode, onRetry }: Props) {
   // El último mensaje dispara el auto-scroll: su identidad cambia al llegar un
   // mensaje nuevo o al cambiar de status (objeto nuevo del store).
   const lastMessage = messages.at(-1);
+  // Mientras un mensaje crece token a token, `aria-busy` le avisa al lector de
+  // pantalla que la región se está actualizando, para que aguante el anuncio en
+  // vez de leer cada fragmento parcial (guard mínimo de a11y; refinamiento en #9).
+  const isStreaming = messages.some((m) => m.status === "streaming");
 
   // Auto-scroll al fondo cuando llega contenido nuevo. El auto-scroll
   // inteligente (pausar si el user scrollea arriba + botón "↓ ir al final")
@@ -51,6 +58,7 @@ export function MessageList({ messages, mode, onRetry }: Props) {
     <div
       className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4"
       aria-live="polite"
+      aria-busy={isStreaming}
       data-lenis-prevent
     >
       {messages.map((message) => (
