@@ -48,7 +48,7 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
         <h1 className="text-title text-[var(--color-ink-deep)]">Buscar</h1>
 
         <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] px-4 focus-within:border-[var(--color-accent)]">
-          <Icon name="buscar" size={20} className="shrink-0 text-[var(--color-ink-muted)]" />
+          <Icon name="buscar" size={20} className="shrink-0 text-[var(--color-ink-soft)]" />
           <input
             type="search"
             // biome-ignore lint/a11y/noAutofocus: la búsqueda es el único propósito de la vista; el foco directo es el comportamiento esperado (como Spotlight).
@@ -64,7 +64,7 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
               type="button"
               onClick={() => setInput("")}
               aria-label="Limpiar búsqueda"
-              className="shrink-0 text-[var(--color-ink-muted)] transition-colors duration-[var(--duration-fast)] hover:text-[var(--color-ink)]"
+              className="shrink-0 text-[var(--color-ink-soft)] transition-colors duration-[var(--duration-fast)] hover:text-[var(--color-ink)]"
             >
               <Icon name="cerrar" size={18} />
             </button>
