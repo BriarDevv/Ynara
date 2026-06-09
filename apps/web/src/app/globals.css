@@ -140,6 +140,14 @@
   --radius-pill: 9999px;
 
   /*
+   * ---- Medida de prosa ----
+   * Largo de línea cómodo para lectura (DESIGN.md §10): ~60 caracteres. Lo
+   * usan los bloques de texto largo (ej. el detalle de Memoria). Tokenizado
+   * para no repetir el literal 60ch por componente.
+   */
+  --measure-prose: 60ch;
+
+  /*
    * ---- Elevation ----
    * Calibrado para card blanca sobre canvas ivory: poca densidad de sombra,
    * lectura como "papel" más que "plástico". Si se mueve a fondo blanco

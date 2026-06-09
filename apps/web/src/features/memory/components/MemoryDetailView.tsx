@@ -52,7 +52,7 @@ export function MemoryDetailView({ layer, item, related, relatedPending, now, ac
           </span>
           <h1 className="text-title text-balance text-[var(--color-ink-deep)]">{p.quote}</h1>
           {p.note ? (
-            <p className="text-body-sm max-w-[60ch] border-l-2 border-[var(--color-border)] pl-4 text-[var(--color-ink-soft)]">
+            <p className="text-body-sm max-w-[var(--measure-prose)] border-l-2 border-[var(--color-border)] pl-4 text-[var(--color-ink-soft)]">
               {p.note}
             </p>
           ) : null}
@@ -61,7 +61,7 @@ export function MemoryDetailView({ layer, item, related, relatedPending, now, ac
         {p.fromSession ? (
           <section className="flex flex-col gap-2">
             <h2 className="text-caption text-[var(--color-ink-soft)]">Contexto</h2>
-            <p className="text-body max-w-[60ch] text-[var(--color-ink-soft)]">
+            <p className="text-body max-w-[var(--measure-prose)] text-[var(--color-ink-soft)]">
               Esto surgió en una conversación con Ynara.
             </p>
           </section>
