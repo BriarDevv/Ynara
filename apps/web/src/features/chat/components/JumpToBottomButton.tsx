@@ -11,8 +11,10 @@ import { cn } from "@/lib/cn";
  * mensajes, justo arriba del composer.
  *
  * El icono es decorativo (`aria-hidden` por default del `Icon`); el botón lleva
- * el `aria-label`. La animación de entrada (`anim-fade-up`) la gatea el CSS por
- * `prefers-reduced-motion` (styles/motion.css), así que no hace falta gatearla acá.
+ * el `aria-label`. La animación de entrada (`anim-fade-up`, definida en
+ * styles/motion.css) la neutraliza la cascada de reduced-motion de globals.css
+ * (más el override .motion-on/.motion-off del a11y store), así que no hace falta
+ * gatearla acá.
  */
 type Props = {
   /** Mostrar el botón. Si es false no se monta (no hay nada que saltar). */
