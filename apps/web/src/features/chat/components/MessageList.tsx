@@ -11,8 +11,8 @@ import { MessageBubble } from "./MessageBubble";
  *
  * Auto-scroll básico al fondo cuando llega contenido nuevo (W2). El
  * auto-scroll inteligente — pausar si el usuario scrollea arriba + botón
- * "↓ Ir al final" — llega en W3 junto al streaming, donde el texto crece
- * token a token y la UX se vuelve crítica.
+ * "↓ Ir al final" — llega en PR #9: el streaming (W3) hace crecer el texto
+ * token a token y ahí esa UX se vuelve crítica, pero el refinamiento va aparte.
  *
  * `aria-live="polite"` para que el lector de pantalla anuncie la respuesta
  * del assistant sin interrumpir. Como el streaming muta el texto token a token,
@@ -39,7 +39,7 @@ export function MessageList({ messages, mode, onRetry }: Props) {
 
   // Auto-scroll al fondo cuando llega contenido nuevo. El auto-scroll
   // inteligente (pausar si el user scrollea arriba + botón "↓ ir al final")
-  // llega en W3, donde el texto crece token a token.
+  // llega en PR #9; este PR (W3) trae el streaming pero no ese refinamiento.
   useEffect(() => {
     if (!lastMessage) return;
     endRef.current?.scrollIntoView({ block: "end" });
