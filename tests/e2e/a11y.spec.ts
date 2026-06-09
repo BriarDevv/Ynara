@@ -41,6 +41,19 @@ async function seedDark(page: Page): Promise<void> {
   }, DARK_PERSISTED);
 }
 
+/** Siembra preferencias de a11y persistidas ANTES de cargar el doc. */
+async function seedA11y(
+  page: Page,
+  state: { textSize?: string; highContrast?: boolean; motion?: string },
+): Promise<void> {
+  await page.addInitScript(
+    (value) => {
+      localStorage.setItem("ynara.a11y", value);
+    },
+    JSON.stringify({ state, version: 0 }),
+  );
+}
+
 test.describe("a11y de vistas autenticadas", () => {
   test("/memoria en claro no tiene violations que gateen", async ({ page }) => {
     await seedOnboarded(page);
@@ -103,5 +116,36 @@ test.describe("a11y de vistas autenticadas", () => {
       );
     });
     expect(allCanvasHidden).toBe(true);
+  });
+});
+
+test.describe("pre-paint de a11y (#182)", () => {
+  test("el script inline aplica las preferencias persistidas sin React (sin FOUC)", async ({
+    page,
+  }) => {
+    await seedA11y(page, { textSize: "lg", highContrast: true, motion: "reduce" });
+
+    // Abortar los chunks JS de Next ANTES de navegar: React nunca hidrata, así
+    // que si las clases aparecen las puso el <script> inline del <head> (el
+    // pre-paint real), no el A11yApplier post-hidratación. Mismo método que
+    // theme.spec (pata a): sin el abort, el applier daría falso verde.
+    //
+    // El fix de #182 (A11yApplier con getState()+subscribe, espejo de
+    // ThemeApplier) elimina la lectura del valor hidratado-stale y el re-render
+    // redundante. Su correctitud descansa en ese patrón ya revisado, no en un
+    // catcher del "stomp": en React 19 + zustand 5 el transitorio default→real se
+    // coalesce en una sola tarea (sin paint intermedio), así que no es observable
+    // por e2e —el bug es la lectura stale latente, no un flash visible hoy—. Este
+    // test cubre el contrato del pre-paint de a11y (que no tenía cobertura), que
+    // a11y-init.ts advierte que puede "romperse en silencio" si una key cambia.
+    await page.route("**/_next/**/*.js", (route) => route.abort());
+    await page.goto("/test-ds", { waitUntil: "domcontentloaded" });
+
+    const html = page.locator("html");
+    await expect(html).toHaveClass(/text-size-lg/);
+    await expect(html).toHaveClass(/theme-high-contrast/);
+    await expect(html).toHaveClass(/motion-off/);
+    // El server-render trae text-size-md; el pre-paint debe haberlo reemplazado.
+    await expect(html).not.toHaveClass(/text-size-md/);
   });
 });
