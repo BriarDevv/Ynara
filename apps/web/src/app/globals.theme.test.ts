@@ -108,6 +108,14 @@ describe("globals.css — puente de tokens :root ↔ @theme inline", () => {
     expect(css).not.toMatch(/--color-violet-(from|to)/);
   });
 
+  it("los gradientes azules del sandbox derivan de la paleta oficial, sin stops off-palette (#186)", () => {
+    // Los stops v3 (#1f66db base-to, #4b7ee6/#7ba1f4 relief) se retiraron: los
+    // gradientes `--gradient-blue-*` ahora derivan de la paleta oficial
+    // (azul/celeste/lavanda), los mismos pares que el clima del canvas.
+    expect(css).not.toMatch(/--color-blue-(base|relief)-(from|to)/);
+    expect(css).not.toMatch(/#1f66db|#4b7ee6|#7ba1f4/i);
+  });
+
   it("define todas las duraciones de motion (ningún componente anima en 0ms)", () => {
     const duraciones = [
       "duration-instant",

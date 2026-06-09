@@ -56,18 +56,6 @@
   --color-border-strong: rgb(36 44 63 / 0.22);
 
   /*
-   * ---- Stops individuales ----
-   * Fuente única de los gradientes azules `--gradient-blue-*` (showcase del
-   * sandbox). Los stops del logo SVG (YnaraMark) migraron a la paleta oficial
-   * (azul/celeste/violeta/violáceo) en el PR #6, así que ya no dependen de
-   * acá. Si cambia uno, cambia todo lo derivado.
-   */
-  --color-blue-base-from: #2f5aa6;
-  --color-blue-base-to: #1f66db;
-  --color-blue-relief-from: #4b7ee6;
-  --color-blue-relief-to: #7ba1f4;
-
-  /*
    * ---- Paleta oficial (v4) ----
    * Los 8 stops del manual de marca 2026 + el lavanda oscuro AA-safe para
    * fills/texto de Memoria (#565f81: blanco encima 6.3:1). Fuente única del
@@ -117,17 +105,14 @@
   /* Overlay para modales/dialogs (backdrop). */
   --color-overlay: rgb(36 44 63 / 0.4);
 
-  /* ---- Gradientes — uso semántico ---- */
-  --gradient-blue-base: linear-gradient(
-    135deg,
-    var(--color-blue-base-from),
-    var(--color-blue-base-to)
-  );
-  --gradient-blue-relief: linear-gradient(
-    135deg,
-    var(--color-blue-relief-from),
-    var(--color-blue-relief-to)
-  );
+  /* ---- Gradientes — uso semántico ----
+   * Acentos azules del showcase del sandbox (§3.4). Derivan de la paleta
+   * oficial (DESIGN.md §3.5), con los mismos pares que el clima del canvas:
+   * base = azul→celeste (como productividad), relief = celeste→lavanda (como
+   * memoria). Sin stops propios off-palette (#186); el logo (YnaraMark) ya no
+   * depende de acá (migró en el PR #6). */
+  --gradient-blue-base: linear-gradient(135deg, var(--color-azul), var(--color-celeste));
+  --gradient-blue-relief: linear-gradient(135deg, var(--color-celeste), var(--color-lavanda));
 
   /*
    * ---- Tints por modo — color plano (DESIGN.md §3.5) ----
