@@ -7,8 +7,9 @@ Fakes incluso en la rama de serving real. Esta factory centraliza la decision:
 
 - En dev/test (default, sin GPU) -> los Fakes deterministas (sin red, sin boot
   roto, sin intentos de conexion a vLLM).
-- Cuando la config pide serving real (``environment == "production"`` para el
-  LLM; ``embedding_backend == "vllm"`` para el embedder) -> los clientes REALES
+- Cuando la config pide serving real (``llm_backend == "vllm"`` o
+  ``environment == "production"`` para el LLM; ``embedding_backend == "vllm"``
+  para el embedder) -> los clientes REALES
   (``ResilientClient(build_pool(VllmClient...))``).
 
 Los Fakes quedan DETRAS de la condicion, NO hardcodeados: cambiar a serving real
@@ -41,11 +42,13 @@ from app.llm.config import LlmRuntimeConfig
 def _wants_real_llm(settings: Settings) -> bool:
     """Decide si construir el LLM real (vLLM) o el Fake determinista.
 
-    Serving real solo en ``production``: dev/staging/test corren sin GPU y deben
-    bootear con los Fakes (sin discar a vLLM). Cuando haya un entorno de serving
-    no-prod, este es el unico punto a tocar.
+    Serving real cuando ``LLM_BACKEND=vllm`` (opt-in explicito: dev contra Ollama
+    o un vLLM local) o en ``production`` (siempre real). dev/staging/test sin el
+    flag corren con los Fakes (sin discar a vLLM). El flag desacopla "serving
+    real" de "soy prod" para no mentir ``environment`` (que dispara los fail-fast
+    de prod: JWT fuerte, CORS no-localhost, master key).
     """
-    return settings.environment == "production"
+    return settings.llm_backend == "vllm" or settings.environment == "production"
 
 
 def build_llm_client(settings: Settings, config: LlmRuntimeConfig) -> LLMClient:

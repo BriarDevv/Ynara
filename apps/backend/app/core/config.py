@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     llm_topology: Literal["split_process", "single_process", "swap_lru"] = Field(
         "split_process", alias="LLM_TOPOLOGY"
     )
+    # `llm_backend` elige entre el Fake determinista (default, sin GPU) y los
+    # clientes vLLM reales. Paralelo a `embedding_backend`. En production el
+    # serving real se fuerza igual (ver factory); este flag lo prende en
+    # dev/staging (p.ej. apuntando a Ollama o a un vLLM local) SIN mentir
+    # `environment` (que dispara los fail-fast de prod: JWT fuerte, CORS, key).
+    llm_backend: Literal["fake", "vllm"] = Field("fake", alias="LLM_BACKEND")
 
     # Embeddings (ADR-008: bge-m3 1024-dim on-prem). `embedding_backend` elige
     # entre el Fake determinista (default, sin GPU) y el cliente vLLM real
