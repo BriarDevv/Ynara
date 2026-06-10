@@ -44,6 +44,7 @@ def _settings(
     *,
     environment: str = "development",
     embedding_backend: str = "fake",
+    llm_backend: str = "fake",
     topology: str = "split_process",
 ) -> Settings:
     """Settings aislado de cualquier .env. ``production`` exige config no-dev."""
@@ -54,6 +55,7 @@ def _settings(
         # ``environment`` no tiene alias: se setea por nombre de campo, no por env var.
         "environment": environment,
         "EMBEDDING_BACKEND": embedding_backend,
+        "LLM_BACKEND": llm_backend,
         "LLM_TOPOLOGY": topology,
         "LLM_PRIMARY_BASE_URL": _PRIMARY_URL,
         "LLM_SECONDARY_BASE_URL": _SECONDARY_URL,
@@ -135,6 +137,13 @@ def test_llm_client_production_single_process_one_client() -> None:
     """single_process: el pool real se arma con un solo VllmClient (solo primary)."""
     settings = _settings(environment="production", topology="single_process")
     client = build_llm_client(settings, _config("single_process"))
+    assert isinstance(client, ResilientClient)
+    assert client.serves_model("qwen")
+
+
+def test_llm_client_is_real_when_backend_vllm_in_dev() -> None:
+    """LLM_BACKEND=vllm prende el serving real en dev sin tocar environment."""
+    client = build_llm_client(_settings(environment="development", llm_backend="vllm"), _config())
     assert isinstance(client, ResilientClient)
     assert client.serves_model("qwen")
 
