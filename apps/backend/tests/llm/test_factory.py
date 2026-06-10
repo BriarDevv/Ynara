@@ -19,7 +19,7 @@ from app.llm.clients.factory import (
     build_reranker,
 )
 from app.llm.clients.fakes import FakeLlmClient
-from app.llm.clients.reranker import FakeReranker
+from app.llm.clients.reranker import FakeReranker, VllmReranker
 from app.llm.clients.resilient import ResilientClient
 from app.llm.config import (
     LlmRuntimeConfig,
@@ -42,6 +42,7 @@ def _settings(
     *,
     environment: str = "development",
     embedding_backend: str = "fake",
+    reranker_backend: str = "fake",
     llm_backend: str = "fake",
     topology: str = "split_process",
 ) -> Settings:
@@ -53,6 +54,7 @@ def _settings(
         # ``environment`` no tiene alias: se setea por nombre de campo, no por env var.
         "environment": environment,
         "EMBEDDING_BACKEND": embedding_backend,
+        "RERANKER_BACKEND": reranker_backend,
         "LLM_BACKEND": llm_backend,
         "LLM_TOPOLOGY": topology,
         "LLM_PRIMARY_BASE_URL": _PRIMARY_URL,
@@ -163,9 +165,15 @@ def test_embedder_is_vllm_when_backend_vllm() -> None:
 # ---------- build_reranker ----------
 
 
-def test_reranker_is_fake() -> None:
+def test_reranker_is_fake_by_default() -> None:
     reranker = build_reranker(_settings())
     assert isinstance(reranker, FakeReranker)
+
+
+def test_reranker_is_vllm_when_backend_vllm() -> None:
+    """``reranker_backend='vllm'`` construye el VllmReranker real (sin abrir red)."""
+    reranker = build_reranker(_settings(reranker_backend="vllm"))
+    assert isinstance(reranker, VllmReranker)
 
 
 # ---------- build_llm_clients (trio) ----------
