@@ -9,8 +9,9 @@ Fakes incluso en la rama de serving real. Esta factory centraliza la decision:
   roto, sin intentos de conexion a vLLM).
 - Cuando la config pide serving real (``llm_backend == "vllm"`` o
   ``environment == "production"`` para el LLM; ``embedding_backend == "vllm"``
-  para el embedder) -> los clientes REALES
-  (``ResilientClient(build_pool(VllmClient...))``).
+  para el embedder; ``reranker_backend == "vllm"`` para el reranker) -> los
+  clientes REALES (``ResilientClient(build_pool(VllmClient...))``,
+  ``VllmEmbeddingClient``, ``VllmReranker``).
 
 Los Fakes quedan DETRAS de la condicion, NO hardcodeados: cambiar a serving real
 es flippear settings, no editar el lifespan. La factory NO abre conexiones de red
@@ -37,7 +38,7 @@ from app.llm.clients.embedding import (
 from app.llm.clients.fakes import FakeLlmClient
 from app.llm.clients.parsers import OpenAIToolCallParser
 from app.llm.clients.pool import build_pool
-from app.llm.clients.reranker import FakeReranker, Reranker
+from app.llm.clients.reranker import FakeReranker, Reranker, VllmReranker
 from app.llm.clients.resilient import ResilientClient
 from app.llm.clients.vllm import VllmClient
 from app.llm.config import LlmRuntimeConfig
@@ -116,14 +117,20 @@ def build_embedder(settings: Settings) -> EmbeddingClient:
 
 
 def build_reranker(settings: Settings) -> Reranker:
-    """Construye el reranker.
+    """Construye el reranker segun ``reranker_backend``.
 
-    El reranker real (cross-encoder via vLLM) todavia NO existe en el codebase y
-    no tiene flag de config propio aun, asi que siempre se devuelve el
-    ``FakeReranker`` passthrough (comportamiento historico). Cuando se implemente,
-    este es el unico punto a gatear (p.ej. por un ``reranker_backend`` nuevo en
-    ``Settings``).
+    ``vllm`` -> ``VllmReranker`` real contra ``settings.reranker_base_url`` (API
+    ``/rerank`` de vLLM). Ollama no sirve cross-encoders, asi que en dev se deja
+    en ``fake``. No abre red al construirse (``httpx.AsyncClient`` perezoso).
+
+    ``fake`` (default) -> ``FakeReranker`` passthrough.
     """
+    if settings.reranker_backend == "vllm":
+        return VllmReranker(
+            base_url=settings.reranker_base_url,
+            http_client=httpx.AsyncClient(),
+            model=settings.reranker_model,
+        )
     return FakeReranker()
 
 

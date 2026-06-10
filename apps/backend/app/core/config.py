@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     embedding_base_url: str = Field("http://localhost:8003/v1", alias="EMBEDDING_BASE_URL")
     embedding_backend: Literal["fake", "vllm"] = Field("fake", alias="EMBEDDING_BACKEND")
 
+    # Reranker (cross-encoder). `reranker_backend` elige el Fake passthrough
+    # (default) vs el `VllmReranker` real contra la API `/rerank` de vLLM. Ollama
+    # NO sirve cross-encoders: en dev se queda en 'fake'. El modelo companion de
+    # bge-m3 es bge-reranker-v2-m3 (ADR-008 lo deja como palanca de re-ranking).
+    reranker_backend: Literal["fake", "vllm"] = Field("fake", alias="RERANKER_BACKEND")
+    reranker_base_url: str = Field("http://localhost:8004/v1", alias="RERANKER_BASE_URL")
+    reranker_model: str = Field("bge-reranker-v2-m3", alias="RERANKER_MODEL")
+
     # Cifrado de memoria a nivel campo (ADR-007 D3). Base64 de 32 bytes random
     # (`openssl rand -base64 32`). Vacío => el helper de crypto falla al primer
     # uso (no se importa la key al boot). NUNCA commitear (regla #2).
