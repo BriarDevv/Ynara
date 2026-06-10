@@ -29,7 +29,11 @@ import httpx
 
 from app.core.config import Settings
 from app.llm.clients.base import LLMClient
-from app.llm.clients.embedding import EmbeddingClient, FakeEmbeddingClient
+from app.llm.clients.embedding import (
+    EmbeddingClient,
+    FakeEmbeddingClient,
+    VllmEmbeddingClient,
+)
 from app.llm.clients.fakes import FakeLlmClient
 from app.llm.clients.parsers import OpenAIToolCallParser
 from app.llm.clients.pool import build_pool
@@ -95,19 +99,18 @@ def build_llm_client(settings: Settings, config: LlmRuntimeConfig) -> LLMClient:
 def build_embedder(settings: Settings) -> EmbeddingClient:
     """Construye el cliente de embeddings segun ``embedding_backend``.
 
-    ``vllm`` -> cliente real contra el servidor de bge-m3. El cliente real
-    (``VllmEmbeddingClient``) todavia NO existe en el codebase, asi que pedir
-    serving real falla fuerte (``NotImplementedError``) en vez de devolver un
-    Fake escondido: el Fake queda EXPLICITAMENTE detras del branch ``fake``
-    (default), no hardcodeado en ambas ramas. Cuando se implemente el cliente
-    real, se cablea aca usando ``settings.embedding_base_url``.
+    ``vllm`` -> ``VllmEmbeddingClient`` real contra ``settings.embedding_base_url``
+    (``POST /v1/embeddings``, bge-m3; sirve igual a un vLLM real o a Ollama). No
+    abre red al construirse (``httpx.AsyncClient`` perezoso), asi que es seguro
+    instanciarlo en el arranque aunque el server no este levantado todavia.
 
     ``fake`` (default operativo, sin GPU) -> ``FakeEmbeddingClient``.
     """
     if settings.embedding_backend == "vllm":
-        raise NotImplementedError(
-            "embedding_backend='vllm' pedido pero el cliente real de embeddings "
-            "(bge-m3) aun no esta implementado; usar embedding_backend='fake'"
+        return VllmEmbeddingClient(
+            base_url=settings.embedding_base_url,
+            http_client=httpx.AsyncClient(),
+            model=settings.embedding_model,
         )
     return FakeEmbeddingClient(model=settings.embedding_model)
 

@@ -10,10 +10,8 @@ Tambien cubren el gate del embedder (``embedding_backend``) y el reranker.
 
 from __future__ import annotations
 
-import pytest
-
 from app.core.config import Settings
-from app.llm.clients.embedding import FakeEmbeddingClient
+from app.llm.clients.embedding import FakeEmbeddingClient, VllmEmbeddingClient
 from app.llm.clients.factory import (
     build_embedder,
     build_llm_client,
@@ -156,10 +154,10 @@ def test_embedder_is_fake_by_default() -> None:
     assert isinstance(embedder, FakeEmbeddingClient)
 
 
-def test_embedder_vllm_backend_not_implemented() -> None:
-    """``embedding_backend='vllm'`` falla fuerte: el cliente real no existe aun."""
-    with pytest.raises(NotImplementedError):
-        build_embedder(_settings(embedding_backend="vllm"))
+def test_embedder_is_vllm_when_backend_vllm() -> None:
+    """``embedding_backend='vllm'`` construye el cliente real (sin abrir red)."""
+    embedder = build_embedder(_settings(embedding_backend="vllm"))
+    assert isinstance(embedder, VllmEmbeddingClient)
 
 
 # ---------- build_reranker ----------
