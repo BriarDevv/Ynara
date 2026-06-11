@@ -162,6 +162,14 @@ def test_embedder_is_vllm_when_backend_vllm() -> None:
     assert isinstance(embedder, VllmEmbeddingClient)
 
 
+def test_embedder_vllm_takes_timeout_from_settings() -> None:
+    """El timeout del embedder sale de Settings (review PR #198, MEDIUM #1)."""
+    settings = _settings(embedding_backend="vllm").model_copy(update={"embedding_timeout_s": 12.5})
+    embedder = build_embedder(settings)
+    assert isinstance(embedder, VllmEmbeddingClient)
+    assert embedder._default_timeout_s == 12.5
+
+
 # ---------- build_reranker ----------
 
 
@@ -174,6 +182,14 @@ def test_reranker_is_vllm_when_backend_vllm() -> None:
     """``reranker_backend='vllm'`` construye el VllmReranker real (sin abrir red)."""
     reranker = build_reranker(_settings(reranker_backend="vllm"))
     assert isinstance(reranker, VllmReranker)
+
+
+def test_reranker_vllm_takes_timeout_from_settings() -> None:
+    """El timeout del reranker sale de Settings (review PR #198, MEDIUM #1)."""
+    settings = _settings(reranker_backend="vllm").model_copy(update={"reranker_timeout_s": 12.5})
+    reranker = build_reranker(settings)
+    assert isinstance(reranker, VllmReranker)
+    assert reranker._default_timeout_s == 12.5
 
 
 # ---------- build_llm_clients (trio) ----------

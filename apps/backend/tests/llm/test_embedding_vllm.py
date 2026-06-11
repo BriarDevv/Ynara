@@ -82,6 +82,25 @@ async def test_embed_orders_by_index() -> None:
     assert result == [[1.0], [9.0]]
 
 
+async def test_embed_uses_configured_default_timeout() -> None:
+    # El timeout por request sale de default_timeout_s (la factory lo toma de
+    # Settings.embedding_timeout_s); sin esto quedaria hardcodeado en 30s.
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["timeout"] = request.extensions["timeout"]
+        return _ok([[0.1]])
+
+    client = VllmEmbeddingClient(
+        base_url=_BASE_URL,
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        model="bge-m3",
+        default_timeout_s=12.5,
+    )
+    await client.embed(["a"])
+    assert captured["timeout"]["read"] == 12.5
+
+
 async def test_embed_empty_batch_short_circuits_without_request() -> None:
     called = False
 

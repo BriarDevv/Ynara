@@ -103,6 +103,25 @@ async def test_rerank_truncates_to_top_n_defensively() -> None:
     assert [r.index for r in results] == [0, 1]
 
 
+async def test_rerank_uses_configured_default_timeout() -> None:
+    # El timeout por request sale de default_timeout_s (la factory lo toma de
+    # Settings.reranker_timeout_s); sin esto quedaria hardcodeado en 30s.
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["timeout"] = request.extensions["timeout"]
+        return _results([(0, 1.0)])
+
+    client = VllmReranker(
+        base_url=_BASE_URL,
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        model="bge-reranker-v2-m3",
+        default_timeout_s=12.5,
+    )
+    await client.rerank(query="q", documents=["a"])
+    assert captured["timeout"]["read"] == 12.5
+
+
 async def test_rerank_empty_documents_short_circuits() -> None:
     called = False
 

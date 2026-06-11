@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     embedding_model: str = Field("bge-m3", alias="EMBEDDING_MODEL")
     embedding_base_url: str = Field("http://localhost:8003/v1", alias="EMBEDDING_BASE_URL")
     embedding_backend: Literal["fake", "vllm"] = Field("fake", alias="EMBEDDING_BACKEND")
+    # Timeout por request del embedder (segundos), solo aplica con backend 'vllm'.
+    # El chat LLM toma el suyo de ynara.config.json[llm.serving].request_timeout_s.
+    embedding_timeout_s: float = Field(30.0, gt=0, alias="EMBEDDING_TIMEOUT_S")
 
     # Reranker (cross-encoder). `reranker_backend` elige el Fake passthrough
     # (default) vs el `VllmReranker` real contra la API `/rerank` de vLLM. Ollama
@@ -62,6 +65,7 @@ class Settings(BaseSettings):
     reranker_backend: Literal["fake", "vllm"] = Field("fake", alias="RERANKER_BACKEND")
     reranker_base_url: str = Field("http://localhost:8004/v1", alias="RERANKER_BASE_URL")
     reranker_model: str = Field("bge-reranker-v2-m3", alias="RERANKER_MODEL")
+    reranker_timeout_s: float = Field(30.0, gt=0, alias="RERANKER_TIMEOUT_S")
 
     # Cifrado de memoria a nivel campo (ADR-007 D3). Base64 de 32 bytes random
     # (`openssl rand -base64 32`). Vacío => el helper de crypto falla al primer
