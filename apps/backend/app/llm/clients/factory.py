@@ -112,6 +112,7 @@ def build_embedder(settings: Settings) -> EmbeddingClient:
             base_url=settings.embedding_base_url,
             http_client=httpx.AsyncClient(),
             model=settings.embedding_model,
+            default_timeout_s=settings.embedding_timeout_s,
         )
     return FakeEmbeddingClient(model=settings.embedding_model)
 
@@ -130,6 +131,7 @@ def build_reranker(settings: Settings) -> Reranker:
             base_url=settings.reranker_base_url,
             http_client=httpx.AsyncClient(),
             model=settings.reranker_model,
+            default_timeout_s=settings.reranker_timeout_s,
         )
     return FakeReranker()
 
