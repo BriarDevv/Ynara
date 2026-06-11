@@ -191,3 +191,11 @@ async def test_health_unhealthy_on_connect_error() -> None:
         raise httpx.ConnectError("down", request=request)
 
     assert (await _client(handler).health()).healthy is False
+
+
+async def test_health_unhealthy_on_non_200() -> None:
+    # Un server que responde 503 (o cualquier non-200) en /models es unhealthy.
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    assert (await _client(handler).health()).healthy is False
