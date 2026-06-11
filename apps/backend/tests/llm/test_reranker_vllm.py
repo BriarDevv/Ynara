@@ -167,12 +167,29 @@ async def test_rerank_maps_http_errors(status: int, expected: type[LlmError]) ->
         await _client(handler).rerank(query="q", documents=["a"])
 
 
-async def test_rerank_timeout_maps_to_llm_timeout() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.TimeoutException("slow", request=request)
+async def test_rerank_timeout_maps_to_llm_timeout_without_leaking_host() -> None:
+    leaky = f"timed out connecting to {_BASE_URL}"
 
-    with pytest.raises(LlmTimeoutError):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException(leaky, request=request)
+
+    with pytest.raises(LlmTimeoutError) as excinfo:
         await _client(handler).rerank(query="q", documents=["a"])
+    # Regla #4: la etiqueta es fija; el host viaja solo en __cause__.
+    assert _BASE_URL not in str(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, httpx.TimeoutException)
+
+
+async def test_rerank_connect_error_maps_to_unavailable_without_leaking_host() -> None:
+    leaky = f"All connection attempts failed for {_BASE_URL}"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(leaky, request=request)
+
+    with pytest.raises(LlmUnavailableError) as excinfo:
+        await _client(handler).rerank(query="q", documents=["a"])
+    assert _BASE_URL not in str(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, httpx.ConnectError)
 
 
 # ---------- health ----------
@@ -186,3 +203,11 @@ async def test_health_ok_when_models_200() -> None:
     health = await _client(handler).health()
     assert health.healthy is True
     assert health.model_name == "bge-reranker-v2-m3"
+
+
+async def test_health_unhealthy_on_non_200() -> None:
+    # Un server que responde 503 (o cualquier non-200) en /models es unhealthy.
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    assert (await _client(handler).health()).healthy is False
