@@ -5,4 +5,4 @@
 // Regla del package (ADR-012): core NO importa nada de plataforma
 // (next, react-dom, expo, expo-*, react-native). Lo que difiere por
 // plataforma se inyecta desde cada app.
-export {};
+export { qk } from "./query-keys";
