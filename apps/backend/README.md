@@ -14,7 +14,7 @@ ningún dato de usuario sale del perímetro (regla #4).
 ## Estado
 
 - **Construido y mergeado**: capa LLM **M0–M8** completa — config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Workers Celery: consolidación async + decay procedural. Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migración inicial mergeada (6 tablas, 4 enums, pgvector).
-- **Pendiente**: infra vLLM real (hoy todo se ejercita con `FakeLlmClient`/`FakeEmbeddingClient`/`FakeReranker` — el vLLM real es un track de infra separado); gap "persistir turnos" para consolidación episódica.
+- **Pendiente**: serving vLLM en infra de prod (los clientes reales ya existen — `VllmClient`/`VllmEmbeddingClient`/`VllmReranker` — y se prenden con `LLM_BACKEND=vllm` / `EMBEDDING_BACKEND=vllm` / `RERANKER_BACKEND=vllm`; en dev sin flags corren los Fakes; probados contra Ollama); gap "persistir turnos" para consolidación episódica.
 
 ## Estructura
 

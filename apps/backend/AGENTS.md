@@ -30,7 +30,7 @@
 
 **Pendiente** (no empezar sin leer el plan):
 
-- Infra vLLM real (hoy todo se ejercita con `FakeLlmClient`/`FakeEmbeddingClient`/`FakeReranker`). Gap "persistir turnos" para consolidación episódica. Plan: [`../../docs/planning/LLM-INFERENCE-INTEGRATION.md`](../../docs/planning/LLM-INFERENCE-INTEGRATION.md). Roadmap de memoria: [`../../docs/planning/BACKEND-MEMORY-ROADMAP.md`](../../docs/planning/BACKEND-MEMORY-ROADMAP.md).
+- Serving vLLM real en infra de prod: correr los modelos en GPU + reconciliar `infra/vllm/start-vllm.sh` (served_name `gemma4`/`qwen`, puertos, proceso bge-m3, medir VRAM/`max_model_len`). Los **clientes** vLLM reales ya están (`VllmClient`/`VllmEmbeddingClient`/`VllmReranker`): se prenden por flag (`LLM_BACKEND`/`EMBEDDING_BACKEND`/`RERANKER_BACKEND`=`vllm`) y se probaron contra Ollama; en dev sin flags corren los Fakes deterministas. Gap "persistir turnos" para consolidación episódica. Plan: [`../../docs/planning/LLM-INFERENCE-INTEGRATION.md`](../../docs/planning/LLM-INFERENCE-INTEGRATION.md). Roadmap de memoria: [`../../docs/planning/BACKEND-MEMORY-ROADMAP.md`](../../docs/planning/BACKEND-MEMORY-ROADMAP.md).
 
 **Implementados en #63**: rate-limit (token/register), refresh single-use y logout (blocklist Redis) — ver [`docs/ENDPOINTS.md`](./docs/ENDPOINTS.md). **Hardening en #142**: reuse-detection a nivel familia/`sid` en `/refresh` (grace window retry-safe + breach → family-revoke) y logout con revocación de familia entera.
 
@@ -92,9 +92,9 @@ llm/
 │   ├── circuit.py     # CircuitBreaker (stdlib, sin libs)
 │   ├── pool.py        # ClientPool + RoutingStrategy + build_pool (topología → clientes)
 │   ├── resilient.py   # ResilientClient: retry+backoff → fallback on-prem → respuesta degradada
-│   ├── embedding.py   # Protocol EmbeddingClient + FakeEmbeddingClient determinista (bge-m3; real pende de infra-swap)
-│   ├── factory.py     # build_llm_client() / build_embedding_client() / build_reranker(): Fakes en dev, clientes reales en prod según settings
-│   └── reranker.py    # Protocol Reranker + FakeReranker passthrough (cross-encoder real pende de infra-swap)
+│   ├── embedding.py   # Protocol EmbeddingClient + FakeEmbeddingClient determinista + VllmEmbeddingClient real (bge-m3, POST /v1/embeddings; prende por EMBEDDING_BACKEND=vllm)
+│   ├── factory.py     # build_llm_client() / build_embedder() / build_reranker(): Fakes por default, clientes reales por flag (LLM_BACKEND/EMBEDDING_BACKEND/RERANKER_BACKEND=vllm) o en prod
+│   └── reranker.py    # Protocol Reranker + FakeReranker passthrough + VllmReranker real (API /rerank de vLLM; prende por RERANKER_BACKEND=vllm)
 ├── prompts/           # shared.py (identidad/voz/seguridad) + loader.py (load_prompt(mode)) + 1 SYSTEM_PROMPT por modo
 ├── tools/             # base.py (Tool Protocol, to_spec, tool_error, IsoDatetime) + registry.py + calendar.py + reminder.py + memory.py
 └── router.py          # M8 — orquesta modo→modelo→memoria→tools. Implementado.
