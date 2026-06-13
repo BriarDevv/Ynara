@@ -1,48 +1,12 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { type A11yState, createA11yStore } from "@ynara/core/stores";
+import { clientStorage } from "@/lib/clientStorage";
 
-export type TextSize = "sm" | "md" | "lg";
-export type MotionPreference = "auto" | "reduce" | "normal";
+// Instancia web del store de a11y (ADR-012): el estado y las acciones viven en
+// @ynara/core; acá se inyecta el storage SSR-safe. `applyA11yClasses` es
+// web-only (togglea clases en <html>) y se queda en esta app.
+export const useA11yStore = createA11yStore(clientStorage);
 
-type A11yState = {
-  textSize: TextSize;
-  highContrast: boolean;
-  /**
-   * - "auto": respeta el OS-pref (prefers-reduced-motion).
-   * - "reduce": fuerza off (aplica .motion-off).
-   * - "normal": fuerza on (aplica .motion-on, gana sobre OS-pref).
-   *
-   * El modelo de clases en <html> está documentado en DESIGN.md §7 y
-   * en el bloque "reduced-motion" de globals.css.
-   */
-  motion: MotionPreference;
-};
-
-type A11yActions = {
-  setTextSize: (size: TextSize) => void;
-  setHighContrast: (on: boolean) => void;
-  setMotion: (pref: MotionPreference) => void;
-  reset: () => void;
-};
-
-const initialState: A11yState = {
-  textSize: "md",
-  highContrast: false,
-  motion: "auto",
-};
-
-export const useA11yStore = create<A11yState & A11yActions>()(
-  persist(
-    (set) => ({
-      ...initialState,
-      setTextSize: (textSize) => set({ textSize }),
-      setHighContrast: (highContrast) => set({ highContrast }),
-      setMotion: (motion) => set({ motion }),
-      reset: () => set(initialState),
-    }),
-    { name: "ynara.a11y" },
-  ),
-);
+export type { A11yState, MotionPreference, TextSize } from "@ynara/core/stores";
 
 /**
  * Aplica el estado actual de a11y a las clases del <html>.
