@@ -1,0 +1,26 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "root": false,
+  "extends": ["../../biome.json"],
+  "linter": {
+    "rules": {
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "next": "core es platform-agnostic (ADR-012): no importar Next; inyectar desde la app.",
+              "next/navigation": "core no navega: inyectar la navegación como callback desde la app.",
+              "next/router": "core no navega: inyectar la navegación como callback desde la app.",
+              "react-dom": "core no toca el DOM (ADR-012): el render vive en cada app.",
+              "expo": "core es platform-agnostic (ADR-012): no importar Expo; inyectar desde la app mobile.",
+              "expo-router": "core no navega: inyectar la navegación como callback desde la app.",
+              "expo-secure-store": "core no toca storage nativo: inyectar el StateStorage desde la app.",
+              "react-native": "core es platform-agnostic (ADR-012): no importar react-native."
+            }
+          }
+        }
+      }
+    }
+  }
+}
