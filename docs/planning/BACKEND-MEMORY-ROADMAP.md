@@ -65,13 +65,13 @@ Se apoya en cuatro fuentes:
 
 ### Hecho (desde v1 → mergeados a main)
 
-*(Actualizado 2026-05-31)*
+*(Actualizado 2026-06-13)*
 
 | Pieza | Detalle |
 |---|---|
 | PR B (migración Alembic) | 6 tablas, 4 enums, pgvector, HNSW, tests up/down/roundtrip |
 | PR C (crypto + wrappers) | `core/crypto.py` AES-256-GCM per-user; wrappers semantic/episodic/procedural |
-| Cliente vLLM + pool + circuit breaker + fallback | Con `FakeLlmClient`; vLLM real es infra aparte, pendiente |
+| Cliente vLLM + pool + circuit breaker + fallback | `VllmClient` + `ResilientClient` reales (PR #198); default dev usa `FakeLlmClient`, el real se prende con `LLM_BACKEND=vllm`; serving prod pendiente |
 | Prompts por modo (M5) | 5 modos, loader, snapshot tests |
 | Framework de tools + calendar + reminders (M6) | `ToolRegistry`, stubs honestos |
 | Tool `memory.*` (M7) | `memory.search/add/update/delete`; `memory_registry(semantic_store)` combinado por el router |
@@ -86,8 +86,8 @@ Se apoya en cuatro fuentes:
 
 ### Pendiente
 
-- ADR-008 (bge-m3) — decisión de modelo de embedding, desbloquea VllmEmbeddingClient real
-- Infra vLLM real — track de infra aparte; hoy todo corre con Fakes
+- ✅ (resuelto) ADR-008 (bge-m3) aprobado + `VllmEmbeddingClient` real implementado (PR #198, probado contra Ollama; se prende con EMBEDDING_BACKEND=vllm)
+- Serving vLLM real en infra de prod — track aparte, pendiente; los clientes reales (`VllmEmbeddingClient`/`VllmReranker`/`VllmClient`) ya están (PR #198) y se prenden por flag
 - Gap "persistir turnos" — la consolidación episódica necesita que los turnos se persistan antes de ser procesados
 - Retención episódica — verificar si el worker de retention ya está implementado o pendiente
 

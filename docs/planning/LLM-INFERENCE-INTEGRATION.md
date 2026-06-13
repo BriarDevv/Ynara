@@ -103,8 +103,11 @@ app/llm/
 **M0–M6 no necesitan Supabase ni auth**: se desarrollan con mocks
 (`FakeLlmClient`, DB real solo en integración). El cruce con memoria
 real ocurre en M7/M8. **Nota (2026-05-31): M0–M6 ya están mergeados**
-(con `FakeLlmClient` / `FakeEmbeddingClient` / `FakeReranker`; el vLLM real
-es un track de infra aparte, pendiente).
+(con `FakeLlmClient` / `FakeEmbeddingClient` / `FakeReranker` por default).
+**Actualización (2026-06-13, PR #198)**: los clientes vLLM reales también están
+implementados (`VllmClient`, `VllmEmbeddingClient`, `VllmReranker`), wire-ables por
+flag (`LLM_BACKEND`/`EMBEDDING_BACKEND`/`RERANKER_BACKEND`=`vllm`) y probados contra
+Ollama. El **serving** vLLM en infra de prod sigue siendo un track aparte, pendiente.
 
 ### Detalle por milestone
 
@@ -224,7 +227,7 @@ El proyecto Supabase **ya existe** (ref `hmsfcqvnhlevfwfgatxd`) y está
 
 ## 5. Estado de ejecución
 
-*(Actualizado 2026-05-31)*
+*(Actualizado 2026-06-13)*
 
 - ✅ ADR-009 aprobado (humano) + card Trello actualizada.
 - ✅ M0 — config single-source mergeado.
@@ -240,7 +243,7 @@ El proyecto Supabase **ya existe** (ref `hmsfcqvnhlevfwfgatxd`) y está
 - ✅ PR B — Migración Alembic inicial mergeada (6 tablas, 4 enums, pgvector).
 - ✅ Track Supabase — proyecto conectado (session pooler, schema en `head`).
 - ✅ PR C — `core/crypto.py` (AES-256-GCM per-user) + wrappers de memoria mergeados.
-- [ ] Infra vLLM real — track de infra aparte, **pendiente** (hoy todo corre con Fakes).
+- [ ] Serving vLLM real en infra de prod — **pendiente**: reconciliar `start-vllm.sh` (served_name/puertos/proceso bge-m3), medir VRAM. Los clientes vLLM reales (`VllmClient`/`VllmEmbeddingClient`/`VllmReranker`) ya están mergeados (PR #198) y probados contra Ollama; se prenden por flag.
 - [ ] Rate-limit — pendiente.
 - [ ] Fix `core/deps.py` transaction pooler (6543) — pendiente si se quiere escalar a alta concurrencia.
 
