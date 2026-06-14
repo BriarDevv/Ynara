@@ -11,8 +11,20 @@ from functools import lru_cache
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+
+class ServingEndpoint(BaseModel):
+    """Un proceso vLLM del serving (ADR-013): su ``base_url`` y los
+    ``models`` (served_names) que anuncia.
+
+    Cada entrada de ``LLM_SERVING`` = un proceso. ``served_name``, parsers
+    y quantization NO van acá: siguen en ``ynara.config.json`` (ADR-009 D4).
+    """
+
+    base_url: str
+    models: list[str]
 
 
 class Settings(BaseSettings):
@@ -34,12 +46,17 @@ class Settings(BaseSettings):
     celery_broker_url: str = Field("", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field("", alias="CELERY_RESULT_BACKEND")
 
-    # LLM serving (ADR-009 D4): los base_url + topologia viven en settings;
-    # served_name, parsers y quantization viven en ynara.config.json.
-    llm_primary_base_url: str = Field("http://localhost:8001/v1", alias="LLM_PRIMARY_BASE_URL")
-    llm_secondary_base_url: str = Field("http://localhost:8002/v1", alias="LLM_SECONDARY_BASE_URL")
-    llm_topology: Literal["split_process", "single_process", "swap_lru"] = Field(
-        "split_process", alias="LLM_TOPOLOGY"
+    # LLM serving (ADR-013): lista explícita de procesos vLLM. Cada entrada
+    # describe un proceso — su base_url y los served_names que sirve — y vive
+    # en .env (JSON). served_name, parsers y quantization siguen en
+    # ynara.config.json (ADR-009 D4). pydantic-settings parsea el JSON del env
+    # var para tipos complejos automáticamente (sin NoDecode).
+    llm_serving: list[ServingEndpoint] = Field(
+        default_factory=lambda: [
+            ServingEndpoint(base_url="http://localhost:8001/v1", models=["gemma4"]),
+            ServingEndpoint(base_url="http://localhost:8002/v1", models=["qwen"]),
+        ],
+        alias="LLM_SERVING",
     )
     # `llm_backend` elige entre el Fake determinista (default, sin GPU) y los
     # clientes vLLM reales. Paralelo a `embedding_backend`. En production el

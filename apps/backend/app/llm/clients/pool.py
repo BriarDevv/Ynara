@@ -11,9 +11,10 @@ para 1-2 procesos. El gancho de escalado (ADR-009, plan §4) es
 implementa cuando haya multiples instancias del mismo modelo, sin tocar
 router ni cliente.
 
-``build_pool`` arma el pool segun la topologia configurada. NO instancia
-clientes HTTP: los recibe ya construidos (eso es responsabilidad del
-startup, M8), asi el pool es testeable con ``FakeLlmClient``.
+``build_pool`` arma el pool desde ``config.serving_endpoints`` (la lista
+``LLM_SERVING`` describe la topologia, ADR-013). NO instancia clientes HTTP:
+los recibe ya construidos (eso es responsabilidad del startup, M8), asi el
+pool es testeable con ``FakeLlmClient``.
 """
 
 from __future__ import annotations
@@ -91,25 +92,18 @@ def build_pool(
     config: LlmRuntimeConfig,
     clients_by_base_url: dict[str, LLMClient],
 ) -> ClientPool:
-    """Arma el ``ClientPool`` segun la topologia de ``config``.
+    """Arma el ``ClientPool`` desde ``config.serving_endpoints`` (ADR-013).
 
-    Mapeo topologia -> clientes (ADR-009 D1):
-
-    - ``split_process`` — 2 procesos: ``primary_base_url`` (primario) y
-      ``secondary_base_url`` (secundario on-prem para fallback).
-    - ``single_process`` / ``swap_lru`` — 1 proceso: solo
-      ``primary_base_url``.
+    La lista ``LLM_SERVING`` describe la topologia: cada entrada es un proceso
+    vLLM (un ``base_url`` + los served_names que sirve). Ya no hay enum: N
+    entradas = N procesos; varias entradas con el mismo served_name = N
+    instancias del mismo modelo (escalado, ADR-009 §4).
 
     Los clientes ya vienen construidos en ``clients_by_base_url`` (keyed por
-    base_url); este helper solo los ordena. El orden importa: el primero es
-    el primario, el segundo (si hay) es el fallback on-prem. Levanta
-    ``KeyError`` si falta un cliente para una base_url requerida por la
-    topologia (config incoherente: fail-fast en el arranque).
+    base_url); este helper solo los ordena segun la lista. El orden importa: es
+    el orden de preferencia (primero = primario, siguientes = fallback on-prem).
+    Levanta ``KeyError`` si falta un cliente para una base_url declarada en
+    ``serving_endpoints`` (config incoherente: fail-fast en el arranque).
     """
-    primary = clients_by_base_url[config.primary_base_url]
-    if config.topology == "split_process":
-        secondary = clients_by_base_url[config.secondary_base_url]
-        clients = [primary, secondary]
-    else:
-        clients = [primary]
+    clients = [clients_by_base_url[ep.base_url] for ep in config.serving_endpoints]
     return ClientPool(clients, FirstHealthy())

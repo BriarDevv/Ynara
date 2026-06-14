@@ -5,8 +5,8 @@ Fusiona dos fuentes en un unico objeto inmutable:
 - ``ynara.config.json`` — contrato de producto: ``models`` (con
   ``served_name``), ``modes`` y el bloque ``llm.serving`` (parsers,
   quantization, ``max_model_len``, timeouts).
-- ``Settings`` (``.env``) — valores por entorno: base_url de cada proceso
-  vLLM y la topologia de serving.
+- ``Settings`` (``.env``) — valores por entorno: la lista ``LLM_SERVING``
+  con cada proceso vLLM (su base_url y los served_names que sirve, ADR-013).
 
 ``load_llm_config()`` es fail-fast: levanta ``LlmConfigError`` con un
 mensaje claro si la config es incoherente (modo que apunta a un modelo
@@ -24,14 +24,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.config import Settings, get_settings
+from app.core.config import ServingEndpoint, Settings, get_settings
 
 # ``config.py`` vive en apps/backend/app/llm/; la raiz del repo esta 4
 # niveles arriba (llm -> app -> backend -> apps -> repo root).
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CONFIG_PATH = _REPO_ROOT / "ynara.config.json"
-
-Topology = Literal["split_process", "single_process", "swap_lru"]
 
 
 class LlmConfigError(RuntimeError):
@@ -90,9 +88,7 @@ class LlmRuntimeConfig(BaseModel):
 
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
 
-    primary_base_url: str
-    secondary_base_url: str
-    topology: Topology
+    serving_endpoints: list[ServingEndpoint]
     serving: ServingConfig
     models: dict[str, ModelConfig]
     modes: dict[str, ModeConfig]
@@ -149,12 +145,10 @@ def _build_runtime_config(data: dict[str, object], settings: Settings) -> LlmRun
         # para que el caller solo tenga que atrapar LlmConfigError.
         raise LlmConfigError(f"ynara.config.json invalido: {exc}") from exc
 
-    _validate_coherence(serving, models, modes)
+    _validate_coherence(serving, settings.llm_serving, models, modes)
 
     return LlmRuntimeConfig(
-        primary_base_url=settings.llm_primary_base_url,
-        secondary_base_url=settings.llm_secondary_base_url,
-        topology=settings.llm_topology,
+        serving_endpoints=settings.llm_serving,
         serving=serving,
         models=models,
         modes=modes,
@@ -163,6 +157,7 @@ def _build_runtime_config(data: dict[str, object], settings: Settings) -> LlmRun
 
 def _validate_coherence(
     serving: ServingConfig,
+    serving_endpoints: list[ServingEndpoint],
     models: dict[str, ModelConfig],
     modes: dict[str, ModeConfig],
 ) -> None:
@@ -196,6 +191,16 @@ def _validate_coherence(
                 f"max_model_len para {key!r} ({serving.max_model_len[key]}) supera el "
                 f"context_window del modelo ({model.context_window})"
             )
+
+    # ADR-013: cada served_name anunciado en LLM_SERVING debe existir en los
+    # models de ynara.config.json (fail-fast: un typo en .env no rutea a nada).
+    if not serving_endpoints:
+        raise LlmConfigError("LLM_SERVING está vacío: declarar al menos un proceso vLLM")
+    served_names = {model.served_name for model in models.values()}
+    for entry in serving_endpoints:
+        for name in entry.models:
+            if name not in served_names:
+                raise LlmConfigError(f"LLM_SERVING referencia served_name desconocido: {name!r}")
 
 
 def load_llm_config(
