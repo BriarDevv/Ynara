@@ -55,6 +55,18 @@ def get_engine() -> AsyncEngine:
     los desactivamos siempre (inocuo para el session pooler 5432 y la conexion
     directa). Con el transaction pooler ademas conviene NullPool: el pooling lo hace
     pgbouncer, SQLAlchemy no debe retener conexiones.
+
+    Alta concurrencia (deuda D10): bajo transaction mode (6543) NullPool delega
+    todo el pooling a pgbouncer, que multiplexea muchos clientes sobre pocas
+    conexiones server-side; el limite efectivo de concurrencia lo fija pgbouncer
+    (``default_pool_size``/``max_client_conn``), no la app, por eso NO se pasa
+    ``pool_size`` (NullPool lo ignoraria). En session pooler 5432 / conexion
+    directa si aplica ``pool_size=settings.database_pool_size`` (QueuePool propio).
+    ``pool_pre_ping=True`` se mantiene en ambos: con NullPool+pgbouncer cada
+    checkout es una conexion nueva contra el pooler local, asi que el SELECT 1 es
+    de bajo costo y evita servir conexiones muertas tras un restart de
+    pgbouncer/Supabase. El branching esta cubierto por
+    ``tests/core/test_deps_engine.py`` (regresion del switch de pooler).
     """
     settings = get_settings()
     url = settings.database_url
