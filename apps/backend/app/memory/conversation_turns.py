@@ -14,6 +14,10 @@ método, así toda fila queda forzosamente atada al usuario del store.
 
 Pipeline:
 
+- ``next_seq``: devuelve el próximo ``seq`` libre de una sesión
+  (``MAX(seq)+1``, 0 si la sesión no tiene turnos). El caller lo usa para
+  numerar turnos sin colisionar con el ``UniqueConstraint(session_id, seq)``
+  al reusar una sesión existente (issue #209).
 - ``add``: cifra el plaintext con ``encrypt_for_user`` y hace ``flush`` (NO
   ``commit``): el commit lo da el endpoint (``_run_chat_turn``) en la MISMA
   transacción que la ``ChatSession``, así turnos + sesión son atómicos.
@@ -28,7 +32,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crypto import decrypt_for_user, encrypt_for_user
@@ -63,6 +67,22 @@ class ConversationTurnStore:
         )
         self._session.add(row)
         await self._session.flush()
+
+    async def next_seq(self, session_id: UUID) -> int:
+        """Devuelve el próximo ``seq`` libre de una sesión (``MAX(seq)+1``).
+
+        Si la sesión no tiene turnos, ``MAX(seq)`` es ``NULL``; el ``COALESCE`` a
+        -1 hace que el primer turno arranque en 0. El caller numera el turno user
+        con ``base`` y el del modelo con ``base+1``, así un segundo turno sobre una
+        sesión reusada NO colisiona con ``UniqueConstraint(session_id, seq)``
+        (issue #209). Filtra por ``user_id`` **y** ``session_id`` (aislamiento
+        estructural), igual que el resto del store.
+        """
+        stmt = select(func.coalesce(func.max(ConversationTurn.seq), -1) + 1).where(
+            ConversationTurn.user_id == self._user_id,
+            ConversationTurn.session_id == session_id,
+        )
+        return (await self._session.execute(stmt)).scalar_one()
 
     async def list_for_session(self, session_id: UUID) -> list[ConversationTurnOut]:
         """Lista los turnos de una sesión del usuario, ORDER BY ``seq`` ASC.

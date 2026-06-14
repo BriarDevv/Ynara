@@ -132,6 +132,70 @@ async def test_chat_persists_two_encrypted_turns(db_session: AsyncSession) -> No
 
 
 # ---------------------------------------------------------------------------
+# Multi-turno sobre una sesion REUSADA: seq monotonico, sin colision UNIQUE
+# ---------------------------------------------------------------------------
+
+
+async def test_chat_multi_turn_same_session_increments_seq(db_session: AsyncSession) -> None:
+    """2 POST a la MISMA sesion (session_id en el body) persisten 4 turnos.
+
+    Regresion del bug CRITICAL (issue #209): con ``seq`` hardcodeado a 0/1, el
+    segundo turno reinsertaba seq=0/1 y violaba ``UniqueConstraint(session_id, seq)``
+    en el flush -> IntegrityError -> rollback -> 500 y turno perdido. Con el seq
+    POR SESION (``MAX(seq)+1``), ambos turnos dan 200, la secuencia es [0,1,2,3]
+    monotonica, los roles alternan user/model y los 4 turnos quedan persistidos.
+    """
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_result(_completion(text="primera respuesta", model_name="gemma4"))
+    fake.queue_result(_completion(text="segunda respuesta", model_name="gemma4"))
+
+    client = await _client(db_session, llm_client=fake)
+    try:
+        async with client:
+            first = await client.post(
+                "/v1/chat",
+                json={"text": "hola Ynara", "mode": "vida"},
+                headers=_bearer(user.id),
+            )
+            assert first.status_code == 200
+            session_id = first.json()["session_id"]
+
+            # Segundo turno REUSANDO la sesion (mismo session_id en el body).
+            second = await client.post(
+                "/v1/chat",
+                json={"text": "segunda pregunta", "mode": "vida", "session_id": session_id},
+                headers=_bearer(user.id),
+            )
+            # Antes del fix esto daba 500 (IntegrityError en el flush).
+            assert second.status_code == 200
+            assert second.json()["session_id"] == session_id
+
+        session_uuid = uuid.UUID(session_id)
+        # Los 4 turnos persistidos, ordenados por seq: secuencia monotonica.
+        store = ConversationTurnStore(db_session, user.id)
+        turns = await store.list_for_session(session_uuid)
+        assert [t.seq for t in turns] == [0, 1, 2, 3]
+        # Roles alternados user/model a lo largo de la sesion.
+        assert [t.role for t in turns] == [
+            TurnRole.USER,
+            TurnRole.MODEL,
+            TurnRole.USER,
+            TurnRole.MODEL,
+        ]
+        # Contenido de cada turno (user pregunta / model responde).
+        assert [t.content for t in turns] == [
+            "hola Ynara",
+            "primera respuesta",
+            "segunda pregunta",
+            "segunda respuesta",
+        ]
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+# ---------------------------------------------------------------------------
 # Degradado: no se persiste ningun turno
 # ---------------------------------------------------------------------------
 
