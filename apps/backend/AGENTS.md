@@ -56,7 +56,7 @@ app/
 ├── schemas/           # Pydantic v2 mirror de models + payloads de API
 ├── services/          # lógica de negocio SIN framework (recibe deps por argumento)
 ├── llm/               # capa de inferencia — ver §3
-├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, implementado); audit.py: AuditStore (único punto de inserción en audit_log — sagrado, no editar)
+├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, implementado); audit.py: AuditStore (único punto de inserción en audit_log — sagrado, no editar). config.py: loader de thresholds de `[memory]` (decay, #211) — sibling de COMPORTAMIENTO, no toca columnas (no sagrado)
 ├── workers/           # Celery (celery_app.py + tasks) — autodiscovery en app.workflows
 └── workflows/         # consolidación async + decay procedural + retention de audit_log (purge_audit_log) implementados
 ```
@@ -106,7 +106,7 @@ llm/
 - **Resiliencia**: cadena **primario → secundario on-prem → respuesta degradada**. El fallback es SIEMPRE on-prem (regla #4): cero APIs externas. Nunca propaga una excepción de infra al caller.
 - **Errores** (`errors.py`): la taxonomía nunca expone contenido del usuario en `__str__`/logs (regla #4).
 - **Tools**: los errores vuelven SIEMPRE como dict estructurado `{"error": {"code", "message"}}` — el modelo **jamás** ve un traceback (el `ToolRegistry` blinda con `except Exception`). Fechas vía el tipo `IsoDatetime` (solo ISO 8601, rechaza epoch). **Gemma no llama tools** (solo Qwen); el registry por defecto (`default_registry()`) NO incluye `memory.*`: se construye por separado con `memory_registry(semantic_store)` (M7 implementado) y el router lo combina por modo cuando la memoria está habilitada.
-- **Config single-source**: el serving (`LLM_SERVING`: lista de `{base_url, models}`) vive en `Settings`/`.env` (ADR-013); `served_name` vive en `ynara.config.json[models]`, y parsers / `quantization` / `max_model_len` en `[llm.serving]`. `load_llm_config()` valida coherencia (fail-fast: cada served_name de `LLM_SERVING` debe existir en `[models]`).
+- **Config single-source**: el serving (`LLM_SERVING`: lista de `{base_url, models}`) vive en `Settings`/`.env` (ADR-013); `served_name` vive en `ynara.config.json[models]`, y parsers / `quantization` / `max_model_len` en `[llm.serving]`. `load_llm_config()` valida coherencia (fail-fast: cada served_name de `LLM_SERVING` debe existir en `[models]`). Los thresholds de decay procedural (`decay_interval_days`, `decay_factor`, `stale_threshold`, `hard_delete_threshold`, `hard_delete_min_days`, ADR-007 D1) viven en `ynara.config.json[memory]` y los parsea `app/memory/config.py` (`load_decay_config()`, mismo patrón fail-fast que `llm/config.py`: Pydantic frozen+strict, `MemoryConfigError`, cache `lru_cache`); `app/workflows/decay.py` los lee de ahí. Es **default-safe**: si el bloque `[memory]` no trae las keys, cae a los defaults de ADR-007 D1 (no rompe el job, #211).
 
 ---
 
