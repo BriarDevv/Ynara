@@ -24,16 +24,29 @@ Cuantización AWQ-Marlin para los LLM (ADR-009 D3).
 ./start-vllm.sh             # levanta los 3 procesos en background
 ```
 
-Para producción, usar systemd units por modelo en lugar del script
-(issue #212).
+Para producción, usar las systemd units por modelo en lugar del script:
+[`infra/prod/vllm-gemma.service`](../prod/vllm-gemma.service),
+[`infra/prod/vllm-qwen.service`](../prod/vllm-qwen.service) y
+[`infra/prod/vllm-bge.service`](../prod/vllm-bge.service). Levantar el
+stack completo bajo systemd:
+
+```sh
+systemctl enable --now vllm-gemma.service vllm-qwen.service vllm-bge.service
+```
 
 ## Topología (cómo lo ve el backend)
 
-La co-residencia se expresa como `LLM_TOPOLOGY=split_process`: dos
-base_url de LLM (primary=gemma `:8001`, secondary=qwen `:8002`) detrás
-del `ClientPool`, **ambos procesos en la misma GPU**. El embedder se
-prende con `EMBEDDING_BACKEND=vllm` apuntando a `:8003`. (En dev con
-Ollama, que sirve todo en un endpoint, la topología es `single_process`.)
+La topología operativa es **`single_process` co-residente** (ADR-012 D2):
+los tres modelos (gemma 12B + qwen 9B + bge-m3) cargan a la vez en la
+misma GPU 16 GB, **sin swap ni alternancia LRU**. A nivel de procesos
+vLLM eso son tres procesos (uno por modelo, ADR-013 / ADR-009 D1), que el
+backend ve vía `LLM_SERVING` (gemma `:8001`, qwen `:8002`) detrás del
+`ClientPool`, más el embedder con `EMBEDDING_BACKEND=vllm` apuntando a
+`:8003`. La co-residencia (los dos LLM + el embedder cargados
+simultáneamente) es lo que define `single_process` en la abstracción de
+ADR-009 D1, no la cantidad de procesos del sistema. En dev con Ollama
+(un solo endpoint que sirve todos los modelos) la topología es la misma:
+`single_process` co-residente.
 
 ## Configuración (provisional — issue #207)
 
@@ -49,7 +62,8 @@ Los valores de `start-vllm.sh` salen de la medición en Ollama/GGUF
 ## Resueltas por ADR-012 (antes "Open questions")
 
 - ¿Los dos en paralelo o alternancia LRU? → **Co-residentes**
-  (`split_process`, sin swap): el 26B no entraba en 16 GB, el 12B sí.
+  (`single_process` co-residente, sin swap): el 26B no entraba en 16 GB,
+  el 12B sí.
 - ¿Tamaño de cuantización? → AWQ-Marlin Q4 (ADR-009 D3); medir
   KV/contexto reales en #207.
 - ¿Si la 4080 satura? → bajar `--max-model-len` de Qwen o cuantizar KV;
