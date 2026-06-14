@@ -78,6 +78,7 @@ def test_load_real_repo_config() -> None:
     # served_name y parser se resuelven por modo / modelo.
     assert cfg.model_for_mode("memoria").served_name == "qwen"
     assert cfg.tool_parser_for("gemma-4-12b") == "gemma4"
+    assert cfg.serving.max_model_len["gemma-4-12b"] == 8192
     assert cfg.serving.max_model_len["qwen-3.5-9b"] == 32768
 
 
