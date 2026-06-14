@@ -205,12 +205,20 @@ async def _run_chat_turn(
     #       al resumen episodico.
     if resp.finish_reason != "degraded" and resp.text:
         turns_store = ConversationTurnStore(session, user_id)
+        # seq POR SESION (no hardcodeado): el proximo libre es MAX(seq)+1 de la
+        # sesion (0 si esta vacia). Hardcodear 0/1 rompia el SEGUNDO turno de una
+        # sesion reusada (session_id en el body -> resolve_chat_session REUSA la
+        # ChatSession) con IntegrityError sobre UniqueConstraint(session_id, seq)
+        # en el flush -> rollback -> 500 y turno perdido (issue #209). El turno user
+        # va en ``base`` y el del modelo en ``base+1``: secuencia monotonica
+        # alternada user/model a lo largo de la sesion.
+        base = await turns_store.next_seq(chat_session.id)
         await turns_store.add(
             ConversationTurnCreate(
                 session_id=chat_session.id,
                 role=TurnRole.USER,
                 content=body.text,
-                seq=0,
+                seq=base,
             )
         )
         await turns_store.add(
@@ -218,7 +226,7 @@ async def _run_chat_turn(
                 session_id=chat_session.id,
                 role=TurnRole.MODEL,
                 content=resp.text,
-                seq=1,
+                seq=base + 1,
             )
         )
 
