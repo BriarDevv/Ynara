@@ -1,5 +1,7 @@
 # ADR-002: Dual stack Gemma 4 + Qwen 3.5
 
+> **Actualización (ADR-012):** en hardware de 16 GB el conversacional pasó de Gemma 4 26B-A4B a Gemma 4 12B. Ver [ADR-012](./ADR-012-conversational-model-12b-single-process.md).
+
 ## Estado
 Aceptado
 
