@@ -91,6 +91,14 @@ y el router no la inyecta automáticamente — el agente puede preguntar
 al usuario antes de actuar. Borrado físico cuando `confidence < 0.1` Y
 `last_reinforced_at > 90 días`.
 
+Los 5 thresholds (`decay_interval_days`, `decay_factor`,
+`stale_threshold`, `hard_delete_threshold`, `hard_delete_min_days`) son
+**config-driven** vía `ynara.config.json[memory]` (no hardcodeados): los
+parsea `app/memory/config.py` (mismo patrón fail-fast que
+`app/llm/config.py`) y `app/workflows/decay.py` los lee de ahí. Si el
+bloque falta o trae valores parciales, el loader cae a los defaults de
+ADR-007 D1 (los de arriba), así un config viejo no rompe el job (#211).
+
 ### Retention de memoria episódica
 
 Default: 12 meses. Modo **Bienestar**: 6 meses (configurable

@@ -28,9 +28,9 @@ app/
 ├── schemas/         # Pydantic v2 (mirror de models + payloads de API)
 ├── services/        # lógica de negocio sin framework (deps por argumento)
 ├── llm/             # capa de inferencia — config, clients/, prompts/, tools/, router (M8)
-├── memory/          # 🔴 wrappers de las 3 capas sagradas + AuditStore (escritura de audit_log)
+├── memory/          # 🔴 wrappers de las 3 capas sagradas + AuditStore (escritura de audit_log) + config.py (loader de thresholds de [memory], no sagrado)
 ├── workers/         # Celery (consolidación async)
-└── workflows/       # consolidación + decay + retention de audit_log implementados
+└── workflows/       # consolidación + decay (thresholds config-driven vía [memory]) + retention de audit_log implementados
 
 alembic/             # Migraciones (env.py acepta TEST_DATABASE_URL)
 docs/                # Catálogos vivos (MODELS, ENDPOINTS, TOOLS, MIGRATIONS)
