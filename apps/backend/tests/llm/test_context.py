@@ -489,7 +489,7 @@ def test_build_memory_context_vida_only_procedural() -> None:
     """Modo 'vida': solo procedural layer -> solo ProceduralMemoryStore."""
     mode_cfg = ModeConfig(
         name="vida",
-        model="gemma-4-26b-a4b",
+        model="gemma-4-12b",
         memory_layers=["procedural"],
         tools_enabled=[],
         tone="casual-rioplatense",
@@ -620,7 +620,7 @@ async def test_integration_vida_only_procedural(db_session: Any) -> None:
 
     mode_cfg = ModeConfig(
         name="vida",
-        model="gemma-4-26b-a4b",
+        model="gemma-4-12b",
         memory_layers=["procedural"],
         tools_enabled=[],
         tone="casual-rioplatense",
@@ -767,7 +767,7 @@ async def test_integration_procedural_filters_stale_and_orders_confidence(
 
     mode_cfg = ModeConfig(
         name="vida",
-        model="gemma-4-26b-a4b",
+        model="gemma-4-12b",
         memory_layers=["procedural"],
         tools_enabled=[],
         tone="casual-rioplatense",

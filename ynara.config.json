@@ -11,19 +11,19 @@
       "tone": "neutro-eficaz"
     },
     "estudio": {
-      "model": "gemma-4-26b-a4b",
+      "model": "gemma-4-12b",
       "memory_layers": ["episodic", "procedural"],
       "tools_enabled": [],
       "tone": "encouragement"
     },
     "bienestar": {
-      "model": "gemma-4-26b-a4b",
+      "model": "gemma-4-12b",
       "memory_layers": ["procedural", "semantic"],
       "tools_enabled": [],
       "tone": "casual-empatico"
     },
     "vida": {
-      "model": "gemma-4-26b-a4b",
+      "model": "gemma-4-12b",
       "memory_layers": ["procedural"],
       "tools_enabled": [],
       "tone": "casual-rioplatense"
@@ -36,7 +36,7 @@
     }
   },
   "models": {
-    "gemma-4-26b-a4b": {
+    "gemma-4-12b": {
       "role": "conversational",
       "writes_memory": false,
       "served_name": "gemma4",
@@ -52,13 +52,13 @@
   "llm": {
     "serving": {
       "tool_parsers": {
-        "gemma-4-26b-a4b": "gemma4",
+        "gemma-4-12b": "gemma4",
         "qwen-3.5-9b": "hermes"
       },
       "quantization": "awq_marlin",
       "kv_cache_dtype": "fp8",
       "max_model_len": {
-        "gemma-4-26b-a4b": 4096,
+        "gemma-4-12b": 8192,
         "qwen-3.5-9b": 32768
       },
       "request_timeout_s": 120

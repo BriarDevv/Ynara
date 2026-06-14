@@ -72,12 +72,12 @@ def test_load_real_repo_config() -> None:
     """El ``ynara.config.json`` real del repo carga sin errores."""
     cfg = load_llm_config(settings=_settings())
     assert isinstance(cfg, LlmRuntimeConfig)
-    assert set(cfg.models) == {"gemma-4-26b-a4b", "qwen-3.5-9b"}
+    assert set(cfg.models) == {"gemma-4-12b", "qwen-3.5-9b"}
     assert cfg.topology == "split_process"
     assert cfg.primary_base_url == "http://localhost:8001/v1"
     # served_name y parser se resuelven por modo / modelo.
     assert cfg.model_for_mode("memoria").served_name == "qwen"
-    assert cfg.tool_parser_for("gemma-4-26b-a4b") == "gemma4"
+    assert cfg.tool_parser_for("gemma-4-12b") == "gemma4"
     assert cfg.serving.max_model_len["qwen-3.5-9b"] == 32768
 
 
