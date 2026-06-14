@@ -184,8 +184,11 @@ async def _async_decay(
         return await _run(session)
 
     # Modo produccion: engine con NullPool (decision #4), commit + dispose.
-    cfg = settings or get_settings()
-    db_url = _normalize_db_url(cfg.database_url)
+    # NOTA: binding separado (``_settings``, NO ``cfg``) para no pisar el
+    # ``DecayConfig`` capturado por el closure ``_run``: este ultimo lee
+    # ``cfg.decay_factor`` etc. y ``_run`` se invoca despues de esta linea.
+    _settings = settings or get_settings()
+    db_url = _normalize_db_url(_settings.database_url)
     engine = create_async_engine(db_url, poolclass=NullPool)
     try:
         maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)

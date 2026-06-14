@@ -9,10 +9,18 @@ Validan dos cosas:
    ``beat_schedule`` MATCHEA un name realmente registrado en ``celery_app.tasks``
    por el decorador ``@celery_app.task(name=...)`` del workflow. Se importan los
    modulos de workflows para forzar el registro antes de assertear.
+3. Robustez en IMPORT-TIME del beat (#211): ``_DECAY_INTERVAL_DAYS`` se calcula
+   al importar el modulo via ``load_decay_config()``, que puede levantar
+   ``MemoryConfigError`` (config ausente/invalido). El modulo lo envuelve en
+   try/except con fallback al default literal (14) para que el worker NUNCA se
+   tumbe al importar antes de registrar las tasks.
 """
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import textwrap
 from datetime import timedelta
 
 # Importar las tasks de workflows las REGISTRA en celery_app.tasks via el
@@ -86,3 +94,56 @@ class TestBeatScheduleConsistency:
         entry = celery_app.conf.beat_schedule["decay-procedural-every-interval"]
         assert isinstance(entry["schedule"], timedelta)
         assert entry["schedule"].days >= 1
+
+
+class TestDecayIntervalImportTimeFallback:
+    """``_DECAY_INTERVAL_DAYS`` resiste un config invalido/ausente en import-time."""
+
+    def test_import_does_not_crash_and_falls_back_when_config_raises(self) -> None:
+        """Importar ``celery_app`` con un config roto NO crashea: el beat cae a 14.
+
+        El fallback corre en IMPORT-TIME, antes de registrar las tasks. Para
+        ejercitarlo sin reload (que contaminaria el ``celery_app`` global que
+        comparte el resto de la suite) se importa el modulo en un SUBPROCESO
+        limpio con ``load_decay_config`` parcheado para tirar
+        ``MemoryConfigError``. Si el try/except faltara, el import explotaria y
+        el subproceso saldria con codigo != 0; ademas se verifica que el valor
+        resultante es el default literal (14).
+        """
+        script = textwrap.dedent(
+            """
+            import app.memory.config as mem_config
+            from app.memory.config import MemoryConfigError
+
+
+            def _boom(*args, **kwargs):
+                raise MemoryConfigError("config invalido a proposito")
+
+
+            # Parchear ANTES de importar celery_app: el modulo llama
+            # load_decay_config() en su cuerpo (import-time).
+            mem_config.load_decay_config = _boom
+
+            from app.workers import celery_app
+
+            assert celery_app._DECAY_INTERVAL_DAYS == 14, celery_app._DECAY_INTERVAL_DAYS
+            print("OK", celery_app._DECAY_INTERVAL_DAYS)
+            """
+        )
+        result = subprocess.run(  # noqa: S603 -- input fijo: sys.executable + script hardcodeado, sin data externa
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, (
+            "el import de celery_app crasheo con config invalido "
+            f"(stdout={result.stdout!r} stderr={result.stderr!r})"
+        )
+        assert "OK 14" in result.stdout
+
+    def test_uses_config_value_on_happy_path(self) -> None:
+        """Sin fallo, ``_DECAY_INTERVAL_DAYS`` viene del config real (14 por default)."""
+        from app.workers.celery_app import _DECAY_INTERVAL_DAYS
+
+        assert _DECAY_INTERVAL_DAYS == 14

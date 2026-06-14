@@ -22,17 +22,27 @@ from datetime import timedelta
 from celery import Celery
 
 from app.core.config import get_settings
-from app.memory.config import load_decay_config
+from app.memory.config import MemoryConfigError, load_decay_config
 
 settings = get_settings()
 
 # Cadencia del decay procedural (M8 Ola 3, ADR-007 D1). Se lee del loader de
 # ``ynara.config.json[memory]`` (#211) en vez de importarlo de
 # ``app.workflows.decay`` para evitar el ciclo de import (ese modulo importa
-# ``celery_app`` de aqui). ``load_decay_config()`` es default-safe en
-# import-time: si el bloque ``[memory]`` no trae el threshold cae al default de
-# ADR-007 D1 (14 dias), asi el beat siempre tiene un valor al importar.
-_DECAY_INTERVAL_DAYS = load_decay_config().decay_interval_days
+# ``celery_app`` de aqui). ``load_decay_config()`` es default-safe cuando el
+# bloque ``[memory]`` no trae el threshold (cae al default de ADR-007 D1), pero
+# AUN puede levantar ``MemoryConfigError`` si ``ynara.config.json`` falta, no es
+# JSON valido o trae un valor invalido. Como esto corre en IMPORT-TIME, una
+# excepcion aca tumbaria el worker ANTES de registrar las tasks. Por eso se
+# envuelve en try/except con fallback al default literal (14 dias): el job nunca
+# tumba el worker por un config ausente/invalido (la red final del task Celery
+# sigue siendo su propio try/except). El override del operador via config se
+# pierde si el config es invalido, pero el beat arranca igual.
+_DECAY_INTERVAL_DAYS_FALLBACK = 14
+try:
+    _DECAY_INTERVAL_DAYS = load_decay_config().decay_interval_days
+except MemoryConfigError:
+    _DECAY_INTERVAL_DAYS = _DECAY_INTERVAL_DAYS_FALLBACK
 
 celery_app = Celery(
     "ynara",
