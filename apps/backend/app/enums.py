@@ -85,3 +85,18 @@ class AuditOperation(StrEnum):
     WRITE = "write"
     UPDATE = "update"
     DELETE = "delete"
+
+
+class TurnRole(StrEnum):
+    """Rol de un turno de conversación persistido en ``conversation_turns``.
+
+    Tipo PG ``turn_role_enum`` — dueño: ``ConversationTurn.role`` en
+    ``app/models/conversation_turn.py`` (único consumidor por ahora,
+    ``create_type=True``). ``conversation_turns`` es una tabla OPERATIVA
+    (buffer transitorio que se purga tras la consolidación episódica), no
+    sagrada; pero su ``content`` viaja cifrado AES-256-GCM per-user igual que
+    la memoria del moat (regla #4).
+    """
+
+    USER = "user"
+    MODEL = "model"

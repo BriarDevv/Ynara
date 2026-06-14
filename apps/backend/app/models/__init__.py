@@ -7,6 +7,7 @@ Tablas sagradas (memoria) tienen reglas especiales: ver
 
 from app.models.audit import AuditLog
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
+from app.models.conversation_turn import ConversationTurn
 from app.models.memory import (
     EMBEDDING_DIM,
     EpisodicMemory,
@@ -21,6 +22,7 @@ __all__ = [
     "AuditLog",
     "Base",
     "ChatSession",
+    "ConversationTurn",
     "EpisodicMemory",
     "ProceduralMemory",
     "SemanticMemory",

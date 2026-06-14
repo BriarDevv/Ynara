@@ -37,6 +37,7 @@ schemas Pydantic.
 | `MemoryLayer` | `memory_layer_enum` | semantic, episodic, procedural | `audit_log.target_layer` |
 | `LlmModel` | `llm_model_enum` | gemma, qwen | `audit_log.origin_model` |
 | `AuditOperation` | `audit_operation_enum` | read, write, update, delete | `audit_log.operation` |
+| `TurnRole` | `turn_role_enum` | user, model | `conversation_turns.role` (dueño, único consumidor) |
 
 ## Tablas sagradas 🔴
 
@@ -214,6 +215,41 @@ Una sesión es una conversación contigua de un usuario en un modo fijo.
 
 **Relación con `episodic_memory`**: 1-a-1 (UNIQUE en `episodic_memory.session_id`).
 Al cerrar la sesión, un worker Celery genera la entrada episódica.
+
+### conversation_turns
+
+**OPERATIVA**, no sagrada (sin 🔴): buffer **transitorio** de los turnos crudos
+(user/modelo) de una sesión. Es la **fuente** que el worker episódico
+(`consolidate_session`, issue #209) lee al cerrar la sesión para resumir y
+persistir en `episodic_memory` (sagrada), y que luego **purga**
+(`ConversationTurnStore.purge_session`): retención **efímera**, no almacenamiento
+de largo plazo. El resumen consolidado vive en `episodic_memory`; los turnos
+crudos se borran tras consolidar.
+
+Aun siendo operativa, el `content` viaja **cifrado AES-256-GCM per-user** (regla
+#4: cero PII en claro en la DB) — exactamente como `semantic_memory.content` /
+`episodic_memory.summary`. El cifrado lo hace el store
+(`app/memory/conversation_turns.py`), no el modelo. Se escribe en `/v1/chat` y
+`/v1/chat/stream` (vía `_run_chat_turn`), en la **misma** transacción que la
+`ChatSession` (turnos + sesión atómicos); no se persiste si el turno degradó.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | `gen_random_uuid()` |
+| `user_id` | UUID FK → users.id, ON DELETE CASCADE | indexed btree |
+| `session_id` | UUID FK → sessions.id, ON DELETE CASCADE | indexed btree |
+| `role` | `turn_role_enum` NOT NULL | `user` o `model` |
+| `content` | BYTEA NOT NULL | Cifrado AES-256-GCM (key derivada por usuario, ADR-007 D3) |
+| `seq` | INTEGER NOT NULL | Orden monotónico por sesión (0 = primer turno user, 1 = primera respuesta model, ...) |
+| `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
+
+**Constraint**:
+- `UNIQUE (session_id, seq)` — un turno por posición en la sesión (idempotencia de orden).
+
+**Índices**:
+- `ix_conversation_turns_user_id` (btree, por `user_id`).
+- `ix_conversation_turns_session_id` (btree, por `session_id`).
+- `ix_conversation_turns_session_id_seq` (btree compuesto, `(session_id, seq)`) — sirve la lectura ordenada que hace el worker.
 
 ## Migración inicial
 
