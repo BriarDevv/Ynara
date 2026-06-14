@@ -10,7 +10,7 @@ export const STEP_COPY: Record<
   { eyebrow: string; title: string; subtitle: string }
 > = {
   auth: {
-    eyebrow: "Paso 1 — Tu cuenta",
+    eyebrow: "Paso 1 — Cuenta",
     title: "Antes que nada",
     subtitle: "Me hace falta una cuenta para acordarme de vos.",
   },
@@ -25,7 +25,7 @@ export const STEP_COPY: Record<
     subtitle: "Elegí lo que aplique. Te voy a entender mejor.",
   },
   modos: {
-    eyebrow: "Paso 4 — Para qué",
+    eyebrow: "Paso 4 — Para qué te sirvo",
     title: "¿Para qué te puedo servir?",
     subtitle: "Empezás por lo que te interese. Después abrís más.",
   },
