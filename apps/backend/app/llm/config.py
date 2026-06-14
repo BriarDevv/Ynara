@@ -192,12 +192,23 @@ def _validate_coherence(
                 f"context_window del modelo ({model.context_window})"
             )
 
-    # ADR-013: cada served_name anunciado en LLM_SERVING debe existir en los
-    # models de ynara.config.json (fail-fast: un typo en .env no rutea a nada).
+    # ADR-013: validar la lista LLM_SERVING (fail-fast: un .env mal armado no
+    # debe bootear con ruteo roto o un httpx.AsyncClient huerfano).
     if not serving_endpoints:
         raise LlmConfigError("LLM_SERVING está vacío: declarar al menos un proceso vLLM")
     served_names = {model.served_name for model in models.values()}
+    seen_base_urls: set[str] = set()
     for entry in serving_endpoints:
+        # base_url duplicada: el factory keyea por base_url -> el 2do client
+        # pisaria al 1ro (su httpx queda huerfano, nunca se cierra) y el pool
+        # tendria dos slots al MISMO client. N instancias = N base_urls distintas.
+        if entry.base_url in seen_base_urls:
+            raise LlmConfigError(f"LLM_SERVING: base_url duplicada: {entry.base_url!r}")
+        seen_base_urls.add(entry.base_url)
+        # entrada sin models: el client nunca seria elegido (serves_model->False)
+        # y el modelo daria ModelNotServedError en runtime sin aviso al boot.
+        if not entry.models:
+            raise LlmConfigError(f"LLM_SERVING: la entrada {entry.base_url!r} no declara 'models'")
         for name in entry.models:
             if name not in served_names:
                 raise LlmConfigError(f"LLM_SERVING referencia served_name desconocido: {name!r}")

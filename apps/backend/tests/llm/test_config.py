@@ -130,6 +130,41 @@ def test_serving_unknown_served_name_raises(tmp_path: Path) -> None:
         load_llm_config(config_path=path, settings=settings)
 
 
+def test_serving_duplicate_base_url_raises(tmp_path: Path) -> None:
+    """``LLM_SERVING`` con base_url repetida dispara fail-fast (ADR-013).
+
+    El factory keyea por base_url: dos entradas con la misma URL pisarian un
+    client (httpx huerfano) y el pool quedaria con dos slots al mismo client.
+    """
+    path = _write(tmp_path, _base_config())
+    settings = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        DATABASE_URL="postgresql://x",
+        REDIS_URL="redis://x",
+        JWT_SECRET="x",
+        LLM_SERVING=[
+            {"base_url": "http://a:9000/v1", "models": ["qwen"]},
+            {"base_url": "http://a:9000/v1", "models": ["qwen"]},
+        ],
+    )
+    with pytest.raises(LlmConfigError, match="base_url duplicada"):
+        load_llm_config(config_path=path, settings=settings)
+
+
+def test_serving_empty_models_raises(tmp_path: Path) -> None:
+    """``LLM_SERVING`` con una entrada sin models dispara fail-fast (ADR-013)."""
+    path = _write(tmp_path, _base_config())
+    settings = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        DATABASE_URL="postgresql://x",
+        REDIS_URL="redis://x",
+        JWT_SECRET="x",
+        LLM_SERVING=[{"base_url": "http://a:9000/v1", "models": []}],
+    )
+    with pytest.raises(LlmConfigError, match="no declara 'models'"):
+        load_llm_config(config_path=path, settings=settings)
+
+
 # ---------- Fail-fast ----------
 
 
