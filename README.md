@@ -118,8 +118,12 @@ Si tenés la 4080 Super o GPU NVIDIA con CUDA 12.x:
 ```
 
 Sin GPU, el backend corre con Fakes (`FakeLlmClient`) por defecto. Para
-apuntar a Ollama/vLLM real, setear `LLM_PRIMARY_BASE_URL` /
-`LLM_SECONDARY_BASE_URL` (+ `LLM_TOPOLOGY`) en `apps/backend/.env`.
+apuntar a Ollama/vLLM real, setear `LLM_BACKEND=vllm` (el flag que activa
+los clientes reales) y declarar el destino del serving en `LLM_SERVING`
+(lista JSON de procesos `{base_url, models}`) en `apps/backend/.env`.
+`LLM_SERVING` indica *dónde* corre cada modelo pero no activa por sí solo
+el serving real; el switch es `LLM_BACKEND`. En `production` el serving
+real se fuerza igual. Ver [`ADR-013`](./docs/architecture/adrs/ADR-013-serving-endpoints-config.md).
 
 Guía paso a paso completa: [`docs/operations/INSTALL.md`](./docs/operations/INSTALL.md).
 Flujo de desarrollo diario: [`docs/operations/LOCAL-DEV.md`](./docs/operations/LOCAL-DEV.md).
