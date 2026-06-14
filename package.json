@@ -29,12 +29,13 @@
     "turbo": "^2.0.0",
     "typescript": "^5.6.0"
   },
-  "//pnpm-overrides": "react-dom pineado a 19.0.0 para igualar a react@19.0.0: pnpm resolvía react-dom 19.2.x y el mismatch rompía vitest/RTL (Incompatible React versions). Quitar cuando react y react-dom converjan solos en la misma minor.",
-  "//pnpm-overrides-types-react": "@types/react pineado a 19.0.14 para una sola copia en el workspace: con @ynara/core consumido por web, dos versiones de @types/react (web 19.2.x vs core 19.0.x) hacían que ReactNode no fuera asignable entre packages. 19.0.x es la línea correcta para react@19.0.0. Quitar cuando todo converja en la misma minor.",
+  "//pnpm-overrides-react": "react y react-dom pineados a 19.1.0 (una sola versión en todo el workspace): mobile (Expo SDK 54) exige react 19.1.0 y la web estaba en 19.0.0. @ynara/core trae zustand y, con dos versiones de react en el árbol, mobile bundleaba DOS copias de React → los hooks fallaban en runtime ('Cannot read property useCallback of null'). Una sola versión hace que core y el renderer usen la misma instancia. react-dom va emparejado para no romper vitest/RTL en web (Incompatible React versions). Next 16 soporta react 19.1.",
+  "//pnpm-overrides-types-react": "@types/react pineado a 19.1.17 (la versión de SDK 54): una sola copia para que ReactNode sea asignable entre packages compartidos.",
   "pnpm": {
     "overrides": {
-      "react-dom": "19.0.0",
-      "@types/react": "19.0.14"
+      "react": "19.1.0",
+      "react-dom": "19.1.0",
+      "@types/react": "19.1.17"
     }
   },
   "license": "UNLICENSED"
