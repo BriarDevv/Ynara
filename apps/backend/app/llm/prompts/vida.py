@@ -1,6 +1,6 @@
 """System prompt del modo Vida.
 
-Modelo Gemma 4 26B-A4B (conversacional): solo lee memoria, no escribe. Tono
+Modelo Gemma 4 12B (conversacional): solo lee memoria, no escribe. Tono
 casual-rioplatense. Capa de memoria: procedural. Ver
 ``ynara.config.json[modes][vida]`` y MODES.md.
 
