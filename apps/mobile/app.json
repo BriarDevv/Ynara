@@ -26,10 +26,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "TODO: completar projectId real cuando exista en EAS"
-      }
+      "router": {}
     }
   }
 }
