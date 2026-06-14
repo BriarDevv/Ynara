@@ -7,10 +7,10 @@ import { useUserStore } from "@/stores/user";
 /**
  * Cierre del onboarding (mobile).
  *
- * IMPORTANTE: por ahora es un cierre LOCAL — traslada el draft al user store y
- * marca el onboarding como completo, SIN el `POST /v1/user/onboard` real (eso
- * llega cuando levantemos el backend; ver TODO). El AuthStep tampoco está
- * todavía, así que normalmente no hay token en el draft.
+ * Traslada el draft al user store (incluido el token que dejó el AuthStep) y
+ * marca el onboarding como completo. El backend NO tiene `POST /v1/user/onboard`:
+ * el flag `onboarding_completed` se maneja client-side, y nombre/mood/modos
+ * quedan en el user store (no hay endpoint para persistirlos todavía).
  */
 export function useCompleteOnboarding() {
   const router = useRouter();
@@ -21,8 +21,8 @@ export function useCompleteOnboarding() {
     const draft = useOnboardingStore.getState();
     const user = useUserStore.getState();
 
-    // TODO(backend): await api.post("/v1/user/onboard", payload) antes de
-    // propagar, y manejar el error. Por ahora cierre local.
+    // Cierre local (no hay endpoint de onboard): el token ya viene del AuthStep
+    // en el draft y acá se commitea al user store, de donde lo lee el cliente API.
     user.setDisplayName(draft.displayName);
     user.setMood(draft.mood, draft.moodFreeText);
     user.setInterestedModes(draft.interestedModes as Mode[]);
