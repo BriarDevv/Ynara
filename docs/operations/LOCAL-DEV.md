@@ -47,14 +47,12 @@ Si querés apuntar a un servidor de inferencia real (vLLM o Ollama),
 configurá las siguientes variables en `apps/backend/.env`:
 
 ```sh
-# Servidor primario (ej.: vLLM con Qwen en GPU local)
-LLM_PRIMARY_BASE_URL=http://localhost:8000/v1
-
-# Servidor secundario (ej.: Ollama como fallback)
-LLM_SECONDARY_BASE_URL=http://localhost:11434/v1
-
-# Topología: "single" (un server) o "split_process" (primario+secundario)
-LLM_TOPOLOGY=split_process
+# LLM_SERVING (ADR-013): lista de procesos vLLM, cada uno {base_url, models}.
+# Los served_name (gemma4/qwen) salen de ynara.config.json[models].
+# Ej. Ollama dev (un endpoint sirve todos los modelos):
+LLM_SERVING=[{"base_url":"http://localhost:11434/v1","models":["gemma4","qwen"]}]
+# Ej. vLLM co-residente (un proceso por modelo, distintos puertos):
+# LLM_SERVING=[{"base_url":"http://localhost:8001/v1","models":["gemma4"]},{"base_url":"http://localhost:8002/v1","models":["qwen"]}]
 ```
 
 Si usás Ollama como backend:
