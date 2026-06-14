@@ -54,6 +54,9 @@ from app.core.config import Settings
 _URL_TXN_POOLER = "postgresql+asyncpg://postgres:pw@aws-0.pooler.supabase.com:6543/postgres"
 _URL_SESSION_POOLER = "postgresql+asyncpg://postgres:pw@aws-0.pooler.supabase.com:5432/postgres"
 _URL_DIRECT = "postgresql+asyncpg://postgres:pw@db.ref.supabase.co:5432/postgres"
+# DSN SIN puerto explicito: ``urlsplit().port`` devuelve ``None`` (no asume el
+# 5432 por default). ``None != 6543`` -> cae al ``else`` -> QueuePool + pool_size.
+_URL_NO_PORT = "postgresql+asyncpg://postgres:pw@db.ref.supabase.co/postgres"
 # Mismo DSN del transaction pooler pero en formato sync (sin ``+asyncpg``): el
 # branch de normalizacion debe reescribirlo a ``postgresql+asyncpg://``.
 _URL_SYNC_SCHEME = "postgresql://postgres:pw@aws-0.pooler.supabase.com:6543/postgres"
@@ -150,6 +153,29 @@ def test_session_pooler_and_direct_use_pool_size_without_nullpool(
     assert kwargs["pool_size"] == _POOL_SIZE
     assert kwargs["connect_args"]["statement_cache_size"] == 0
     # En este branch el pooling lo hace SQLAlchemy: NullPool NO debe aparecer.
+    assert "poolclass" not in kwargs
+
+
+def test_url_without_explicit_port_falls_back_to_pool_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DSN SIN puerto -> ``urlsplit().port is None`` -> ``else`` (QueuePool + pool_size).
+
+    Edge case del branching: una URL sin ``:puerto`` deja ``port == None``, que NO
+    es ``6543``, asi que cae al branch de pooling app-side (comportamiento correcto:
+    el transaction pooler SIEMPRE expone el 6543 explicito; sin puerto es conexion
+    directa/session). Regresion contra un futuro ``port == 6543`` mal escrito (p.ej.
+    ``in (6543, None)``) que prenderia NullPool por error.
+    """
+    captured = _patch_create_async_engine(monkeypatch)
+    monkeypatch.setattr(deps, "get_settings", lambda: _settings(_URL_NO_PORT))
+
+    deps.get_engine()
+
+    kwargs = captured["kwargs"]
+    assert kwargs["pool_size"] == _POOL_SIZE
+    assert kwargs["connect_args"]["statement_cache_size"] == 0
+    # Sin puerto NO es transaction pooler: NullPool NO debe aparecer.
     assert "poolclass" not in kwargs
 
 
