@@ -30,7 +30,7 @@ flowchart TB
       API[FastAPI<br/>gunicorn + uvicorn]
       WORK[Celery workers]
       REDIS[Redis<br/>Docker o Upstash]
-      VLLM_G[vLLM<br/>Gemma 4 26B-A4B]
+      VLLM_G[vLLM<br/>Gemma 4 12B]
       VLLM_Q[vLLM<br/>Qwen 3.5 9B]
       GPU[RTX 4080 Super 16GB]
     end
@@ -64,9 +64,12 @@ self-hosted en la misma VPS o en VPS dedicada. Detalle del cutover en
 
 ## Notas
 
-- La 4080 Super tiene 16 GB de VRAM. Cargar Gemma 4 26B-A4B
-  cuantizado + Qwen 3.5 9B cuantizado simultáneamente es tight pero
-  posible; alternativa es alternancia con cache LRU.
+- La 4080 Super tiene 16 GB de VRAM. Gemma 4 12B (dense) cuantizado
+  + Qwen 3.5 9B cuantizado + bge-m3 co-residen dentro de los 16 GB
+  (confirmado por medición — ADR-012). En vLLM son 2 procesos en la
+  misma GPU (`LLM_TOPOLOGY=split_process`); en dev con Ollama, un
+  endpoint único (`single_process`). El Gemma 4 26B-A4B original no
+  entraba; el cambio a 12B cerró esa restricción de VRAM.
 - Cloudflare Tunnel evita abrir puertos en la VPS y oculta IP real.
 - R2 para storage de exports de usuario, backups cifrados, assets
   estáticos pesados.

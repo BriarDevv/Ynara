@@ -6,7 +6,7 @@
 
 **Qué es Ynara**: asistente personal adaptativo on-prem con memoria propia.
 
-**Stack**: Next.js 16 (web) + Expo 53+ (mobile) + FastAPI + Pydantic v2 + SQLAlchemy 2 async (backend) + vLLM con dual stack Gemma 4 26B-A4B (conversacional) + Qwen 3.5-9B (agente) + memoria in-house (3 stores semantic/episodic/procedural, AES-256-GCM per-user — ADR-010) + Postgres 16 + pgvector.
+**Stack**: Next.js 16 (web) + Expo 53+ (mobile) + FastAPI + Pydantic v2 + SQLAlchemy 2 async (backend) + vLLM con dual stack Gemma 4 12B (conversacional) + Qwen 3.5-9B (agente) + memoria in-house (3 stores semantic/episodic/procedural, AES-256-GCM per-user — ADR-010) + Postgres 16 + pgvector.
 
 **Reglas más críticas**:
 
@@ -213,9 +213,9 @@ Reglas extendidas (15 más + landmines del scaffold): [`docs/conventions/AI-GUID
 | Modo | Modelo | Capas de memoria | Tools |
 | --- | --- | --- | --- |
 | productividad | Qwen 3.5-9B (agente) | semantic + episodic | calendar, reminder, memory |
-| estudio | Gemma 4 26B-A4B | episodic + procedural | — |
-| bienestar | Gemma 4 26B-A4B | procedural + semantic | — |
-| vida | Gemma 4 26B-A4B | procedural | — |
+| estudio | Gemma 4 12B | episodic + procedural | — |
+| bienestar | Gemma 4 12B | procedural + semantic | — |
+| vida | Gemma 4 12B | procedural | — |
 | memoria | Qwen 3.5-9B (agente) | las 3 capas | memory |
 
 - **Gemma solo lee memoria.** No escribe, no llama tools.

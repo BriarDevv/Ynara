@@ -3,7 +3,7 @@
 > **Estado**: v2 — M0–M9 ejecutados y mergeados; infra vLLM real pendiente
 > **Fecha**: 2026-05-29 · **Actualizado**: 2026-05-31
 > **Alcance**: `apps/backend/app/llm/` — capa que sirve el dual-stack
-> (Gemma 4 26B-A4B + Qwen 3.5-9B) sobre la RTX 4080 Super, más la
+> (Gemma 4 12B + Qwen 3.5-9B) sobre la RTX 4080 Super, más la
 > conexión escalable a Supabase. La lógica de router + memoria + prompts
 > se cruza con la card hermana *Arquitectura de memoria contextual*.
 > **Fuentes**: [`AGENTS.md`](../../AGENTS.md),

@@ -9,7 +9,7 @@ sequenceDiagram
     participant API as FastAPI /v1/chat
     participant R as Router LLM
     participant M as Memoria
-    participant G as Gemma 4 26B (conv)
+    participant G as Gemma 4 12B (conv)
     participant Q as Qwen 3.5 9B (agente)
     participant T as Tools
 
