@@ -19,12 +19,18 @@ from app.llm.config import LlmConfigError, LlmRuntimeConfig, load_llm_config
 
 
 def _settings() -> Settings:
-    """Settings aislado de cualquier .env, con los campos minimos."""
+    """Settings aislado de cualquier .env, con los campos minimos.
+
+    ``LLM_SERVING`` se setea explicito (1 entrada, served_name ``qwen``) para
+    ser coherente con ``_base_config`` (que solo declara el modelo qwen). El
+    default real referencia tambien ``gemma4``, ausente en la config minima.
+    """
     return Settings(
         _env_file=None,  # type: ignore[call-arg]
         DATABASE_URL="postgresql://test:test@localhost/test",
         REDIS_URL="redis://localhost:6379/0",
         JWT_SECRET="test-secret",
+        LLM_SERVING=[{"base_url": "http://localhost:8002/v1", "models": ["qwen"]}],
     )
 
 
@@ -73,8 +79,13 @@ def test_load_real_repo_config() -> None:
     cfg = load_llm_config(settings=_settings())
     assert isinstance(cfg, LlmRuntimeConfig)
     assert set(cfg.models) == {"gemma-4-12b", "qwen-3.5-9b"}
-    assert cfg.topology == "split_process"
-    assert cfg.primary_base_url == "http://localhost:8001/v1"
+    # LLM_SERVING (ADR-013): la lista describe la topologia y cada entrada
+    # referencia served_names validos (default = gemma4 + qwen, co-residente).
+    assert cfg.serving_endpoints
+    served_names = {model.served_name for model in cfg.models.values()}
+    for entry in cfg.serving_endpoints:
+        for name in entry.models:
+            assert name in served_names
     # served_name y parser se resuelven por modo / modelo.
     assert cfg.model_for_mode("memoria").served_name == "qwen"
     assert cfg.tool_parser_for("gemma-4-12b") == "gemma4"
@@ -90,21 +101,33 @@ def test_load_minimal_config(tmp_path: Path) -> None:
     assert cfg.serving.request_timeout_s == 120
 
 
-def test_settings_override_base_urls_and_topology(tmp_path: Path) -> None:
+def test_settings_override_serving(tmp_path: Path) -> None:
+    """``LLM_SERVING`` de Settings se refleja en ``cfg.serving_endpoints``."""
     path = _write(tmp_path, _base_config())
     settings = Settings(
         _env_file=None,  # type: ignore[call-arg]
         DATABASE_URL="postgresql://x",
         REDIS_URL="redis://x",
         JWT_SECRET="x",
-        LLM_PRIMARY_BASE_URL="http://primary:9000/v1",
-        LLM_SECONDARY_BASE_URL="http://secondary:9001/v1",
-        LLM_TOPOLOGY="swap_lru",
+        LLM_SERVING=[{"base_url": "http://primary:9000/v1", "models": ["qwen"]}],
     )
     cfg = load_llm_config(config_path=path, settings=settings)
-    assert cfg.primary_base_url == "http://primary:9000/v1"
-    assert cfg.secondary_base_url == "http://secondary:9001/v1"
-    assert cfg.topology == "swap_lru"
+    assert [ep.base_url for ep in cfg.serving_endpoints] == ["http://primary:9000/v1"]
+    assert cfg.serving_endpoints[0].models == ["qwen"]
+
+
+def test_serving_unknown_served_name_raises(tmp_path: Path) -> None:
+    """``LLM_SERVING`` con un served_name inexistente dispara fail-fast (ADR-013)."""
+    path = _write(tmp_path, _base_config())
+    settings = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        DATABASE_URL="postgresql://x",
+        REDIS_URL="redis://x",
+        JWT_SECRET="x",
+        LLM_SERVING=[{"base_url": "http://primary:9000/v1", "models": ["no-existe"]}],
+    )
+    with pytest.raises(LlmConfigError, match="served_name desconocido"):
+        load_llm_config(config_path=path, settings=settings)
 
 
 # ---------- Fail-fast ----------
