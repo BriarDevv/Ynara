@@ -30,11 +30,22 @@ cualquier migración que las afecte (regla #3 de `AGENTS.md`):
 - `procedural_memory`
 - `audit_log`
 
-(`users` / `sessions` son **operativas**: review normal en el PR, sin el gate extra
-de regla #3. El perímetro sagrado es la memoria cifrada del moat + el `audit_log`
-inmutable — la misma lista que AGENTS §0 / `app/models/{memory,audit}.py`.)
+(`users` / `sessions` / `conversation_turns` son **operativas**: review normal en
+el PR, sin el gate extra de regla #3. El perímetro sagrado es la memoria cifrada
+del moat + el `audit_log` inmutable — la misma lista que AGENTS §0 /
+`app/models/{memory,audit}.py`. `conversation_turns` es un buffer transitorio que
+se purga tras consolidar; aunque cifra su `content` per-user por regla #4, no es
+parte del moat: su migración va por review normal.)
 
 Esto es regla #3 de [`AGENTS.md`](../../../AGENTS.md).
+
+## Migraciones registradas
+
+| Archivo | Revision | Down revision | Qué hace |
+|---|---|---|---|
+| `20260529_1949_initial_schema.py` | `b7b06025f4bb` | (inicial) | 6 tablas sagradas/operativas, 4 enums, pgvector + pgcrypto. |
+| `20260602_1015_audit_log_block_update_trigger.py` | `a1f3c9d27e84` | `b7b06025f4bb` | Trigger BEFORE UPDATE que bloquea UPDATE sobre `audit_log` (inmutabilidad). |
+| `20260614_1700_conversation_turns_table.py` | `c4e8a1d50b93` | `a1f3c9d27e84` | Tabla **operativa** `conversation_turns` (buffer de turnos para la episódica, issue #209) + enum `turn_role_enum` + UNIQUE `(session_id, seq)` + índices. |
 
 ## Migraciones peligrosas
 
