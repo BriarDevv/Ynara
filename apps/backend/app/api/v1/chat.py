@@ -71,14 +71,17 @@ from app.core.deps import (
     get_reranker,
 )
 from app.core.ratelimit import check_chat_rate_limit
+from app.enums import TurnRole
 from app.llm.clients.base import LLMClient
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
 from app.llm.config import load_llm_config
 from app.llm.router import route
 from app.llm.schemas import ChatRequest, ChatResponse
+from app.memory.conversation_turns import ConversationTurnStore
 from app.models.session import ChatSession
 from app.schemas.chat import Action, ChatHttpRequest, ChatHttpResponse
+from app.schemas.conversation_turn import ConversationTurnCreate
 from app.workflows.consolidation import consolidate_turn
 
 logger = logging.getLogger(__name__)
@@ -186,9 +189,42 @@ async def _run_chat_turn(
         reranker=reranker,
     )
 
-    # (4) Commit AL FINAL, despues de route(): persiste la ChatSession (y lo que
-    #     hayan escrito los stores en esta sesion). Si saltara un bug inesperado
-    #     antes de aca, get_db() hace rollback y nada se persiste.
+    # (3.5) Persistir los 2 turnos (user + modelo) ANTES del commit, en la MISMA
+    #       transaccion que la ChatSession (commit unico del paso 4): turnos +
+    #       sesion son atomicos. El content viaja cifrado per-user (regla #4) via
+    #       ConversationTurnStore. Es la FUENTE que el worker episodico
+    #       (consolidate_session) lee al cerrar la sesion para resumir (issue #209).
+    #
+    #       Sede UNICA: /chat y /chat/stream pasan por aca, asi que ambos persisten
+    #       los turnos. NO se persiste si el turno DEGRADO (resp.finish_reason ==
+    #       'degraded': fallback de route() por error LLM o cadena on-prem agotada):
+    #       un turno degradado no tiene una respuesta util que valga la pena
+    #       resumir, igual que no se encola consolidate_turn (paso 5). Tampoco si la
+    #       respuesta del modelo quedo vacia (turno sin contenido util): el schema
+    #       ConversationTurnCreate exige content no-vacio, y un turno vacio no aporta
+    #       al resumen episodico.
+    if resp.finish_reason != "degraded" and resp.text:
+        turns_store = ConversationTurnStore(session, user_id)
+        await turns_store.add(
+            ConversationTurnCreate(
+                session_id=chat_session.id,
+                role=TurnRole.USER,
+                content=body.text,
+                seq=0,
+            )
+        )
+        await turns_store.add(
+            ConversationTurnCreate(
+                session_id=chat_session.id,
+                role=TurnRole.MODEL,
+                content=resp.text,
+                seq=1,
+            )
+        )
+
+    # (4) Commit AL FINAL, despues de route(): persiste la ChatSession + los turnos
+    #     (y lo que hayan escrito los stores en esta sesion). Si saltara un bug
+    #     inesperado antes de aca, get_db() hace rollback y nada se persiste.
     await session.commit()
 
     # (5) Enqueue de consolidacion DESPUES del commit (M10 Ola 0). Se movio aca
