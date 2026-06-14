@@ -59,39 +59,35 @@ def _wants_real_llm(settings: Settings) -> bool:
 def build_llm_client(settings: Settings, config: LlmRuntimeConfig) -> LLMClient:
     """Construye el cliente LLM segun la config: ``ResilientClient`` real o Fake.
 
-    Camino real (``_wants_real_llm``): un ``VllmClient`` por base_url de la
-    topologia (cada uno = un proceso vLLM, ADR-009 D1), todos sirviendo el set
-    de ``served_name`` de la config; se arman en un ``ClientPool`` via
-    ``build_pool`` (que ordena primario/secundario segun ``topology``) y se
-    envuelven en un ``ResilientClient`` (retry + breaker + fallback on-prem).
+    Camino real (``_wants_real_llm``): un ``VllmClient`` por entrada de
+    ``config.serving_endpoints`` (cada entrada = un proceso vLLM, ADR-013),
+    anunciando SOLO los ``served_models`` de su entrada. Esto cierra #206: cada
+    client dice servir solo sus modelos, asi el ``ClientPool`` rutea cada modelo
+    al proceso correcto. Se arman en el pool via ``build_pool`` (en el orden de la
+    lista = orden de preferencia) y se envuelven en un ``ResilientClient`` (retry
+    + breaker + fallback on-prem).
 
-    Camino Fake (default dev/test): ``FakeLlmClient`` con los ``served_name`` de
-    la config, igual que el comportamiento historico del lifespan. No abre red.
+    Camino Fake (default dev/test): ``FakeLlmClient`` con TODOS los ``served_name``
+    de la config, igual que el comportamiento historico del lifespan. No abre red.
     """
-    served_models = frozenset(m.served_name for m in config.models.values())
     if not _wants_real_llm(settings):
+        served_models = frozenset(m.served_name for m in config.models.values())
         return FakeLlmClient(served_models=served_models)
 
-    # Serving real: un VllmClient por base_url QUE LA TOPOLOGIA USA (no mas).
-    # split_process necesita primary+secondary (fallback on-prem); single_process
-    # y swap_lru usan solo el primary. Construir el secondary en esas dos ultimas
-    # dejaria un VllmClient + httpx.AsyncClient huerfano (fuera del pool, nunca
-    # cerrado): derivar el set ANTES de construir evita esa fuga.
+    # Serving real (ADR-013): un VllmClient por entrada de LLM_SERVING, cada uno
+    # anunciando solo SUS served_names (entry.models). El pool reune todos en el
+    # orden de la lista; candidates(model) filtra por serves_model -> ruteo correcto.
     parser = OpenAIToolCallParser()
     timeout_s = float(config.serving.request_timeout_s)
-    if config.topology == "split_process":
-        base_urls = {config.primary_base_url, config.secondary_base_url}
-    else:
-        base_urls = {config.primary_base_url}
     clients_by_base_url: dict[str, LLMClient] = {
-        base_url: VllmClient(
-            base_url=base_url,
-            served_models=served_models,
+        ep.base_url: VllmClient(
+            base_url=ep.base_url,
+            served_models=frozenset(ep.models),
             http_client=httpx.AsyncClient(),
             parser=parser,
             default_timeout_s=timeout_s,
         )
-        for base_url in base_urls
+        for ep in config.serving_endpoints
     }
     pool = build_pool(config, clients_by_base_url)
     return ResilientClient(pool)
