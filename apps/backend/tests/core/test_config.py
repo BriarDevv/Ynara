@@ -73,6 +73,28 @@ def test_prod_rejects_cors_127_0_0_1() -> None:
         _settings(**overrides)
 
 
+def test_prod_rejects_cors_ipv6_loopback() -> None:
+    """En production un origin IPv6 loopback (``[::1]``) en CORS rompe el boot.
+
+    ``urlsplit('http://[::1]:3000').hostname`` == ``'::1'``, que está en
+    ``dev_hosts`` — el origin IPv6 de dev no debe colarse en prod.
+    """
+    overrides = {**_PROD_CLEAN, "cors_origins": ["http://[::1]:3000"]}
+    with pytest.raises(ValueError, match="CORS_ORIGINS"):
+        _settings(**overrides)
+
+
+def test_prod_rejects_empty_cors() -> None:
+    """En production un CORS vacío (lista vacía) rompe el boot (fail-fast).
+
+    ``any(...)`` sobre lista vacía es False, así que sin el chequeo previo el boot
+    pasaría con CERO origins (mala config: API sin política CORS).
+    """
+    overrides = {**_PROD_CLEAN, "cors_origins": []}
+    with pytest.raises(ValueError, match="CORS_ORIGINS"):
+        _settings(**overrides)
+
+
 def test_prod_rejects_empty_master_key() -> None:
     """En production una MEMORY_ENCRYPTION_MASTER_KEY vacía rompe el boot."""
     overrides = {**_PROD_CLEAN, "MEMORY_ENCRYPTION_MASTER_KEY": ""}
@@ -143,6 +165,15 @@ def test_prod_rejects_cors_localhost_from_env() -> None:
     overrides.pop("cors_origins")
     with pytest.raises(ValueError, match="CORS_ORIGINS"):
         _settings(CORS_ORIGINS="http://localhost:3000", **overrides)
+
+
+def test_prod_rejects_empty_cors_from_env() -> None:
+    """El fail-fast de prod rechaza ``CORS_ORIGINS=`` (vacío) por env: el split lo
+    deja en ``[]`` y el boot no debe pasar con cero origins."""
+    overrides = {**_PROD_CLEAN}
+    overrides.pop("cors_origins")
+    with pytest.raises(ValueError, match="CORS_ORIGINS"):
+        _settings(CORS_ORIGINS="", **overrides)
 
 
 def test_prod_accepts_cors_real_domains_from_env() -> None:

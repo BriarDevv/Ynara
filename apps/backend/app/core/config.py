@@ -248,6 +248,10 @@ class Settings(BaseSettings):
             barrera del navegador contra requests cross-origin con credenciales). El
             ``# TODO: ajustar a dominios reales`` del default deja de ser opcional en
             prod: si quedó sin ajustar, el boot falla en vez de servir inseguro.
+            ``cors_origins`` VACÍO (p.ej. ``CORS_ORIGINS=``) también falla: una lista
+            vacía pasa el chequeo de ``any(...)`` (no hay origins de dev que detectar)
+            pero deja la API sin política CORS configurada, lo que es mala config en
+            prod — se exige explicitar los dominios reales del front.
 
         (b) ``MEMORY_ENCRYPTION_MASTER_KEY`` vacía: sin la key el cifrado de memoria
             (ADR-007) no funciona y el helper de crypto recién falla al PRIMER uso (un
@@ -258,6 +262,15 @@ class Settings(BaseSettings):
         la master key suele estar vacía en dev (sin fricción, igual que el JWT secret).
         """
         if self.environment == "production":
+            # CORS vacío en prod: ``any(...)`` sobre lista vacía es False (no detecta
+            # origins de dev), así que sin este chequeo previo el boot pasaría con CERO
+            # origins. Eso es mala config (la API queda sin política CORS): se exige
+            # explicitar los dominios reales del front en vez de bootear inseguro.
+            if not self.cors_origins:
+                raise ValueError(
+                    "CORS_ORIGINS vacío en production: configurar los dominios reales "
+                    "del front (p.ej. https://app.ynara.com)"
+                )
             # Hostname EXACTO (urlsplit), no substring: así un dominio prod legítimo
             # que contenga 'localhost' como substring (p.ej. localhost-staging.x.com)
             # no da falso positivo. Igual falla cerrado ante el origin de dev real.
