@@ -525,3 +525,50 @@ def test_breaker_state_exposed() -> None:
     # arranca permitiendo (CLOSED). Acceso directo solo para sanidad.
     breaker = resilient._breakers[id(client)]
     assert breaker.state is CircuitState.CLOSED
+
+
+# ---------- passthrough de thinking por rol (ADR-012 D4, #205) ----------
+
+
+async def test_complete_forwards_thinking_to_candidate() -> None:
+    """``complete(thinking=False)`` hila el flag tal cual al candidato elegido.
+
+    El ResilientClient es el cliente de PRODUCCION; su passthrough de thinking
+    debe llegar intacto al ``complete`` del cliente subyacente (no se reinterpreta
+    ni se pierde en la cadena de candidatos).
+    """
+    client = _fake()
+    client.queue_result(_result("ok"))
+    resilient = _resilient([client])
+    await resilient.complete(model=_MODEL, messages=_messages(), thinking=False)
+    assert client.complete_calls[0]["thinking"] is False
+
+
+async def test_complete_forwards_thinking_to_secondary_on_fallback() -> None:
+    """En el FALLBACK on-prem, el secundario recibe el ``thinking`` correcto.
+
+    El primario agota los reintentos (errores transitorios) y se cae al
+    secundario; el flag de thinking debe propagarse tambien por esa rama, no
+    solo por el candidato primario.
+    """
+    primary = _fake()
+    for _ in range(3):
+        primary.queue_error(LlmUnavailableError())
+    secondary = _fake()
+    secondary.queue_result(_result("desde secundario"))
+    resilient = _resilient([primary, secondary], max_attempts=3)
+    result = await resilient.complete(model=_MODEL, messages=_messages(), thinking=True)
+    assert result.text == "desde secundario"
+    assert secondary.complete_calls[0]["thinking"] is True
+
+
+async def test_stream_forwards_thinking_to_candidate() -> None:
+    """``stream(thinking=False)`` hila el flag tal cual al candidato elegido."""
+    from app.llm.schemas import CompletionChunk
+
+    client = _fake()
+    client.queue_chunks([CompletionChunk(delta_text="ok")])
+    resilient = _resilient([client])
+    async for _ in resilient.stream(model=_MODEL, messages=_messages(), thinking=False):
+        pass
+    assert client.stream_calls[0]["thinking"] is False

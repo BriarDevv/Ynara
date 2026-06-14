@@ -123,6 +123,7 @@ class VllmClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
+        thinking: bool | None = None,
         timeout_s: float | None = None,
     ) -> CompletionResult:
         self._ensure_served(model)
@@ -132,6 +133,7 @@ class VllmClient:
             tools=tools,
             max_tokens=max_tokens,
             temperature=temperature,
+            thinking=thinking,
             stream=False,
         )
         started = time.perf_counter()
@@ -150,6 +152,7 @@ class VllmClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
+        thinking: bool | None = None,
         timeout_s: float | None = None,
     ) -> AsyncIterator[CompletionChunk]:
         self._ensure_served(model)
@@ -159,6 +162,7 @@ class VllmClient:
             tools=tools,
             max_tokens=max_tokens,
             temperature=temperature,
+            thinking=thinking,
             stream=True,
         )
         url = f"{self._base_url}{_CHAT_PATH}"
@@ -213,6 +217,7 @@ class VllmClient:
         tools: list[ToolSpec] | None,
         max_tokens: int,
         temperature: float,
+        thinking: bool | None,
         stream: bool,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -225,6 +230,14 @@ class VllmClient:
         if tools:
             payload["tools"] = [self._encode_tool(t) for t in tools]
             payload["tool_choice"] = "auto"
+        # Control del modo de razonamiento por request (ADR-012 D4). vLLM acepta
+        # ``chat_template_kwargs.enable_thinking`` en el body; el valor request-level
+        # pisa el default del server. Solo se emite si el caller decide (True/False);
+        # con ``None`` la clave NO se agrega y se preserva el default del server (y
+        # asi el comportamiento previo exacto). Regla #4 intacta: esto solo gobierna
+        # el modo de razonamiento on-prem, no envia datos crudos a externos.
+        if thinking is not None:
+            payload["chat_template_kwargs"] = {"enable_thinking": thinking}
         return payload
 
     @staticmethod

@@ -155,6 +155,101 @@ async def test_route_uses_context_budget_for_render(monkeypatch: pytest.MonkeyPa
 
 
 # ---------------------------------------------------------------------------
+# UNIT: thinking por rol (ADR-012 D4, #205)
+# ---------------------------------------------------------------------------
+
+
+def test_thinking_for_role() -> None:
+    """``_thinking_for_role`` mapea rol -> flag (ADR-012 D4).
+
+    Cubre tambien la rama ``None`` (rol desconocido), inalcanzable en runtime
+    porque la config tipa ``role`` como ``Literal``, pero presente como fail-safe
+    que no rompe el turno.
+    """
+    from app.llm.router import _thinking_for_role
+
+    assert _thinking_for_role("conversational") is False
+    assert _thinking_for_role("agent") is True
+    assert _thinking_for_role("otro") is None
+
+
+@pytest.mark.asyncio
+async def test_route_conversational_mode_disables_thinking() -> None:
+    """Modo conversacional (VIDA -> gemma4) deriva ``thinking=False`` al complete.
+
+    El conversacional NUNCA piensa (Gemma -> content vacio con thinking ON).
+    """
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_result(_result(text="hola", finish_reason="stop", model_name="gemma4"))
+
+    from app.llm import router as router_mod
+    from app.llm.context import MemoryContext
+    from app.llm.tools.registry import default_registry
+
+    empty_ctx = MemoryContext(
+        semantic_store=None,
+        episodic_store=None,
+        procedural_store=None,
+        _default_reg=default_registry(),
+        _memory_reg=None,
+    )
+    original = router_mod.build_memory_context
+    router_mod.build_memory_context = lambda **_kw: empty_ctx
+    try:
+        await route(
+            ChatRequest(text="hola", mode=Mode.VIDA, session_id="sess-think-conv"),
+            session=MagicMock(),
+            user_id=uuid.uuid4(),
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            config=_cfg(),
+        )
+    finally:
+        router_mod.build_memory_context = original
+
+    assert fake.complete_calls[0]["thinking"] is False
+
+
+@pytest.mark.asyncio
+async def test_route_agent_mode_enables_thinking() -> None:
+    """Modo agente (PRODUCTIVIDAD -> qwen) deriva ``thinking=True`` al complete.
+
+    El agente piensa para planificar tool calls (Qwen).
+    """
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+    fake.queue_result(_result(text="listo", finish_reason="stop", model_name="qwen"))
+
+    from app.llm import router as router_mod
+    from app.llm.context import MemoryContext
+    from app.llm.tools.registry import default_registry
+
+    empty_ctx = MemoryContext(
+        semantic_store=None,
+        episodic_store=None,
+        procedural_store=None,
+        _default_reg=default_registry(),
+        _memory_reg=None,
+    )
+    original = router_mod.build_memory_context
+    router_mod.build_memory_context = lambda **_kw: empty_ctx
+    try:
+        await route(
+            ChatRequest(text="hola", mode=Mode.PRODUCTIVIDAD, session_id="sess-think-agent"),
+            session=MagicMock(),
+            user_id=uuid.uuid4(),
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            config=_cfg(),
+        )
+    finally:
+        router_mod.build_memory_context = original
+
+    assert fake.complete_calls[0]["thinking"] is True
+
+
+# ---------------------------------------------------------------------------
 # UNIT: overflow / errores permanentes -> fallback (sin DB)
 # ---------------------------------------------------------------------------
 
