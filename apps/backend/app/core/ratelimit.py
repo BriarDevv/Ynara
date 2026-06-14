@@ -52,6 +52,12 @@ _REGISTER_COUNTER_PREFIX = "auth:ratelimit:register:"
 _REFRESH_COUNTER_PREFIX = "auth:ratelimit:refresh:"
 _CHAT_COUNTER_PREFIX = "chat:ratelimit:turn:"
 _MEMORY_EXPORT_COUNTER_PREFIX = "memory:ratelimit:export:"
+# Bucket de /v1/sessions (issue #208), por user_id. UN solo prefijo compartido por
+# las 3 rutas (list/get/close): un techo unico por usuario es el minimo viable que
+# cierra el gap de abuso (las 3 son ops baratas: 2 SELECTs el list, 1 get el detail,
+# 1 get + commit idempotente el close). El ``:read:`` reserva el segmento por si en
+# el futuro se splitea close en su propio bucket (basta agregar otra key/settings).
+_SESSIONS_COUNTER_PREFIX = "sessions:ratelimit:read:"
 
 
 def _normalize_email(email: str) -> str:
@@ -90,6 +96,11 @@ def _chat_counter_key(user_id: str) -> str:
 def _memory_export_counter_key(user_id: str) -> str:
     # user_id es un UUID opaco (no PII directa): va crudo, no hasheado.
     return f"{_MEMORY_EXPORT_COUNTER_PREFIX}{user_id}"
+
+
+def _sessions_counter_key(user_id: str) -> str:
+    # user_id es un UUID opaco (no PII directa): va crudo, no hasheado.
+    return f"{_SESSIONS_COUNTER_PREFIX}{user_id}"
 
 
 # ---------------------------------------------------------------------------
@@ -225,3 +236,30 @@ async def check_memory_export_rate_limit(store: TokenStore, *, user_id: str) -> 
         ttl_seconds=settings.memory_export_window_seconds,
     )
     return count <= settings.memory_export_max_requests
+
+
+# ---------------------------------------------------------------------------
+# Sessions (por user_id — del CurrentUser autenticado, issue #208)
+# ---------------------------------------------------------------------------
+
+
+async def check_sessions_rate_limit(store: TokenStore, *, user_id: str) -> bool:
+    """``True`` si la request a ``/v1/sessions`` esta permitida; ``False`` si excede el limite.
+
+    UN solo bucket por ``user_id`` compartido por las 3 rutas (list/get/close): el
+    JWT ya autentico al caller, asi que el freno es por usuario (no por IP) y no
+    penaliza a varios usuarios tras un NAT compartido. Las 3 son ops baratas, asi
+    que un techo unico amplio corta el scripting abusivo sin molestar el uso
+    legitimo (p.ej. polling de un cliente). Chequea + incrementa en una sola op.
+    fail-open: si Redis cae, ``incr_with_ttl`` => 0 => permite (baseline sin freno,
+    nunca auto-DoS).
+
+    El ``user_id`` es un UUID opaco (no PII directa): va crudo en la key, sin
+    hashear (ver ``_sessions_counter_key``).
+    """
+    settings = get_settings()
+    count = await store.incr_with_ttl(
+        _sessions_counter_key(user_id),
+        ttl_seconds=settings.sessions_window_seconds,
+    )
+    return count <= settings.sessions_max_requests
