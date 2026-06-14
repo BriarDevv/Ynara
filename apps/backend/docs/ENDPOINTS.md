@@ -296,8 +296,14 @@ una inexistente (sin oráculo de existencia ajena). Todas las read surfaces son
   - Solo setea `ended_at`: **no** toca memoria, **no** encola consolidación (la
     consolidación episódica es M10 Ola 4).
 - Response 401 (todas las rutas): sin token / token inválido (`get_current_user`).
+- Response 429 (todas las rutas): supera el rate-limit por `user_id` —
+  `detail: "demasiados intentos, intente mas tarde"` (neutro) + header
+  `Retry-After` == `SESSIONS_WINDOW_SECONDS`.
 - Permisos: **usuario autenticado** (solo sobre sus propias sesiones).
-- Rate limit: TODO.
+- Rate limit: por `user_id` (del JWT), **un solo bucket** compartido por las 3 rutas
+  (`list`/`get`/`close`), `SESSIONS_MAX_REQUESTS` (120) por `SESSIONS_WINDOW_SECONDS`
+  (60s); 429 con `Retry-After` al cruzar el techo. fail-open si Redis cae (sin freno,
+  baseline). El check corre **antes** de tocar la DB.
 - Modos: todos.
 
 ---
