@@ -20,7 +20,7 @@
 
 [Unit]
 Description=Ynara vLLM - Qwen 3.5-9B (agente, :8002)
-Documentation=https://github.com/Ynara/ynara/blob/main/docs/architecture/adrs/ADR-012-conversational-model-12b-single-process.md
+Documentation=https://github.com/Ynara/ynara/blob/main/docs/architecture/adrs/ADR-009-vllm-serving-topology-tool-parsers.md
 After=network-online.target
 Wants=network-online.target
 
