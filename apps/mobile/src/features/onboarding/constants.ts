@@ -36,6 +36,18 @@ export const STEP_COPY: Record<
   },
 };
 
+/**
+ * Copy de los dos modos visuales del step `auth` (signup y login) — verbatim de
+ * apps/web/.../onboarding/constants.ts. Signup reusa el copy de `STEP_COPY.auth`.
+ */
+export const AUTH_STEP_COPY = {
+  signup: { title: STEP_COPY.auth.title, subtitle: STEP_COPY.auth.subtitle },
+  login: {
+    title: "Bienvenido de vuelta",
+    subtitle: "Ingresá con tu cuenta existente.",
+  },
+} as const;
+
 /** Máximo de moods seleccionables en el step "Tu día" (igual que la web). */
 export const MAX_MOOD = 2;
 

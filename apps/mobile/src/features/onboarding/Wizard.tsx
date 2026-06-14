@@ -3,16 +3,18 @@ import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { OnboardingHeader } from "./components/OnboardingHeader";
 import { A11yStep } from "./steps/A11yStep";
+import { AuthStep } from "./steps/AuthStep";
 import { ModesStep } from "./steps/ModesStep";
 import { MoodStep } from "./steps/MoodStep";
 import { NameStep } from "./steps/NameStep";
-import { PlaceholderStep } from "./steps/PlaceholderStep";
 import { useOnboardingNav } from "./useOnboardingNav";
 
-// Steps implementados; el resto (auth) cae al PlaceholderStep (navegable)
-// hasta que llegue en su propio PR (necesita backend).
+// Los 5 steps del onboarding, ya todos implementados. El switch es exhaustivo
+// sobre `OnboardingStep`; `null` solo por si la unión crece sin actualizar acá.
 function renderStep(step: OnboardingStep) {
   switch (step) {
+    case "auth":
+      return <AuthStep />;
     case "nombre":
       return <NameStep />;
     case "dia":
@@ -22,7 +24,7 @@ function renderStep(step: OnboardingStep) {
     case "a11y":
       return <A11yStep />;
     default:
-      return <PlaceholderStep step={step} />;
+      return null;
   }
 }
 
