@@ -179,10 +179,12 @@ cosmético con aprobación humana).
     Si la voz prefiere tildes, es un cambio chico.
   - **IDENTITY.md rasgos 3-5** siguen `TODO`; los prompts usan solo los
     rasgos 1-2 cerrados (no se inventó voz).
-- **Conexión a la base**: el `.env` usa el **session pooler (5432)**. Para
-  escalar a alta concurrencia con el **transaction pooler (6543)** hace
-  falta el fix de `core/deps.py`: `NullPool` + `connect_args={"statement_cache_size": 0}`
-  (asyncpg + pooler de transacción no soporta prepared statements).
+- **Conexión a la base** ✅ (2026-06-14): el `.env` usa el **session pooler
+  (5432)**. Para escalar a alta concurrencia con el **transaction pooler
+  (6543)** el fix de `core/deps.py` (`NullPool` +
+  `connect_args={"statement_cache_size": 0}`, porque asyncpg + pooler de
+  transacción no soporta prepared statements) **ya estaba implementado**;
+  queda blindado por tests de regresión (#210).
 - **Migración ya aplicada a la DB MVP real** (queda en `head`). Si PR B se
   modifica en review, re-aplicar.
 - **Sentry/PostHog** (M4, aún no implementado): cuando se cablee, el

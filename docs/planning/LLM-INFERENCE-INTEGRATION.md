@@ -245,7 +245,7 @@ El proyecto Supabase **ya existe** (ref `hmsfcqvnhlevfwfgatxd`) y está
 - ✅ PR C — `core/crypto.py` (AES-256-GCM per-user) + wrappers de memoria mergeados.
 - [ ] Serving vLLM real en infra de prod — **pendiente**: reconciliar `start-vllm.sh` (served_name/puertos/proceso bge-m3), medir VRAM. Los clientes vLLM reales (`VllmClient`/`VllmEmbeddingClient`/`VllmReranker`) ya están mergeados (PR #198) y probados contra Ollama; se prenden por flag.
 - [ ] Rate-limit — pendiente.
-- [ ] Fix `core/deps.py` transaction pooler (6543) — pendiente si se quiere escalar a alta concurrencia.
+- ✅ Fix `core/deps.py` transaction pooler (6543) — el soporte (NullPool + `statement_cache_size=0`) ya estaba implementado en `core/deps.py`; queda cubierto por tests de regresión (#210, 2026-06-14).
 
 > Documento operativo. Cambios de decisión van por ADR. Cambios de plan
 > se editan acá con fecha + autor.
