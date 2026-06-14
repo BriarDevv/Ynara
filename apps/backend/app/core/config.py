@@ -33,6 +33,10 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        # alias y nombre de campo conviven (misma convención que app/schemas/base.py):
+        # un campo con alias env (p.ej. cors_origins/CORS_ORIGINS) se puede setear por
+        # cualquiera de los dos. Los tests setean varios campos por nombre de campo.
+        populate_by_name=True,
     )
 
     environment: Literal["development", "staging", "production"] = "development"
@@ -155,12 +159,22 @@ class Settings(BaseSettings):
     sentry_dsn: str = Field("", alias="SENTRY_DSN")
     sentry_traces_sample_rate: float = Field(0.0, ge=0.0, le=1.0, alias="SENTRY_TRACES_SAMPLE_RATE")
 
-    # CORS — TODO: ajustar a dominios reales al desplegar
-    cors_origins: list[str] = Field(
+    # CORS — origins permitidos por el navegador. Se setea por entorno via
+    # ``CORS_ORIGINS`` (CSV human-friendly, p.ej.
+    # ``https://app.ynara.com,https://api.ynara.com``); el default es dev =
+    # localhost. En production ``_reject_dev_config_in_prod`` falla el boot si
+    # quedan origins de dev (localhost/127.0.0.1/::1), así que los dominios
+    # reales del front son la fuente de verdad por entorno, no este default.
+    # ``NoDecode`` desactiva el JSON-decode que ``EnvSettingsSource`` aplicaría a un
+    # ``list[str]`` (que crashea ante ``CORS_ORIGINS=`` o ``=https://a.com,https://b.com``):
+    # el string crudo del env llega tal cual al ``field_validator`` de abajo, que lo
+    # splittea por comas (mismo patrón que ``trusted_proxy_ips``).
+    cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             "http://localhost:3000",
             "http://localhost:8081",
-        ]
+        ],
+        alias="CORS_ORIGINS",
     )
 
     @field_validator("trusted_proxy_ips", mode="before")
@@ -174,6 +188,23 @@ class Settings(BaseSettings):
         Normaliza un string separado por comas a lista (vacío -> ``[]``); una lista ya
         parseada (kwargs / JSON) pasa intacta. El ``_validate_trusted_proxy_ips`` de
         después valida que cada entry sea un IP/CIDR real.
+        """
+        if isinstance(v, str):
+            return [part.strip() for part in v.split(",") if part.strip()]
+        return v
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _split_cors_origins(cls, v: object) -> object:
+        """Acepta CSV/vacío desde env (pydantic-settings parsea ``list[str]`` como JSON).
+
+        Sin esto, ``CORS_ORIGINS=https://app.ynara.com,https://api.ynara.com`` (el
+        formato human-friendly que documenta ``.env.example``) crashea el boot porque
+        el parser de env espera un JSON-array. Normaliza un string separado por comas a
+        lista (vacío -> ``[]``, que en prod hace fallar el fail-fast de dev-config); una
+        lista ya parseada (kwargs / JSON) pasa intacta — así los tests que pasan
+        ``cors_origins=[...]`` por kwarg siguen funcionando sin cambios. Mismo patrón
+        que ``_split_trusted_proxy_ips``.
         """
         if isinstance(v, str):
             return [part.strip() for part in v.split(",") if part.strip()]
