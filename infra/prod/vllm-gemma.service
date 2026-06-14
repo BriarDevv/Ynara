@@ -50,7 +50,7 @@ ExecStart=/usr/bin/env vllm serve ${GEMMA_MODEL} \
     --quantization awq_marlin \
     --kv-cache-dtype fp8 \
     --enable-auto-tool-choice --tool-call-parser gemma4 \
-    --chat-template-kwargs {"enable_thinking": false}
+    --chat-template-kwargs '{"enable_thinking": false}'
 
 Restart=on-failure
 RestartSec=5
