@@ -22,14 +22,17 @@ from datetime import timedelta
 from celery import Celery
 
 from app.core.config import get_settings
+from app.memory.config import load_decay_config
 
 settings = get_settings()
 
-# Cadencia del decay procedural (M8 Ola 3, ADR-007 D1). Se inlinea el valor de
-# ``DECAY_INTERVAL_DAYS`` en vez de importarlo de ``app.workflows.decay`` para
-# evitar el ciclo de import (ese modulo importa ``celery_app`` de aqui). El
-# valor canonico vive en ``app.workflows.decay.DECAY_INTERVAL_DAYS``.
-_DECAY_INTERVAL_DAYS = 14
+# Cadencia del decay procedural (M8 Ola 3, ADR-007 D1). Se lee del loader de
+# ``ynara.config.json[memory]`` (#211) en vez de importarlo de
+# ``app.workflows.decay`` para evitar el ciclo de import (ese modulo importa
+# ``celery_app`` de aqui). ``load_decay_config()`` es default-safe en
+# import-time: si el bloque ``[memory]`` no trae el threshold cae al default de
+# ADR-007 D1 (14 dias), asi el beat siempre tiene un valor al importar.
+_DECAY_INTERVAL_DAYS = load_decay_config().decay_interval_days
 
 celery_app = Celery(
     "ynara",
