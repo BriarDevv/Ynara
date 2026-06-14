@@ -1,5 +1,7 @@
 # ADR-009: Topología de serving vLLM y parsers de tool-calling
 
+> **Actualización (ADR-012):** D3 cerrada con medición real; topología default = co-residencia (Gemma 4 12B + Qwen 9B + bge-m3). La tabla D2 y el análisis de VRAM de abajo reflejan el estado original (26B); la autoridad de runtime es ynara.config.json. Ver [ADR-012](./ADR-012-conversational-model-12b-single-process.md).
+
 ## Estado
 
 Aceptado
