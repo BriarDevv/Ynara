@@ -68,7 +68,12 @@
     "engine": "in-house",
     "store": "postgres-pgvector",
     "embedding_model": "bge-m3",
-    "consolidation": "celery-async"
+    "consolidation": "celery-async",
+    "decay_interval_days": 14,
+    "decay_factor": 0.9,
+    "stale_threshold": 0.3,
+    "hard_delete_threshold": 0.1,
+    "hard_delete_min_days": 90
   },
   "infrastructure": {
     "phase": "mvp",
