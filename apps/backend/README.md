@@ -63,7 +63,7 @@ Copiar `.env.example` a `.env` (gitignored). Críticas:
 | `DATABASE_URL` | Postgres (`postgresql+asyncpg://...`). MVP: session pooler de Supabase. |
 | `REDIS_URL` | Broker + result backend de Celery. |
 | `JWT_SECRET` | Firma de tokens (auth). |
-| `LLM_PRIMARY_BASE_URL` / `LLM_SECONDARY_BASE_URL` / `LLM_TOPOLOGY` | Serving vLLM (ADR-009). |
+| `LLM_SERVING` | Serving vLLM: lista JSON `[{base_url, models}]`, una entrada por proceso (ADR-013). |
 | `TEST_DATABASE_URL` | Solo tests de integración — DB **dedicada**, nunca prod. |
 | `MEMORY_ENCRYPTION_MASTER_KEY` | Cifrado de memoria (implementado, ADR-007 D3). |
 

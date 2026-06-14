@@ -102,11 +102,11 @@ llm/
 
 **Invariantes que NO se rompen:**
 
-- **Serving** (ADR-009): un modelo por proceso vLLM; topología configurable por `LLM_TOPOLOGY` (`split_process`/`single_process`/`swap_lru`) detrás del `ClientPool`. Parsers de tool-calling: `hermes` (Qwen) / `gemma4` (Gemma).
+- **Serving** (ADR-009 + ADR-013): un modelo por proceso vLLM; la topología se declara como lista explícita `LLM_SERVING` (`[{base_url, models}]`, cada entrada = un proceso) detrás del `ClientPool`. Cada client anuncia solo sus `models` → ruteo por served_name (fix #206). Parsers de tool-calling: `hermes` (Qwen) / `gemma4` (Gemma).
 - **Resiliencia**: cadena **primario → secundario on-prem → respuesta degradada**. El fallback es SIEMPRE on-prem (regla #4): cero APIs externas. Nunca propaga una excepción de infra al caller.
 - **Errores** (`errors.py`): la taxonomía nunca expone contenido del usuario en `__str__`/logs (regla #4).
 - **Tools**: los errores vuelven SIEMPRE como dict estructurado `{"error": {"code", "message"}}` — el modelo **jamás** ve un traceback (el `ToolRegistry` blinda con `except Exception`). Fechas vía el tipo `IsoDatetime` (solo ISO 8601, rechaza epoch). **Gemma no llama tools** (solo Qwen); el registry por defecto (`default_registry()`) NO incluye `memory.*`: se construye por separado con `memory_registry(semantic_store)` (M7 implementado) y el router lo combina por modo cuando la memoria está habilitada.
-- **Config single-source**: los `base_url` + topología viven en `Settings`/`.env`; `served_name` vive en `ynara.config.json[models]`, y parsers / `quantization` / `max_model_len` en `[llm.serving]`. `load_llm_config()` valida coherencia (fail-fast).
+- **Config single-source**: el serving (`LLM_SERVING`: lista de `{base_url, models}`) vive en `Settings`/`.env` (ADR-013); `served_name` vive en `ynara.config.json[models]`, y parsers / `quantization` / `max_model_len` en `[llm.serving]`. `load_llm_config()` valida coherencia (fail-fast: cada served_name de `LLM_SERVING` debe existir en `[models]`).
 
 ---
 
