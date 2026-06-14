@@ -1,0 +1,70 @@
+# Ynara · vLLM · Gemma 4 12B (conversacional) — systemd unit de produccion.
+#
+# Reemplaza el `start-vllm.sh` (dev) por una unit por proceso en prod (issue #212).
+# Topologia ADR-012 D2: single_process co-residente — los 3 modelos (gemma 12B +
+# qwen 9B + bge-m3) co-residen en la MISMA GPU (RTX 4080 Super 16 GB) sin swap.
+# Una unit por proceso (espeja ADR-013: N procesos = N units); habilitar las 3
+# juntas para levantar el stack completo bajo systemd:
+#   systemctl enable --now vllm-gemma.service vllm-qwen.service vllm-bge.service
+#
+# Flags alineados a ADR-012 / ynara.config.json[llm.serving] / start-vllm.sh:
+#   --max-model-len 8192          (ADR-012 D3: techo de co-residencia medido)
+#   --gpu-memory-utilization 0.50 (PROVISIONAL, ver disclaimer abajo)
+#   --quantization awq_marlin     (ynara.config.json: quantization)
+#   --kv-cache-dtype fp8          (ADR-012 D3 / ynara.config.json: kv_cache_dtype)
+#   --tool-call-parser gemma4     (ADR-009 D2: parser de la familia Gemma)
+#   thinking OFF (conversacional, ADR-012 D4)
+#
+# DISCLAIMER (#207, mismo que start-vllm.sh): --gpu-memory-utilization y
+# --max-model-len son PROVISIONALES, derivados de la medicion en Ollama/GGUF
+# (ADR-012). Reconfirmar bajo vLLM/AWQ-Marlin co-residiendo los 3 en 16 GB; si
+# OOMea, bajar primero el --max-model-len de Qwen (vllm-qwen.service).
+
+[Unit]
+Description=Ynara vLLM - Gemma 4 12B (conversacional, :8001)
+Documentation=https://github.com/Ynara/ynara/blob/main/docs/architecture/adrs/ADR-012-conversational-model-12b-single-process.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ynara
+Group=ynara
+WorkingDirectory=/opt/ynara
+
+# Paths y cache de HuggingFace (checkpoints, HF_HOME, CUDA_VISIBLE_DEVICES, etc.)
+# viven en un EnvironmentFile externo — NUNCA en la unit (regla #4: sin secrets ni
+# config de entorno hardcodeada). Ej: HF_HOME, GEMMA_MODEL, VLLM_BIN.
+EnvironmentFile=/etc/ynara/vllm.env
+
+# --served-model-name = el served_name de ynara.config.json (el backend rutea por
+# ESE nombre, no por la key del modelo). Puerto 8001 = LLM_SERVING en .env.example.
+# thinking OFF (ADR-012 D4 conversacional): el parametro exacto de vLLM
+# (--chat-template-kwargs '{"enable_thinking": false}') se verifica contra docs
+# oficiales en el PR de la feature de thinking; aca queda como flag + comentario.
+ExecStart=/usr/bin/env vllm serve ${GEMMA_MODEL} \
+    --port 8001 \
+    --served-model-name gemma4 \
+    --max-model-len 8192 \
+    --gpu-memory-utilization 0.50 \
+    --quantization awq_marlin \
+    --kv-cache-dtype fp8 \
+    --enable-auto-tool-choice --tool-call-parser gemma4 \
+    --chat-template-kwargs {"enable_thinking": false}
+
+Restart=on-failure
+RestartSec=5
+# Carga de pesos ~7-9 s en Ollama/GGUF (ADR-012); bajo vLLM/AWQ puede ser mayor.
+# Margen holgado para no matar el proceso durante la carga inicial.
+TimeoutStartSec=300
+Nice=-5
+
+# Hardening basico. ReadWritePaths: logs + cache de HF (descarga/lee checkpoints).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/log/ynara /opt/ynara/.cache/huggingface
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,60 @@
+# Ynara · vLLM · bge-m3 (embeddings) — systemd unit de produccion.
+#
+# Companion de vllm-gemma.service y vllm-qwen.service (issue #212). bge-m3 es el
+# embedder de la memoria (ADR-008); co-reside con los dos LLM bajo single_process
+# (ADR-012 D2) — queda residente para que el retrieval nunca se trabe por
+# carga/descarga de modelos (ADR-012 consecuencias positivas). Levantar el stack
+# completo:
+#   systemctl enable --now vllm-gemma.service vllm-qwen.service vllm-bge.service
+#
+# Flags alineados a start-vllm.sh:
+#   --task embed                  (modo embeddings, no chat)
+#   --gpu-memory-utilization 0.06 (PROVISIONAL, ver disclaimer abajo)
+#
+# bge-m3 NO es un LLM de chat: no lleva quantization AWQ ni tool parser ni KV fp8.
+# El reranker (bge-reranker-v2-m3, :8004) es un 4to proceso que todavia NO se
+# levanta (presupuesto VRAM en #207); cuando se agregue = copiar esta unit con otro
+# puerto/served-name (RERANKER_BACKEND sigue 'fake' hasta entonces).
+#
+# DISCLAIMER (#207, mismo que start-vllm.sh): --gpu-memory-utilization es
+# PROVISIONAL (medicion Ollama/GGUF, ADR-012); reconfirmar bajo vLLM.
+
+[Unit]
+Description=Ynara vLLM - bge-m3 (embeddings, :8003)
+Documentation=https://github.com/Ynara/ynara/blob/main/docs/architecture/adrs/ADR-008-embedding-model-bge-m3.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ynara
+Group=ynara
+WorkingDirectory=/opt/ynara
+
+# Paths y cache de HuggingFace en EnvironmentFile externo — NUNCA en la unit
+# (regla #4). Ej: HF_HOME, EMBED_MODEL, VLLM_BIN, CUDA_VISIBLE_DEVICES.
+EnvironmentFile=/etc/ynara/vllm.env
+
+# --served-model-name = served_name de ynara.config.json (bge-m3). Puerto 8003 =
+# EMBEDDING_BASE_URL en .env.example. --task embed levanta vLLM en modo embeddings.
+ExecStart=/usr/bin/env vllm serve ${EMBED_MODEL} \
+    --port 8003 \
+    --task embed \
+    --served-model-name bge-m3 \
+    --gpu-memory-utilization 0.06
+
+Restart=on-failure
+RestartSec=5
+# Carga ~rapida (0,66 GB de pesos, ADR-012); margen holgado igual.
+TimeoutStartSec=180
+Nice=-5
+
+# Hardening basico. ReadWritePaths: logs + cache de HF.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/log/ynara /opt/ynara/.cache/huggingface
+
+[Install]
+WantedBy=multi-user.target
