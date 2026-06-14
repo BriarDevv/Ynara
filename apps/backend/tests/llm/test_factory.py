@@ -10,7 +10,7 @@ Tambien cubren el gate del embedder (``embedding_backend``) y el reranker.
 
 from __future__ import annotations
 
-from app.core.config import Settings
+from app.core.config import ServingEndpoint, Settings
 from app.llm.clients.embedding import FakeEmbeddingClient, VllmEmbeddingClient
 from app.llm.clients.factory import (
     build_embedder,
@@ -21,17 +21,18 @@ from app.llm.clients.factory import (
 from app.llm.clients.fakes import FakeLlmClient
 from app.llm.clients.reranker import FakeReranker, VllmReranker
 from app.llm.clients.resilient import ResilientClient
+from app.llm.clients.vllm import VllmClient
 from app.llm.config import (
     LlmRuntimeConfig,
     ModeConfig,
     ModelConfig,
     ServingConfig,
-    Topology,
 )
 
 _QWEN = "qwen-3.5-9b"
-_PRIMARY_URL = "http://primary:8001/v1"
-_SECONDARY_URL = "http://secondary:8002/v1"
+_GEMMA = "gemma-4-12b"
+_GEMMA_URL = "http://gemma:8001/v1"
+_QWEN_URL = "http://qwen:8002/v1"
 
 # JWT secret >= 32 chars: production rechaza un secret debil (ver Settings).
 _PROD_JWT_SECRET = "x" * 48
@@ -44,9 +45,13 @@ def _settings(
     embedding_backend: str = "fake",
     reranker_backend: str = "fake",
     llm_backend: str = "fake",
-    topology: str = "split_process",
 ) -> Settings:
-    """Settings aislado de cualquier .env. ``production`` exige config no-dev."""
+    """Settings aislado de cualquier .env. ``production`` exige config no-dev.
+
+    ``LLM_SERVING`` no afecta la factory (que arma los clients desde
+    ``config.serving_endpoints``), pero se deja en su default para no acoplar
+    estos tests al esquema de .env.
+    """
     kwargs: dict[str, object] = {
         "_env_file": None,
         "DATABASE_URL": "postgresql://test:test@localhost/test",
@@ -56,9 +61,6 @@ def _settings(
         "EMBEDDING_BACKEND": embedding_backend,
         "RERANKER_BACKEND": reranker_backend,
         "LLM_BACKEND": llm_backend,
-        "LLM_TOPOLOGY": topology,
-        "LLM_PRIMARY_BASE_URL": _PRIMARY_URL,
-        "LLM_SECONDARY_BASE_URL": _SECONDARY_URL,
     }
     if environment == "production":
         # production fail-fast: secret fuerte, CORS no-localhost, master key.
@@ -71,13 +73,22 @@ def _settings(
     return Settings(**kwargs)  # type: ignore[arg-type]
 
 
-def _config(topology: Topology = "split_process") -> LlmRuntimeConfig:
-    """``LlmRuntimeConfig`` minimo coherente con base_urls que matchean settings."""
+def _config(serving_endpoints: list[ServingEndpoint] | None = None) -> LlmRuntimeConfig:
+    """``LlmRuntimeConfig`` minimo coherente (gemma + qwen).
+
+    Default ``serving_endpoints``: co-residente (ADR-013/012), gemma en una url
+    y qwen en otra, cada proceso anunciando solo su served_name.
+    """
+    if serving_endpoints is None:
+        serving_endpoints = [
+            ServingEndpoint(base_url=_GEMMA_URL, models=["gemma4"]),
+            ServingEndpoint(base_url=_QWEN_URL, models=["qwen"]),
+        ]
     serving = ServingConfig(
-        tool_parsers={_QWEN: "hermes"},
+        tool_parsers={_QWEN: "hermes", _GEMMA: "gemma4"},
         quantization="awq_marlin",
         kv_cache_dtype="fp8",
-        max_model_len={_QWEN: 32768},
+        max_model_len={_QWEN: 32768, _GEMMA: 8192},
         request_timeout_s=120,
     )
     models = {
@@ -87,7 +98,14 @@ def _config(topology: Topology = "split_process") -> LlmRuntimeConfig:
             writes_memory=True,
             served_name="qwen",
             context_window=262144,
-        )
+        ),
+        _GEMMA: ModelConfig(
+            key=_GEMMA,
+            role="conversational",
+            writes_memory=False,
+            served_name="gemma4",
+            context_window=128000,
+        ),
     }
     modes = {
         "productividad": ModeConfig(
@@ -99,9 +117,7 @@ def _config(topology: Topology = "split_process") -> LlmRuntimeConfig:
         )
     }
     return LlmRuntimeConfig(
-        primary_base_url=_PRIMARY_URL,
-        secondary_base_url=_SECONDARY_URL,
-        topology=topology,
+        serving_endpoints=serving_endpoints,
         serving=serving,
         models=models,
         modes=modes,
@@ -115,8 +131,9 @@ def test_llm_client_is_fake_in_dev() -> None:
     """En development (default) la factory devuelve el ``FakeLlmClient``."""
     client = build_llm_client(_settings(environment="development"), _config())
     assert isinstance(client, FakeLlmClient)
-    # Sirve el set de served_name de la config (incluye 'qwen').
+    # El Fake sirve TODOS los served_name de la config (gemma4 + qwen).
     assert client.serves_model("qwen")
+    assert client.serves_model("gemma4")
 
 
 def test_llm_client_is_fake_in_staging() -> None:
@@ -129,16 +146,48 @@ def test_llm_client_is_resilient_in_production() -> None:
     """En production la factory devuelve el ``ResilientClient`` real (sin red)."""
     client = build_llm_client(_settings(environment="production"), _config())
     assert isinstance(client, ResilientClient)
-    # El pool real sirve el served_name de la config (routing por modelo).
+    # El pool real sirve ambos served_name de la config (routing por modelo).
     assert client.serves_model("qwen")
+    assert client.serves_model("gemma4")
 
 
-def test_llm_client_production_single_process_one_client() -> None:
-    """single_process: el pool real se arma con un solo VllmClient (solo primary)."""
-    settings = _settings(environment="production", topology="single_process")
-    client = build_llm_client(settings, _config("single_process"))
+def test_llm_client_production_single_entry_one_client() -> None:
+    """Una sola entrada (Ollama dev) = un solo VllmClient en el pool real."""
+    settings = _settings(environment="production")
+    cfg = _config([ServingEndpoint(base_url=_QWEN_URL, models=["gemma4", "qwen"])])
+    client = build_llm_client(settings, cfg)
     assert isinstance(client, ResilientClient)
-    assert client.serves_model("qwen")
+    pool_clients = client._pool.clients
+    assert len(pool_clients) == 1
+    # El unico client sirve ambos modelos (un endpoint que los sirve a los dos).
+    assert pool_clients[0].serves_model("qwen")
+    assert pool_clients[0].serves_model("gemma4")
+
+
+def test_llm_client_real_clients_advertise_only_their_models() -> None:
+    """Regression #206: cada VllmClient real recibe SOLO los served_models de su entrada.
+
+    Con gemma en una url y qwen en otra, el client de gemma NO debe anunciar qwen
+    (antes de ADR-013 ambos recibian el set completo -> ruteo a 404).
+    """
+    settings = _settings(environment="production")
+    cfg = _config(
+        [
+            ServingEndpoint(base_url=_GEMMA_URL, models=["gemma4"]),
+            ServingEndpoint(base_url=_QWEN_URL, models=["qwen"]),
+        ]
+    )
+    client = build_llm_client(settings, cfg)
+    assert isinstance(client, ResilientClient)
+    pool_clients = client._pool.clients
+    assert len(pool_clients) == 2
+    for vllm_client in pool_clients:
+        assert isinstance(vllm_client, VllmClient)
+    gemma_client, qwen_client = pool_clients
+    assert gemma_client.serves_model("gemma4")
+    assert not gemma_client.serves_model("qwen")
+    assert qwen_client.serves_model("qwen")
+    assert not qwen_client.serves_model("gemma4")
 
 
 def test_llm_client_is_real_when_backend_vllm_in_dev() -> None:
@@ -146,6 +195,7 @@ def test_llm_client_is_real_when_backend_vllm_in_dev() -> None:
     client = build_llm_client(_settings(environment="development", llm_backend="vllm"), _config())
     assert isinstance(client, ResilientClient)
     assert client.serves_model("qwen")
+    assert client.serves_model("gemma4")
 
 
 # ---------- build_embedder ----------
