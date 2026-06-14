@@ -100,6 +100,60 @@ def test_dev_allows_localhost_cors_and_empty_master_key() -> None:
 
 
 # ---------------------------------------------------------------------------
+# CORS_ORIGINS por env var (CSV human-friendly, mismo patrón que TRUSTED_PROXY_IPS)
+# ---------------------------------------------------------------------------
+
+
+def test_cors_origins_parsed_from_env_csv() -> None:
+    """``CORS_ORIGINS`` CSV desde env se splittea a lista (no crashea por JSON-decode)."""
+    s = _settings(CORS_ORIGINS="https://a.com,https://b.com")
+    assert s.cors_origins == ["https://a.com", "https://b.com"]
+
+
+def test_cors_origins_csv_strips_whitespace() -> None:
+    """Espacios alrededor de cada origin del CSV se recortan."""
+    s = _settings(CORS_ORIGINS=" https://a.com , https://b.com ")
+    assert s.cors_origins == ["https://a.com", "https://b.com"]
+
+
+def test_cors_origins_empty_env_falls_back_to_empty_list() -> None:
+    """``CORS_ORIGINS=`` (vacío) no crashea el boot; queda lista vacía (mismo
+    contrato que ``TRUSTED_PROXY_IPS`` vacío)."""
+    s = _settings(CORS_ORIGINS="")
+    assert s.cors_origins == []
+
+
+def test_cors_origins_json_list_passes_intact() -> None:
+    """Una lista ya parseada por kwarg pasa intacta (no rompe los tests que usan
+    ``cors_origins=[...]``)."""
+    s = _settings(cors_origins=["https://app.ynara.com"])
+    assert s.cors_origins == ["https://app.ynara.com"]
+
+
+def test_cors_origins_default_dev_localhost_when_unset() -> None:
+    """Sin ``CORS_ORIGINS``, el default dev (localhost:3000/8081) queda intacto."""
+    s = _settings(environment="development")
+    assert s.cors_origins == ["http://localhost:3000", "http://localhost:8081"]
+
+
+def test_prod_rejects_cors_localhost_from_env() -> None:
+    """El fail-fast de prod rechaza localhost cuando ``CORS_ORIGINS`` llega por env
+    (string CSV), no solo por kwarg list."""
+    overrides = {**_PROD_CLEAN}
+    overrides.pop("cors_origins")
+    with pytest.raises(ValueError, match="CORS_ORIGINS"):
+        _settings(CORS_ORIGINS="http://localhost:3000", **overrides)
+
+
+def test_prod_accepts_cors_real_domains_from_env() -> None:
+    """Con dominios reales por env (CSV), production bootea OK."""
+    overrides = {**_PROD_CLEAN}
+    overrides.pop("cors_origins")
+    s = _settings(CORS_ORIGINS="https://app.ynara.com,https://api.ynara.com", **overrides)
+    assert s.cors_origins == ["https://app.ynara.com", "https://api.ynara.com"]
+
+
+# ---------------------------------------------------------------------------
 # Fallback de las URLs de Celery hacia redis_url (P2.7)
 # ---------------------------------------------------------------------------
 
