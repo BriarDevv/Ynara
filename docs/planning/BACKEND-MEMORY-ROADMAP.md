@@ -206,7 +206,7 @@ familia/`sid` con grace (#142, ya mergeado).
 - Parser `hermes` (`OpenAIToolCallParser`) para tool calls de Qwen (ADR-009; `qwen3_coder` no existe).
 - Streaming desde primer token.
 - Health check `/v1/models`.
-- Config: `LLM_PRIMARY_BASE_URL` / `LLM_SECONDARY_BASE_URL` / `LLM_TOPOLOGY` en settings; `ynara.config.json[llm.serving]` para parámetros de modelo (ADR-009 D4). (`GEMMA_ENDPOINT`/`QWEN_ENDPOINT` no existen.)
+- Config: `LLM_SERVING` (lista de procesos `{base_url, models}`, ADR-013) en settings; `ynara.config.json[llm.serving]` para parámetros de modelo (ADR-009 D4). (`GEMMA_ENDPOINT`/`QWEN_ENDPOINT` no existen.)
 
 **Estimación**: 1-2 sesiones.
 

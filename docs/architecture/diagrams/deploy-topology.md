@@ -67,8 +67,8 @@ self-hosted en la misma VPS o en VPS dedicada. Detalle del cutover en
 - La 4080 Super tiene 16 GB de VRAM. Gemma 4 12B (dense) cuantizado
   + Qwen 3.5 9B cuantizado + bge-m3 co-residen dentro de los 16 GB
   (confirmado por medición — ADR-012). En vLLM son 2 procesos en la
-  misma GPU (`LLM_TOPOLOGY=split_process`); en dev con Ollama, un
-  endpoint único (`single_process`). El Gemma 4 26B-A4B original no
+  misma GPU (una entrada por modelo en `LLM_SERVING`, ADR-013); en dev
+  con Ollama, un endpoint único que sirve ambos. El Gemma 4 26B-A4B original no
   entraba; el cambio a 12B cerró esa restricción de VRAM.
 - Cloudflare Tunnel evita abrir puertos en la VPS y oculta IP real.
 - R2 para storage de exports de usuario, backups cifrados, assets

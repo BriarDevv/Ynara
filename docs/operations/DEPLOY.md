@@ -16,8 +16,8 @@ Ver `docs/architecture/diagrams/deploy-topology.md`.
 - **Storage** → Cloudflare R2.
 - **GPU inference** → vLLM en máquina con RTX 4080 Super.
   _(PENDIENTE: track de infra aparte; hoy el backend usa `FakeLlmClient`.
-  La integración ya está soportada vía `LLM_PRIMARY_BASE_URL` /
-  `LLM_SECONDARY_BASE_URL` / `LLM_TOPOLOGY`.)_
+  La integración ya está soportada vía `LLM_SERVING` (ADR-013): lista de
+  procesos `{base_url, models}`.)_
 
 ## Pipelines CI/CD
 
