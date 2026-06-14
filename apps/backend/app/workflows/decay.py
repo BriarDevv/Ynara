@@ -48,6 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.core.config import Settings, get_settings
+from app.memory.config import DecayConfig, load_decay_config
 from app.models.memory import ProceduralMemory
 from app.workers.celery_app import celery_app
 from app.workflows.consolidation import _normalize_db_url
@@ -56,16 +57,24 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Constantes de decay (ADR-007 D1 defaults)
-# TODO: mover a ynara.config.json[memory] cuando se agregue ese bloque de
-# parametros (tocar ynara.config.json ahora es gate regla #1).
+# Thresholds de decay (ADR-007 D1): ahora config-driven via
+# ``ynara.config.json[memory]`` (#211). El loader ``load_decay_config()``
+# (``app/memory/config.py``) los parsea con el mismo patron fail-fast que
+# ``llm/config.py`` y aplica los defaults de ADR-007 D1 si el bloque falta.
+#
+# Estos aliases de modulo derivan de los DEFAULTS del loader y existen solo
+# para consumidores que necesitan el valor en import-time (el beat de Celery)
+# o para los tests legacy. La fuente de verdad runtime es ``load_decay_config()``
+# / el ``DecayConfig`` inyectado en ``_async_decay``, NO estos aliases: el
+# operador override via config NO se refleja aca (son los defaults).
 # ---------------------------------------------------------------------------
 
-DECAY_INTERVAL_DAYS = 14
-DECAY_FACTOR = 0.9
-STALE_THRESHOLD = 0.3
-HARD_DELETE_THRESHOLD = 0.1
-HARD_DELETE_MIN_DAYS = 90
+_DEFAULT_DECAY_CONFIG = DecayConfig()
+DECAY_INTERVAL_DAYS = _DEFAULT_DECAY_CONFIG.decay_interval_days
+DECAY_FACTOR = _DEFAULT_DECAY_CONFIG.decay_factor
+STALE_THRESHOLD = _DEFAULT_DECAY_CONFIG.stale_threshold
+HARD_DELETE_THRESHOLD = _DEFAULT_DECAY_CONFIG.hard_delete_threshold
+HARD_DELETE_MIN_DAYS = _DEFAULT_DECAY_CONFIG.hard_delete_min_days
 
 
 @dataclass(frozen=True)
@@ -93,6 +102,7 @@ async def _async_decay(
     *,
     session: AsyncSession | None = None,
     settings: Settings | None = None,
+    decay_config: DecayConfig | None = None,
 ) -> DecayResult:
     """Nucleo async del decay procedural; retorna los conteos de cada paso.
 
@@ -101,14 +111,20 @@ async def _async_decay(
 
     (a) DECAY: a toda entrada cuyo ``last_reinforced_at`` quedo por debajo del
         cutoff (no reforzada en el ultimo intervalo) se le aplica
-        ``confidence *= DECAY_FACTOR``. ``0.9 * confidence`` nunca viola el
+        ``confidence *= cfg.decay_factor``. ``factor <= 1`` nunca viola el
         CheckConstraint ``confidence BETWEEN 0 AND 1``.
-    (b) STALE: toda entrada con ``confidence < STALE_THRESHOLD`` que aun no
+    (b) STALE: toda entrada con ``confidence < cfg.stale_threshold`` que aun no
         este marcada queda ``stale=True`` (el router filtra ``stale=False``).
-    (c) HARD DELETE: borrado fisico cuando ``confidence < HARD_DELETE_THRESHOLD``
-        Y ``last_reinforced_at`` mas viejo que ``HARD_DELETE_MIN_DAYS``. Doble
+    (c) HARD DELETE: borrado fisico cuando ``confidence < cfg.hard_delete_threshold``
+        Y ``last_reinforced_at`` mas viejo que ``cfg.hard_delete_min_days``. Doble
         criterio: evita borrar entradas que decayeron por baja interaccion
         general reciente.
+
+    Los thresholds vienen de ``decay_config`` (inyectable para tests
+    deterministas sin tocar disco); por defecto se cargan de
+    ``ynara.config.json[memory]`` via ``load_decay_config()`` (#211, ADR-007
+    D1). El cutoff se sigue calculando en Python (``datetime.now(UTC) -
+    timedelta``) -> determinismo de tests intacto.
 
     Si ``session`` se inyecta (tests de integracion) se usa directamente y NO se
     commitea (el fixture controla el rollback); se hace ``flush()`` entre pasos
@@ -116,16 +132,17 @@ async def _async_decay(
     (worker Celery en prod) se construye el engine con ``NullPool``, se abre la
     sesion, se commitea y se dispone el engine en ``finally``.
     """
+    cfg = decay_config if decay_config is not None else load_decay_config()
     now = datetime.now(UTC)
-    decay_cutoff = now - timedelta(days=DECAY_INTERVAL_DAYS)
-    hard_delete_cutoff = now - timedelta(days=HARD_DELETE_MIN_DAYS)
+    decay_cutoff = now - timedelta(days=cfg.decay_interval_days)
+    hard_delete_cutoff = now - timedelta(days=cfg.hard_delete_min_days)
 
     async def _run(db: AsyncSession) -> DecayResult:
-        # (a) DECAY — confidence *= 0.9 a las no reforzadas en el ultimo intervalo.
+        # (a) DECAY — confidence *= factor a las no reforzadas en el ultimo intervalo.
         decay_stmt = (
             sa_update(ProceduralMemory)
             .where(ProceduralMemory.last_reinforced_at < decay_cutoff)
-            .values(confidence=ProceduralMemory.confidence * DECAY_FACTOR)
+            .values(confidence=ProceduralMemory.confidence * cfg.decay_factor)
             .execution_options(synchronize_session=False)
         )
         decay_res = await db.execute(decay_stmt)
@@ -137,7 +154,7 @@ async def _async_decay(
         stale_stmt = (
             sa_update(ProceduralMemory)
             .where(
-                ProceduralMemory.confidence < STALE_THRESHOLD,
+                ProceduralMemory.confidence < cfg.stale_threshold,
                 ProceduralMemory.stale.is_(False),
             )
             .values(stale=True)
@@ -151,7 +168,7 @@ async def _async_decay(
         delete_stmt = (
             sa_delete(ProceduralMemory)
             .where(
-                ProceduralMemory.confidence < HARD_DELETE_THRESHOLD,
+                ProceduralMemory.confidence < cfg.hard_delete_threshold,
                 ProceduralMemory.last_reinforced_at < hard_delete_cutoff,
             )
             .execution_options(synchronize_session=False)

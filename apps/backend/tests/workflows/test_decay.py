@@ -15,14 +15,16 @@ Reglas aplicadas:
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.memory.config import DecayConfig
 from app.models.memory import ProceduralMemory
 from app.models.user import User
 from app.workflows.decay import (
@@ -125,13 +127,64 @@ class TestBeatSchedule:
     """La cadencia del beat es por-intervalo (cada DECAY_INTERVAL_DAYS dias)."""
 
     def test_beat_schedule_registers_decay_task(self) -> None:
-        """El beat_schedule registra la task de decay con cadencia por-intervalo."""
+        """El beat_schedule registra la task de decay con cadencia por-intervalo.
+
+        El interval lo provee ``load_decay_config()`` (#211); por default cae a
+        14 dias (ADR-007 D1), que es el alias legacy ``DECAY_INTERVAL_DAYS``.
+        """
         from app.workers.celery_app import celery_app
 
         schedule = celery_app.conf.beat_schedule
         entry = schedule["decay-procedural-every-interval"]
         assert entry["task"] == "workflows.decay_procedural"
         assert entry["schedule"] == timedelta(days=DECAY_INTERVAL_DAYS)
+
+
+class TestAsyncDecayConfigLoading:
+    """``_async_decay`` resuelve los thresholds del loader si no se inyecta config.
+
+    Corremos contra una ``AsyncSession`` mockeada (sin DB): cada ``execute``
+    devuelve un resultado con ``rowcount=0``, asi ``_async_decay`` completa los
+    3 pasos limpio y podemos verificar SI consulto ``load_decay_config`` o no.
+    """
+
+    @staticmethod
+    def _mock_session() -> MagicMock:
+        """AsyncSession mock: ``execute``/``flush`` async, ``execute`` -> rowcount=0.
+
+        Usamos ``MagicMock`` como base (no ``AsyncMock``) y declaramos async solo
+        los metodos que ``_async_decay`` awaitea, para que ``AsyncMock`` no
+        auto-genere coroutines huerfanas en atributos no usados.
+        """
+        exec_result = MagicMock()
+        exec_result.rowcount = 0
+        fake_session = MagicMock()
+        fake_session.execute = AsyncMock(return_value=exec_result)
+        fake_session.flush = AsyncMock(return_value=None)
+        return fake_session
+
+    def test_loads_config_when_not_injected(self) -> None:
+        """Sin ``decay_config`` inyectado, ``_async_decay`` llama ``load_decay_config``."""
+        fake_session = self._mock_session()
+        with patch(
+            "app.workflows.decay.load_decay_config", return_value=DecayConfig()
+        ) as mock_loader:
+            result = asyncio.run(_async_decay(session=fake_session))
+
+        assert isinstance(result, DecayResult)
+        mock_loader.assert_called_once_with()
+
+    def test_does_not_load_config_when_injected(self) -> None:
+        """Con ``decay_config`` inyectado, ``_async_decay`` NO llama al loader."""
+        injected = DecayConfig(decay_interval_days=7)
+        fake_session = self._mock_session()
+        with patch(
+            "app.workflows.decay.load_decay_config",
+            side_effect=AssertionError("no debe consultar el loader"),
+        ) as mock_loader:
+            asyncio.run(_async_decay(session=fake_session, decay_config=injected))
+
+        mock_loader.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +360,63 @@ class TestAsyncDecayIntegration:
         # last_reinforced_at intacto (el decay no lo toca; el upsert lo pondria
         # en now()).
         assert refreshed.last_reinforced_at.replace(tzinfo=UTC) == original_lra.replace(tzinfo=UTC)
+
+    async def test_injected_config_drives_factor_and_cutoff(self, db_session: AsyncSession) -> None:
+        """Un ``DecayConfig`` custom cambia el factor y el cutoff (no usa defaults).
+
+        Con ``decay_factor=0.5`` (vs default 0.9) y ``decay_interval_days=7`` (vs
+        14): una entrada reforzada hace 8 dias (dentro del intervalo default,
+        pero fuera del custom de 7) SI decae, y lo hace por 0.5.
+        """
+        custom = DecayConfig(
+            decay_interval_days=7,
+            decay_factor=0.5,
+            stale_threshold=0.3,
+            hard_delete_threshold=0.1,
+            hard_delete_min_days=90,
+        )
+        user_id = await _seed_user(db_session)
+        # 8 dias: dentro del intervalo default (14) -> con defaults NO decaeria;
+        # fuera del custom (7) -> con el config inyectado SI decae.
+        eight_days = datetime.now(UTC) - timedelta(days=8)
+        entry = await _seed_procedural(
+            db_session,
+            user_id=user_id,
+            key="config_driven",
+            confidence=0.8,
+            last_reinforced_at=eight_days,
+        )
+
+        result = await _async_decay(session=db_session, decay_config=custom)
+
+        refreshed = await _get(db_session, entry.id)
+        assert refreshed is not None
+        # Decayo por el factor CUSTOM (0.5), no por el default (0.9).
+        assert refreshed.confidence == pytest.approx(0.8 * 0.5)
+        assert result.decayed == 1
+
+    async def test_default_config_keeps_existing_behavior(self, db_session: AsyncSession) -> None:
+        """Con ``DecayConfig()`` (defaults) el comportamiento es identico al previo.
+
+        Misma siembra que ``test_old_entry_decays_by_factor`` pero inyectando el
+        config por defecto: confirma que los numeros 14/0.9 no cambiaron.
+        """
+        user_id = await _seed_user(db_session)
+        old = datetime.now(UTC) - timedelta(days=DECAY_INTERVAL_DAYS + 1)
+        entry = await _seed_procedural(
+            db_session,
+            user_id=user_id,
+            key="vieja_default",
+            confidence=0.8,
+            last_reinforced_at=old,
+        )
+
+        result = await _async_decay(session=db_session, decay_config=DecayConfig())
+
+        refreshed = await _get(db_session, entry.id)
+        assert refreshed is not None
+        assert refreshed.confidence == pytest.approx(0.8 * DECAY_FACTOR)
+        assert result.decayed >= 1
 
     async def test_full_pipeline_counts(self, db_session: AsyncSession) -> None:
         """Una corrida mixta reporta conteos coherentes de los tres pasos."""
