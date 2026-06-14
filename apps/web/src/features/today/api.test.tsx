@@ -8,8 +8,10 @@ import { useToggleTask } from "./api";
 
 // Mockeamos el fetcher: el test verifica la mecánica optimista del hook, no la
 // red. `patch` devuelve la tarea ya flipeada (lo que haría el backend).
+// El hook vive en @ynara/core (ADR-012) e importa `api` desde @ynara/core/api,
+// así que el mock apunta ahí (no a @/lib/api).
 const patch = vi.fn();
-vi.mock("@/lib/api", () => ({
+vi.mock("@ynara/core/api", () => ({
   api: { patch: (...args: unknown[]) => patch(...args) },
 }));
 

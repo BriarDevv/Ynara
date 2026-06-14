@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./api": "./src/api/index.ts",
     "./query-keys": "./src/query-keys.ts",
-    "./stores": "./src/stores/index.ts"
+    "./stores": "./src/stores/index.ts",
+    "./features/*": "./src/features/*/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

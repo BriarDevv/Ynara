@@ -1,21 +1,12 @@
+import { ONBOARDING_STEPS, type OnboardingStep, STEP_INDEX } from "@ynara/core/features/onboarding";
 import type { ModeId } from "@/components/ui/modes";
 
-/**
- * Orden canónico de los steps. La URL /onboarding/[step] usa estos
- * slugs. Si cambia el orden, hay que actualizar también ProgressDots
- * y el dispatcher de [step]/page.tsx.
- */
-export const ONBOARDING_STEPS = ["auth", "nombre", "dia", "modos", "a11y"] as const;
-
-export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
-
-export const STEP_INDEX: Record<OnboardingStep, number> = ONBOARDING_STEPS.reduce(
-  (acc, slug, i) => {
-    acc[slug] = i;
-    return acc;
-  },
-  {} as Record<OnboardingStep, number>,
-);
+export type { OnboardingStep };
+// La estructura de steps (orden, índice, tipo) se movió a @ynara/core (ADR-012)
+// para compartirla con mobile. Se re-exporta acá para no tocar los call-sites
+// que importan desde "../constants". El copy de cada step es web-specific y
+// se queda en este archivo.
+export { ONBOARDING_STEPS, STEP_INDEX };
 
 export const STEP_COPY: Record<OnboardingStep, { title: string; subtitle: string }> = {
   auth: {
