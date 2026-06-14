@@ -35,3 +35,22 @@ export const STEP_COPY: Record<
     subtitle: "Lo cambiás cuando quieras.",
   },
 };
+
+/** Máximo de moods seleccionables en el step "Tu día" (igual que la web). */
+export const MAX_MOOD = 2;
+
+export type MoodOption = {
+  value: string;
+  label: string;
+  hint?: string;
+};
+
+// Opciones del step "Tu día" — verbatim de apps/web/.../onboarding/constants.ts.
+export const MOOD_OPTIONS: readonly MoodOption[] = [
+  { value: "tranquilo", label: "Tranquilo, con tiempo" },
+  { value: "ocupado", label: "Ocupado, varias cosas" },
+  { value: "estresado", label: "Estresado" },
+  { value: "confuso", label: "Confuso, no sé por dónde arrancar" },
+  { value: "creativo", label: "Creativo, con ideas" },
+  { value: "cansado", label: "Cansado" },
+] as const;
