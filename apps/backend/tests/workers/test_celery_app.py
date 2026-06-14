@@ -29,7 +29,8 @@ from datetime import timedelta
 # Se importan los objetos task (no solo los modulos) para assertear su ``.name``
 # real contra el name registrado y el referenciado por el beat.
 from app.workers.celery_app import celery_app
-from app.workflows.consolidation import consolidate_turn
+from app.workflows.audit_retention import purge_audit_log
+from app.workflows.consolidation import consolidate_session, consolidate_turn
 from app.workflows.decay import decay_procedural
 
 
@@ -79,6 +80,21 @@ class TestBeatScheduleConsistency:
         """``consolidate_turn`` (la otra task de la cola) tambien esta registrada."""
         assert consolidate_turn.name in celery_app.tasks
         assert consolidate_turn.name == "workflows.consolidate_turn"
+
+    def test_consolidate_session_task_is_registered(self) -> None:
+        """``consolidate_session`` (episodica, issue #209) esta registrada."""
+        assert consolidate_session.name in celery_app.tasks
+        assert consolidate_session.name == "workflows.consolidate_session"
+
+    def test_purge_audit_log_task_is_registered(self) -> None:
+        """``purge_audit_log`` (referenciada por el beat) esta registrada.
+
+        El beat ``purge-audit-log-monthly`` apunta a ``workflows.purge_audit_log``;
+        importar la task arriba fuerza su registro para que
+        ``test_every_beat_task_is_registered`` sea valido aun corriendo este archivo
+        de forma aislada (su modulo ``audit_retention`` no se importaba antes)."""
+        assert purge_audit_log.name in celery_app.tasks
+        assert purge_audit_log.name == "workflows.purge_audit_log"
 
     def test_every_beat_task_is_registered(self) -> None:
         """Generico: TODO ``task`` del beat_schedule existe en el registro real.

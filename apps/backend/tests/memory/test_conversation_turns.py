@@ -1,0 +1,195 @@
+"""Tests del store de turnos de conversacion ``ConversationTurnStore`` (issue #209).
+
+UNIT: validacion del schema ``ConversationTurnOut`` (rechaza ``BYTEA`` crudo).
+INTEGRATION (``@pytest.mark.integration``, DB real): cifrado/descifrado,
+orden por ``seq``, purga, y aislamiento por ``user_id`` (regla #3 / regla #4).
+
+``conversation_turns`` es una tabla OPERATIVA, pero el ``content`` viaja cifrado
+AES-256-GCM per-user igual que la memoria del moat: los tests de integracion
+verifican que el blob en la DB es ``bytes`` (no plaintext) y que descifrar el blob
+de otro usuario con la key ajena tira ``InvalidTag``.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+
+import pytest
+from cryptography.exceptions import InvalidTag
+from pydantic import ValidationError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.crypto import decrypt_for_user
+from app.enums import Mode, TurnRole
+from app.memory.conversation_turns import ConversationTurnStore
+from app.models.conversation_turn import ConversationTurn
+from app.models.session import ChatSession
+from app.models.user import User
+from app.schemas.conversation_turn import ConversationTurnCreate, ConversationTurnOut
+
+# ---------------------------------------------------------------------------
+# UNIT — schema strict
+# ---------------------------------------------------------------------------
+
+
+def test_out_rejects_raw_bytes_content() -> None:
+    """``ConversationTurnOut`` con ``content=bytes`` -> ValidationError (strict).
+
+    El wrapper debe pasar ``content`` ya descifrado como ``str``; el schema rechaza
+    el ``BYTEA`` crudo (defensa en profundidad).
+    """
+    with pytest.raises(ValidationError):
+        ConversationTurnOut(
+            id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            session_id=uuid.uuid4(),
+            role=TurnRole.USER,
+            content=b"\x00blob-cifrado-crudo",  # type: ignore[arg-type]
+            seq=0,
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+
+
+def test_create_rejects_empty_content() -> None:
+    """``ConversationTurnCreate`` con ``content=''`` -> ValidationError (min_length)."""
+    with pytest.raises(ValidationError):
+        ConversationTurnCreate(
+            session_id=uuid.uuid4(),
+            role=TurnRole.MODEL,
+            content="",
+            seq=1,
+        )
+
+
+# ---------------------------------------------------------------------------
+# INTEGRATION — DB real
+# ---------------------------------------------------------------------------
+
+
+async def _seed_user(session: AsyncSession) -> User:
+    user = User()
+    session.add(user)
+    await session.flush()
+    await session.refresh(user)
+    return user
+
+
+async def _seed_session(
+    session: AsyncSession, *, user_id: uuid.UUID, mode: Mode = Mode.VIDA
+) -> ChatSession:
+    cs = ChatSession(user_id=user_id, mode=mode)
+    session.add(cs)
+    await session.flush()
+    await session.refresh(cs)
+    return cs
+
+
+@pytest.mark.integration
+class TestConversationTurnStoreIntegration:
+    """Tests de ``ConversationTurnStore`` contra la DB de tests (rollback al final)."""
+
+    async def test_add_persists_encrypted_content(self, db_session: AsyncSession) -> None:
+        """``add`` cifra el ``content``: el blob en la DB es bytes, NO plaintext."""
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        store = ConversationTurnStore(db_session, user.id)
+
+        plaintext = "hola, soy un mensaje secreto del usuario"
+        await store.add(
+            ConversationTurnCreate(session_id=cs.id, role=TurnRole.USER, content=plaintext, seq=0)
+        )
+
+        # Lectura cruda del blob: debe ser bytes y NO contener el plaintext.
+        raw = (
+            await db_session.execute(
+                select(ConversationTurn.content).where(ConversationTurn.session_id == cs.id)
+            )
+        ).scalar_one()
+        assert isinstance(raw, bytes)
+        assert plaintext.encode("utf-8") not in raw
+
+        # El store descifra al leer.
+        turns = await store.list_for_session(cs.id)
+        assert len(turns) == 1
+        assert turns[0].content == plaintext
+
+    async def test_list_for_session_ordered_by_seq(self, db_session: AsyncSession) -> None:
+        """``list_for_session`` devuelve los turnos ORDER BY ``seq`` ASC."""
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        store = ConversationTurnStore(db_session, user.id)
+
+        # Insertar fuera de orden a proposito: seq 1 antes que seq 0.
+        await store.add(
+            ConversationTurnCreate(
+                session_id=cs.id, role=TurnRole.MODEL, content="respuesta", seq=1
+            )
+        )
+        await store.add(
+            ConversationTurnCreate(session_id=cs.id, role=TurnRole.USER, content="pregunta", seq=0)
+        )
+
+        turns = await store.list_for_session(cs.id)
+        assert [t.seq for t in turns] == [0, 1]
+        assert turns[0].role == TurnRole.USER
+        assert turns[0].content == "pregunta"
+        assert turns[1].role == TurnRole.MODEL
+        assert turns[1].content == "respuesta"
+
+    async def test_purge_session_hard_deletes(self, db_session: AsyncSession) -> None:
+        """``purge_session`` borra todos los turnos de la sesion; devuelve el rowcount."""
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        store = ConversationTurnStore(db_session, user.id)
+
+        await store.add(
+            ConversationTurnCreate(session_id=cs.id, role=TurnRole.USER, content="uno", seq=0)
+        )
+        await store.add(
+            ConversationTurnCreate(session_id=cs.id, role=TurnRole.MODEL, content="dos", seq=1)
+        )
+
+        purged = await store.purge_session(cs.id)
+        assert purged == 2
+        assert await store.list_for_session(cs.id) == []
+
+    async def test_user_isolation(self, db_session: AsyncSession) -> None:
+        """Cada user solo ve/purga sus turnos; el blob ajeno no descifra con su key."""
+        user_a = await _seed_user(db_session)
+        user_b = await _seed_user(db_session)
+        cs_a = await _seed_session(db_session, user_id=user_a.id)
+        cs_b = await _seed_session(db_session, user_id=user_b.id)
+        store_a = ConversationTurnStore(db_session, user_a.id)
+        store_b = ConversationTurnStore(db_session, user_b.id)
+
+        await store_a.add(
+            ConversationTurnCreate(
+                session_id=cs_a.id, role=TurnRole.USER, content="dato de A", seq=0
+            )
+        )
+        await store_b.add(
+            ConversationTurnCreate(
+                session_id=cs_b.id, role=TurnRole.USER, content="dato de B", seq=0
+            )
+        )
+
+        # A no ve la sesion de B (filtra por user_id + session_id).
+        assert await store_a.list_for_session(cs_b.id) == []
+        # A purga la sesion de B -> 0 filas (no toca nada ajeno).
+        assert await store_a.purge_session(cs_b.id) == 0
+        # B sigue teniendo su turno.
+        b_turns = await store_b.list_for_session(cs_b.id)
+        assert len(b_turns) == 1
+        assert b_turns[0].content == "dato de B"
+
+        # El blob de B NO descifra con la key derivada de A (InvalidTag).
+        raw_b = (
+            await db_session.execute(
+                select(ConversationTurn.content).where(ConversationTurn.session_id == cs_b.id)
+            )
+        ).scalar_one()
+        with pytest.raises(InvalidTag):
+            decrypt_for_user(user_a.id, raw_b)

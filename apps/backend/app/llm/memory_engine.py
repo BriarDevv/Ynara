@@ -73,6 +73,23 @@ class MemoryOp:
     target_id: str | None = None
 
 
+@dataclass(frozen=True)
+class SessionSummary:
+    """Resumen episodico de una sesion completa (output de ``summarize``).
+
+    Campos:
+        summary: Parrafo en tercera persona con lo que paso en la sesion. Vacio
+            ("") cuando el LLM no devolvio un resumen utilizable (parseo
+            defensivo): el caller (worker episodico) NO debe persistir un
+            episodio con summary vacio.
+        topics: Metadata estructurada de la sesion (temas, tono, etc.). Dict
+            vacio cuando no hay metadata.
+    """
+
+    summary: str = ""
+    topics: dict[str, Any] = field(default_factory=dict)
+
+
 # ---------------------------------------------------------------------------
 # MemoryEngine — Protocol
 # ---------------------------------------------------------------------------
@@ -160,6 +177,38 @@ Devuelve SOLO la lista JSON de operaciones de memoria. Nada mas."""
 
 
 # ---------------------------------------------------------------------------
+# Prompt de resumen episodico
+# ---------------------------------------------------------------------------
+
+_SUMMARY_SYSTEM = """\
+Sos un resumidor de conversaciones para un asistente personal llamado Ynara.
+Tu unica tarea es leer el transcript de una sesion completa (turnos del usuario y \
+del asistente) y devolver un objeto JSON con un resumen episodico de la sesion.
+
+REGLAS ESTRICTAS:
+1. El "summary" es un parrafo en tercera persona que captura lo que paso en la \
+sesion: de que se hablo, que pidio el usuario, que se resolvio. Conciso pero \
+completo (2 a 5 oraciones).
+2. "topics" es un objeto con metadata estructurada de la sesion (p.ej. \
+{"temas": ["trabajo", "salud"], "tono": "reflexivo"}). Puede ir vacio ({}).
+3. NO inventes informacion que no este en el transcript.
+4. NO incluyas datos sensibles innecesarios; resumi a nivel de tema, no de detalle \
+intimo, salvo que sea central a la sesion.
+
+FORMATO DE SALIDA (SOLO JSON, sin texto extra, sin markdown):
+{"summary": "El usuario hablo de ...", "topics": {"temas": ["..."]}}
+"""
+
+_SUMMARY_USER_TMPL = """\
+[MODO: {mode}]
+
+[TRANSCRIPT DE LA SESION]
+{transcript}
+
+Devuelve SOLO el objeto JSON con "summary" y "topics". Nada mas."""
+
+
+# ---------------------------------------------------------------------------
 # QwenMemoryEngine
 # ---------------------------------------------------------------------------
 
@@ -213,6 +262,36 @@ def _parse_ops(raw_text: str) -> list[MemoryOp]:
     return ops
 
 
+def _parse_summary(raw_text: str) -> SessionSummary:
+    """Parseo defensivo del JSON de resumen episodico devuelto por Qwen.
+
+    Espejo de ``_parse_ops`` (regla #6): si el parse falla, el resultado no es un
+    objeto, o ``summary`` no es un str no-vacio, devuelve un ``SessionSummary``
+    vacio (``summary=""``) sin propagar. El worker episodico jamas debe caerse por
+    un JSON malo de Qwen; con ``summary=""`` el caller decide no crear el episodio.
+    """
+    try:
+        data = json.loads(raw_text.strip())
+    except (json.JSONDecodeError, ValueError):
+        logger.debug("memory_engine: JSON invalido en resumen de Qwen (descartado)")
+        return SessionSummary()
+
+    if not isinstance(data, dict):
+        logger.debug("memory_engine: resumen de Qwen no es objeto (descartado)")
+        return SessionSummary()
+
+    summary = data.get("summary", "")
+    if not isinstance(summary, str) or not summary.strip():
+        logger.debug("memory_engine: resumen de Qwen sin 'summary' valido (descartado)")
+        return SessionSummary()
+
+    topics = data.get("topics", {})
+    if not isinstance(topics, dict):
+        topics = {}
+
+    return SessionSummary(summary=summary.strip(), topics=topics)
+
+
 class QwenMemoryEngine:
     """Extractor de memoria usando Qwen via ``LLMClient``.
 
@@ -259,6 +338,37 @@ class QwenMemoryEngine:
             return []
 
         return _parse_ops(result.text)
+
+    async def summarize(self, *, transcript: str, mode: str) -> SessionSummary:
+        """Resume un transcript de sesion completo a un ``SessionSummary`` via Qwen.
+
+        Lo usa el worker episodico (``consolidate_session``) al cerrar la sesion:
+        recibe el transcript reconstruido de los turnos descifrados y devuelve el
+        ``summary`` (a cifrar + embeddear en ``episodic_memory``) + ``topics``.
+
+        El contenido del transcript NO se loguea (regla #4: ningun dato de usuario
+        a logs). Si el LLM falla o devuelve JSON invalido, devuelve un
+        ``SessionSummary`` vacio (``summary=""``) sin propagar: el caller NO crea
+        el episodio cuando el summary es vacio.
+        """
+        user_content = _SUMMARY_USER_TMPL.format(mode=mode, transcript=transcript)
+        messages = [
+            ChatMessage(role="system", content=_SUMMARY_SYSTEM),
+            ChatMessage(role="user", content=user_content),
+        ]
+        try:
+            result = await self._client.complete(
+                model=self._served_name,
+                messages=messages,
+                temperature=0.2,  # baja temperatura para un resumen estable
+                max_tokens=512,
+            )
+        except Exception:
+            # El worker nunca debe caerse por un fallo del LLM en el resumen.
+            logger.debug("memory_engine: fallo al llamar a Qwen para resumen (descartado)")
+            return SessionSummary()
+
+        return _parse_summary(result.text)
 
 
 # ---------------------------------------------------------------------------

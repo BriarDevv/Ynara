@@ -48,6 +48,7 @@ Decisiones de diseno (criticadas, NO re-litigar):
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
@@ -62,6 +63,9 @@ from app.core.ratelimit import check_sessions_rate_limit
 from app.models.session import ChatSession
 from app.schemas.session import SessionOut
 from app.schemas.session_api import SessionListPage
+from app.workflows.consolidation import consolidate_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -167,6 +171,14 @@ async def close_session(
     - Commitea y devuelve el ``SessionOut`` (mirror del modelo, decision #4).
     - Rate-limit (decision #6): bucket por ``user_id`` compartido con list/get,
       ANTES de tocar la DB. fail-open si Redis cae. 429 + ``Retry-After`` al cruzar.
+    - Trigger episodico (issue #209): SOLO en la rama del PRIMER cierre real
+      (``ended_at`` era ``None``), DESPUES del commit, se encola
+      ``consolidate_session.delay(...)``. El enqueue post-commit (igual que el de
+      ``consolidate_turn`` en ``_run_chat_turn``) garantiza que el ``ended_at`` ya
+      este persistido cuando el worker corra. Un segundo cierre (idempotente) NO
+      re-encola: el episodio ya se disparo en el primero. Best-effort fail-open: si
+      Redis esta caido, el ``.delay()`` tira y se loguea SOLO ``type(exc).__name__``
+      (regla #4); el close devuelve 200 igual (la consolidacion es eventual).
 
     Returns:
         ``SessionOut`` con el estado de la sesion cerrada (``ended_at`` no nulo).
@@ -184,9 +196,27 @@ async def close_session(
 
     # Idempotente: solo se setea ended_at si todavia es None. Un segundo cierre
     # preserva el timestamp original (no es 409; cerrar dos veces es inocuo).
-    if cs.ended_at is None:
+    is_first_close = cs.ended_at is None
+    if is_first_close:
         cs.ended_at = datetime.now(UTC)
+        # Snapshot de los primitivos ANTES del commit: el enqueue post-commit cierra
+        # sobre str puros, nunca sobre atributos ORM (evita lazy-load post-commit).
+        enqueue_user_id = str(cs.user_id)
+        enqueue_session_id = str(cs.id)
+        enqueue_mode = cs.mode.value
         await session.commit()
         await session.refresh(cs)
+
+        # Enqueue de consolidacion episodica DESPUES del commit (M10 Ola 4), SOLO en
+        # la rama del primer cierre real. fail-open: el broker caido NO rompe el
+        # close (la consolidacion es eventual). .delay() es no-bloqueante.
+        try:
+            consolidate_session.delay(
+                user_id=enqueue_user_id,
+                session_id=enqueue_session_id,
+                mode=enqueue_mode,
+            )
+        except Exception as exc:  # best-effort: el broker caido NO rompe el close.
+            logger.warning("consolidate_session enqueue failed: %s", type(exc).__name__)
 
     return SessionOut.model_validate(cs)
