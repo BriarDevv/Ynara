@@ -36,6 +36,14 @@ Decisiones de diseno (criticadas, NO re-litigar):
 (5) Mirror sin nada sensible. ``SessionOut`` es el mirror del modelo y no expone
     nada sensible; el wrapper de paginacion (``SessionListPage``) vive en
     ``app/schemas/session_api.py`` (no sagrado), espejando ``memory_api.py``.
+
+(6) Rate-limit por user_id (issue #208). Las 3 rutas comparten UN bucket por
+    ``user_id`` (mismo patron fail-open que ``check_chat_rate_limit`` /
+    ``check_memory_export_rate_limit``): el guard 429 corre ANTES de tocar la DB,
+    asi un usuario throttleado no consume conexiones del pool ni queries. fail-OPEN
+    si Redis cae: ``incr_with_ttl`` => 0 => permite (baseline sin freno, nunca un
+    auto-DoS). 429 con ``Retry-After`` (mismo shape que auth/chat/memory via
+    ``too_many_requests``); ``detail`` neutro (regla #4).
 """
 
 from __future__ import annotations
@@ -47,7 +55,10 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from app.core.deps import CurrentUser, DbSession
+from app.api.v1._http import too_many_requests
+from app.core.config import get_settings
+from app.core.deps import CurrentUser, DbSession, TokenStoreDep
+from app.core.ratelimit import check_sessions_rate_limit
 from app.models.session import ChatSession
 from app.schemas.session import SessionOut
 from app.schemas.session_api import SessionListPage
@@ -67,6 +78,7 @@ _NOT_FOUND_DETAIL = "sesion no encontrada"
 async def list_sessions(
     session: DbSession,
     user_id: CurrentUser,
+    store: TokenStoreDep,
     limit: Annotated[int, Query(ge=1, le=_LIMIT_MAX)] = _LIMIT_DEFAULT,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> SessionListPage:
@@ -78,10 +90,14 @@ async def list_sessions(
     - Orden ``started_at DESC`` (la mas reciente primero). ``limit`` ∈ ``[1, 100]``
       (default 50), ``offset`` ≥ 0: FastAPI devuelve 422 fuera de rango.
     - Solo lectura: un SELECT + un COUNT, sin mutar ni encolar nada.
+    - Rate-limit (decision #6): bucket por ``user_id`` compartido con get/close,
+      ANTES de tocar la DB. fail-open si Redis cae. 429 + ``Retry-After`` al cruzar.
 
     Returns:
         ``SessionListPage`` con ``items`` (la pagina) + ``total`` (del user).
     """
+    if not await check_sessions_rate_limit(store, user_id=str(user_id)):
+        raise too_many_requests(get_settings().sessions_window_seconds)
     items_result = await session.execute(
         select(ChatSession)
         .where(ChatSession.user_id == user_id)
@@ -106,6 +122,7 @@ async def get_session(
     session_id: UUID,
     session: DbSession,
     user_id: CurrentUser,
+    store: TokenStoreDep,
 ) -> SessionOut:
     """Devuelve UNA ``ChatSession`` del usuario por id.
 
@@ -113,10 +130,14 @@ async def get_session(
       el MISMO ``detail`` (``_NOT_FOUND_DETAIL``): sin oraculo de existencia ajena,
       identico a ``close_session`` (decision #1).
     - Solo lectura: un ``session.get``, sin mutar ni encolar nada.
+    - Rate-limit (decision #6): bucket por ``user_id`` compartido con list/close,
+      ANTES de tocar la DB. fail-open si Redis cae. 429 + ``Retry-After`` al cruzar.
 
     Returns:
         ``SessionOut`` (mirror del modelo, sin nada sensible).
     """
+    if not await check_sessions_rate_limit(store, user_id=str(user_id)):
+        raise too_many_requests(get_settings().sessions_window_seconds)
     cs = await session.get(ChatSession, session_id)
 
     # Aislamiento sin oraculo: sesion inexistente y sesion ajena dan el MISMO 404.
@@ -134,6 +155,7 @@ async def close_session(
     session_id: UUID,
     session: DbSession,
     user_id: CurrentUser,
+    store: TokenStoreDep,
 ) -> SessionOut:
     """Cierra la ``ChatSession`` del usuario seteando ``ended_at`` (idempotente).
 
@@ -143,10 +165,14 @@ async def close_session(
       devuelve 200 con el ``ended_at`` original. Si es ``None``, setea
       ``datetime.now(UTC)`` (decision #3).
     - Commitea y devuelve el ``SessionOut`` (mirror del modelo, decision #4).
+    - Rate-limit (decision #6): bucket por ``user_id`` compartido con list/get,
+      ANTES de tocar la DB. fail-open si Redis cae. 429 + ``Retry-After`` al cruzar.
 
     Returns:
         ``SessionOut`` con el estado de la sesion cerrada (``ended_at`` no nulo).
     """
+    if not await check_sessions_rate_limit(store, user_id=str(user_id)):
+        raise too_many_requests(get_settings().sessions_window_seconds)
     cs = await session.get(ChatSession, session_id)
 
     # Aislamiento sin oraculo: sesion inexistente y sesion ajena dan el MISMO 404.

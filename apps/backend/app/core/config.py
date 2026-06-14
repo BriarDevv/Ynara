@@ -127,6 +127,11 @@ class Settings(BaseSettings):
     # legitimo y cortan el abuso. fail-OPEN si Redis cae.
     memory_export_max_requests: int = Field(5, alias="MEMORY_EXPORT_MAX_REQUESTS")
     memory_export_window_seconds: int = Field(3600, alias="MEMORY_EXPORT_WINDOW_SECONDS")
+    # Rate-limit de /v1/sessions (issue #208), por user_id. UN bucket compartido por
+    # list/get/close (las 3 son lecturas/ops baratas): default amplio para cubrir un
+    # polling legitimo y solo cortar scripting abusivo. fail-OPEN si Redis cae.
+    sessions_max_requests: int = Field(120, alias="SESSIONS_MAX_REQUESTS")
+    sessions_window_seconds: int = Field(60, alias="SESSIONS_WINDOW_SECONDS")
 
     # Reverse-proxy / IP real del cliente (issue #151). El rate-limit anti-fuerza-bruta
     # cuenta por IP; detrás de Cloudflare Tunnel el peer que ve uvicorn es el conector
