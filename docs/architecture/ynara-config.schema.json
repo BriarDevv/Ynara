@@ -126,7 +126,38 @@
     },
     "memory": {
       "type": "object",
-      "additionalProperties": true
+      "description": "Memoria: engine/store/embedding_model/consolidation + thresholds de decay procedural (ADR-007 D1). `additionalProperties` queda en true para no romper esas keys ni las de retention futuras; los thresholds de decay no son `required` (el loader aplica defaults si faltan, compat con config viejo).",
+      "additionalProperties": true,
+      "properties": {
+        "decay_interval_days": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Cada cuantos dias corre el decay (confidence *= factor por intervalo). Default 14 (ADR-007 D1)."
+        },
+        "decay_factor": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "Factor multiplicativo de confidence por intervalo sin reforzar. Default 0.9 (ADR-007 D1)."
+        },
+        "stale_threshold": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "Confidence bajo el cual la entrada queda stale=true (el router no la inyecta). Default 0.3 (ADR-007 D1)."
+        },
+        "hard_delete_threshold": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "Confidence bajo el cual la entrada es candidata a borrado fisico (junto con la antiguedad). Debe ser <= stale_threshold. Default 0.1 (ADR-007 D1)."
+        },
+        "hard_delete_min_days": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Antiguedad minima (dias sin reforzar) para el borrado fisico, ademas de la baja confianza. Default 90 (ADR-007 D1)."
+        }
+      }
     },
     "infrastructure": {
       "type": "object",
