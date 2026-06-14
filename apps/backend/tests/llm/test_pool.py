@@ -21,7 +21,7 @@ from app.llm.config import (
 from app.llm.errors import ModelNotServedError
 
 _QWEN = "qwen-3.5-9b"
-_GEMMA = "gemma-4-26b-a4b"
+_GEMMA = "gemma-4-12b"
 _PRIMARY_URL = "http://primary:8001/v1"
 _SECONDARY_URL = "http://secondary:8002/v1"
 
