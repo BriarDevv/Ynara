@@ -133,6 +133,129 @@ async def test_complete_propagates_tool_parsing_error() -> None:
         await client.complete(model=_MODEL, messages=_messages())
 
 
+# ---------- thinking por rol -> chat_template_kwargs (ADR-012 D4, #205) ----------
+
+
+@pytest.mark.asyncio
+async def test_complete_thinking_false_sets_enable_thinking_false() -> None:
+    """``thinking=False`` -> payload trae ``chat_template_kwargs.enable_thinking`` False.
+
+    Garantiza el OFF explicito del conversacional (Gemma): con thinking activo
+    devuelve content vacio (gotcha medido); el False explicito pisa el default.
+    """
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(200, json=_load("completion_text.json"))
+
+    client = _client(handler)
+    await client.complete(model=_MODEL, messages=_messages(), thinking=False)
+    assert captured["payload"]["chat_template_kwargs"]["enable_thinking"] is False
+
+
+@pytest.mark.asyncio
+async def test_complete_thinking_true_sets_enable_thinking_true() -> None:
+    """``thinking=True`` -> payload trae ``chat_template_kwargs.enable_thinking`` True.
+
+    El agente (Qwen) piensa para planificar tool calls; el True explicito asegura
+    ON aunque cambie el default del server.
+    """
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(200, json=_load("completion_text.json"))
+
+    client = _client(handler)
+    await client.complete(model=_MODEL, messages=_messages(), thinking=True)
+    assert captured["payload"]["chat_template_kwargs"]["enable_thinking"] is True
+
+
+@pytest.mark.asyncio
+async def test_complete_thinking_none_omits_chat_template_kwargs() -> None:
+    """Sin ``thinking`` (default None) -> NO se emite ``chat_template_kwargs``.
+
+    Preserva el comportamiento previo exacto: la clave no aparece y el server usa
+    su default.
+    """
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(200, json=_load("completion_text.json"))
+
+    client = _client(handler)
+    await client.complete(model=_MODEL, messages=_messages())
+    assert "chat_template_kwargs" not in captured["payload"]
+
+
+@pytest.mark.asyncio
+async def test_stream_thinking_false_sets_enable_thinking_false() -> None:
+    """``stream`` tambien hila ``thinking``: OFF -> ``enable_thinking`` False en payload.
+
+    Cubre la rama de stream para que el flag no quede sin tocar en streaming.
+    """
+    sse = (_FIXTURES / "stream_text.sse").read_text(encoding="utf-8")
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200, content=sse.encode("utf-8"), headers={"content-type": "text/event-stream"}
+        )
+
+    client = _client(handler)
+    async for _ in client.stream(model=_MODEL, messages=_messages(), thinking=False):
+        pass
+    assert captured["payload"]["chat_template_kwargs"]["enable_thinking"] is False
+
+
+@pytest.mark.asyncio
+async def test_stream_thinking_true_sets_enable_thinking_true() -> None:
+    """``stream(thinking=True)`` -> ``enable_thinking`` True en el payload.
+
+    Simetria ON con ``complete``: el agente (Qwen) piensa para planificar tool
+    calls tambien en streaming; el True explicito asegura ON aunque cambie el
+    default del server.
+    """
+    sse = (_FIXTURES / "stream_text.sse").read_text(encoding="utf-8")
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200, content=sse.encode("utf-8"), headers={"content-type": "text/event-stream"}
+        )
+
+    client = _client(handler)
+    async for _ in client.stream(model=_MODEL, messages=_messages(), thinking=True):
+        pass
+    assert captured["payload"]["chat_template_kwargs"]["enable_thinking"] is True
+
+
+@pytest.mark.asyncio
+async def test_stream_thinking_none_omits_chat_template_kwargs() -> None:
+    """Sin ``thinking`` (default None) en ``stream`` -> NO se emite ``chat_template_kwargs``.
+
+    Simetria None con ``complete``: la clave no aparece y el server usa su default
+    tambien por la rama de streaming.
+    """
+    sse = (_FIXTURES / "stream_text.sse").read_text(encoding="utf-8")
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200, content=sse.encode("utf-8"), headers={"content-type": "text/event-stream"}
+        )
+
+    client = _client(handler)
+    async for _ in client.stream(model=_MODEL, messages=_messages()):
+        pass
+    assert "chat_template_kwargs" not in captured["payload"]
+
+
 # ---------- timeout configurable (#27) ----------
 
 

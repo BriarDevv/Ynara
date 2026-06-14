@@ -75,9 +75,15 @@ class FakeLlmClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
+        thinking: bool | None = None,
         timeout_s: float | None = None,
     ) -> CompletionResult:
-        self.complete_calls.append({"model": model, "messages": messages, "tools": tools})
+        # ``thinking`` se registra para que los tests de routing por rol (ADR-012
+        # D4) puedan afirmar que el router lo deriva correcto (False conversacional,
+        # True agente, None desconocido).
+        self.complete_calls.append(
+            {"model": model, "messages": messages, "tools": tools, "thinking": thinking}
+        )
         if not self._results:
             raise AssertionError("FakeLlmClient: no hay resultados programados")
         item = self._results.popleft()
@@ -93,9 +99,12 @@ class FakeLlmClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
+        thinking: bool | None = None,
         timeout_s: float | None = None,
     ) -> AsyncIterator[CompletionChunk]:
-        self.stream_calls.append({"model": model, "messages": messages, "tools": tools})
+        self.stream_calls.append(
+            {"model": model, "messages": messages, "tools": tools, "thinking": thinking}
+        )
         if not self._chunks:
             raise AssertionError("FakeLlmClient: no hay chunks programados")
         item = self._chunks.popleft()

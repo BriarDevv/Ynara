@@ -499,6 +499,36 @@ async def test_specs_no_vacia_pasa_tools_lista() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Tests: passthrough de thinking por rol (ADR-012 D4, #205)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("thinking", [True, False, None])
+async def test_run_tool_loop_pasa_thinking_a_complete(thinking: bool | None) -> None:
+    """``run_tool_loop(thinking=...)`` hila el flag tal cual a ``complete``.
+
+    El thinking es passthrough puro hacia ``llm_client.complete`` (lo decide el
+    router por rol): True/False fuerzan ON/OFF, None deja el default del server.
+    """
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+    fake.queue_result(_make_result(text="ok", finish_reason="stop"))
+
+    _text, _actions, _fr = await run_tool_loop(
+        llm_client=fake,
+        served_name="qwen",
+        messages=_messages(),
+        specs=[],
+        registries=_empty_registries(),
+        thinking=thinking,
+        fallback_text="fallback",
+    )
+
+    # Identidad estricta: el flag debe llegar sin reinterpretarse (None != False).
+    assert fake.complete_calls[0]["thinking"] is thinking
+
+
+# ---------------------------------------------------------------------------
 # Tests de _execute_anywhere
 # ---------------------------------------------------------------------------
 

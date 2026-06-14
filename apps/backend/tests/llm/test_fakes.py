@@ -53,6 +53,32 @@ async def test_complete_returns_queued_result() -> None:
 
 
 @pytest.mark.asyncio
+async def test_complete_records_thinking_flag() -> None:
+    """``complete`` registra el flag ``thinking`` en ``complete_calls`` (ADR-012 D4).
+
+    Habilita los asserts de routing por rol: el router deriva el flag y el Fake lo
+    expone para verificarlo. ``None`` por default (no se forzo el modo).
+    """
+    fake = FakeLlmClient(served_models=frozenset({_MODEL}))
+    fake.queue_result(_result())
+    fake.queue_result(_result())
+    await fake.complete(model=_MODEL, messages=_messages(), thinking=True)
+    await fake.complete(model=_MODEL, messages=_messages())
+    assert fake.complete_calls[0]["thinking"] is True
+    assert fake.complete_calls[1]["thinking"] is None
+
+
+@pytest.mark.asyncio
+async def test_stream_records_thinking_flag() -> None:
+    """``stream`` tambien registra ``thinking`` en ``stream_calls`` (ADR-012 D4)."""
+    fake = FakeLlmClient(served_models=frozenset({_MODEL}))
+    fake.queue_chunks([CompletionChunk(delta_text="ho")])
+    async for _ in fake.stream(model=_MODEL, messages=_messages(), thinking=False):
+        pass
+    assert fake.stream_calls[0]["thinking"] is False
+
+
+@pytest.mark.asyncio
 async def test_complete_raises_queued_error() -> None:
     fake = FakeLlmClient(served_models=frozenset({_MODEL}))
     fake.queue_error(LlmTimeoutError())

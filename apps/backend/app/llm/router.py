@@ -111,6 +111,26 @@ _FALLBACK_TEXT = (
 )
 
 
+def _thinking_for_role(role: str) -> bool | None:
+    """Modo de razonamiento por rol del modelo (ADR-012 D4).
+
+    - ``conversational`` -> ``False``: el modelo conversacional (Gemma 4) NUNCA
+      piensa. Con thinking activo Gemma devuelve ``content`` vacio (gotcha medido);
+      emitir ``False`` explicito garantiza OFF aunque cambie el default del server.
+    - ``agent`` -> ``True``: el agente (Qwen3) piensa para planificar tool calls;
+      emitir ``True`` explicito asegura ON aunque cambie el default del server.
+    - cualquier otro rol -> ``None``: no emitir la clave, usar el default del
+      server. La config tipa ``role`` como ``Literal`` (solo los dos de arriba), asi
+      que esta rama es inalcanzable en runtime; existe como fail-safe que NO rompe el
+      turno ante un rol desconocido (preserva el comportamiento previo exacto).
+    """
+    if role == "conversational":
+        return False
+    if role == "agent":
+        return True
+    return None
+
+
 async def route(
     request: ChatRequest,
     *,
@@ -163,6 +183,11 @@ async def route(
     model_cfg = cfg.model_for_mode(mode_key)
     max_model_len = cfg.serving.max_model_len[model_cfg.key]
 
+    # Modo de razonamiento por rol (ADR-012 D4): conversacional NUNCA piensa
+    # (Gemma -> content vacio con thinking ON), agente SI (Qwen planifica tool
+    # calls). Se hila por el tool loop hasta el cliente; ``None`` deja el default.
+    thinking = _thinking_for_role(model_cfg.role)
+
     # System prompt estatico del modo (cacheado, NO mutar).
     system_prompt = load_prompt(request.mode)
 
@@ -211,6 +236,7 @@ async def route(
             messages=messages,
             specs=specs,
             registries=mem_ctx.registries,
+            thinking=thinking,
             fallback_text=_FALLBACK_TEXT,
         )
     except ModelNotServedError:

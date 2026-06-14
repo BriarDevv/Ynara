@@ -54,12 +54,17 @@ class LLMClient(Protocol):
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
+        thinking: bool | None = None,
         timeout_s: float | None = None,
     ) -> CompletionResult:
         """Genera una completion no-streaming.
 
         ``timeout_s=None`` deja que la implementacion use su default (el
         ``VllmClient`` lo toma de ``config.serving.request_timeout_s``).
+
+        ``thinking`` controla el modo de razonamiento del modelo (ADR-012 D4):
+        ``None`` = no emitir la clave -> usa el default del server (preserva el
+        comportamiento exacto previo). ``True``/``False`` = forzar ON/OFF.
         """
         ...
 
@@ -71,11 +76,15 @@ class LLMClient(Protocol):
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
+        thinking: bool | None = None,
         timeout_s: float | None = None,
     ) -> AsyncIterator[CompletionChunk]:
         """Genera una completion en streaming (yield de chunks).
 
         ``timeout_s=None`` -> default de la implementacion (ver ``complete``).
+
+        ``thinking`` controla el modo de razonamiento del modelo (ADR-012 D4):
+        ``None`` = no emitir la clave -> default del server (ver ``complete``).
         """
         ...
 

@@ -67,6 +67,7 @@ async def run_tool_loop(
     specs: list[ToolSpec],
     registries: tuple[ToolRegistry, ToolRegistry | None],
     max_iterations: int = MAX_TOOL_ITERATIONS,
+    thinking: bool | None = None,
     fallback_text: str,
 ) -> tuple[str, list[dict[str, object]], str]:
     """Loop principal de inferencia + ejecucion de tools.
@@ -97,6 +98,9 @@ async def run_tool_loop(
         registries: Tupla ``(default_registry, memory_registry|None)`` de
             ``MemoryContext.registries``.
         max_iterations: Guard maximo de iteraciones (default ``MAX_TOOL_ITERATIONS``).
+        thinking: Modo de razonamiento del modelo (ADR-012 D4). ``None`` deja el
+            default del server; ``True``/``False`` lo fuerza ON/OFF. Passthrough
+            puro hacia ``llm_client.complete``; lo decide el router por rol.
         fallback_text: Texto de fallback si el texto final esta vacio.
 
     Returns:
@@ -119,6 +123,7 @@ async def run_tool_loop(
             model=served_name,
             messages=messages,
             tools=tool_specs,
+            thinking=thinking,
         )
         last_text = result.text
         last_finish_reason = result.finish_reason

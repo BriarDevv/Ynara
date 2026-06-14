@@ -147,6 +147,7 @@ class ResilientClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
+        thinking: bool | None = None,
         timeout_s: float | None = None,
     ) -> CompletionResult:
         """Completa con retry + fallback on-prem; degrada si todo falla.
@@ -155,6 +156,9 @@ class ResilientClient:
         (``total_budget_s``): si se vence, se corta y se degrada igual que al
         agotar la cadena, evitando que el peor caso sume el timeout de cada
         intento (P2.5).
+
+        ``thinking`` es passthrough puro hacia el cliente subyacente (ADR-012 D4):
+        no hay logica nueva, solo se hila por toda la cadena de candidatos.
         """
         try:
             async with asyncio.timeout(self._total_budget_s):
@@ -164,6 +168,7 @@ class ResilientClient:
                     tools=tools,
                     max_tokens=max_tokens,
                     temperature=temperature,
+                    thinking=thinking,
                     timeout_s=timeout_s,
                 )
         except TimeoutError:
@@ -181,6 +186,7 @@ class ResilientClient:
         tools: list[ToolSpec] | None,
         max_tokens: int,
         temperature: float,
+        thinking: bool | None,
         timeout_s: float | None,
     ) -> CompletionResult | None:
         """Recorre los candidatos (primario -> fallback on-prem).
@@ -200,6 +206,7 @@ class ResilientClient:
                 tools=tools,
                 max_tokens=max_tokens,
                 temperature=temperature,
+                thinking=thinking,
                 timeout_s=timeout_s,
             )
             if result is not None:
@@ -216,6 +223,7 @@ class ResilientClient:
         tools: list[ToolSpec] | None,
         max_tokens: int,
         temperature: float,
+        thinking: bool | None,
         timeout_s: float | None,
     ) -> CompletionResult | None:
         """Reintenta un candidato; ``None`` si se agota (toca fallback).
@@ -232,6 +240,7 @@ class ResilientClient:
                     tools=tools,
                     max_tokens=max_tokens,
                     temperature=temperature,
+                    thinking=thinking,
                     timeout_s=timeout_s,
                 )
             except _PERMANENT_ERRORS:
@@ -267,6 +276,7 @@ class ResilientClient:
         tools: list[ToolSpec] | None = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
+        thinking: bool | None = None,
         timeout_s: float | None = None,
     ) -> AsyncIterator[CompletionChunk]:
         """Streamea desde un candidato sano.
@@ -276,6 +286,8 @@ class ResilientClient:
         delega; si el primer chunk falla, la excepcion se propaga (el router
         decide como degradar el streaming). El fallback on-prem completo
         solo aplica al modo no-streaming (``complete``).
+
+        ``thinking`` es passthrough puro hacia el cliente elegido (ADR-012 D4).
         """
         return self._stream(
             model=model,
@@ -283,6 +295,7 @@ class ResilientClient:
             tools=tools,
             max_tokens=max_tokens,
             temperature=temperature,
+            thinking=thinking,
             timeout_s=timeout_s,
         )
 
@@ -294,6 +307,7 @@ class ResilientClient:
         tools: list[ToolSpec] | None,
         max_tokens: int,
         temperature: float,
+        thinking: bool | None,
         timeout_s: float | None,
     ) -> AsyncIterator[CompletionChunk]:
         client = self._pick_for_stream(model)
@@ -303,6 +317,7 @@ class ResilientClient:
             tools=tools,
             max_tokens=max_tokens,
             temperature=temperature,
+            thinking=thinking,
             timeout_s=timeout_s,
         ):
             yield chunk
