@@ -96,9 +96,9 @@ Este documento es el plan del **segundo slice navegable** del frontend de Ynara:
 | Modo | Modelo | Rol | Tools | Memoria |
 |---|---|---|---|---|
 | productividad | qwen-3.5-9b | **agente** | calendar, reminder, memory | semantic + episodic |
-| estudio | gemma-4-26b-a4b | conversacional | — | episodic + procedural |
-| bienestar | gemma-4-26b-a4b | conversacional | — | procedural + semantic |
-| vida | gemma-4-26b-a4b | conversacional | — | procedural |
+| estudio | gemma-4-12b | conversacional | — | episodic + procedural |
+| bienestar | gemma-4-12b | conversacional | — | procedural + semantic |
+| vida | gemma-4-12b | conversacional | — | procedural |
 | memoria | qwen-3.5-9b | **agente** | memory | las 3 capas |
 
 > **Regla de oro del routing** (ADR-002): **Qwen** (productividad, memoria) ejecuta tools y escribe memoria → produce `actions[]`. **Gemma** (estudio, bienestar, vida) solo conversa y lee memoria → `actions[]` vacío. La UI (web y mobile) tiene que reflejar esta diferencia.

@@ -9,9 +9,9 @@ vive en [`ynara.config.json`](../../ynara.config.json).
 | Modo | Modelo | Capas de memoria | Tools | Tono |
 |------|--------|------------------|-------|------|
 | Productividad | Qwen 3.5-9B | semantic, episodic | calendar, reminder, memory | neutro-eficaz |
-| Estudio | Gemma 4 26B-A4B | episodic, procedural | — | encouragement |
-| Bienestar | Gemma 4 26B-A4B | procedural, semantic | — | casual-empatico |
-| Vida | Gemma 4 26B-A4B | procedural | — | casual-rioplatense |
+| Estudio | Gemma 4 12B | episodic, procedural | — | encouragement |
+| Bienestar | Gemma 4 12B | procedural, semantic | — | casual-empatico |
+| Vida | Gemma 4 12B | procedural | — | casual-rioplatense |
 | Memoria | Qwen 3.5-9B | episodic, semantic, procedural | memory | neutro-eficaz |
 
 ## Productividad
@@ -32,7 +32,7 @@ Ejemplos:
 
 > Para entender, no para hacer la tarea.
 
-- Modelo: Gemma 4 26B-A4B (conversacional).
+- Modelo: Gemma 4 12B (conversacional).
 - Lee memoria episódica + procedural. No escribe.
 - Sin tools — sesión cerrada de tutoría.
 - Tono: aliento + claridad. Explicaciones desde lo que el usuario ya
@@ -46,7 +46,7 @@ Ejemplos:
 
 > Para descomprimir. Acompañar sin terapizar.
 
-- Modelo: Gemma 4 26B-A4B.
+- Modelo: Gemma 4 12B.
 - Lee memoria procedural + semántica. No escribe.
 - Sin tools.
 - Tono: cálido sin pegote. **Prohibido** consejos clínicos, prohibido
@@ -62,7 +62,7 @@ Reglas duras:
 
 > Charla cotidiana, recomendaciones livianas.
 
-- Modelo: Gemma 4 26B-A4B.
+- Modelo: Gemma 4 12B.
 - Lee memoria procedural. No escribe.
 - Sin tools: Gemma es conversacional y solo lee memoria; las acciones
   (calendar incluido) las maneja Qwen en Productividad (ADR-002).

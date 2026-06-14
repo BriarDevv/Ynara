@@ -29,7 +29,7 @@ con un PR.
 
 ## Modelos
 
-- **Gemma** — Gemma 4 26B-A4B. Modelo conversacional. Solo lee
+- **Gemma** — Gemma 4 12B. Modelo conversacional. Solo lee
   memoria.
 - **Qwen** — Qwen 3.5 9B. Modelo agente. Lee y escribe memoria,
   llama tools.

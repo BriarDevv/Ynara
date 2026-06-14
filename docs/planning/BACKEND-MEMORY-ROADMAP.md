@@ -15,7 +15,7 @@ Este documento es el plan operativo para llevar el backend de Ynara desde su est
 Se apoya en cuatro fuentes:
 
 1. **Informe técnico §1.5 y §2.4** — dual-stack Gemma + Qwen, vLLM, LlamaIndex, Mem0, patrón ADD/UPDATE/DELETE/NOOP.
-2. **ADR-002** — Gemma 4 26B-A4B (conversacional) + Qwen 3.5-9B (agente), cuantización Q4/Q5 para 16GB VRAM.
+2. **ADR-002** — Gemma 4 12B (conversacional, actualizado por ADR-012) + Qwen 3.5-9B (agente), cuantización Q4/Q5 para 16GB VRAM.
 3. **ADR-004** — Postgres + pgvector como único vector store.
 4. **ADR-007** — decay exponencial, retention diferenciada (`is_sensitive`), cifrado AES-256-GCM con HKDF.
 

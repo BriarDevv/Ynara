@@ -22,7 +22,7 @@
 
 - **FastAPI + Pydantic v2 strict + SQLAlchemy 2 async + Alembic + Celery + uv.** Python ≥ 3.12.
 - **DB**: Postgres + pgvector. MVP en Supabase vía **session pooler** (puerto 5432, IPv4; la conexión directa es IPv6-only). V2 self-hosted (ADR-005).
-- **LLM**: stack dual vLLM — **Gemma 4 26B-A4B** (conversacional, solo lee memoria) + **Qwen 3.5-9B** (agente, lee+escribe, llama tools). Ver ADR-002 (roles) y ADR-009 (serving + parsers).
+- **LLM**: stack dual vLLM — **Gemma 4 12B** (conversacional, solo lee memoria) + **Qwen 3.5-9B** (agente, lee+escribe, llama tools). Ver ADR-002 (roles) y ADR-009 (serving + parsers).
 
 **Construido y mergeado** (capa LLM M0–M8 completa):
 

@@ -13,7 +13,7 @@
 [![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red)](./LICENSE)
 
 Cinco modos (productividad, estudio, bienestar, vida, memoria) sobre dos
-modelos propios (Gemma 4 26B-A4B + Qwen 3.5-9B), memoria semántica +
+modelos propios (Gemma 4 12B + Qwen 3.5-9B), memoria semántica +
 episódica + procedural sobre Postgres + pgvector, todo on-prem. Sin datos
 de usuario saliendo del perímetro, sin lock-in a big tech.
 
@@ -32,7 +32,7 @@ de usuario saliendo del perímetro, sin lock-in a big tech.
 | Métrica | Valor actual |
 | --- | --- |
 | Modos del producto | 5 (productividad, estudio, bienestar, vida, memoria) |
-| Modelos LLM | 2 (Gemma 4 26B-A4B conversacional + Qwen 3.5-9B agente) |
+| Modelos LLM | 2 (Gemma 4 12B conversacional + Qwen 3.5-9B agente) |
 | Capas de memoria | 3 (semántica, episódica, procedural) |
 | Tools del agente Qwen | 8 (calendar×2, reminder×2, memory×4) |
 | Apps | 3 (web Next.js 16, mobile Expo 53+, backend FastAPI) |
@@ -47,9 +47,9 @@ de usuario saliendo del perímetro, sin lock-in a big tech.
 | Modo | Para qué sirve | Modelo | Tools | Capas de memoria |
 | --- | --- | --- | --- | --- |
 | **Productividad** | Agendar, recordar, ejecutar | Qwen 3.5-9B (agente) | calendar, reminder, memory | semántica, episódica |
-| **Estudio** | Tutoría, explicar, procesar textos | Gemma 4 26B-A4B | — | episódica, procedural |
-| **Bienestar** | Descarga emocional, acompañar | Gemma 4 26B-A4B | — | procedural, semántica |
-| **Vida** | Charla casual, recomendaciones | Gemma 4 26B-A4B | — | procedural |
+| **Estudio** | Tutoría, explicar, procesar textos | Gemma 4 12B | — | episódica, procedural |
+| **Bienestar** | Descarga emocional, acompañar | Gemma 4 12B | — | procedural, semántica |
+| **Vida** | Charla casual, recomendaciones | Gemma 4 12B | — | procedural |
 | **Memoria** | Recall explícito de conversaciones | Qwen 3.5-9B (agente) | memory | las 3 capas |
 
 Detalle de cada modo en [`docs/product/MODES.md`](./docs/product/MODES.md).
@@ -162,7 +162,7 @@ Atajos completos en [`Makefile`](./Makefile).
 
 | Modelo | Rol | Lee memoria | Escribe memoria | Llama tools | Endpoint |
 | --- | --- | --- | --- | --- | --- |
-| **Gemma 4 26B-A4B** (MoE, 4B activos) | Conversacional | Sí | No | No | `:8000/v1` |
+| **Gemma 4 12B** (dense) | Conversacional | Sí | No | No | `:8000/v1` |
 | **Qwen 3.5-9B** | Agente | Sí | Sí | Sí | `:8001/v1` |
 
 Razonamiento: [`ADR-002`](./docs/architecture/adrs/ADR-002-gemma-qwen-dual-stack.md).
