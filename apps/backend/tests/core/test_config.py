@@ -185,6 +185,54 @@ def test_prod_accepts_cors_real_domains_from_env() -> None:
 
 
 # ---------------------------------------------------------------------------
+# TRUSTED_PROXY_IPS por env var (CSV human-friendly, mismo patrón que CORS_ORIGINS)
+# ---------------------------------------------------------------------------
+
+
+def test_trusted_proxy_ips_parsed_from_env_csv() -> None:
+    """``TRUSTED_PROXY_IPS`` CSV desde env se splittea a lista intacta (no JSON-decode)."""
+    s = _settings(TRUSTED_PROXY_IPS="127.0.0.1,10.0.0.0/8")
+    assert s.trusted_proxy_ips == ["127.0.0.1", "10.0.0.0/8"]
+
+
+def test_trusted_proxy_ips_csv_strips_whitespace() -> None:
+    """Espacios alrededor de cada IP/CIDR del CSV se recortan."""
+    s = _settings(TRUSTED_PROXY_IPS=" 127.0.0.1 , 10.0.0.0/8 ")
+    assert s.trusted_proxy_ips == ["127.0.0.1", "10.0.0.0/8"]
+
+
+def test_trusted_proxy_ips_single_value() -> None:
+    """Un único IP/CIDR sin comas también se parsea a una lista de un elemento."""
+    s = _settings(TRUSTED_PROXY_IPS="192.168.0.0/16")
+    assert s.trusted_proxy_ips == ["192.168.0.0/16"]
+
+
+def test_trusted_proxy_ips_empty_env_falls_back_to_empty_list() -> None:
+    """``TRUSTED_PROXY_IPS=`` (vacío) no crashea el boot; queda lista vacía (default
+    seguro: no confiar ningún proxy)."""
+    s = _settings(TRUSTED_PROXY_IPS="")
+    assert s.trusted_proxy_ips == []
+
+
+def test_trusted_proxy_ips_default_empty_when_unset() -> None:
+    """Sin ``TRUSTED_PROXY_IPS``, el default es lista vacía (no se confía ningún proxy)."""
+    s = _settings()
+    assert s.trusted_proxy_ips == []
+
+
+def test_trusted_proxy_ips_list_passes_intact() -> None:
+    """Una lista ya parseada por kwarg pasa intacta (no rompe los kwargs list)."""
+    s = _settings(trusted_proxy_ips=["10.0.0.0/8"])
+    assert s.trusted_proxy_ips == ["10.0.0.0/8"]
+
+
+def test_trusted_proxy_ips_invalid_entry_rejected() -> None:
+    """Una entry no-IP/CIDR rompe el boot (fail-fast del validator anti-spoof, #151)."""
+    with pytest.raises(ValueError, match="TRUSTED_PROXY_IPS"):
+        _settings(TRUSTED_PROXY_IPS="no-soy-una-ip")
+
+
+# ---------------------------------------------------------------------------
 # Fallback de las URLs de Celery hacia redis_url (P2.7)
 # ---------------------------------------------------------------------------
 

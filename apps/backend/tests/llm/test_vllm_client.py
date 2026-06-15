@@ -389,6 +389,39 @@ async def test_complete_422_overflow_signature_stays_bad_request() -> None:
     assert not isinstance(excinfo.value, LlmContextOverflowError)
 
 
+# ---------- asimetría intencional: stream() NO mapea 400-overflow ----------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "overflow_msg",
+    [
+        "This model's maximum context length is 8192 tokens, however you requested 9000.",
+        "The input exceeds the context length of the model.",
+        "Please reduce the length of the messages.",
+    ],
+)
+async def test_stream_400_overflow_stays_bad_request(overflow_msg: str) -> None:
+    """``stream()`` con un 400 + firma de overflow levanta ``LlmBadRequestError`` PLANO,
+    NO ``LlmContextOverflowError`` — asimetría INTENCIONAL vs ``complete()``.
+
+    Regresión: en ``complete()`` la response ya está leída y se le pasa el body a
+    ``_raise_for_status(..., body_text=response.text)``, así un 400 de overflow se
+    mapea a la subclase ``LlmContextOverflowError`` (P2.4). En ``stream()`` el
+    ``_raise_for_status(response)`` se llama SIN ``body_text`` (el body es un stream
+    aún no consumido), así que ``_is_context_overflow(None)`` da False y el 400 se
+    mapea al ``LlmBadRequestError`` genérico. Este test fija esa diferencia para que
+    un cambio futuro en el manejo del body de stream no la altere sin querer.
+    """
+    body = {"error": {"message": overflow_msg, "type": "BadRequestError"}}
+    client = _client(lambda req: httpx.Response(400, json=body))
+    with pytest.raises(LlmBadRequestError) as excinfo:
+        async for _ in client.stream(model=_MODEL, messages=_messages()):
+            pass
+    # La subclase de overflow NO se gatilla por la rama de streaming.
+    assert not isinstance(excinfo.value, LlmContextOverflowError)
+
+
 @pytest.mark.asyncio
 async def test_complete_timeout_mapped() -> None:
     def handler(request: httpx.Request) -> httpx.Response:

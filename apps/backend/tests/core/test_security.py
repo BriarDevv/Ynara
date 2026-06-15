@@ -223,3 +223,21 @@ def test_hash_is_salted() -> None:
 
 def test_verify_password_malformed_hash_returns_false() -> None:
     assert verify_password("clave", "no-es-un-hash-bcrypt") is False
+
+
+def test_bcrypt_truncates_at_72_bytes() -> None:
+    """Regresión: bcrypt solo usa los primeros 72 bytes; lo que sigue es ignorado.
+
+    Semántica INTENCIONAL (no un bug): ``_to_bcrypt_bytes`` trunca a 72 bytes antes
+    de hashear/verificar (bcrypt >= 4.1 levanta si se pasan más, así que se trunca
+    explícito). Por eso una contraseña de exactamente 72 bytes + cualquier sufijo
+    extra verifica contra el hash de los primeros 72 bytes: el sufijo cae fuera de
+    la ventana que bcrypt mira. Se documenta acá para que un cambio futuro del
+    truncado no pase silencioso.
+    """
+    base = "a" * 72  # 72 caracteres ASCII == 72 bytes
+    hashed = hash_password(base)
+    # El sufijo extra queda fuera de los 72 bytes -> verifica igual.
+    assert verify_password(base + "extra", hashed) is True
+    # Y el propio base (sin sufijo) obviamente también.
+    assert verify_password(base, hashed) is True

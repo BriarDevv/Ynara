@@ -23,6 +23,8 @@ import sys
 import textwrap
 from datetime import timedelta
 
+import pytest
+
 # Importar las tasks de workflows las REGISTRA en celery_app.tasks via el
 # decorador @celery_app.task(name=...). Sin estos imports el registro estaria
 # vacio y el assert de consistencia beat<->registro seria un falso negativo.
@@ -163,3 +165,39 @@ class TestDecayIntervalImportTimeFallback:
         from app.workers.celery_app import _DECAY_INTERVAL_DAYS
 
         assert _DECAY_INTERVAL_DAYS == 14
+
+    def test_fallback_constant_is_14(self) -> None:
+        """El literal de fallback es 14 (ADR-007 D1): el beat lo usa si el config rompe."""
+        from app.workers.celery_app import _DECAY_INTERVAL_DAYS_FALLBACK
+
+        assert _DECAY_INTERVAL_DAYS_FALLBACK == 14
+
+    def test_fallback_value_when_load_decay_config_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Recalcular el intervalo con ``load_decay_config`` que tira ``MemoryConfigError``
+        cae al fallback (14) SIN propagar.
+
+        Reproduce IN-PROCESS la lógica del try/except de import-time del módulo (que no
+        se puede re-ejecutar sin un reload que contaminaría el ``celery_app`` global):
+        se parchea ``load_decay_config`` para que lance y se verifica que el mismo
+        patrón ``try/except MemoryConfigError -> fallback`` devuelve el literal 14. El
+        subproceso de ``test_import_does_not_crash_...`` cubre el camino real de
+        import-time; este aísla la decisión de fallback sin tocar el módulo global.
+        """
+        import app.memory.config as mem_config
+        from app.workers.celery_app import _DECAY_INTERVAL_DAYS_FALLBACK
+
+        def _boom() -> object:
+            raise mem_config.MemoryConfigError("config invalido a proposito")
+
+        monkeypatch.setattr(mem_config, "load_decay_config", _boom)
+
+        # Mismo patrón que el cuerpo del módulo (celery_app.py:42-45).
+        try:
+            interval = mem_config.load_decay_config().decay_interval_days
+        except mem_config.MemoryConfigError:
+            interval = _DECAY_INTERVAL_DAYS_FALLBACK
+
+        assert interval == 14
+        assert interval == _DECAY_INTERVAL_DAYS_FALLBACK

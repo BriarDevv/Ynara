@@ -322,6 +322,44 @@ def test_truncate_reduces_entries_not_mid_line() -> None:
         assert line.startswith("- ")
 
 
+def test_truncate_budget_zero_hits_lower_bounds_not_empty() -> None:
+    """Con ``budget_tokens=0`` y datos presentes, el recorte llega a los PISOS de los
+    loops, NO a vacío.
+
+    Documenta el comportamiento REAL (ver docstring de ``context_budget``): el "piso"
+    es el LÍMITE INFERIOR de los while-loops (``epi > 1``, ``sem > 3``, ``proc > 5``),
+    un efecto colateral del rango de los loops, NO una garantía activa del budget.
+    Con budget 0 igual quedan exactamente 1 episodic + 3 semantic + 5 procedural
+    porque los loops no recortan por debajo de eso (aunque el bloque siga sin caber
+    en 0 tokens). NO se eliminan todas las entradas.
+    """
+    sem = ["- " + "S" * 80] * SEMANTIC_LIMIT  # 5
+    epi = ["- [2025-01-01] " + "E" * 80] * EPISODIC_LIMIT  # 3
+    proc = [f'- k{idx}: {{"v":{idx}}}' for idx in range(PROCEDURAL_LIMIT)]  # 10
+
+    s, e, p = _truncate_to_budget(sem, epi, proc, budget_tokens=0)
+
+    # Pisos de cada loop: el recorte para en el límite inferior, no en 0.
+    assert len(e) == 1  # episodic 3 -> 1 (no baja de 1)
+    assert len(s) == 3  # semantic 5 -> 3 (no baja de 3)
+    assert len(p) == 5  # procedural 10 -> 5 (no baja de 5)
+    # Ninguna lista queda vacía pese al budget 0.
+    assert s and e and p
+
+
+def test_truncate_budget_zero_already_at_floor_is_noop() -> None:
+    """Con budget 0 pero las listas YA en su piso, no se recorta nada (los while no entran)."""
+    sem = ["- s"] * 3  # ya en el piso semantic
+    epi = ["- [2025-01-01] e"]  # ya en el piso episodic
+    proc = ["- k: {}"] * 5  # ya en el piso procedural
+
+    s, e, p = _truncate_to_budget(sem, epi, proc, budget_tokens=0)
+
+    assert len(s) == 3
+    assert len(e) == 1
+    assert len(p) == 5
+
+
 def test_truncate_semantic_after_episodic() -> None:
     """Cuando epi ya esta en 1, el siguiente paso recorta semantic."""
     sem_lines = ["- " + "S" * 300] * 5
