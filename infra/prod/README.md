@@ -11,6 +11,9 @@ docker-compose principal:
 
 ## systemd units de vLLM (issue #212)
 
+> **ADR-014:** en GPU de 16 GB el motor es **Ollama/GGUF**, no vLLM. Estas units
+> son la ruta **vLLM para 24 GB+**; en 16 GB no se usan.
+
 Una unit por proceso, alineadas a ADR-012 (12B conversacional, 9B agente,
 `single_process` co-residente, thinking OFF conversacional). Levantar el
 stack completo:
