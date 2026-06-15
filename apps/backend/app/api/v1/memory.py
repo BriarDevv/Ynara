@@ -144,15 +144,15 @@ async def _episodic_page(
 async def _procedural_page(
     store: ProceduralMemoryStore, *, limit: int, offset: int
 ) -> ProceduralMemoryPage:
-    """Arma la ``ProceduralMemoryPage``: ``items`` paginados + ``total`` del user.
+    """Arma la ``ProceduralMemoryPage``: ``items`` paginados en DB + ``total`` del user.
 
-    El store procedural no tiene paginación nativa (``list_all()`` sin args), así
-    que la página se recorta en Python sobre la lista ordenada por ``key``. Para
-    on-prem (pocas preferencias por user) es inocuo; ``total`` es el largo completo.
+    Paginación en Postgres (``limit``/``offset``) + ``count()``, igual que
+    ``_semantic_page`` / ``_episodic_page``. Antes ``list_all()`` traía TODAS las
+    filas y la página se recortaba en Python (no escalaba si la capa crecía).
     """
-    all_items = await store.list_all()
-    page = all_items[offset : offset + limit]
-    return ProceduralMemoryPage(items=page, total=len(all_items))
+    items = await store.list_all(limit=limit, offset=offset)
+    total = await store.count()
+    return ProceduralMemoryPage(items=items, total=total)
 
 
 def _parse_uuid_ref(ref: str) -> UUID:

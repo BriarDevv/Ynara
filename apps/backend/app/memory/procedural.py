@@ -106,13 +106,26 @@ class ProceduralMemoryStore:
             return None
         return ProceduralMemoryOut.model_validate(row)
 
-    async def list_all(self) -> list[ProceduralMemoryOut]:
-        """Lista todas las entradas procedurales del usuario, ordenadas por ``key``."""
+    async def list_all(
+        self, *, limit: int | None = None, offset: int = 0
+    ) -> list[ProceduralMemoryOut]:
+        """Lista las entradas procedurales del usuario, ordenadas por ``key``, paginado en DB.
+
+        Espeja ``SemanticMemoryStore.list_all`` / ``EpisodicMemoryStore.list_all``:
+        filtra por ``self._user_id`` (aislamiento estructural) y aplica
+        ``offset``/``limit`` EN LA DB, no en Python. ``limit=None`` (default) trae
+        TODAS las filas en un solo query (lo usan el export y el context builder);
+        con ``limit`` la paginación de ``GET /v1/memory`` la hace Postgres. Antes
+        ``list_all`` traía todo y la API recortaba en Python (no escalaba).
+        """
         stmt = (
             select(ProceduralMemory)
             .where(ProceduralMemory.user_id == self._user_id)
             .order_by(ProceduralMemory.key)
+            .offset(offset)
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         rows = (await self._session.execute(stmt)).scalars().all()
         return [ProceduralMemoryOut.model_validate(row) for row in rows]
 

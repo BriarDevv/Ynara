@@ -760,3 +760,23 @@ async def test_procedural_count_returns_correct_total(db_session: AsyncSession) 
     # Upsert idempotente sobre una key existente NO incrementa el conteo.
     await procedural.upsert(ProceduralMemoryUpsert(key="pref.0", value={"i": 0, "v": 2}))
     assert await procedural.count() == 5
+
+
+@pytest.mark.integration
+async def test_procedural_list_all_paginates_in_db(db_session: AsyncSession) -> None:
+    """``list_all(limit, offset)`` pagina en la DB ordenado por ``key``; sin args trae todo."""
+    user = await _seed_user(db_session)
+    _, _, procedural = _fake_stores(db_session, user.id)
+    for key in ("a.uno", "b.dos", "c.tres", "d.cuatro", "e.cinco"):
+        await procedural.upsert(ProceduralMemoryUpsert(key=key, value={"v": key}))
+
+    # Sin args: todas, ordenadas por key.
+    todas = await procedural.list_all()
+    assert [e.key for e in todas] == ["a.uno", "b.dos", "c.tres", "d.cuatro", "e.cinco"]
+
+    # Página en DB: limit + offset (slice [offset, offset+limit)).
+    page = await procedural.list_all(limit=2, offset=1)
+    assert [e.key for e in page] == ["b.dos", "c.tres"]
+
+    # offset más allá del total -> vacío (la DB no devuelve filas; no se recorta en Python).
+    assert await procedural.list_all(limit=2, offset=10) == []
