@@ -15,8 +15,11 @@ columna como ``LargeBinary``.
 Orden e idempotencia: ``seq`` es un entero monotónico por sesión (0 = primer
 turno del usuario, 1 = primera respuesta del modelo, ...). El
 ``UniqueConstraint(session_id, seq)`` impide insertar dos turnos con el mismo
-orden en la misma sesión; el índice compuesto ``(session_id, seq)`` sirve la
-lectura ordenada que hace el worker.
+orden en la misma sesión. El índice compuesto ``(user_id, session_id, seq)``
+sirve el patrón real de queries del store —todas filtran por ``user_id`` +
+``session_id`` (next_seq, list_for_session, purge_session) y ordenan por
+``seq``— y su prefijo ``(user_id)`` cubre el cascade-delete por usuario; el
+índice implícito del UNIQUE cubre el de sesión.
 """
 
 from __future__ import annotations
@@ -44,20 +47,22 @@ class ConversationTurn(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "conversation_turns"
     __table_args__ = (
         UniqueConstraint("session_id", "seq", name="uq_conversation_turns_session_id_seq"),
-        Index("ix_conversation_turns_session_id_seq", "session_id", "seq"),
+        # Índice único de acceso: matchea WHERE user_id=? AND session_id=? (next_seq,
+        # list_for_session, purge_session) y ordena por seq. Reemplaza los 3 índices
+        # parciales originales (auditoría backend). El prefijo (user_id) cubre el FK
+        # cascade por usuario; el UNIQUE(session_id, seq) cubre el de sesión.
+        Index("ix_conversation_turns_user_id_session_id_seq", "user_id", "session_id", "seq"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("sessions.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     role: Mapped[TurnRole] = mapped_column(
         Enum(TurnRole, name="turn_role_enum", native_enum=True, values_callable=enum_values),
