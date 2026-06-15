@@ -14,22 +14,32 @@ perímetro (regla #4).
 
 ## Estado
 
-- **Construido y mergeado**: capa LLM **M0–M8** completa — config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Persistencia de turnos crudos cifrados (`conversation_turns`, operativa) en `/v1/chat` + consolidación **episódica** async al cerrar la sesión (`consolidate_session`: resume con Qwen, embeddea, cifra y persiste en `episodic_memory`, purga los turnos). Workers Celery: consolidación async (semantic/procedural + episódica) + decay procedural. Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migración inicial mergeada (6 tablas, 4 enums, pgvector).
-- **Pendiente**: serving vLLM en infra de prod (los clientes reales ya existen — `VllmClient`/`VllmEmbeddingClient`/`VllmReranker` — y se prenden con `LLM_BACKEND=vllm` / `EMBEDDING_BACKEND=vllm` / `RERANKER_BACKEND=vllm`; en dev sin flags corren los Fakes; probados contra Ollama).
+- **Construido y mergeado**: capa LLM **M0–M8** completa — config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Persistencia de turnos crudos cifrados (`conversation_turns`, operativa) en `/v1/chat` + consolidación **episódica** async al cerrar la sesión (`consolidate_session`: resume con Qwen, embeddea, cifra y persiste en `episodic_memory`, purga los turnos). Workers Celery: consolidación async (semantic/procedural + episódica) + decay procedural. Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migraciones: cadena de **4** (initial → audit_log block-update trigger → `conversation_turns` table → drop de índices redundantes de `conversation_turns`); 7 tablas, 5 enums, pgvector + pgcrypto. Ver [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md).
+- **Serving**: el motor local de 16GB es **Ollama/GGUF** (un endpoint OpenAI-compatible
+  `http://localhost:11434/v1` con los modelos `gemma4` + `qwen`); vLLM queda reservado a 24GB+
+  (ADR-014). El cliente HTTP del backend es OpenAI-compatible y sirve **ambos** motores: el flag
+  `LLM_BACKEND=vllm` es un **nombre legacy** del cliente (NO implica vLLM — habla igual con
+  Ollama). Default `LLM_BACKEND=fake` (`FakeLlmClient` determinista, sin GPU); ídem
+  `EMBEDDING_BACKEND` / `RERANKER_BACKEND` (`fake` por default, `vllm` para prender el cliente
+  real). Los clientes reales (`VllmClient` / `VllmEmbeddingClient` / `VllmReranker`) ya existen y
+  se probaron contra Ollama.
 
 ## Estructura
 
 ```
 app/
 ├── main.py          # entrypoint FastAPI (lifespan, CORS, routers v1)
-├── enums.py         # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation)
-├── core/            # config (Settings lazy), deps (engine async lazy: get_engine/get_sessionmaker), security (auth JWT implementado), db_guard
+├── enums.py         # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation, TurnRole)
+├── core/            # config (Settings lazy), deps (engine async lazy: get_engine/get_sessionmaker), security (auth JWT con PyJWT + bcrypt directo — ADR-015, no python-jose/passlib), db_guard
 ├── api/v1/          # rutas FastAPI, un archivo por dominio
-├── models/          # SQLAlchemy 2 (user, session, memory 🔴, audit 🔴)
+├── models/          # SQLAlchemy 2 (user, session, memory 🔴, audit 🔴, conversation_turn operativa)
 ├── schemas/         # Pydantic v2 (mirror de models + payloads de API)
 ├── services/        # lógica de negocio sin framework (deps por argumento)
 ├── llm/             # capa de inferencia — config, clients/, prompts/, tools/, router (M8)
-├── memory/          # 🔴 wrappers de las 3 capas sagradas + AuditStore (escritura de audit_log) + config.py (loader de thresholds de [memory], no sagrado)
+├── memory/          # 🔴 wrappers de las 3 capas sagradas + AuditStore (escritura de audit_log)
+│                     #   + módulos neutrales (no sagrados): hashing.py (digests de audit_log),
+│                     #   embedding.py (embed_one), config.py (decay+retention de [memory]),
+│                     #   conversation_turns.py (store del buffer operativo de turnos)
 ├── workers/         # Celery (consolidación async)
 └── workflows/       # consolidación + decay (thresholds config-driven vía [memory]) + retention de audit_log implementados
 
@@ -64,7 +74,8 @@ Copiar `.env.example` a `.env` (gitignored). Críticas:
 | `DATABASE_URL` | Postgres (`postgresql+asyncpg://...`). MVP: session pooler de Supabase. |
 | `REDIS_URL` | Broker + result backend de Celery. |
 | `JWT_SECRET` | Firma de tokens (auth). |
-| `LLM_SERVING` | Serving vLLM: lista JSON `[{base_url, models}]`, una entrada por proceso (ADR-013). |
+| `LLM_SERVING` | Endpoints de serving: lista JSON `[{base_url, models}]`, una entrada por proceso/endpoint (ADR-013). Motor local 16GB = un endpoint Ollama/GGUF (`http://localhost:11434/v1`, models `gemma4`+`qwen`); vLLM (24GB+) usa una entrada por modelo (ADR-014). |
+| `LLM_BACKEND` | `fake` (default, `FakeLlmClient` sin GPU) o `vllm` (nombre **legacy** del cliente OpenAI-compatible; sirve Ollama y vLLM). Ídem `EMBEDDING_BACKEND` / `RERANKER_BACKEND`. |
 | `TEST_DATABASE_URL` | Solo tests de integración — DB **dedicada**, nunca prod. |
 | `MEMORY_ENCRYPTION_MASTER_KEY` | Cifrado de memoria (implementado, ADR-007 D3). |
 

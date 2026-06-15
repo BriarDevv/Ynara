@@ -16,7 +16,10 @@ correspondiente.
 Estos catálogos son el **qué**; el **cómo** vive en otro lado:
 
 - Mapa del código, capa LLM (`app/llm/`) y gates: [`../AGENTS.md`](../AGENTS.md).
-- Decisiones: [ADRs](../../../docs/architecture/adrs/) — ADR-002 (dual stack Gemma/Qwen), ADR-005 (Supabase MVP), ADR-009 (serving vLLM + parsers), ADR-013 (LLM_SERVING reemplaza LLM_TOPOLOGY), ADR-014 (motor local 16GB Ollama/GGUF vs vLLM 24GB+).
+- Decisiones: [ADRs](../../../docs/architecture/adrs/) — ADR-001..ADR-015 (15 ADRs lógicos en 16 archivos: hay dos ADR-012, uno de modelo conversacional 12B y otro de código compartido en mobile). Los más relevantes para el backend:
+  - ADR-002 (dual stack Gemma/Qwen), ADR-005 (Supabase MVP), ADR-007 (memory decay/retention/encryption), ADR-008 (embedding bge-m3), ADR-010 (memory architecture v2 in-house, supersede ADR-003/Mem0), ADR-011 (auth layering).
+  - **Serving**: ADR-009 (serving vLLM + tool parsers), **refinado por** ADR-013 (`LLM_SERVING` reemplaza `LLM_TOPOLOGY`) y ADR-014 (motor local 16GB Ollama/GGUF vs vLLM 24GB+).
+  - ADR-015 (auth deps: PyJWT + bcrypt directo).
 - Plan de la capa de inferencia: [`LLM-INFERENCE-INTEGRATION.md`](../../../docs/planning/LLM-INFERENCE-INTEGRATION.md).
 
 ## Regla

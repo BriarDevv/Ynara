@@ -8,12 +8,12 @@
 - **GET** `/v1/health` — **liveness**: el proceso está vivo. No toca dependencias.
   - Request: ninguno.
   - Response: `{ "status": "ok", "version": "0.1.0" }` (siempre 200 si responde).
-  - Permisos: público. Rate limit: 60/min.
+  - Permisos: público. Sin throttling aplicativo (no hay rate-limit por minuto).
 - **GET** `/v1/health/ready` — **readiness**: pinga DB y Redis.
   - Request: ninguno.
   - Response 200: `{ "status": "ready", "version": "0.1.0", "checks": { "database": { "ok": true }, "redis": { "ok": true } } }`.
   - Response 503 (degraded): mismo shape, `status: "degraded"` y la dependencia caída con `{ "ok": false, "error": "<ClaseDeExcepción>" }`. El error es **solo el nombre de la clase**, nunca el connection string (regla #2 / #4).
-  - Permisos: público. Rate limit: 60/min.
+  - Permisos: público. Sin throttling aplicativo (no hay rate-limit por minuto).
   - Uso: el orquestador no rutea tráfico mientras devuelva 503.
 
 ## /v1/auth
@@ -251,10 +251,16 @@ Invariantes (regla #3 / ADR-007 / ADR-010):
     completo; el receipt reporta el rowcount real. No descifra ni logea contenido.
 - Response 401 (todos): sin token / token inválido (`get_current_user`).
 - Permisos: **usuario autenticado**, solo su propia memoria.
-- Rate limit: solo `GET /v1/memory/export` (el endpoint más caro) está limitado, por
-  `user_id`, `MEMORY_EXPORT_MAX_REQUESTS` (5) por `MEMORY_EXPORT_WINDOW_SECONDS`
-  (3600s); 429 con `Retry-After`. fail-open si Redis cae. El resto de `/v1/memory` no
-  tiene rate-limit aplicativo.
+- Rate limit: dos endpoints están limitados, ambos por `user_id`, con 429 +
+  `Retry-After` al cruzar el techo y **fail-open** si Redis cae:
+  - `GET /v1/memory/export` (el endpoint más caro): `MEMORY_EXPORT_MAX_REQUESTS` (5)
+    por `MEMORY_EXPORT_WINDOW_SECONDS` (3600s).
+  - `POST /v1/memory/wipe` **execute** (la operación destructiva): `MEMORY_WIPE_MAX_REQUESTS`
+    (5) por `MEMORY_WIPE_WINDOW_SECONDS` (3600s), vía `check_memory_wipe_rate_limit`
+    (`memory.py`). Solo gatea el **execute**: el preview `?dry_run=true` es read-only y
+    **NO** consume cuota. El check corre **antes** de tocar la DB.
+  - El resto de `/v1/memory` (list/detail, PATCH/DELETE individual) no tiene rate-limit
+    aplicativo.
 
 ## /v1/sessions
 

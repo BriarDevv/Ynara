@@ -45,7 +45,8 @@ Esto es regla #3 de [`AGENTS.md`](../../../AGENTS.md).
 |---|---|---|---|
 | `20260529_1949_initial_schema.py` | `b7b06025f4bb` | (inicial) | 6 tablas sagradas/operativas, 4 enums, pgvector + pgcrypto. |
 | `20260602_1015_audit_log_block_update_trigger.py` | `a1f3c9d27e84` | `b7b06025f4bb` | Trigger BEFORE UPDATE que bloquea UPDATE sobre `audit_log` (inmutabilidad). |
-| `20260614_1700_conversation_turns_table.py` | `c4e8a1d50b93` | `a1f3c9d27e84` | Tabla **operativa** `conversation_turns` (buffer de turnos para la episódica, issue #209) + enum `turn_role_enum` + UNIQUE `(session_id, seq)` + índices. |
+| `20260614_1700_conversation_turns_table.py` | `c4e8a1d50b93` | `a1f3c9d27e84` | Tabla **operativa** `conversation_turns` (buffer de turnos para la episódica, issue #209) + enum `turn_role_enum` + UNIQUE `(session_id, seq)` + 3 índices parciales. |
+| `20260615_0200_drop_redundant_conversation_turns_indexes.py` | `b7e2f4a16c9d` | `c4e8a1d50b93` | **HEAD.** Tabla **operativa** `conversation_turns`: dropea los 3 índices parciales (`user_id`; `session_id`; `(session_id, seq)`) y crea el único índice compuesto `(user_id, session_id, seq)` que matchea el patrón real de queries del store. El `downgrade` recrea los 3 originales (round-trip limpio). |
 
 ## Migraciones peligrosas
 

@@ -26,7 +26,7 @@
 
 **Construido y mergeado** (capa LLM M0–M8 completa):
 
-- Config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Workers Celery: consolidación async + decay procedural + retention de audit_log (24 meses). Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migración inicial (6 tablas, 4 enums, pgvector). Persistencia de turnos para consolidación episódica: tabla `conversation_turns` + `consolidate_session` al cerrar la sesión (#209).
+- Config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Workers Celery: consolidación async + decay procedural + retention de audit_log (24 meses). Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migraciones: cadena de **4** (initial 6 tablas/4 enums → trigger block-update de `audit_log` → tabla `conversation_turns` + `turn_role_enum` → drop de índices redundantes de `conversation_turns`); total 7 tablas, 5 enums, pgvector + pgcrypto. Persistencia de turnos para consolidación episódica: tabla `conversation_turns` + `consolidate_session` al cerrar la sesión (#209).
 
 **Pendiente** (no empezar sin leer el plan):
 
@@ -41,22 +41,22 @@
 ```
 app/
 ├── main.py            # entrypoint FastAPI (lifespan, CORS, routers v1)
-├── enums.py           # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation)
+├── enums.py           # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation, TurnRole)
 ├── core/
 │   ├── config.py      # Settings (pydantic-settings); get_settings() cacheado y lazy
 │   ├── crypto.py      # AES-256-GCM per-user (HKDF-SHA256); encrypt_for_user / decrypt_for_user
 │   ├── db_guard.py    # guard anti-prod en lifespan: aborta el boot si DATABASE_URL apunta a Supabase prod sin opt-in
 │   ├── deps.py        # engine async LAZY (get_engine/get_sessionmaker cacheados, no module-level) + get_db (AsyncSession por request); dispose en el shutdown del lifespan
 │   ├── observability.py  # init_sentry() con before_send que scrubea PII (cuerpo, headers auth, user, extras) — regla #4
-│   ├── ratelimit.py   # rate-limit fail-open para login/register/refresh/chat/export (contadores Redis vía TokenStore)
-│   ├── security.py    # JWT/hashing — implementado (create_access_token, verify_access_token, hash_password, verify_password)
+│   ├── ratelimit.py   # rate-limit fail-open para login/register/refresh/chat/export, memory-wipe (`memory:ratelimit:wipe:`, solo el execute) y sessions (`sessions:ratelimit:read:`, bucket único list/get/close) (contadores Redis vía TokenStore)
+│   ├── security.py    # JWT/hashing — implementado con PyJWT + bcrypt directo (ADR-015, no python-jose/passlib): create_access_token, verify_access_token, hash_password, verify_password
 │   └── token_store.py # blocklist de jti + revocación por familia (sid) + contadores genéricos; Protocol + RedisTokenStore + InMemoryTokenStore (tests)
 ├── api/v1/            # rutas, un archivo por dominio (health, auth, chat, sessions, memory)
-├── models/            # SQLAlchemy 2 (user, session, memory, audit) — base.py: mixins UUIDPK/Timestamp
+├── models/            # SQLAlchemy 2 (user, session, memory, audit, conversation_turn) — base.py: mixins UUIDPK/Timestamp
 ├── schemas/           # Pydantic v2 mirror de models + payloads de API
 ├── services/          # lógica de negocio SIN framework (recibe deps por argumento)
 ├── llm/               # capa de inferencia — ver §3
-├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, implementado); audit.py: AuditStore (único punto de inserción en audit_log — sagrado, no editar). config.py: loader de thresholds de `[memory]` (decay, #211) — sibling de COMPORTAMIENTO, no toca columnas (no sagrado)
+├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, implementado); audit.py: AuditStore (único punto de inserción en audit_log — sagrado, no editar). Módulos neutrales (no sagrados, siblings de COMPORTAMIENTO, no tocan columnas): hashing.py (digests de audit_log: compute_record_hash + procedural_hash_payload), embedding.py (embed_one compartido), config.py (loader de thresholds de `[memory]`: decay + retention, #211), conversation_turns.py (store del buffer operativo)
 ├── workers/           # Celery (celery_app.py + tasks) — autodiscovery en app.workflows
 └── workflows/         # consolidación async + decay procedural + retention de audit_log (purge_audit_log) implementados
 ```
@@ -102,11 +102,11 @@ llm/
 
 **Invariantes que NO se rompen:**
 
-- **Serving** (ADR-009 + ADR-013): un modelo por proceso vLLM; la topología se declara como lista explícita `LLM_SERVING` (`[{base_url, models}]`, cada entrada = un proceso) detrás del `ClientPool`. Cada client anuncia solo sus `models` → ruteo por served_name (fix #206). Parsers de tool-calling: `hermes` (Qwen) / `gemma4` (Gemma).
+- **Serving** (ADR-009 + ADR-013 + ADR-014): el **motor local de 16GB es Ollama/GGUF** — un endpoint OpenAI-compatible (`http://localhost:11434/v1`) que co-aloja `gemma4` + `qwen`; **vLLM queda reservado a 24GB+** (un modelo por proceso). La topología se declara como lista explícita `LLM_SERVING` (`[{base_url, models}]`, cada entrada = un endpoint/proceso) detrás del `ClientPool`. Cada client anuncia solo sus `models` → ruteo por served_name (fix #206). Parsers de tool-calling: `hermes` (Qwen) / `gemma4` (Gemma).
 - **Resiliencia**: cadena **primario → secundario on-prem → respuesta degradada**. El fallback es SIEMPRE on-prem (regla #4): cero APIs externas. Nunca propaga una excepción de infra al caller.
 - **Errores** (`errors.py`): la taxonomía nunca expone contenido del usuario en `__str__`/logs (regla #4).
 - **Tools**: los errores vuelven SIEMPRE como dict estructurado `{"error": {"code", "message"}}` — el modelo **jamás** ve un traceback (el `ToolRegistry` blinda con `except Exception`). Fechas vía el tipo `IsoDatetime` (solo ISO 8601, rechaza epoch). **Gemma no llama tools** (solo Qwen); el registry por defecto (`default_registry()`) NO incluye `memory.*`: se construye por separado con `memory_registry(semantic_store)` (M7 implementado) y el router lo combina por modo cuando la memoria está habilitada.
-- **Config single-source**: el serving (`LLM_SERVING`: lista de `{base_url, models}`) vive en `Settings`/`.env` (ADR-013); `served_name` vive en `ynara.config.json[models]`, y parsers / `quantization` / `max_model_len` en `[llm.serving]`. `load_llm_config()` valida coherencia (fail-fast: cada served_name de `LLM_SERVING` debe existir en `[models]`). Los thresholds de decay procedural (`decay_interval_days`, `decay_factor`, `stale_threshold`, `hard_delete_threshold`, `hard_delete_min_days`, ADR-007 D1) viven en `ynara.config.json[memory]` y los parsea `app/memory/config.py` (`load_decay_config()`, mismo patrón fail-fast que `llm/config.py`: Pydantic frozen+strict, `MemoryConfigError`, cache `lru_cache`); `app/workflows/decay.py` los lee de ahí. Es **default-safe**: si el bloque `[memory]` no trae las keys, cae a los defaults de ADR-007 D1 (no rompe el job, #211).
+- **Config single-source**: el serving (`LLM_SERVING`: lista de `{base_url, models}`) vive en `Settings`/`.env` (ADR-013); `served_name` vive en `ynara.config.json[models]`, y parsers / `quantization` / `max_model_len` en `[llm.serving]`. `load_llm_config()` valida coherencia (fail-fast: cada served_name de `LLM_SERVING` debe existir en `[models]`). Los thresholds de decay procedural (`decay_interval_days`, `decay_factor`, `stale_threshold`, `hard_delete_threshold`, `hard_delete_min_days`, ADR-007 D1) viven en `ynara.config.json[memory]` y los parsea `app/memory/config.py` (`load_decay_config()`, mismo patrón fail-fast que `llm/config.py`: Pydantic frozen+strict, `MemoryConfigError`, cache `lru_cache`); `app/workflows/decay.py` los lee de ahí. Es **default-safe**: si el bloque `[memory]` no trae las keys, cae a los defaults de ADR-007 D1 (no rompe el job, #211). La **retención episódica diferenciada** (`retention_default_days`, `retention_sensitive_days`, `retention_sensitive_min_days`, `retention_sensitive_max_days`, ADR-007 D2) vive en el **mismo** bloque `[memory]` y la parsea `load_retention_config()` (`RetentionConfig`) con el MISMO patrón (frozen/strict/`extra='forbid'` + default-safe + fail-fast en `MemoryConfigError`).
 
 ---
 
@@ -174,4 +174,4 @@ Política completa: [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md).
 
 **Regla de los catálogos**: si agregás un modelo, endpoint, tool o migración, **actualizás el catálogo correspondiente en el mismo PR**. La review humana lo verifica (CI todavía no).
 
-ADRs relevantes: [ADR-002](../../docs/architecture/adrs/ADR-002-gemma-qwen-dual-stack.md) (dual stack), [ADR-005](../../docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md) (Supabase MVP), [ADR-009](../../docs/architecture/adrs/ADR-009-vllm-serving-topology-tool-parsers.md) (serving + parsers).
+ADRs relevantes: [ADR-002](../../docs/architecture/adrs/ADR-002-gemma-qwen-dual-stack.md) (dual stack), [ADR-005](../../docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md) (Supabase MVP), [ADR-009](../../docs/architecture/adrs/ADR-009-vllm-serving-topology-tool-parsers.md) (serving + parsers), [ADR-013](../../docs/architecture/adrs/ADR-013-serving-endpoints-config.md) (`LLM_SERVING` reemplaza `LLM_TOPOLOGY`), [ADR-014](../../docs/architecture/adrs/ADR-014-serving-ollama-gguf-16gb.md) (motor local 16GB Ollama/GGUF vs vLLM 24GB+), [ADR-015](../../docs/architecture/adrs/ADR-015-auth-deps-pyjwt-bcrypt.md) (auth con PyJWT + bcrypt directo).
