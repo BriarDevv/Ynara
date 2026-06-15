@@ -1,6 +1,16 @@
 # Capa de inferencia LLM — Plan de integración
 
-> **Estado**: v2 — M0–M9 ejecutados y mergeados; infra vLLM real pendiente
+> **Actualizado por ADR-013/ADR-014 (junio 2026):** el runtime local de
+> serving (16 GB, RTX 4080 Super) es **Ollama/GGUF** ([ADR-014](../architecture/adrs/ADR-014-serving-ollama-gguf-16gb.md)),
+> no vLLM (vLLM queda para 24 GB+). El **contrato de config** de serving es
+> la lista `llm_serving: list[ServingEndpoint]` (env `LLM_SERVING`, JSON
+> `{base_url, models}`, [ADR-013](../architecture/adrs/ADR-013-serving-endpoints-config.md)),
+> que reemplaza a `llm_primary_base_url`/`llm_secondary_base_url`/`llm_topology`.
+> `LLM_BACKEND=vllm` es el **nombre legacy** del cliente HTTP OpenAI-compatible
+> (sirve igual a Ollama). El cuerpo histórico de este plan no se reescribe; los
+> puntos vigentes pero fácticamente desactualizados se anotan inline.
+
+> **Estado**: v2 — M0–M9 ejecutados y mergeados; serving local = Ollama/GGUF (ADR-014); infra vLLM real (24 GB+) pendiente
 > **Fecha**: 2026-05-29 · **Actualizado**: 2026-05-31
 > **Alcance**: `apps/backend/app/llm/` — capa que sirve el dual-stack
 > (Gemma 4 12B + Qwen 3.5-9B) sobre la RTX 4080 Super, más la
@@ -32,6 +42,13 @@ El resto de las decisiones cerradas se respetan sin cambios: vLLM como
 runtime, Q4/Q5, pgvector (ADR-004), LlamaIndex en la capa de
 orquestación (card hermana), embeddings bge-m3, todo on-prem (regla #4),
 Cloudflare Tunnel, Linux nativo.
+
+> **Nota (ADR-014, junio 2026):** "vLLM como runtime" quedó **superado para
+> 16 GB**. En la RTX 4080 Super (16 GB) el motor de serving es **Ollama/GGUF**
+> ([ADR-014](../architecture/adrs/ADR-014-serving-ollama-gguf-16gb.md)); vLLM
+> sólo aplica a 24 GB+. El cliente del backend es HTTP OpenAI-compatible, así
+> que sirve a ambos motores sin cambios (`LLM_BACKEND=vllm` es nombre legacy
+> del cliente, no implica vLLM).
 
 > **Nota LlamaIndex**: la capa de *cliente* de inferencia (este plan) es
 > un wrapper HTTP fino sobre vLLM, independiente de LlamaIndex.
@@ -78,8 +95,15 @@ app/llm/
   `quantization`, `kv_cache_dtype`, `max_model_len` por modelo,
   `request_timeout_s`. (Valores provisionales hasta medir VRAM real.)
 - `core/config.py` settings: **elimina** `gemma_endpoint`/`qwen_endpoint`;
-  **agrega** `llm_primary_base_url`, `llm_secondary_base_url`,
-  `llm_topology`.
+  **agrega** la lista `llm_serving: list[ServingEndpoint]` (env `LLM_SERVING`,
+  JSON `[{base_url, models}]` — cada entrada = un endpoint de serving y los
+  served_names que anuncia; [ADR-013](../architecture/adrs/ADR-013-serving-endpoints-config.md)).
+  > **Corrección (ADR-013, junio 2026):** la propuesta original de este plan
+  > (`llm_primary_base_url` + `llm_secondary_base_url` + enum `llm_topology` con
+  > `split_process`/`single_process`/`swap_lru`) **nunca se implementó así**.
+  > ADR-013 la reemplazó por la lista explícita `llm_serving` (data-driven, escala
+  > a N modelos/instancias y cierra el bug de ruteo #206). El enum `llm_topology`
+  > se retiró: la topología *es* la lista. Estado real en `core/config.py`.
 - Actualizar `docs/architecture/ynara-config.schema.json` y
   `apps/backend/.env.example` en el mismo cambio.
 
@@ -186,16 +210,22 @@ El proyecto Supabase **ya existe** (ref `hmsfcqvnhlevfwfgatxd`) y está
      es IPv6-only).
    - Migraciones: conexión directa (5432).
    - 3 toggles OFF (Data API / auto-expose / RLS) — regla #5.
-4. **Fix de `core/deps.py`** (bug de escalado, pendiente para alta
-   concurrencia): el pooler de transacciones + asyncpg requiere desactivar
-   prepared statements:
+4. ✅ **Fix de `core/deps.py`** (bug de escalado para alta concurrencia) —
+   **implementado y cubierto por tests de regresión (#210, 2026-06-14)**. El
+   pooler de transacciones (6543) + asyncpg requiere desactivar prepared
+   statements; `get_engine()` ya aplica `connect_args={"statement_cache_size": 0}`
+   siempre y `poolclass=NullPool` cuando el puerto es 6543 (en 5432/directa usa
+   `pool_size`). El branching está blindado por `tests/core/test_deps_engine.py`.
 
    ```python
-   engine = create_async_engine(
-       url,                       # ...pooler.supabase.com:6543/postgres
-       poolclass=NullPool,        # el pooling lo hace Supavisor
-       connect_args={"statement_cache_size": 0},
-   )
+   engine_kwargs = {
+       "pool_pre_ping": True,
+       "connect_args": {"statement_cache_size": 0},  # siempre (inocuo en 5432)
+   }
+   if urlsplit(url).port == 6543:                     # transaction pooler
+       engine_kwargs["poolclass"] = NullPool          # el pooling lo hace Supavisor
+   else:
+       engine_kwargs["pool_size"] = settings.database_pool_size
    ```
 
    Alembic (`env.py`) ya usa `NullPool` (correcto), pero debe apuntar a

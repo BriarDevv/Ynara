@@ -1,5 +1,16 @@
 # Respuestas al §7.1 — Contrato de `/v1/chat` (frontend ↔ backend)
 
+> **Actualización (junio 2026):** dos premisas que el cuerpo da por vigentes
+> quedaron **obsoletas**: (1) el doc dice que `app/llm/router.py` y el endpoint
+> "no existen aún (`NotImplementedError`)" — **ya existen y están mergeados**:
+> router M8 + tool loop y `POST /v1/chat` (JSON) + `POST /v1/chat/stream` (SSE,
+> eventos `token`/`done`/`error`). (2) El doc razona el límite de mensaje contra
+> **Gemma `max_model_len = 4096`**; hoy en `ynara.config.json` Gemma tiene
+> `max_model_len = 8192` y `context_window = 128000` (Qwen `context_window =
+> 262144`) — la conclusión (~4.000 chars como techo seguro cross-modelo) sigue
+> siendo razonable, pero el `max_model_len` de Gemma ya no es 4096. Esta es la
+> bitácora point-in-time de la sesión original — **el cuerpo no se reescribe**.
+
 > **Actualización post-sesión (2026-05-31):** `core/security.py` (auth JWT) fue implementado; `/v1/chat` (sync + SSE streaming), `/v1/sessions` y `/v1/memory` completo están mergeados. Este doc es la bitácora point-in-time de la sesión original — el cuerpo no se reescribe.
 
 > **Resumen.** Responde las preguntas abiertas del plan de integración del
