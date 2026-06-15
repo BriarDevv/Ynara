@@ -82,9 +82,12 @@ async def run_tool_loop(
        ``_execute_anywhere``, acumula en ``actions`` y agrega un
        ChatMessage(role='tool') por cada resultado.
     4. Al agotar ``max_iterations`` sin converger, usa el ultimo ``result.text``
-       como texto final; si esta vacio, usa ``fallback_text``. finish_reason
-       reportado sera ``'max_iterations'`` (parada forzada por el guard; un
-       sentinel honesto para telemetria, no se confunde con un ``'stop'`` real).
+       como texto final; si esta vacio, fuerza UNA completion final SIN tools para
+       que el modelo responda en lenguaje natural (en vez de seguir tool-calleando) y
+       el usuario vea una respuesta real, no el ``fallback_text`` generico. Si esa
+       completion forzada tambien vuelve vacia, recien ahi se usa ``fallback_text``.
+       finish_reason reportado sera ``'max_iterations'`` (parada forzada por el guard;
+       un sentinel honesto para telemetria, no se confunde con un ``'stop'`` real).
 
     Args:
         llm_client: Implementacion de ``LLMClient`` (real o fake).
@@ -168,10 +171,28 @@ async def run_tool_loop(
                 )
             )
     else:
-        # Guard agotado sin converger: last_text tiene el texto de la ultima
-        # iteracion; finish_reason se marca 'max_iterations' (sentinel honesto
-        # para no confundir una parada forzada con un 'stop' real del modelo).
+        # Guard agotado sin converger. finish_reason se marca 'max_iterations'
+        # (sentinel honesto, no un 'stop' real del modelo). El modelo NO produjo una
+        # respuesta final en lenguaje natural: tipicamente loopeo llamando tools (p.ej.
+        # qwen reintentando un stub como memory.add). Si la ultima iteracion no dejo
+        # texto, forzamos UNA completion final SIN tools: sin tools que llamar, el
+        # modelo le responde al usuario en lenguaje natural en vez de seguir
+        # tool-calleando, asi el usuario ve una respuesta real en vez del fallback
+        # generico (que lee como un error aunque las tools SI se ejecutaron). Si esa
+        # completion tambien vuelve vacia, se cae al fallback_text de abajo (no empeora
+        # el caso previo). Cualquier LlmError de esta llamada propaga al caller (route),
+        # igual que las del loop: route lo captura y degrada.
         last_finish_reason = "max_iterations"
+        if not last_text:
+            forced = await llm_client.complete(
+                model=served_name,
+                messages=messages,
+                tools=None,
+                thinking=thinking,
+            )
+            # ``last_text`` es "" acá (la guarda ``if not last_text`` lo garantiza); si la
+            # forzada también vuelve vacía, el ``final_text`` de abajo cae al fallback.
+            last_text = forced.text
 
     final_text = last_text if last_text else fallback_text
     return final_text, actions, last_finish_reason
