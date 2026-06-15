@@ -1,7 +1,7 @@
 import { createChatStore } from "@ynara/core/features/chat";
-import { memoryStorage } from "@/lib/memoryStorage";
+import { asyncStorage } from "@/lib/asyncStorage";
 
 // Instancia mobile del chat store (ADR-012): la lógica vive en @ynara/core; acá
-// se inyecta storage en memoria (el historial es efímero por ahora — AsyncStorage
-// queda como follow-up). El token/perfil viven en el user store (SecureStore).
-export const useChatStore = createChatStore(memoryStorage);
+// se inyecta AsyncStorage (el historial NO es secreto y persiste entre recargas;
+// el token/perfil van en el user store sobre SecureStore, regla #5).
+export const useChatStore = createChatStore(asyncStorage);
