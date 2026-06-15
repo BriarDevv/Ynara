@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.crypto import decrypt_for_user, encrypt_for_user
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
+from app.memory.embedding import embed_one
 from app.models.memory import EpisodicMemory
 from app.schemas.memory import EpisodicMemoryCreate, EpisodicMemoryOut
 
@@ -55,11 +56,6 @@ class EpisodicMemoryStore:
         self._embedder = embedder
         self._reranker = reranker
 
-    async def _embed_one(self, text: str) -> list[float]:
-        """Embeddea un solo texto plaintext. Devuelve el vector de 1024 floats."""
-        vectors = await self._embedder.embed([text])
-        return vectors[0]
-
     async def add(self, payload: EpisodicMemoryCreate) -> EpisodicMemoryOut:
         """Persiste un resumen episódico: embeddea el plaintext, lo cifra, INSERTA.
 
@@ -67,7 +63,7 @@ class EpisodicMemoryStore:
         ``occurred_at`` se escriben tal como llegan (ya validados por el schema).
         Devuelve el ``Out`` con el ``summary`` **plaintext** original.
         """
-        embedding = await self._embed_one(payload.summary)
+        embedding = await embed_one(self._embedder, payload.summary)
         blob = encrypt_for_user(self._user_id, payload.summary)
 
         row = EpisodicMemory(
@@ -93,7 +89,7 @@ class EpisodicMemoryStore:
         if limit <= 0:
             return []
 
-        qvec = await self._embed_one(query)
+        qvec = await embed_one(self._embedder, query)
         stmt = (
             select(EpisodicMemory)
             .where(EpisodicMemory.user_id == self._user_id)
