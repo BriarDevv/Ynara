@@ -1,4 +1,6 @@
-# ADR-012: Código compartido web/mobile vía packages/core
+# ADR-016: Código compartido web/mobile vía packages/core
+
+> **Nota:** este ADR era ADR-012; renumerado a ADR-016 para resolver la colisión de numeración (la convención exige números únicos).
 
 ## Estado
 Aceptado

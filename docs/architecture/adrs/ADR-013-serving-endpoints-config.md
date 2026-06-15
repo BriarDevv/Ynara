@@ -1,5 +1,7 @@
 # ADR-013: Config de serving LLM explícita (endpoints → served models)
 
+> **Actualización (ADR-014):** el motor local 16 GB pasa a Ollama/GGUF; el contrato `llm_serving` sigue vigente, vLLM multi-proceso queda para 24 GB+. Ver [ADR-014](./ADR-014-serving-ollama-gguf-16gb.md).
+
 ## Estado
 
 Aceptado

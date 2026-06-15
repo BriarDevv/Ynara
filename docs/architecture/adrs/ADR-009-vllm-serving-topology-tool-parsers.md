@@ -3,6 +3,8 @@
 > **Actualización (ADR-012):** D3 cerrada con medición real; topología default = co-residencia (Gemma 4 12B + Qwen 9B + bge-m3). La tabla D2 y el análisis de VRAM de abajo reflejan el estado original (26B); la autoridad de runtime es ynara.config.json. Ver [ADR-012](./ADR-012-conversational-model-12b-single-process.md).
 >
 > **Actualización (ADR-014):** medido bajo vLLM/AWQ ([#207](https://github.com/BriarDevv/Ynara/issues/207)) — en 16 GB no entran dos LLM (overhead por-proceso de vLLM: ~1,3–2 GiB torch + ~1,1 GiB de contexto CUDA por proceso). El motor de serving local pasa a **Ollama/GGUF**; vLLM queda reservado para GPU de 24 GB+. Ver [ADR-014](./ADR-014-serving-ollama-gguf-16gb.md).
+>
+> **Refinado por ADR-013/ADR-014:** el motor de serving local en 16 GB pasó a Ollama/GGUF; vLLM queda para 24 GB+. La descripción de endpoints de D4 fue reemplazada por la lista explícita `LLM_SERVING` de [ADR-013](./ADR-013-serving-endpoints-config.md).
 
 ## Estado
 
@@ -137,6 +139,13 @@ Se elimina la duplicación actual de endpoints (hoy están en
 - **Refina** [ADR-002](./ADR-002-gemma-qwen-dual-stack.md) (dual-stack).
 - **ADR-008** queda reservado para bge-m3 (modelo de embedding), según
   el roadmap de memoria backend.
+- **Refinado por** [ADR-012](./ADR-012-conversational-model-12b-single-process.md)
+  (cierra D3 con medición; topología default co-residente).
+- **Refinado por** [ADR-013](./ADR-013-serving-endpoints-config.md)
+  (D4: reemplaza el esquema posicional `LLM_PRIMARY/SECONDARY_BASE_URL` +
+  `LLM_TOPOLOGY` por la lista explícita `LLM_SERVING`).
+- **Refinado por** [ADR-014](./ADR-014-serving-ollama-gguf-16gb.md)
+  (motor de serving local 16 GB pasa de vLLM a Ollama/GGUF; vLLM → 24 GB+).
 
 ## Fuentes
 

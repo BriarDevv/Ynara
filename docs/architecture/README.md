@@ -25,9 +25,17 @@ Acá vive el "porqué" detrás de las decisiones técnicas del proyecto.
 | 006 | Pinear next-auth a 5.0.0-beta.31 hasta release estable | Aceptado |
 | 007 | Políticas operacionales de memoria (decay, retention diferenciada, encriptación a nivel campo) | Aceptado |
 | 008 | Modelo de embedding — BAAI bge-m3 (1024-dim, on-prem) | Aceptado |
-| 009 | Topología de serving vLLM y parsers de tool-calling | Aceptado |
+| 009 | Topología de serving vLLM y parsers de tool-calling | Aceptado — refinado por ADR-013/ADR-014 |
 | 010 | Arquitectura de memoria v2 — engine in-house sobre storage cifrado propio (supersede ADR-003) | Aceptado |
-| 011 | Auth permanece layer-split — criterio de feature-packages vs dominios ordinarios | Aceptado |
+| 011 | Auth permanece layer-split — criterio de feature-packages vs dominios ordinarios | Aceptado — refinado por ADR-015 |
+| 012 | Modelo conversacional Gemma 4 12B y topología single_process co-residente en 16 GB | Aceptado |
+| 013 | Config de serving LLM explícita (endpoints → served models) | Aceptado — refinado por ADR-014 |
+| 014 | Motor de serving local = Ollama/GGUF en 16 GB (vLLM reservado para 24 GB+) | Aceptado |
+| 015 | Librería JWT = PyJWT (sale python-jose); bcrypt directo (sale passlib) | Aceptado |
+| 016 | Código compartido web/mobile vía packages/core (ex-ADR-012) | Aceptado |
+
+> Hay 16 ADRs lógicos (ADR-001..016, sin huecos): el ADR-016 era un
+> segundo ADR-012 duplicado y se renumeró para garantizar números únicos.
 
 ## Cómo crear un ADR nuevo
 
