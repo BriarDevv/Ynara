@@ -73,7 +73,11 @@
     "decay_factor": 0.9,
     "stale_threshold": 0.3,
     "hard_delete_threshold": 0.1,
-    "hard_delete_min_days": 90
+    "hard_delete_min_days": 90,
+    "retention_default_days": 365,
+    "retention_sensitive_days": 180,
+    "retention_sensitive_min_days": 30,
+    "retention_sensitive_max_days": 365
   },
   "infrastructure": {
     "phase": "mvp",

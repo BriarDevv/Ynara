@@ -60,8 +60,11 @@ class Settings(BaseSettings):
     # automáticamente (sin NoDecode).
     llm_serving: list[ServingEndpoint] = Field(
         default_factory=lambda: [
-            ServingEndpoint(base_url="http://localhost:8001/v1", models=["gemma4"]),
-            ServingEndpoint(base_url="http://localhost:8002/v1", models=["qwen"]),
+            # Default (motor local 16GB, ADR-014): UN endpoint Ollama que sirve
+            # AMBOS modelos (gemma4 + qwen) en la misma GPU. Espeja el default de
+            # ``.env.example``. El vLLM dual (2 endpoints, un modelo c/u) es para
+            # 24GB+ y se setea explicito via ``LLM_SERVING`` en el .env.
+            ServingEndpoint(base_url="http://localhost:11434/v1", models=["gemma4", "qwen"]),
         ],
         alias="LLM_SERVING",
     )
