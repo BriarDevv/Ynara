@@ -34,11 +34,12 @@ la descripción en español, imperativo, sin punto final.
 - `web` — `apps/web/`
 - `mobile` — `apps/mobile/`
 - `backend` — `apps/backend/`
-- `shared-types` / `shared-schemas` / `ui` / `config` — packages
-- `architecture` / `product` / `operations` / `conventions` — docs
+- `core` / `shared-types` / `shared-schemas` / `ui` / `config` — packages
+- `architecture` / `product` / `ops` / `conventions` — docs
 - `infra` — `infra/`
 - `llm` — capa LLM dentro de backend
 - `memory` — capa de memoria dentro de backend
+- `db` — migraciones Alembic / DDL dentro de backend
 - `tools` — tools del agente
 
 Sin scope solo para cambios cross-cutting reales (ej: cambiar

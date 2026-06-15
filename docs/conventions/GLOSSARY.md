@@ -34,8 +34,19 @@ con un PR.
 - **Qwen** — Qwen 3.5 9B. Modelo agente. Lee y escribe memoria,
   llama tools.
 - **bge-m3** — modelo de embeddings, 1024 dimensiones.
-- **vLLM** — servidor de inferencia objetivo para producción. Pendiente de deploy; en desarrollo se usan Fakes (FakeLlmClient/FakeEmbeddingClient/FakeReranker).
-- **Ollama** — servidor de inferencia alternativo para dev local.
+- **Reranker** — reordena los candidatos del ANN (el top-K que devuelve
+  pgvector) por relevancia antes del recall final. Contrato `Reranker`
+  (Protocol) en `apps/backend/app/llm/clients/reranker.py`, con
+  `FakeReranker` passthrough determinista para dev/test y `VllmReranker`
+  real contra la API `/rerank` de vLLM (cross-encoder). Ollama no sirve
+  cross-encoders, así que en dev se usa el Fake.
+- **vLLM** — motor de serving reservado para GPU de 24 GB+ (ADR-014).
+  `LLM_BACKEND=vllm` es el nombre legacy del cliente HTTP, no implica que
+  vLLM sea el motor local. En dev se usan Fakes
+  (FakeLlmClient/FakeEmbeddingClient/FakeReranker).
+- **Ollama** — motor de serving local en 16 GB (RTX 4080 Super), elegido
+  en ADR-014: es el único que sostiene el dual-stack completo
+  (Gemma 12B + Qwen 9B + bge-m3 co-residentes).
 
 ## Stack
 
