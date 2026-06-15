@@ -22,7 +22,7 @@ from datetime import timedelta
 from celery import Celery
 
 from app.core.config import get_settings
-from app.memory.config import MemoryConfigError, load_decay_config
+from app.memory.config import MemoryConfigError, load_decay_config, load_retention_config
 
 settings = get_settings()
 
@@ -43,6 +43,17 @@ try:
     _DECAY_INTERVAL_DAYS = load_decay_config().decay_interval_days
 except MemoryConfigError:
     _DECAY_INTERVAL_DAYS = _DECAY_INTERVAL_DAYS_FALLBACK
+
+# Cadencia (en dias) del worker de retention episodica. Mismo patron default-safe
+# que el decay: se lee de ``ynara.config.json[memory].episodic_retention_interval_days``
+# (default 1 = diario, configurable) y, si el config rompe en import-time
+# (MemoryConfigError), cae al literal de fallback para NO tumbar el worker antes de
+# registrar las tasks (la red final sigue siendo el try/except del propio task).
+_EPISODIC_RETENTION_INTERVAL_DAYS_FALLBACK = 1
+try:
+    _EPISODIC_RETENTION_INTERVAL_DAYS = load_retention_config().episodic_retention_interval_days
+except MemoryConfigError:
+    _EPISODIC_RETENTION_INTERVAL_DAYS = _EPISODIC_RETENTION_INTERVAL_DAYS_FALLBACK
 
 celery_app = Celery(
     "ynara",
@@ -97,6 +108,14 @@ celery_app.conf.beat_schedule = {
     "purge-audit-log-monthly": {
         "task": "workflows.purge_audit_log",
         "schedule": timedelta(days=30),
+    },
+    # Retention episodica (ADR-007 D2 / roadmap §5.3): borra episodios cuya ventana
+    # (created_at + retention_days) ya vencio. Cadencia config-driven (default 1 =
+    # diario); a diferencia del audit (mensual, 24m de retention) los episodios
+    # sensibles vencen a 180d, asi que conviene una cadencia mas fina y configurable.
+    "purge-episodic-memory-every-interval": {
+        "task": "workflows.purge_episodic_memory",
+        "schedule": timedelta(days=_EPISODIC_RETENTION_INTERVAL_DAYS),
     },
 }
 

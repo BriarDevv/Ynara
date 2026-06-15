@@ -237,6 +237,40 @@ def test_load_real_repo_retention_matches_defaults() -> None:
     assert cfg.retention_sensitive_days == 180
     assert cfg.retention_sensitive_min_days == 30
     assert cfg.retention_sensitive_max_days == 365
+    # Cadencia del worker de retention episodica (default 1 = diario en el repo real).
+    assert cfg.episodic_retention_interval_days == 1
+
+
+def test_episodic_retention_interval_default_is_one() -> None:
+    """``RetentionConfig()`` por defaults trae ``episodic_retention_interval_days=1``."""
+    assert RetentionConfig().episodic_retention_interval_days == 1
+
+
+def test_episodic_retention_interval_override(tmp_path: Path) -> None:
+    """Un valor custom de la cadencia episodica se parsea tal cual."""
+    path = _write(tmp_path, _base_retention(episodic_retention_interval_days=7))
+    cfg = load_retention_config(config_path=path)
+    assert cfg.episodic_retention_interval_days == 7
+    # No afecta las otras keys de retention.
+    assert cfg.retention_default_days == 365
+
+
+def test_episodic_retention_interval_zero_raises(tmp_path: Path) -> None:
+    """``episodic_retention_interval_days <= 0`` es fail-fast (``gt=0``)."""
+    path = _write(tmp_path, _base_retention(episodic_retention_interval_days=0))
+    with pytest.raises(MemoryConfigError):
+        load_retention_config(config_path=path)
+
+
+def test_episodic_retention_interval_above_cap_raises(tmp_path: Path) -> None:
+    """``episodic_retention_interval_days > 30`` es fail-fast (cap ``le=30``).
+
+    Guarda de privacidad: una cadencia mayor a mensual dejaria episodios sensibles
+    vencidos vivos demasiado tiempo.
+    """
+    path = _write(tmp_path, _base_retention(episodic_retention_interval_days=31))
+    with pytest.raises(MemoryConfigError):
+        load_retention_config(config_path=path)
 
 
 def test_load_retention_block_with_keys(tmp_path: Path) -> None:

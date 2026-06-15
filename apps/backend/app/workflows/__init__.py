@@ -15,6 +15,6 @@ imports el worker arrancaba con el registro vacío y rechazaba cada task encolad
 re-exportan vía ``__all__`` para que el linter no los marque como no usados (F401).
 """
 
-from app.workflows import audit_retention, consolidation, decay
+from app.workflows import audit_retention, consolidation, decay, episodic_retention
 
-__all__ = ["audit_retention", "consolidation", "decay"]
+__all__ = ["audit_retention", "consolidation", "decay", "episodic_retention"]
