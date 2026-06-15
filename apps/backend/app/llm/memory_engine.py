@@ -30,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 from uuid import UUID
@@ -215,6 +216,28 @@ Devuelve SOLO el objeto JSON con "summary" y "topics". Nada mas."""
 _VALID_OPS: frozenset[str] = frozenset({"ADD", "UPDATE", "DELETE", "NOOP"})
 _VALID_LAYERS: frozenset[str] = frozenset({"semantic", "procedural"})
 
+# Qwen es un modelo *thinking*. consolidate/summarize fuerzan thinking=False
+# (output JSON limpio, ADR-012 D4), pero si el server igual antepone un bloque
+# <think>...</think> (default del server / Ollama sin reasoning-parser) o envuelve
+# el JSON en un fence markdown, se limpia ANTES de json.loads para no degradar la
+# extraccion a [] / summary vacio en silencio (#235).
+_THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>.*?</think>", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_reasoning_and_fences(raw_text: str) -> str:
+    """Quita bloques ``<think>...</think>`` y fences markdown del texto del LLM.
+
+    Defensa en profundidad del parseo (Qwen es thinking model): aunque
+    ``consolidate``/``summarize`` mandan ``thinking=False``, esto tolera que el
+    server emita razonamiento igual o devuelva el JSON dentro de un fence
+    ```` ```json ... ``` ````.
+    """
+    cleaned = _THINK_BLOCK_RE.sub("", raw_text).strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z0-9]*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```\s*$", "", cleaned)
+    return cleaned.strip()
+
 
 def _parse_ops(raw_text: str) -> list[MemoryOp]:
     """Parseo defensivo del JSON de ops devuelto por Qwen.
@@ -224,7 +247,7 @@ def _parse_ops(raw_text: str) -> list[MemoryOp]:
     por un JSON malo de Qwen.
     """
     try:
-        data = json.loads(raw_text.strip())
+        data = json.loads(_strip_reasoning_and_fences(raw_text))
     except (json.JSONDecodeError, ValueError):
         logger.debug("memory_engine: JSON invalido en respuesta de Qwen (descartado)")
         return []
@@ -271,7 +294,7 @@ def _parse_summary(raw_text: str) -> SessionSummary:
     un JSON malo de Qwen; con ``summary=""`` el caller decide no crear el episodio.
     """
     try:
-        data = json.loads(raw_text.strip())
+        data = json.loads(_strip_reasoning_and_fences(raw_text))
     except (json.JSONDecodeError, ValueError):
         logger.debug("memory_engine: JSON invalido en resumen de Qwen (descartado)")
         return SessionSummary()
@@ -297,6 +320,9 @@ class QwenMemoryEngine:
 
     Llama al modelo con un prompt de extraccion y parsea la respuesta JSON
     de forma defensiva (decision #6 M8): nunca propaga errores de parseo.
+    Fuerza ``thinking=False`` en ambas llamadas (ADR-012 D4): la extraccion y el
+    resumen necesitan JSON puro, y el razonamiento de Qwen (thinking model)
+    contaminaria ``result.text`` y degradaria el parseo en silencio (#235).
     """
 
     def __init__(self, llm_client: LLMClient, served_name: str = "qwen") -> None:
@@ -330,6 +356,10 @@ class QwenMemoryEngine:
                 model=self._served_name,
                 messages=messages,
                 temperature=0.1,  # baja temperatura para extraccion estructurada
+                # thinking OFF (ADR-012 D4): la extraccion quiere JSON puro. Qwen es
+                # thinking model y su razonamiento contaminaria result.text y rompria
+                # el parseo (-> [] mudo). El default del server no es confiable aca.
+                thinking=False,
                 max_tokens=512,
             )
         except Exception:
@@ -361,6 +391,9 @@ class QwenMemoryEngine:
                 model=self._served_name,
                 messages=messages,
                 temperature=0.2,  # baja temperatura para un resumen estable
+                # thinking OFF (ADR-012 D4): el resumen quiere JSON puro; el <think>
+                # de Qwen romperia el parseo (-> summary vacio mudo).
+                thinking=False,
                 max_tokens=512,
             )
         except Exception:

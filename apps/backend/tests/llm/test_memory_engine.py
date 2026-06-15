@@ -149,6 +149,40 @@ async def test_qwen_engine_valid_json_add_semantic() -> None:
     assert ops[0].content == "El usuario es medico."
 
 
+async def test_qwen_engine_consolidate_forces_thinking_off() -> None:
+    """consolidate manda thinking=False (#235): la extraccion quiere JSON puro."""
+    fake_llm = FakeLlmClient(served_models=frozenset({"qwen"}))
+    fake_llm.queue_result(_make_result(_json_ops([{"op": "NOOP", "layer": "semantic"}])))
+    engine = QwenMemoryEngine(llm_client=fake_llm, served_name="qwen")
+    await engine.consolidate(user_msg="hola", model_response="hola!", mode="vida")
+    assert fake_llm.complete_calls[0]["thinking"] is False
+
+
+async def test_qwen_engine_consolidate_tolerates_think_block() -> None:
+    """Un bloque <think>...</think> antes del JSON no rompe la extraccion (#235)."""
+    fake_llm = FakeLlmClient(served_models=frozenset({"qwen"}))
+    raw = "<think>el usuario dijo que es medico</think>\n" + _json_ops(
+        [{"op": "ADD", "layer": "semantic", "content": "El usuario es medico."}]
+    )
+    fake_llm.queue_result(_make_result(raw))
+    engine = QwenMemoryEngine(llm_client=fake_llm, served_name="qwen")
+    ops = await engine.consolidate(user_msg="soy medico", model_response="ok", mode="vida")
+    assert len(ops) == 1
+    assert ops[0].op == "ADD"
+    assert ops[0].content == "El usuario es medico."
+
+
+async def test_qwen_engine_consolidate_tolerates_markdown_fence() -> None:
+    """El JSON envuelto en un fence ```json ... ``` se parsea igual (#235)."""
+    fake_llm = FakeLlmClient(served_models=frozenset({"qwen"}))
+    raw = "```json\n" + _json_ops([{"op": "NOOP", "layer": "semantic"}]) + "\n```"
+    fake_llm.queue_result(_make_result(raw))
+    engine = QwenMemoryEngine(llm_client=fake_llm, served_name="qwen")
+    ops = await engine.consolidate(user_msg="hola", model_response="hola!", mode="vida")
+    assert len(ops) == 1
+    assert ops[0].op == "NOOP"
+
+
 async def test_qwen_engine_valid_json_add_procedural() -> None:
     fake_llm = FakeLlmClient(served_models=frozenset({"qwen"}))
     fake_llm.queue_result(
