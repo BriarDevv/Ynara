@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Levanta el stack de inferencia de Ynara via vLLM: Gemma 4 12B (conversacional),
-# Qwen 3.5-9B (agente) y bge-m3 (embeddings), co-residentes en la RTX 4080 Super
-# 16GB. Ver ADR-012 (modelo 12B + co-residencia) y ADR-009 (topologia/parsers).
+# Qwen 3.5-9B (agente) y bge-m3 (embeddings), co-residentes.
+#
+# RUTA PARA GPU DE 24 GB+ (ADR-014 / issue #207). En la 4080 16GB esto NO entra:
+# medido, dos LLM por proceso vLLM superan 16GB (Gemma 12B sola = ~11,6 GiB
+# reales por el overhead por-proceso). El serving local de 16GB usa Ollama/GGUF
+# (ADR-014). Ver ADR-012 (modelo 12B) y ADR-009 (topologia/parsers).
 #
 # Topologia: cada modelo = un proceso vLLM (ADR-009 D1), los 3 co-residen en la
 # misma GPU. En el backend esto es LLM_TOPOLOGY=split_process (2 base_url de LLM:
@@ -14,19 +18,21 @@
 #
 # Uso: ./start-vllm.sh
 #
-# NOTA (issue #207): los valores de --gpu-memory-utilization y --max-model-len son
-# PROVISIONALES, derivados de la medicion en Ollama/GGUF (ADR-012). Falta
-# confirmarlos bajo vLLM/AWQ-Marlin co-residiendo los 3 en 16GB; si OOMea, bajar
-# primero el --max-model-len de Qwen.
+# NOTA (issue #207 / ADR-014): pesos medidos bajo vLLM 0.23.0 — Gemma 12B 8,28 GiB,
+# Qwen 9B 8,41 GiB, bge 1,06 GiB. En 16GB NO entran dos LLM (overhead por-proceso
+# ~1,3-2 GiB torch + ~1,1 GiB de contexto CUDA fuera del budget de gpu-mem-util);
+# por eso 16GB usa Ollama. Los --gpu-memory-utilization de abajo son para 24GB+ y
+# hay que re-tunearlos en esa placa (no estan medidos en 24GB).
 
 set -euo pipefail
 
 LOG_DIR="${LOG_DIR:-./logs}"
 mkdir -p "$LOG_DIR"
 
-# TODO (#207): confirmar el checkpoint AWQ exacto en HuggingFace.
-GEMMA_MODEL="${GEMMA_MODEL:-google/gemma-4-12b-it}"
-QWEN_MODEL="${QWEN_MODEL:-Qwen/Qwen3.5-9B-Instruct}"
+# Checkpoints AWQ confirmados en #207 (ungated, cargan en vLLM 0.23.0). Los
+# QuantTrio/* estan inflados (Qwen 9B = 11,2 GiB); usar cyankiwi.
+GEMMA_MODEL="${GEMMA_MODEL:-cyankiwi/gemma-4-12B-it-AWQ-INT4}"
+QWEN_MODEL="${QWEN_MODEL:-cyankiwi/Qwen3.5-9B-AWQ-4bit}"
 EMBED_MODEL="${EMBED_MODEL:-BAAI/bge-m3}"
 
 # --served-model-name = el served_name de ynara.config.json (el backend rutea por
@@ -48,6 +54,7 @@ nohup vllm serve "$QWEN_MODEL" \
     --port 8002 \
     --max-model-len 32768 \
     --gpu-memory-utilization 0.36 \
+    --max-num-seqs 192 \
     --served-model-name qwen \
     --enable-auto-tool-choice --tool-call-parser hermes \
     > "$LOG_DIR/vllm-qwen.log" 2>&1 &

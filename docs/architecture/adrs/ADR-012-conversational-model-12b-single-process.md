@@ -1,5 +1,13 @@
 # ADR-012: Modelo conversacional Gemma 4 12B y topología single_process co-residente en 16 GB
 
+> **Actualización (ADR-014):** la co-residencia de D2 y los números de D3 se
+> midieron bajo vLLM/AWQ ([#207](https://github.com/BriarDevv/Ynara/issues/207))
+> y **NO entran en 16 GB** por el overhead por-proceso de vLLM (Gemma 12B sola
+> ocupa ~11,6 GiB reales). La co-residencia 12B+9B+bge (14,55 GiB) **sí** se
+> sostiene en **Ollama/GGUF**, que pasa a ser el motor de serving local en 16 GB
+> (vLLM → 24 GB+). La decisión D1 (conversacional = 12B) sigue vigente. Ver
+> [ADR-014](./ADR-014-serving-ollama-gguf-16gb.md).
+
 ## Estado
 
 Aceptado
