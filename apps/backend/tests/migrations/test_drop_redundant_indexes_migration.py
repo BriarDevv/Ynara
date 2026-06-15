@@ -35,8 +35,14 @@ _MIGRATION = (
 _NEW_REVISION = "b7e2f4a16c9d"
 _PREV_REVISION = "c4e8a1d50b93"  # conversation_turns (head previo)
 _TABLE = "conversation_turns"
-_REDUNDANT = ("ix_conversation_turns_session_id_seq", "ix_conversation_turns_session_id")
-_KEPT = ("ix_conversation_turns_user_id", "uq_conversation_turns_session_id_seq")
+# La migración reemplaza los 3 índices parciales por un compuesto.
+_DROPPED = (
+    "ix_conversation_turns_session_id_seq",
+    "ix_conversation_turns_session_id",
+    "ix_conversation_turns_user_id",
+)
+_COMPOSITE = "ix_conversation_turns_user_id_session_id_seq"
+_KEPT = ("uq_conversation_turns_session_id_seq",)  # índice implícito del UNIQUE (constraint)
 
 
 # ---------------------------------------------------------------------------
@@ -56,21 +62,33 @@ def test_migration_chains_to_previous_head() -> None:
     assert callable(module.downgrade)
 
 
-def test_upgrade_drops_the_redundant_indexes() -> None:
-    """El ``upgrade`` dropea exactamente los dos indices redundantes."""
+def test_upgrade_drops_partials_and_creates_composite() -> None:
+    """El ``upgrade`` dropea los 3 índices parciales y crea el compuesto."""
     tree = ast.parse(_MIGRATION.read_text(encoding="utf-8"))
+
+    def _index_name(arg: ast.expr) -> str | None:
+        # Nombre directo (Constant) o envuelto en op.f(...) (Call).
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            return arg.value
+        if isinstance(arg, ast.Call) and arg.args and isinstance(arg.args[0], ast.Constant):
+            return arg.args[0].value
+        return None
+
     dropped: set[str] = set()
+    created: set[str] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             continue
         if node.func.attr == "drop_index" and node.args:
-            arg = node.args[0]
-            # Nombre directo (Constant) o envuelto en op.f(...) (Call).
-            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                dropped.add(arg.value)
-            elif isinstance(arg, ast.Call) and arg.args and isinstance(arg.args[0], ast.Constant):
-                dropped.add(arg.args[0].value)
-    assert set(_REDUNDANT) <= dropped
+            name = _index_name(node.args[0])
+            if name:
+                dropped.add(name)
+        elif node.func.attr == "create_index" and node.args:
+            name = _index_name(node.args[0])
+            if name:
+                created.add(name)
+    assert set(_DROPPED) <= dropped
+    assert _COMPOSITE in created
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +155,7 @@ _ROUNDTRIP_DB = "ynara_drop_redundant_idx_roundtrip"
 
 @pytest.mark.integration
 def test_upgrade_downgrade_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
-    """upgrade(head) saca los redundantes (deja user_id + UNIQUE); downgrade(prev) los repone."""
+    """upgrade(head) reemplaza los 3 parciales por el compuesto; downgrade(prev) revierte."""
     base_dsn = _test_db_dsn()
     if not base_dsn:
         pytest.skip("TEST_DATABASE_URL no seteada (DB de tests dedicada, NO prod)")
@@ -151,15 +169,17 @@ def test_upgrade_downgrade_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
     try:
         command.upgrade(cfg, "head")
         after_up = asyncio.run(_index_names(ephemeral_dsn))
-        for name in _REDUNDANT:
+        for name in _DROPPED:
             assert name not in after_up, f"{name} deberia estar dropeado tras upgrade head"
+        assert _COMPOSITE in after_up, "el upgrade no creo el indice compuesto"
         for name in _KEPT:
             assert name in after_up, f"{name} NO deberia haberse tocado"
 
         command.downgrade(cfg, _PREV_REVISION)
         after_down = asyncio.run(_index_names(ephemeral_dsn))
-        for name in _REDUNDANT:
+        for name in _DROPPED:
             assert name in after_down, f"el downgrade no repuso {name}"
+        assert _COMPOSITE not in after_down, "el downgrade no borro el indice compuesto"
     finally:
         asyncio.run(_drop_db(maintenance_dsn, _ROUNDTRIP_DB))
 
