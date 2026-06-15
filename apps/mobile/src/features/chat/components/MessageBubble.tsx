@@ -4,6 +4,7 @@ import { chatErrorCopy } from "@ynara/shared-schemas";
 import { Pressable, Text, View } from "react-native";
 import { MODE_DOT_CLASS } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
+import { ActionCard } from "./ActionCard";
 
 type Props = {
   message: ChatUiMessage;
@@ -50,20 +51,32 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
     );
   }
 
-  // assistant — mientras streamea: cursor al final + live region para que el
-  // lector de pantalla anuncie el texto que va llegando.
+  // assistant — mientras streamea: cursor al final + live region. Las acciones
+  // (modos Qwen) se renderizan debajo del texto cuando el turno cierra con
+  // `actions`; Gemma no trae acciones.
   const streaming = message.status === "streaming";
+  const actions = message.actions ?? [];
+  // Fila ancho-completo con gutter a la derecha (`pr-12`): en RN un hijo `flex-1`
+  // solo se expande si el contenedor tiene ancho definido — con `max-w` (que se
+  // encoge al contenido) colapsaba a 0 y el texto/cards quedaban invisibles.
   return (
-    <View className="flex-row justify-start">
-      <View className="max-w-[85%] flex-row gap-3">
-        <View className={cn("mt-1 w-0.5 self-stretch rounded-pill", MODE_DOT_CLASS[mode])} />
+    <View className="w-full flex-row gap-3 pr-12">
+      <View className={cn("mt-1 w-0.5 self-stretch rounded-pill", MODE_DOT_CLASS[mode])} />
+      <View className="flex-1 gap-2">
         <Text
-          className="flex-1 text-body text-ink"
+          className="text-body text-ink"
           accessibilityLiveRegion={streaming ? "polite" : "none"}
         >
           {message.text}
           {streaming ? <Text className="text-ink-soft">▋</Text> : null}
         </Text>
+        {actions.length > 0 ? (
+          <View className="gap-2">
+            {actions.map((action) => (
+              <ActionCard key={action.id} action={action} />
+            ))}
+          </View>
+        ) : null}
       </View>
     </View>
   );
