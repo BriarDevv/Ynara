@@ -1,5 +1,7 @@
 # ADR-011: Auth permanece organizado por capa — criterio de feature-packages vs layer-split
 
+> **Refinado por ADR-015:** la pieza JWT+bcrypt migró de python-jose/passlib a PyJWT + bcrypt directo. Ver [ADR-015](./ADR-015-auth-deps-pyjwt-bcrypt.md).
+
 ## Estado
 Aceptado
 

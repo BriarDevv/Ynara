@@ -4,11 +4,19 @@
 
 ## MVP (fase actual)
 
-> **NOTA — Estado actual:** el vLLM real todavía NO corre en ningún
-> entorno. El backend usa Fakes (`FakeLlmClient`, `FakeEmbeddingClient`,
-> `FakeReranker`) en su lugar. Los nodos `VLLM_G` y `VLLM_Q` del
-> diagrama representan el estado objetivo; su activación es un track de
+> **NOTA — Estado actual:** el motor de inferencia real todavía NO corre
+> en ningún entorno. El backend usa Fakes (`FakeLlmClient`,
+> `FakeEmbeddingClient`, `FakeReranker`) en su lugar. El nodo `OLLAMA` del
+> diagrama representa el estado objetivo; su activación es un track de
 > infra aparte, pendiente.
+>
+> **Motor de serving (ADR-014):** en la 4080 Super 16 GB el serving local
+> es **Ollama/GGUF**, un solo proceso con Gemma 4 12B + Qwen 3.5 9B + bge-m3
+> co-residentes (~14,55 GiB). `LLM_BACKEND=vllm` en `.env` es el **nombre
+> legacy** del cliente OpenAI-compatible (apunta a Ollama hoy). vLLM
+> multi-proceso (3 procesos :8001/:8002/:8003 + systemd por modelo en
+> `infra/prod/`, levantados por `infra/vllm/start-vllm.sh`) es la ruta para
+> GPU de 24 GB+, no la de la 4080.
 
 ```mermaid
 flowchart TB
@@ -30,8 +38,7 @@ flowchart TB
       API[FastAPI<br/>gunicorn + uvicorn]
       WORK[Celery workers]
       REDIS[Redis<br/>Docker o Upstash]
-      VLLM_G[vLLM<br/>Gemma 4 12B]
-      VLLM_Q[vLLM<br/>Qwen 3.5 9B]
+      OLLAMA[Ollama/GGUF<br/>1 proceso :11434<br/>Gemma 4 12B + Qwen 3.5 9B + bge-m3<br/>co-residentes ~14,55 GiB]
       GPU[RTX 4080 Super 16GB]
     end
 
@@ -46,13 +53,11 @@ flowchart TB
     CFT --> API
     API --> REDIS
     API --> PG
-    API --> VLLM_G
-    API --> VLLM_Q
+    API --> OLLAMA
     API -.->|enqueue| WORK
     WORK --> PG
-    WORK --> VLLM_Q
-    VLLM_G --- GPU
-    VLLM_Q --- GPU
+    WORK --> OLLAMA
+    OLLAMA --- GPU
     API --> CFR2
 ```
 
@@ -66,10 +71,15 @@ self-hosted en la misma VPS o en VPS dedicada. Detalle del cutover en
 
 - La 4080 Super tiene 16 GB de VRAM. Gemma 4 12B (dense) cuantizado
   + Qwen 3.5 9B cuantizado + bge-m3 co-residen dentro de los 16 GB
-  (confirmado por medición — ADR-012). En vLLM son 2 procesos en la
-  misma GPU (una entrada por modelo en `LLM_SERVING`, ADR-013); en dev
-  con Ollama, un endpoint único que sirve ambos. El Gemma 4 26B-A4B original no
-  entraba; el cambio a 12B cerró esa restricción de VRAM.
+  (confirmado por medición — ADR-012). En 16 GB el motor es **Ollama/GGUF**:
+  un solo proceso (:11434) sirve los tres modelos co-residentes (~14,55 GiB,
+  ADR-014). `LLM_BACKEND=vllm` es el **nombre legacy** del cliente
+  OpenAI-compatible, no implica que corra vLLM. El Gemma 4 26B-A4B original
+  no entraba; el cambio a 12B cerró esa restricción de VRAM.
+- **vLLM = ruta 24 GB+** (ADR-014 D2): 3 procesos en puertos distintos
+  (:8001 gemma, :8002 qwen, :8003 bge), una entrada por modelo en
+  `LLM_SERVING` (ADR-013), levantados por `infra/vllm/start-vllm.sh` con
+  systemd units por modelo en `infra/prod/`. No es la ruta de la 4080.
 - Cloudflare Tunnel evita abrir puertos en la VPS y oculta IP real.
 - R2 para storage de exports de usuario, backups cifrados, assets
   estáticos pesados.

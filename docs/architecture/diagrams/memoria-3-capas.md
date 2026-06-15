@@ -51,6 +51,27 @@ Preferencias y patrones de comportamiento.
 - Store: `procedural_memory` (Postgres + JSONB).
 - No requiere embeddings — lookup directo.
 
+## Tabla operativa: `conversation_turns`
+
+Buffer transitorio de los turnos crudos de la conversación. **No es una
+capa sagrada** y es distinta de las 3 capas y del `audit_log`.
+
+- **Operativa, no sagrada:** append-only mientras la sesión está abierta;
+  el worker episódico (`consolidate_session`) la lee al cerrar la sesión
+  y luego la **purga** (`purge_session`, hard-delete).
+- **Cifrada igual que las capas:** el `content` viaja cifrado
+  AES-256-GCM per-user (regla #4), igual que `semantic.content` /
+  `episodic.summary`. Store: `conversation_turns` (Postgres + BYTEA).
+- Es la fuente cruda desde la que se genera el resumen episódico; no se
+  recupera en el read-path del chat.
+
+## Módulos compartidos de `app/memory/`
+
+- `hashing.py::compute_record_hash` — sha256 hex del contenido afectado
+  para el `record_hash` del `audit_log` (la tabla sagrada de auditoría).
+- `embedding.py::embed_one` — helper único de embedding (bge-m3) que
+  consumen `semantic.py` y `episodic.py` (antes duplicado en cada store).
+
 ## Reglas
 
 - **Solo Qwen escribe memoria.** Gemma solo lee.
