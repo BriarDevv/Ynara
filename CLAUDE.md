@@ -19,14 +19,19 @@
 
 ## Slash commands específicos de Claude Code
 
-<!-- TODO: completar a medida que definamos comandos del equipo -->
+Los slash commands locales del repo viven en `.claude/commands/`.
+Cualquier agregado requiere PR.
 
-Los slash commands locales viven en `.claude/commands/`. Cualquier
-agregado requiere PR.
+- `/pr-review <PR_NUMBER>` — único comando del repo
+  ([`.claude/commands/pr-review.md`](./.claude/commands/pr-review.md)):
+  corre el workflow de review de un PR (setup, verificaciones mecánicas,
+  análisis cualitativo) y deja un solo comentario vía `gh pr comment`.
+  No mergea ni aprueba formalmente. Workflow completo en
+  [`skills/pr-review/SKILL.md`](./skills/pr-review/SKILL.md).
 
-- `/init` — usar el comando nativo para refrescar memoria de proyecto.
-- `/review` — review de PR antes de pedir review humano.
-- `/security-review` — pasada de seguridad en cambios pendientes.
+Comandos como `/init`, `/review` o `/security-review` son **nativos de
+Claude Code**, no del repo: usalos si tu instalación los provee, pero no
+viven en `.claude/commands/`.
 
 ## Sub-agents específicos
 

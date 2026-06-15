@@ -6,7 +6,7 @@
 
 **Qué es Ynara**: asistente personal adaptativo on-prem con memoria propia.
 
-**Stack**: Next.js 16 (web) + Expo 53+ (mobile) + FastAPI + Pydantic v2 + SQLAlchemy 2 async (backend) + vLLM con dual stack Gemma 4 12B (conversacional) + Qwen 3.5-9B (agente) + memoria in-house (3 stores semantic/episodic/procedural, AES-256-GCM per-user — ADR-010) + Postgres 16 + pgvector.
+**Stack**: Next.js 16 (web) + Expo 53+ (mobile) + FastAPI + Pydantic v2 + SQLAlchemy 2 async (backend) + serving local Ollama/GGUF en 16GB (vLLM reservado para 24GB+ — ADR-014) con dual stack Gemma 4 12B (conversacional) + Qwen 3.5-9B (agente) + memoria in-house (3 stores semantic/episodic/procedural, AES-256-GCM per-user — ADR-010) + Postgres 16 + pgvector.
 
 **Reglas más críticas**:
 
@@ -59,6 +59,8 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 
 1. [`docs/product/MEMORY.md`](./docs/product/MEMORY.md)
 2. `apps/backend/app/memory/` (wrappers)
+3. [`ADR-007`](./docs/architecture/adrs/ADR-007-memory-decay-retention-encryption.md) — decay, retention y cifrado per-user
+4. [`ADR-008`](./docs/architecture/adrs/ADR-008-embedding-model-bge-m3.md) — embedding model bge-m3
 
 **Tocar memoria (esquema o migración)**
 
@@ -163,10 +165,10 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 | `apps/web/` | Next.js 16 + Tailwind v4 CSS-first (sin `tailwind.config.ts`) + shadcn/ui |
 | `apps/mobile/` | Expo 53+ + Expo Router + NativeWind (todavía sobre Tailwind 3) |
 | `apps/backend/app/api/v1/` | Rutas HTTP, un módulo por dominio |
-| `apps/backend/app/core/` | Settings, security (JWT implementado), deps de FastAPI |
+| `apps/backend/app/core/` | Settings, security (JWT con PyJWT + bcrypt directo, ADR-015), deps de FastAPI |
 | `apps/backend/app/llm/router.py` | Único punto de entrada al LLM. Decide modelo según modo |
 | `apps/backend/app/llm/tools/` | Tools que solo Qwen llama (catálogo en `docs/TOOLS.md`) |
-| `apps/backend/app/memory/` | Wrappers de las 3 capas. **Tablas sagradas** (regla #3) |
+| `apps/backend/app/memory/` | Wrappers de las 3 capas. **Tablas sagradas** (regla #3). Incluye `conversation_turns` (tabla **operativa**, no sagrada: buffer append-only cifrado, purgado al consolidar) |
 | `apps/backend/app/services/` | Lógica de negocio — no importa de FastAPI ni de ORM directo |
 | `apps/backend/app/workers/` | Instancia Celery + autodiscovery de workflows |
 | `apps/backend/app/workflows/` | Tasks Celery (consolidación de memoria, resúmenes episódicos) |
@@ -175,10 +177,11 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 | `packages/shared-types/` | Types TS compartidos web+mobile (mirror manual de Pydantic) |
 | `packages/shared-schemas/` | Zod schemas — validación cliente, mirror de Pydantic |
 | `packages/ui/` | Componentes UI realmente compartibles entre web y mobile |
+| `packages/core/` | Lógica no-visual compartida web+mobile (stores Zustand, hooks TanStack Query, cliente HTTP) — ADR-012 |
 | `packages/config/` | tsconfig.base estricto + biome + eslint compartidos |
-| `docs/architecture/adrs/` | 10 ADRs inmutables (ADR-001 a ADR-010). Cambio arquitectónico nuevo = ADR nuevo |
+| `docs/architecture/adrs/` | 15 ADRs inmutables (ADR-001 a ADR-015; ADR-012 numerado dos veces). Cambio arquitectónico nuevo = ADR nuevo |
 | `docs/conventions/AI-GUIDELINES.md` | 15 reglas extendidas + landmines aprendidas |
-| `infra/vllm/` | `start-vllm.sh` para Gemma + Qwen en la RTX 4080 |
+| `infra/vllm/` | `start-vllm.sh` para Gemma + Qwen — ruta vLLM para GPU de 24GB+. En la RTX 4080 16GB el serving local es Ollama/GGUF (ADR-014) |
 | `infra/docker/` | docker-compose dev (solo Redis) y prod |
 | `skills/*/SKILL.md` | 6 procedimientos reutilizables para humanos e IAs |
 | `.claude/commands/` | Slash commands locales (ej: `/pr-review`). Adapter Claude Code |
@@ -190,9 +193,9 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 
 2. **Nunca tocar secrets.** Prohibido leer, copiar, mover o commitear `.env`, claves API, tokens, certificados. Si detectás un secret expuesto, alertá inmediatamente y no toques nada. **Severidad: bloqueante.**
 
-3. **Tablas sagradas.** Las tablas de memoria (`semantic_memory`, `episodic_memory`, `procedural_memory`) y el audit trail inmutable (`audit_log`) no se modifican sin tests pasando y **1 aprobación humana explícita** (review formal aprobada en el PR, no solo el OK del operador que abrió el PR). Cubre sus modelos (`app/models/{memory,audit}.py`), schemas (`app/schemas/{memory,audit}.py`), wrappers (`app/memory/`) y las migraciones Alembic que las afecten. **Severidad: bloqueante.**
+3. **Tablas sagradas.** Las tablas de memoria (`semantic_memory`, `episodic_memory`, `procedural_memory`) y el audit trail inmutable (`audit_log`) no se modifican sin tests pasando y **1 aprobación humana explícita** (review formal aprobada en el PR, no solo el OK del operador que abrió el PR). Cubre sus modelos (`app/models/{memory,audit}.py`), schemas (`app/schemas/{memory,audit}.py`), wrappers (`app/memory/`) y las migraciones Alembic que las afecten. La tabla `conversation_turns` **no** es sagrada: es **operativa** (buffer append-only cifrado AES-256-GCM per-user que el worker episódico lee al cerrar sesión y luego purga), aunque viva bajo `app/memory/`. **Severidad: bloqueante.**
 
-4. **Datos de usuario nunca fuera del perímetro.** Prohibido enviar mensajes, memoria, metadata o cualquier dato a APIs externas (OpenAI, Anthropic, Google, Cohere, Mistral). Toda inferencia es on-prem (vLLM en prod, Ollama en dev). **Severidad: bloqueante.**
+4. **Datos de usuario nunca fuera del perímetro.** Prohibido enviar mensajes, memoria, metadata o cualquier dato a APIs externas (OpenAI, Anthropic, Google, Cohere, Mistral). Toda inferencia es on-prem; el motor depende de la VRAM, no del entorno: en 16GB (RTX 4080 Super) el serving local es **Ollama/GGUF** y **vLLM** queda reservado para GPU de 24GB+ (ADR-014). El flag `LLM_BACKEND=vllm` es el nombre **legacy** del cliente OpenAI-compatible (vale para Ollama y para vLLM), no fuerza vLLM. **Severidad: bloqueante.**
 
 5. **Cliente Supabase prohibido en el frontend.** En fase MVP, Supabase es solo Postgres gestionado. Prohibido `@supabase/supabase-js` en `apps/web/` o `apps/mobile/`. Prohibido Supabase Auth, Storage, Realtime, Edge Functions, RLS como autorización primaria. Todo dato pasa por FastAPI. **Severidad: bloqueante.** Ver [`ADR-005`](./docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md).
 

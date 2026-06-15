@@ -53,8 +53,9 @@ agenda, recordatorios). La política de seguridad refleja eso:
    en la API (regla #5 de `AGENTS.md`).
 
 4. **Tablas de memoria son sagradas.** `semantic_memory`,
-   `episodic_memory`, `procedural_memory` requieren tests + 1 aprobación
-   humana explícita para cualquier migración (regla #3 de `AGENTS.md`).
+   `episodic_memory`, `procedural_memory` y el audit trail inmutable
+   `audit_log` requieren tests + 1 aprobación humana explícita para
+   cualquier migración (regla #3 de `AGENTS.md`).
 
 5. **JWT firmado con secret rotable.** El access token expira en 7 días
    por defecto (`JWT_EXPIRE_MINUTES`); el refresh token en 30 días
@@ -81,10 +82,15 @@ agenda, recordatorios). La política de seguridad refleja eso:
 
 El usuario tiene derecho a:
 
-- Exportar toda su memoria y conversaciones
-  (`scripts/export-user-data.sh`).
-- Borrar todo (`scripts/reset-memory.sh`).
+- Exportar toda su memoria y conversaciones: `GET /v1/memory/export`
+  (devuelve las 3 capas descifradas con su propio JWT).
+- Borrar todo: `POST /v1/memory/wipe` (con `?dry_run=true` previsualiza el
+  recount sin borrar; el execute destructivo exige el confirm per-layer).
 - Pausar la memoria semántica de forma temporal.
+
+> Los scripts `scripts/export-user-data.sh` y `scripts/reset-memory.sh`
+> son **placeholders** (hoy `exit 1` / sin implementar): la superficie real
+> es la API de FastAPI de arriba.
 
 Detalle de implementación en
 [`docs/product/MEMORY.md`](./docs/product/MEMORY.md).
@@ -92,7 +98,10 @@ Detalle de implementación en
 ## Dependencias
 
 - Cualquier dependencia nueva pasa por review humano.
-- Auditoría automática semanal con `pnpm audit` y `uv pip audit`.
+- Auditoría automática de dependencias del backend con `uv run pip-audit`,
+  disparada en cada PR/push que toca `apps/backend/**` (CI de backend,
+  `.github/workflows/ci.yml`); falla el build ante una CVE/PYSEC conocida.
+  El frontend todavía no tiene auditoría de dependencias automatizada.
 - Pin de versiones obligatorio para dependencias críticas (auth,
   crypto, ORM).
 
