@@ -134,7 +134,12 @@ consolidada** que cambia el estado (ADD/UPDATE/DELETE sobre semantic o
 procedural; NOOP y ops skippeadas no auditan). La fila guarda solo
 metadata + un `record_hash` SHA-256 del contenido/identificador
 afectado, **nunca el contenido en claro** (regla #4): el hash es
-unidireccional, así que cero PII llega a la tabla de auditoría.
+unidireccional, así que cero PII llega a la tabla de auditoría. El
+**formato canónico** del `record_hash` (incluido el payload procedural
+`(key, value)` con `sort_keys`) vive en `app/memory/hashing.py`
+(`compute_record_hash` + `procedural_hash_payload`, funciones puras de
+solo stdlib): es la **sede única**, importada tanto por la consolidación
+(`apply_ops`) como por las mutaciones por endpoint.
 Además, las **mutaciones por endpoint** (`PATCH`/`DELETE`/`wipe` en
 `/v1/memory`, issue #161) escriben una fila por operación efectiva, en la
 **misma** transacción del request. Las filas de consolidación van
@@ -236,8 +241,8 @@ Aun siendo operativa, el `content` viaja **cifrado AES-256-GCM per-user** (regla
 | Columna | Tipo | Notas |
 |---|---|---|
 | `id` | UUID PK | `gen_random_uuid()` |
-| `user_id` | UUID FK → users.id, ON DELETE CASCADE | indexed btree |
-| `session_id` | UUID FK → sessions.id, ON DELETE CASCADE | indexed btree |
+| `user_id` | UUID FK → users.id, ON DELETE CASCADE | (cubierto por el índice compuesto, ver abajo) |
+| `session_id` | UUID FK → sessions.id, ON DELETE CASCADE | (cubierto por el UNIQUE y el índice compuesto) |
 | `role` | `turn_role_enum` NOT NULL | `user` o `model` |
 | `content` | BYTEA NOT NULL | Cifrado AES-256-GCM (key derivada por usuario, ADR-007 D3) |
 | `seq` | INTEGER NOT NULL | Orden monotónico por sesión (0 = primer turno user, 1 = primera respuesta model, ...) |
@@ -247,9 +252,13 @@ Aun siendo operativa, el `content` viaja **cifrado AES-256-GCM per-user** (regla
 - `UNIQUE (session_id, seq)` — un turno por posición en la sesión (idempotencia de orden).
 
 **Índices**:
-- `ix_conversation_turns_user_id` (btree, por `user_id`).
-- `ix_conversation_turns_session_id` (btree, por `session_id`).
-- `ix_conversation_turns_session_id_seq` (btree compuesto, `(session_id, seq)`) — sirve la lectura ordenada que hace el worker.
+- `ix_conversation_turns_user_id_session_id_seq` (btree compuesto, `(user_id, session_id, seq)`) —
+  **único** índice de la tabla, matchea el patrón real de queries del store: todas filtran por
+  `user_id` Y `session_id` (`next_seq`, `list_for_session`, `purge_session`) y ordenan por `seq`.
+  Su prefijo `(user_id)` cubre el cascade-delete por usuario; el índice implícito del
+  `UNIQUE (session_id, seq)` cubre el acceso por sesión. Reemplaza los 3 índices parciales
+  originales (`ix_..._user_id`, `ix_..._session_id`, `ix_..._session_id_seq`), eliminados en la
+  migración `20260615_0200_drop_redundant_conversation_turns_indexes`.
 
 ## Migración inicial
 
@@ -267,9 +276,12 @@ e incluye:
 
 La migración `20260614_1700_conversation_turns_table` agrega el enum
 `turn_role_enum` + la tabla `conversation_turns` (FKs a `users` y `sessions`),
-llevando el total a **7 tablas** (#209).
+llevando el total a **7 tablas** (#209). La migración siguiente,
+`20260615_0200_drop_redundant_conversation_turns_indexes` (**HEAD**), reemplaza
+los 3 índices parciales de `conversation_turns` por el único índice compuesto
+`(user_id, session_id, seq)`.
 
-Ver [`docs/MIGRATIONS.md`](./MIGRATIONS.md) para la política completa.
+Ver [`docs/MIGRATIONS.md`](./MIGRATIONS.md) para la cadena completa y la política.
 
 ## Wrappers de memoria
 
@@ -280,3 +292,19 @@ ver `app/llm/tools/memory.py`). El engine es **in-house** (ADR-010,
 que supersede ADR-003/Mem0): no se usa Mem0. Cifrado AES-256-GCM
 per-user via `app/core/crypto.py` (`encrypt_for_user` /
 `decrypt_for_user`, ADR-007 D3, mergeado).
+
+**Módulos neutrales** (siblings de comportamiento, no tocan columnas de las tablas
+sagradas):
+
+- `app/memory/hashing.py` — sede única del formato de los digests de `audit_log`
+  (`compute_record_hash` + `procedural_hash_payload`). Antes vivían como helpers
+  privados de `app/llm/memory_engine.py` (boundary leak); ahora son la API pública de
+  este módulo, importada por el motor de extracción y por los endpoints de memoria.
+- `app/memory/embedding.py` — helper compartido `embed_one(embedder, text)`: embeddea un
+  texto plaintext y devuelve el vector de 1024 floats. Antes duplicado como `_embed_one`
+  en `semantic.py` / `episodic.py`.
+- `app/memory/config.py` — loader de los thresholds de `ynara.config.json[memory]`:
+  `DecayConfig` / `load_decay_config` (decay procedural, ADR-007 D1) y `RetentionConfig`
+  / `load_retention_config` (retention episódica, ADR-007 D2). Pydantic frozen + strict +
+  `extra='forbid'`, fail-fast (`MemoryConfigError`) pero **default-safe** (config viejo sin
+  esas keys → defaults de ADR-007, no rompe).
