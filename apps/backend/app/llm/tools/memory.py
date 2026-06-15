@@ -21,10 +21,10 @@ Nunca se propaga una excepción al modelo.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError
 
 from app.llm.tools.base import (
     first_validation_error,
@@ -53,18 +53,40 @@ class _SearchArgs(BaseModel):
     limit: int = Field(5, ge=1, le=20)
 
 
+def _coerce_layer_to_semantic(value: object) -> str:
+    """Normaliza cualquier ``layer`` a ``'semantic'`` (única capa soportada hoy).
+
+    ``memory.add`` sólo escribe semantic por ahora (episodic/procedural se escriben
+    vía el pipeline async de M8). Un modelo chico (Qwen) alucina valores de ``layer``
+    ('personal', 'base', ...) o pide capas aún no cableadas (episodic/procedural); con
+    un ``Literal['semantic']`` estricto eso fallaba con ``invalid_arguments``, lo que
+    hacía que el AGENTE le reportara al usuario un FALSO 'no pude guardar' aunque la
+    escritura real es async (la hace el worker de consolidación, NO esta tool, que es
+    un stub ``not_wired``). Coercionar a 'semantic' evita ese falso fallo. Cuando M8
+    cablee multi-capa, ``layer`` vuelve a ser un ``Literal`` real con las 3 capas y
+    esta función se restringe a aceptar SOLO strings (rechazando ``None``/``int``), que
+    hoy también se coercionan en silencio porque la tool es no-op: post-M8 ese laxismo
+    podría enmascarar un bug del prompt o del pipeline de tool-calling.
+    """
+    return "semantic"
+
+
 class _AddArgs(BaseModel):
     """Argumentos de ``memory.add``.
 
-    ``layer`` sólo acepta ``'semantic'`` por ahora (Literal): episodic/procedural
-    se escriben vía el pipeline async de M8.
-    ``user_id`` ausente por diseño (el store ya está ligado a él).
+    ``layer`` es opcional (default ``'semantic'``) y TOLERANTE: cualquier valor que el
+    modelo mande se normaliza a ``'semantic'`` (ver ``_coerce_layer_to_semantic``), la
+    única capa que esta tool soporta hoy. El schema sigue anunciando ``'semantic'`` para
+    guiar al modelo, pero un valor alucinado ya no rompe el turno.
+    ``extra='forbid'`` se mantiene: ``user_id`` (u otro campo) NO puede inyectarse por
+    argumento (el store ya está ligado al ``user_id``; pasarlo permitiría apuntar a otro
+    usuario). Un extra desconocido sigue siendo ``invalid_arguments``.
     """
 
     model_config = ConfigDict(strict=True, extra="forbid")
 
     content: str
-    layer: Literal["semantic"]
+    layer: Annotated[Literal["semantic"], BeforeValidator(_coerce_layer_to_semantic)] = "semantic"
     importance: int | None = Field(None, ge=0, le=100)
 
 

@@ -6,7 +6,7 @@ implementa la misma interfaz que ``SemanticMemoryStore`` sin tocar Postgres.
 Verifican:
 - ``memory.search`` con args validos llama al store y devuelve resultados.
 - ``memory.add`` devuelve siempre ``not_wired`` (MEMORY.md regla #2).
-- ``layer='episodic'`` es ``invalid_arguments`` (Literal).
+- ``layer`` alucinado/omitido se normaliza a ``'semantic'`` (BeforeValidator tolerante).
 - Args invalidos (falta campo, tipo incorrecto, extra) -> ``invalid_arguments``.
 - ``memory.update`` / ``memory.delete`` con store que devuelve None/False -> ``not_found``.
 - ``memory_registry()`` construye un registry con las 4 tools en namespace ``memory``.
@@ -216,22 +216,32 @@ class TestMemoryAdd:
 
         assert result["status"] == "not_wired"
 
-    async def test_layer_episodic_returns_invalid_arguments(self) -> None:
-        # Literal['semantic']: 'episodic' debe rechazarse
+    async def test_hallucinated_layer_value_is_tolerated(self) -> None:
+        """Regresión (#259): el modelo (qwen) alucina valores de ``layer``
+        ('personal', 'base', etc.) que el ``Literal['semantic']`` rechazaba con
+        ``invalid_arguments``, haciendo que el agente le reportara al usuario un
+        FALSO 'no pude guardar' (la escritura real la hace el worker async, no esta
+        tool — que es un stub not_wired). Ahora cualquier ``layer`` se normaliza a
+        'semantic' (única capa soportada hoy) y la tool responde ``not_wired``."""
+        store = FakeSemanticStore()
+        tool = MemoryAddTool(store)
+
+        result = await tool.execute({"content": "me llamo Mateo", "layer": "personal"})
+
+        assert result.get("status") == "not_wired", result
+        # El echo refleja la normalización a 'semantic' (no el valor alucinado).
+        assert result["echo"]["layer"] == "semantic"  # type: ignore[index]
+
+    async def test_layer_episodic_is_coerced_to_semantic(self) -> None:
+        """Un ``layer`` no-semantic (episodic/procedural) se normaliza a 'semantic':
+        memory.add solo escribe semantic hoy (M8 cablea multi-capa). No falla."""
         store = FakeSemanticStore()
         tool = MemoryAddTool(store)
 
         result = await tool.execute({"content": "algo", "layer": "episodic"})
 
-        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
-
-    async def test_layer_procedural_returns_invalid_arguments(self) -> None:
-        store = FakeSemanticStore()
-        tool = MemoryAddTool(store)
-
-        result = await tool.execute({"content": "algo", "layer": "procedural"})
-
-        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert result.get("status") == "not_wired", result
+        assert result["echo"]["layer"] == "semantic"  # type: ignore[index]
 
     async def test_missing_content_returns_invalid_arguments(self) -> None:
         store = FakeSemanticStore()
@@ -241,13 +251,15 @@ class TestMemoryAdd:
 
         assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
 
-    async def test_missing_layer_returns_invalid_arguments(self) -> None:
+    async def test_missing_layer_defaults_to_semantic(self) -> None:
+        """``layer`` es opcional (default 'semantic'): el modelo puede omitirlo."""
         store = FakeSemanticStore()
         tool = MemoryAddTool(store)
 
         result = await tool.execute({"content": "algo"})
 
-        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert result.get("status") == "not_wired", result
+        assert result["echo"]["layer"] == "semantic"  # type: ignore[index]
 
     async def test_importance_out_of_range_returns_invalid_arguments(self) -> None:
         store = FakeSemanticStore()
