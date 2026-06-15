@@ -1,6 +1,19 @@
 # Backend · Memoria contextual + capa LLM — Roadmap
 
-> **Estado**: v2 — agente funcionando hasta M9; infra vLLM real pendiente
+> **Actualización (junio 2026):** la mayor parte del camino crítico está
+> **mergeada**: capa de memoria M7/M8/M9 (router + tool loop + endpoints
+> `/v1/chat`·`/v1/sessions`·`/v1/memory`), escritura real de `audit_log` vía
+> `AuditStore` por op consolidada (#158), rate-limit de wipe/export y de los
+> endpoints de auth, y los **workers Celery** (consolidación post-turno +
+> decay procedural + retention episódica). Cambios de contexto desde v2:
+> serving local 16 GB = **Ollama/GGUF** ([ADR-014](../architecture/adrs/ADR-014-serving-ollama-gguf-16gb.md);
+> `LLM_BACKEND=vllm` es nombre legacy del cliente); config de serving =
+> lista `llm_serving` ([ADR-013](../architecture/adrs/ADR-013-serving-endpoints-config.md));
+> engine de memoria **in-house** ([ADR-010](../architecture/adrs/ADR-010-memory-architecture-v2.md),
+> supersede Mem0). El cuerpo histórico no se reescribe; el estado real se marca
+> con ✅ y notas inline.
+
+> **Estado**: v2 — agente funcionando hasta M9; serving local = Ollama/GGUF (ADR-014); infra vLLM real (24 GB+) pendiente
 > **Fecha**: 2026-05-21 · **Actualizado**: 2026-05-31
 > **Owner**: @BriarDevv
 > **Alcance**: `apps/backend` — desde el estado actual hasta tener el agente respondiendo con memoria viva.
@@ -15,6 +28,11 @@ Este documento es el plan operativo para llevar el backend de Ynara desde su est
 Se apoya en cuatro fuentes:
 
 1. **Informe técnico §1.5 y §2.4** — dual-stack Gemma + Qwen, vLLM, LlamaIndex, Mem0, patrón ADD/UPDATE/DELETE/NOOP.
+   > **Nota (ADR-010, junio 2026):** **Mem0 quedó superseded** — el engine de
+   > consolidación es **in-house** ([ADR-010](../architecture/adrs/ADR-010-memory-architecture-v2.md),
+   > supersede ADR-003). Mem0 sólo se conserva como referencia del *algoritmo*
+   > ADD/UPDATE/DELETE/NOOP, nunca como storage. Y, para 16 GB, el serving es
+   > Ollama/GGUF (ADR-014), no vLLM.
 2. **ADR-002** — Gemma 4 12B (conversacional, actualizado por ADR-012) + Qwen 3.5-9B (agente), cuantización Q4/Q5 para 16GB VRAM.
 3. **ADR-004** — Postgres + pgvector como único vector store.
 4. **ADR-007** — decay exponencial, retention diferenciada (`is_sensitive`), cifrado AES-256-GCM con HKDF.
@@ -89,7 +107,11 @@ Se apoya en cuatro fuentes:
 - ✅ (resuelto) ADR-008 (bge-m3) aprobado + `VllmEmbeddingClient` real implementado (PR #198, probado contra Ollama; se prende con EMBEDDING_BACKEND=vllm)
 - Serving vLLM real en infra de prod — track aparte, pendiente; los clientes reales (`VllmEmbeddingClient`/`VllmReranker`/`VllmClient`) ya están (PR #198) y se prenden por flag
 - Gap "persistir turnos" — la consolidación episódica necesita que los turnos se persistan antes de ser procesados
-- Retención episódica — verificar si el worker de retention ya está implementado o pendiente
+- ✅ Retención episódica — **externalizada y resuelta**: `RetentionConfig` +
+  `load_retention_config()` (`app/memory/config.py`) leen las 4 keys de
+  retention de `ynara.config.json[memory]` (`retention_default_days=365`,
+  `retention_sensitive_days=180`, min/max 30/365) con el mismo patrón
+  frozen/strict del decay (ADR-007 D2). Ya no es config hardcodeada.
 
 > M4 observabilidad (Sentry PII scrubbing + métricas) — **hecho (#66)**.
 
@@ -196,6 +218,13 @@ Redis por `jti`, más rate-limit en token/register) + reuse-detection a nivel
 familia/`sid` con grace (#142, ya mergeado).
 
 ### 4.2 Cliente vLLM
+
+> **Nota (ADR-013/ADR-014, junio 2026):** el nombre "cliente vLLM" y el flag
+> `LLM_BACKEND=vllm` son **legacy**: el cliente es un wrapper HTTP
+> OpenAI-compatible que sirve indistintamente a **Ollama/GGUF** (motor local de
+> 16 GB, ADR-014) y a vLLM (24 GB+). El default de dev es `FakeLlmClient`; el
+> real se prende con `LLM_BACKEND=vllm` (ya mergeado, PR #198). El serving prod
+> es track aparte, pendiente.
 
 **Path**: `apps/backend/app/llm/clients/vllm.py`.
 
