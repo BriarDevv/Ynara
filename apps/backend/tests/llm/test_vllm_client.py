@@ -27,7 +27,7 @@ from app.llm.errors import (
     ModelNotServedError,
     ToolParsingError,
 )
-from app.llm.schemas import ChatMessage, ToolSpec
+from app.llm.schemas import ChatMessage, ToolCall, ToolSpec
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 _BASE_URL = "http://vllm-test:8001/v1"
@@ -122,6 +122,94 @@ async def test_complete_with_tools_in_payload() -> None:
         "units": "celsius",
     }
     assert result.finish_reason == "tool_calls"
+
+
+@pytest.mark.asyncio
+async def test_complete_encodes_assistant_tool_calls_in_payload() -> None:
+    """Un assistant con ``tool_calls`` se re-serializa al wire OpenAI (multi-turno con tool).
+
+    Regresion (#256): ``_encode_message`` dropeaba ``message.tool_calls``, asi que la
+    2da vuelta del tool loop mandaba un assistant ``content:null`` SIN tool_calls. Ollama
+    rechaza eso con 400 ("invalid message content type: <nil>") -> el turno degradaba y la
+    consolidacion de memoria no corria. El assistant que llamo una tool DEBE re-enviarse con
+    sus ``tool_calls`` (formato OpenAI: ``arguments`` como JSON string) para correlacionar con
+    el mensaje ``role='tool'`` siguiente.
+    """
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(200, json=_load("completion_text.json"))
+
+    client = _client(handler)
+    messages = [
+        ChatMessage(role="system", content="sos un asistente"),
+        ChatMessage(role="user", content="recordame algo"),
+        ChatMessage(
+            role="assistant",
+            content=None,
+            tool_calls=[
+                ToolCall(
+                    id="call_1",
+                    name="crear_recordatorio",
+                    arguments={"titulo": "x", "fecha_hora": "2026-06-16T09:00:00"},
+                )
+            ],
+        ),
+        ChatMessage(
+            role="tool",
+            tool_call_id="call_1",
+            name="crear_recordatorio",
+            content='{"ok": true}',
+        ),
+    ]
+    await client.complete(model=_MODEL, messages=messages)
+
+    wire = captured["payload"]["messages"]
+    # Un mensaje normal (sin tool_calls) NO debe traer la clave (no ensuciar el wire).
+    assert "tool_calls" not in wire[0]
+    # El assistant que llamo la tool DEBE traer tool_calls en formato OpenAI.
+    assistant = wire[2]
+    assert assistant["role"] == "assistant"
+    # ``content:null`` ES valido cuando van los tool_calls (el otro lado del bug del 400).
+    assert assistant.get("content") is None
+    assert "tool_calls" in assistant, "el assistant re-envia sus tool_calls (sino Ollama 400)"
+    tc = assistant["tool_calls"][0]
+    assert tc["id"] == "call_1"
+    assert tc["type"] == "function"
+    assert tc["function"]["name"] == "crear_recordatorio"
+    # ``arguments`` viaja como JSON string (wire OpenAI), no como dict.
+    assert json.loads(tc["function"]["arguments"]) == {
+        "titulo": "x",
+        "fecha_hora": "2026-06-16T09:00:00",
+    }
+    # El mensaje role='tool' siguiente conserva su correlacion con la call.
+    assert wire[3]["role"] == "tool"
+    assert wire[3]["tool_call_id"] == "call_1"
+
+
+@pytest.mark.asyncio
+async def test_complete_omits_empty_tool_calls_from_payload() -> None:
+    """Un assistant con ``tool_calls=[]`` NO emite la clave en el wire (truthy check).
+
+    Un ``"tool_calls": []`` junto a ``content:null`` seria tan invalido para Ollama
+    como omitir la clave; el encode usa truthy check (no ``is not None``), asi que una
+    lista vacia no ensucia el payload. Hoy el tool_loop nunca construye ese mensaje,
+    pero el test sella la rama defensiva.
+    """
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(200, json=_load("completion_text.json"))
+
+    client = _client(handler)
+    messages = [
+        ChatMessage(role="user", content="hola"),
+        ChatMessage(role="assistant", content="respuesta sin tools", tool_calls=[]),
+    ]
+    await client.complete(model=_MODEL, messages=messages)
+    assert "tool_calls" not in captured["payload"]["messages"][1]
 
 
 @pytest.mark.asyncio
