@@ -56,6 +56,44 @@ def test_parse_summary_missing_summary_returns_empty() -> None:
     assert out.summary == ""
 
 
+def test_parse_summary_strips_think_block() -> None:
+    """Un bloque <think>...</think> antes del JSON no rompe el resumen (#235)."""
+    raw = "<think>la sesion fue sobre X</think>\n" + json.dumps(
+        {"summary": "El usuario hablo de X.", "topics": {"t": ["X"]}}
+    )
+    out = _parse_summary(raw)
+    assert out.summary == "El usuario hablo de X."
+    assert out.topics == {"t": ["X"]}
+
+
+async def test_qwen_engine_summarize_forces_thinking_off() -> None:
+    """summarize manda thinking=False (#235): el resumen quiere JSON puro."""
+    fake_llm = FakeLlmClient(served_models=frozenset({"qwen"}))
+    fake_llm.queue_result(_result(json.dumps({"summary": "Hablo de X.", "topics": {}})))
+    engine = QwenMemoryEngine(llm_client=fake_llm, served_name="qwen")
+    await engine.summarize(transcript="user: hola\nmodel: hola!", mode="vida")
+    assert fake_llm.complete_calls[0]["thinking"] is False
+
+
+def test_parse_summary_strips_markdown_fence() -> None:
+    """El resumen envuelto en un fence ```json ... ``` se parsea igual (#235)."""
+    raw = "```json\n" + json.dumps({"summary": "Resumen.", "topics": {}}) + "\n```"
+    out = _parse_summary(raw)
+    assert out.summary == "Resumen."
+
+
+async def test_qwen_engine_summarize_tolerates_think_block() -> None:
+    """End-to-end: un bloque <think> en la respuesta no rompe summarize (#235)."""
+    fake_llm = FakeLlmClient(served_models=frozenset({"qwen"}))
+    raw = "<think>la sesion fue sobre X</think>\n" + json.dumps(
+        {"summary": "El usuario hablo de X.", "topics": {}}
+    )
+    fake_llm.queue_result(_result(raw))
+    engine = QwenMemoryEngine(llm_client=fake_llm, served_name="qwen")
+    out = await engine.summarize(transcript="user: hola\nmodel: hola!", mode="vida")
+    assert out.summary == "El usuario hablo de X."
+
+
 def test_parse_summary_blank_summary_returns_empty() -> None:
     out = _parse_summary(json.dumps({"summary": "   ", "topics": {}}))
     assert out.summary == ""
