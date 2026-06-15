@@ -31,7 +31,7 @@ La superficie de **auth** hoy se reparte por capa:
 | Router HTTP (`/auth/*`) | `app/api/v1/auth.py` | auth |
 | Service (register/authenticate) | `app/services/auth.py` | auth |
 | Schemas wire | `app/schemas/auth.py` | auth |
-| JWT (jose) + bcrypt | `app/core/security.py` | auth |
+| JWT (PyJWT) + bcrypt | `app/core/security.py` | auth |
 | Token store (blocklist jti + familia) | `app/core/token_store.py` | **compartido** |
 | Rate-limit | `app/core/ratelimit.py` | **compartido** |
 | Auth deps (`get_current_user`, ...) | dentro de `app/core/deps.py` | auth (wiring) |
