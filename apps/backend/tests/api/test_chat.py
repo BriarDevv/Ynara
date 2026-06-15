@@ -33,19 +33,21 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 from httpx import ASGITransport
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.deps import get_db, get_embedder, get_llm_client, get_reranker, get_token_store
 from app.core.security import create_access_token
 from app.core.token_store import InMemoryTokenStore, RedisTokenStore, TokenStore
-from app.enums import Mode
+from app.enums import Mode, TurnRole
 from app.llm.clients.embedding import FakeEmbeddingClient
 from app.llm.clients.fakes import FakeLlmClient
 from app.llm.clients.reranker import FakeReranker
 from app.llm.schemas import CompletionResult, ToolCall
 from app.main import app
+from app.memory.conversation_turns import ConversationTurnStore
+from app.models.conversation_turn import ConversationTurn
 from app.models.session import ChatSession
 from app.models.user import User
 
@@ -297,6 +299,85 @@ async def test_enqueue_failure_does_not_break_turn(db_session: AsyncSession) -> 
         # La ChatSession quedo persistida pese al fallo del enqueue (commit previo).
         persisted = await db_session.get(ChatSession, uuid.UUID(body["session_id"]))
         assert persisted is not None
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+# ---------------------------------------------------------------------------
+# Persistencia de turnos: un /chat OK deja 2 turnos (user seq=0 / model seq=1)
+# ---------------------------------------------------------------------------
+
+
+async def test_chat_ok_persists_two_turns_user_and_model(db_session: AsyncSession) -> None:
+    """Tras un POST /chat exitoso hay 2 turnos en ConversationTurnStore: user(seq=0) +
+    model(seq=1), con los roles correctos y el contenido descifrado.
+
+    Lock del contrato de persistencia de turnos del happy path (issue #209) desde la
+    superficie del endpoint /chat.
+    """
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_result(_completion(text="hola, todo bien?", model_name="gemma4"))
+
+    client = await _client(db_session, llm_client=fake)
+    try:
+        async with client:
+            resp = await client.post(
+                "/v1/chat",
+                json={"text": "hola Ynara", "mode": "vida"},
+                headers=_bearer(user.id),
+            )
+        assert resp.status_code == 200
+        session_id = uuid.UUID(resp.json()["session_id"])
+
+        # Exactamente 2 turnos persistidos, con orden + roles + contenido correctos.
+        store = ConversationTurnStore(db_session, user.id)
+        turns = await store.list_for_session(session_id)
+        assert [t.seq for t in turns] == [0, 1]
+        assert [t.role for t in turns] == [TurnRole.USER, TurnRole.MODEL]
+        assert turns[0].content == "hola Ynara"
+        assert turns[1].content == "hola, todo bien?"
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+async def test_chat_degraded_response_persists_no_turns(db_session: AsyncSession) -> None:
+    """Una respuesta ``finish_reason='degraded'`` NO genera filas de turnos.
+
+    Espejo negativo del happy path: si el turno degradó, no se persiste ningún turno
+    (ni se consolida). Cuenta 0 filas en ``conversation_turns`` para esa sesión.
+    """
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+    fake.queue_result(
+        _completion(text="respuesta degradada", finish_reason="degraded", model_name="qwen")
+    )
+
+    client = await _client(db_session, llm_client=fake)
+    try:
+        with patch("app.api.v1.chat.consolidate_turn") as mock_task:
+            mock_task.delay = MagicMock()
+            async with client:
+                resp = await client.post(
+                    "/v1/chat",
+                    json={"text": "hola", "mode": "productividad"},
+                    headers=_bearer(user.id),
+                )
+        assert resp.status_code == 200
+        assert resp.json()["finish_reason"] == "degraded"
+        session_id = uuid.UUID(resp.json()["session_id"])
+
+        # Cero turnos persistidos para la sesión degradada.
+        count = (
+            await db_session.execute(
+                select(func.count())
+                .select_from(ConversationTurn)
+                .where(ConversationTurn.session_id == session_id)
+            )
+        ).scalar_one()
+        assert count == 0
     finally:
         app.dependency_overrides.clear()
         await _delete_user(db_session, user.id)

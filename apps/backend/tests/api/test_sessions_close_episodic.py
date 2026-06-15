@@ -20,6 +20,7 @@ import httpx
 import pytest
 from httpx import ASGITransport
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db
@@ -130,6 +131,34 @@ async def test_close_enqueue_failure_does_not_break_close(db_session: AsyncSessi
         assert resp.json()["ended_at"] is not None
         mock_task.delay.assert_called_once()
         # El ended_at quedo persistido pese al fallo del enqueue.
+        await db_session.refresh(cs)
+        assert cs.ended_at is not None
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+async def test_close_enqueue_operational_error_fail_open(db_session: AsyncSession) -> None:
+    """Fail-open ante un ``OperationalError`` del broker: el close sigue 200, ended_at persiste.
+
+    El ``except Exception`` del endpoint atrapa cualquier fallo del ``.delay()`` (no
+    solo ``RuntimeError``): un ``OperationalError`` (broker/redis inalcanzable) NO
+    rompe el cierre — la consolidación es eventual, el ``ended_at`` ya se commiteó.
+    """
+    user = await _seed_user(db_session)
+    cs = await _seed_session(db_session, user_id=user.id, mode=Mode.VIDA)
+
+    boom = OperationalError("ENQUEUE", params=None, orig=Exception("broker unreachable"))
+    client = await _client(db_session)
+    try:
+        with patch("app.api.v1.sessions.consolidate_session") as mock_task:
+            mock_task.delay = MagicMock(side_effect=boom)
+            async with client:
+                resp = await client.post(f"/v1/sessions/{cs.id}/close", headers=_bearer(user.id))
+
+        assert resp.status_code == 200
+        assert resp.json()["ended_at"] is not None
+        mock_task.delay.assert_called_once()
         await db_session.refresh(cs)
         assert cs.ended_at is not None
     finally:

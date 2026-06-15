@@ -193,3 +193,102 @@ class TestConversationTurnStoreIntegration:
         ).scalar_one()
         with pytest.raises(InvalidTag):
             decrypt_for_user(user_a.id, raw_b)
+
+
+@pytest.mark.integration
+class TestNextSeq:
+    """Tests de ``next_seq`` — la lógica crítica anti-colisión del ``UNIQUE(session_id, seq)``.
+
+    ``next_seq`` es ``COALESCE(MAX(seq), -1) + 1`` filtrado por ``user_id`` + ``session_id``.
+    Es lo que previene el bug CRITICAL de #209 (seq hardcodeado a 0/1 colisionaba al reusar
+    una sesión). HOY no tenía NINGÚN test directo del store: estos lo cubren.
+    """
+
+    async def test_next_seq_new_session_is_zero(self, db_session: AsyncSession) -> None:
+        """Sesión nueva sin turnos -> 0 (``MAX(seq)`` NULL -> ``COALESCE(-1)+1``)."""
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        store = ConversationTurnStore(db_session, user.id)
+
+        assert await store.next_seq(cs.id) == 0
+
+    async def test_next_seq_is_monotonic_after_inserts(self, db_session: AsyncSession) -> None:
+        """Tras insertar turnos, ``next_seq`` es ``MAX(seq)+1`` y avanza monotónico."""
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        store = ConversationTurnStore(db_session, user.id)
+
+        # Insertar el turno 0 usando el seq que dicta el store.
+        base = await store.next_seq(cs.id)
+        assert base == 0
+        await store.add(
+            ConversationTurnCreate(session_id=cs.id, role=TurnRole.USER, content="t0", seq=base)
+        )
+        # Tras un turno, el próximo seq es 1.
+        assert await store.next_seq(cs.id) == 1
+
+        await store.add(
+            ConversationTurnCreate(session_id=cs.id, role=TurnRole.MODEL, content="t1", seq=1)
+        )
+        # Tras dos turnos, el próximo es 2 (MAX(seq)=1 -> +1).
+        assert await store.next_seq(cs.id) == 2
+
+    async def test_next_seq_respects_max_not_count(self, db_session: AsyncSession) -> None:
+        """``next_seq`` es ``MAX(seq)+1``, NO ``count``: un seq alto suelto lo refleja.
+
+        Si se inserta un turno con ``seq=5`` (sin los intermedios), el próximo libre es
+        6 — la lógica usa el máximo, no la cantidad de filas. Asegura que no haya
+        colisión con el ``UNIQUE`` aunque la secuencia tenga huecos.
+        """
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        store = ConversationTurnStore(db_session, user.id)
+
+        await store.add(
+            ConversationTurnCreate(session_id=cs.id, role=TurnRole.USER, content="alto", seq=5)
+        )
+        assert await store.next_seq(cs.id) == 6
+
+    async def test_next_seq_isolated_by_session(self, db_session: AsyncSession) -> None:
+        """El ``next_seq`` de una sesión NO se contamina con los turnos de otra sesión.
+
+        Dos sesiones del MISMO user: insertar turnos en una no mueve el ``next_seq`` de
+        la otra (el query filtra por ``session_id``). Una sesión nueva sigue arrancando
+        en 0 aunque otra ya tenga turnos.
+        """
+        user = await _seed_user(db_session)
+        cs_a = await _seed_session(db_session, user_id=user.id)
+        cs_b = await _seed_session(db_session, user_id=user.id)
+        store = ConversationTurnStore(db_session, user.id)
+
+        # Llenar la sesión A con 3 turnos.
+        for seq in range(3):
+            role = TurnRole.USER if seq % 2 == 0 else TurnRole.MODEL
+            await store.add(
+                ConversationTurnCreate(session_id=cs_a.id, role=role, content=f"a{seq}", seq=seq)
+            )
+
+        # A avanzó a 3; B (sin turnos) sigue en 0: no se contaminó.
+        assert await store.next_seq(cs_a.id) == 3
+        assert await store.next_seq(cs_b.id) == 0
+
+    async def test_next_seq_isolated_by_user(self, db_session: AsyncSession) -> None:
+        """El ``next_seq`` filtra también por ``user_id``: el de un user no ve filas ajenas.
+
+        Aunque dos users no compartirían un ``session_id`` real, el query filtra por
+        AMBOS (``user_id`` **y** ``session_id``): un store ligado a otro user nunca
+        cuenta turnos que no le pertenecen (aislamiento estructural).
+        """
+        user_a = await _seed_user(db_session)
+        user_b = await _seed_user(db_session)
+        cs_a = await _seed_session(db_session, user_id=user_a.id)
+        store_a = ConversationTurnStore(db_session, user_a.id)
+        store_b = ConversationTurnStore(db_session, user_b.id)
+
+        await store_a.add(
+            ConversationTurnCreate(session_id=cs_a.id, role=TurnRole.USER, content="de A", seq=0)
+        )
+
+        # A ve su turno (próximo = 1); B, ligado a otro user, ve 0 para esa misma sesión.
+        assert await store_a.next_seq(cs_a.id) == 1
+        assert await store_b.next_seq(cs_a.id) == 0

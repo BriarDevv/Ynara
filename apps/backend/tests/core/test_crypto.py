@@ -79,6 +79,31 @@ def test_other_user_cannot_decrypt(patched_key: None) -> None:
         decrypt_for_user(_USER_B, blob)
 
 
+def test_cross_user_decrypt_raises_invalid_tag(patched_key: None) -> None:
+    """Lock del aislamiento cross-user del HKDF per-user (ADR-007 D3).
+
+    La key de cifrado se deriva por usuario (HKDF con ``user_id`` como info), así que
+    el blob de A NO es legible con la key de B y viceversa: GCM rechaza con
+    ``InvalidTag`` (el auth tag no valida bajo otra key). Es la garantía estructural
+    de que un usuario nunca descifra la memoria de otro aunque el ciphertext crudo se
+    filtrara. Se chequea en AMBAS direcciones (A->B y B->A) para que ninguna sea un
+    falso negativo simétrico.
+    """
+    blob_a = encrypt_for_user(_USER_A, "memoria privada de A")
+    blob_b = encrypt_for_user(_USER_B, "memoria privada de B")
+
+    # B no puede leer el blob de A.
+    with pytest.raises(InvalidTag):
+        decrypt_for_user(_USER_B, blob_a)
+    # A no puede leer el blob de B.
+    with pytest.raises(InvalidTag):
+        decrypt_for_user(_USER_A, blob_b)
+
+    # Cada uno SÍ descifra el propio (la derivación per-user no rompe el roundtrip).
+    assert decrypt_for_user(_USER_A, blob_a) == "memoria privada de A"
+    assert decrypt_for_user(_USER_B, blob_b) == "memoria privada de B"
+
+
 def test_tampered_ciphertext_rejected(patched_key: None) -> None:
     blob = bytearray(encrypt_for_user(_USER_A, "intacto"))
     blob[-1] ^= 0x01  # flip un bit del auth_tag

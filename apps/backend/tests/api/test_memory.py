@@ -809,6 +809,76 @@ async def test_patch_body_mismatch_422(db_session: AsyncSession) -> None:
 
 
 # ---------------------------------------------------------------------------
+# OLA2-6b. BOUNDARY del PATCH semantic: content="" → 422; en el límite → 200; excedido → 422
+# ---------------------------------------------------------------------------
+
+# Límite de longitud del ``content`` del PATCH semantic (``MemoryPatchRequest.content``
+# tiene ``max_length=4096``). Se referencia el número para que el boundary quede explícito.
+_PATCH_CONTENT_MAX_LEN = 4096
+
+
+async def test_patch_semantic_empty_content_422(db_session: AsyncSession) -> None:
+    """PATCH semantic con ``content=""`` → 422 (Pydantic ``min_length=1``)."""
+    user = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, user, tag="B0")
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.patch(
+                f"/v1/memory/semantic/{refs['semantic_id']}",
+                json={"content": ""},
+                headers=_bearer(user.id),
+            )
+        assert resp.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_patch_semantic_content_at_max_length_200(db_session: AsyncSession) -> None:
+    """PATCH semantic con ``content`` de exactamente ``max_length`` (4096) → 200.
+
+    El boundary inferior (en el límite) DEBE pasar: el re-cifrado round-trip refleja el
+    content nuevo de 4096 chars.
+    """
+    user = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, user, tag="B1")
+    at_limit = "x" * _PATCH_CONTENT_MAX_LEN
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.patch(
+                f"/v1/memory/semantic/{refs['semantic_id']}",
+                json={"content": at_limit},
+                headers=_bearer(user.id),
+            )
+        assert resp.status_code == 200
+        assert resp.json()["content"] == at_limit
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_patch_semantic_content_over_max_length_422(db_session: AsyncSession) -> None:
+    """PATCH semantic con ``content`` 1 char por encima del límite (4097) → 422."""
+    user = await _seed_user(db_session)
+    refs = await _seed_full_memory(db_session, user, tag="B2")
+    over_limit = "x" * (_PATCH_CONTENT_MAX_LEN + 1)
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.patch(
+                f"/v1/memory/semantic/{refs['semantic_id']}",
+                json={"content": over_limit},
+                headers=_bearer(user.id),
+            )
+        assert resp.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
 # OLA2-7. DELETE propio (3 capas) → 204; GET posterior → 404
 # ---------------------------------------------------------------------------
 

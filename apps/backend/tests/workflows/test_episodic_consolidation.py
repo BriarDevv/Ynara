@@ -24,6 +24,7 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode, TurnRole
@@ -355,6 +356,52 @@ class TestAsyncConsolidateSession:
         assert audit.origin_model == LlmModel.QWEN
         # record_hash es un sha256 hex (64 chars), NUNCA el summary en claro.
         assert len(audit.record_hash) == 64
+
+    async def test_integrity_error_race_degrades_to_zero(self, db_session: AsyncSession) -> None:
+        """Carrera entre workers: si ``episodic_store.add`` tira ``IntegrityError`` (la
+        UNIQUE(session_id) la rechaza porque otro worker insertó entre el SELECT y el
+        INSERT), se degrada a 0 (no-op) SIN propagar y sin duplicar.
+
+        Es la rama de la red final de idempotencia (consolidation.py:426-437): el
+        chequeo previo ``_episode_exists`` no alcanza ante la carrera, así que el
+        ``IntegrityError`` del INSERT se atrapa, se hace ``rollback`` del estado parcial
+        y se retorna 0. Se fuerza el ``IntegrityError`` parcheando ``add`` del store
+        (el momento exacto de la carrera no se puede orquestar de forma determinista).
+        """
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        await _seed_turns(db_session, user_id=user.id, session_id=cs.id)
+        client = _make_llm_with_summary("Resumen que choca con la UNIQUE.")
+
+        # Forzar el IntegrityError de la UNIQUE(session_id) al insertar el episodio:
+        # simula que otro worker ganó la carrera entre el SELECT y este INSERT.
+        boom = IntegrityError("INSERT ...", params=None, orig=Exception("UNIQUE session_id"))
+        with patch(
+            "app.workflows.consolidation.EpisodicMemoryStore.add",
+            new_callable=AsyncMock,
+            side_effect=boom,
+        ):
+            created = await _async_consolidate_session(
+                user_id=str(user.id),
+                session_id=str(cs.id),
+                mode="vida",
+                llm_client=client,
+                embedder=FakeEmbeddingClient(),
+                reranker=FakeReranker(),
+                session=db_session,
+            )
+
+        # La rama IntegrityError degrada a 0 (no-op): no se propaga la excepción.
+        assert created == 0
+        # No se creó episodio (el INSERT falló y se revirtió).
+        ep_count = (
+            await db_session.execute(
+                select(func.count())
+                .select_from(EpisodicMemory)
+                .where(EpisodicMemory.session_id == cs.id)
+            )
+        ).scalar_one()
+        assert ep_count == 0
 
     async def test_garbage_session_id_returns_zero(self, db_session: AsyncSession) -> None:
         """Un session_id no-UUID degrada a 0 (no-op) sin crashear."""
