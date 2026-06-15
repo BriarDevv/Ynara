@@ -7,12 +7,20 @@ import { z } from "zod";
  */
 const ClientEnvSchema = z.object({
   EXPO_PUBLIC_API_URL: z.string().url().default("http://localhost:8080"),
+  // Mock-first del chat (FRONTEND-CHAT-PLAN.md): "true" → respuestas canned
+  // locales por modo (sin LLM, reusa @ynara/core). Default off (pega al backend
+  // real); hoy va "true" en .env hasta que exista el serving de IA del equipo.
+  EXPO_PUBLIC_ENABLE_MOCKS: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
 });
 
 export type ClientEnv = z.infer<typeof ClientEnvSchema>;
 
 const rawEnv = {
   EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
+  EXPO_PUBLIC_ENABLE_MOCKS: process.env.EXPO_PUBLIC_ENABLE_MOCKS,
 };
 
 const parsed = ClientEnvSchema.safeParse(rawEnv);
