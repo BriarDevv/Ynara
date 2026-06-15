@@ -20,6 +20,7 @@ import json
 import pytest
 
 from app.llm.clients.fakes import FakeLlmClient
+from app.llm.errors import LlmTimeoutError
 from app.llm.schemas import (
     ChatMessage,
     CompletionResult,
@@ -210,16 +211,8 @@ async def test_qwen_2_vueltas_con_tool_call() -> None:
     assert len(fake.complete_calls) == 3
 
 
-@pytest.mark.asyncio
-async def test_guard_max_iteraciones_usa_fallback() -> None:
-    """Al agotar MAX_TOOL_ITERATIONS, usa fallback_text si result.text esta vacio."""
-    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
-
-    tc = _make_tool_call("calendar.create_event", "tc-x")
-    # Siempre devuelve tool_calls sin converger (5 iteraciones + ninguna stop)
-    for _i in range(MAX_TOOL_ITERATIONS):
-        fake.queue_result(_make_result(text="", finish_reason="tool_calls", tool_calls=[tc]))
-
+def _looping_registry_and_spec() -> tuple[ToolRegistry, ToolSpec]:
+    """Registry + spec de una tool fake que siempre devuelve ok (para tests de loop)."""
     reg = ToolRegistry()
 
     class FakeTool:
@@ -235,12 +228,66 @@ async def test_guard_max_iteraciones_usa_fallback() -> None:
             return {"status": "ok"}
 
     reg.register(FakeTool())  # type: ignore[arg-type]
-
     spec = ToolSpec(
         name="calendar.create_event",
         description="crea un evento",
         parameters={"type": "object", "properties": {}},
     )
+    return reg, spec
+
+
+@pytest.mark.asyncio
+async def test_guard_max_iteraciones_fuerza_respuesta_final() -> None:
+    """Al agotar MAX_TOOL_ITERATIONS con texto vacío, una completion final SIN tools.
+
+    Regresión (#260): un modelo que loopea llamando tools (p.ej. qwen reintentando el
+    stub memory.add) agotaba las iteraciones sin dar un texto final -> el usuario veía
+    el ``fallback_text`` ("no pude procesar...") AUNQUE las tools sí se ejecutaron. Ahora
+    se fuerza UNA completion sin tools: sin tools que llamar, el modelo responde en
+    lenguaje natural y el usuario ve una respuesta real (no el fallback)."""
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+
+    tc = _make_tool_call("calendar.create_event", "tc-x")
+    # Las MAX iteraciones devuelven tool_calls con texto vacío (nunca converge).
+    for _i in range(MAX_TOOL_ITERATIONS):
+        fake.queue_result(_make_result(text="", finish_reason="tool_calls", tool_calls=[tc]))
+    # La completion FORZADA (sin tools) devuelve la respuesta final real.
+    fake.queue_result(_make_result(text="Listo, lo anoté en tu memoria.", finish_reason="stop"))
+
+    reg, spec = _looping_registry_and_spec()
+
+    text, actions, finish_reason = await run_tool_loop(
+        llm_client=fake,
+        served_name="qwen",
+        messages=_messages(),
+        specs=[spec],
+        registries=(reg, None),
+        max_iterations=MAX_TOOL_ITERATIONS,
+        fallback_text="no pude completar la tarea",
+    )
+
+    # NO el fallback: la completion forzada produjo una respuesta real.
+    assert text == "Listo, lo anoté en tu memoria."
+    assert finish_reason == "max_iterations"
+    # 5 tool calls ejecutadas en el loop + 1 completion forzada al final = 6 complete().
+    assert len(actions) == MAX_TOOL_ITERATIONS
+    assert len(fake.complete_calls) == MAX_TOOL_ITERATIONS + 1
+    # La completion FORZADA va SIN tools (para que el modelo responda, no tool-callee).
+    assert fake.complete_calls[-1]["tools"] is None
+
+
+@pytest.mark.asyncio
+async def test_guard_max_iteraciones_usa_fallback_si_forzada_vacia() -> None:
+    """Si la completion final forzada TAMBIÉN vuelve vacía, se cae al fallback_text."""
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+
+    tc = _make_tool_call("calendar.create_event", "tc-x")
+    for _i in range(MAX_TOOL_ITERATIONS):
+        fake.queue_result(_make_result(text="", finish_reason="tool_calls", tool_calls=[tc]))
+    # La completion forzada también vuelve vacía -> fallback (sin empeorar el caso previo).
+    fake.queue_result(_make_result(text="", finish_reason="stop"))
+
+    reg, spec = _looping_registry_and_spec()
 
     text, actions, finish_reason = await run_tool_loop(
         llm_client=fake,
@@ -253,11 +300,39 @@ async def test_guard_max_iteraciones_usa_fallback() -> None:
     )
 
     assert text == "no pude completar la tarea"
-    # Guard agotado: finish_reason 'max_iterations' (sentinel honesto, no 'stop')
     assert finish_reason == "max_iterations"
-    # 5 tool calls ejecutadas (una por iteracion)
     assert len(actions) == MAX_TOOL_ITERATIONS
-    assert len(fake.complete_calls) == MAX_TOOL_ITERATIONS
+    assert len(fake.complete_calls) == MAX_TOOL_ITERATIONS + 1
+    assert fake.complete_calls[-1]["tools"] is None
+
+
+@pytest.mark.asyncio
+async def test_guard_max_iteraciones_completion_forzada_propaga_error() -> None:
+    """Si la completion final forzada tira ``LlmError``, propaga al caller.
+
+    No se envuelve en try/except acá (igual que las completions del loop): ``route()``
+    captura la familia ``LlmError`` y degrada. Este test fija que el error NO se traga
+    silenciosamente dentro de ``run_tool_loop``."""
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+
+    tc = _make_tool_call("calendar.create_event", "tc-x")
+    for _i in range(MAX_TOOL_ITERATIONS):
+        fake.queue_result(_make_result(text="", finish_reason="tool_calls", tool_calls=[tc]))
+    # La completion forzada (6ta) falla -> debe propagar.
+    fake.queue_error(LlmTimeoutError("timeout"))
+
+    reg, spec = _looping_registry_and_spec()
+
+    with pytest.raises(LlmTimeoutError):
+        await run_tool_loop(
+            llm_client=fake,
+            served_name="qwen",
+            messages=_messages(),
+            specs=[spec],
+            registries=(reg, None),
+            max_iterations=MAX_TOOL_ITERATIONS,
+            fallback_text="no pude completar la tarea",
+        )
 
 
 @pytest.mark.asyncio
