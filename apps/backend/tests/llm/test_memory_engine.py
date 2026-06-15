@@ -36,6 +36,7 @@ from app.llm.memory_engine import (
     MemoryEngine,
     MemoryOp,
     QwenMemoryEngine,
+    SessionSummary,
     apply_ops,
 )
 from app.llm.schemas import CompletionResult
@@ -115,6 +116,27 @@ async def test_fake_memory_engine_multiple_calls_independent() -> None:
     # Cada llamada devuelve una copia independiente.
     assert r1 == r2
     assert r1 is not r2
+
+
+async def test_fake_memory_engine_summarize_returns_preset() -> None:
+    summary = SessionSummary(summary="El usuario habló de X.", topics={"t": ["X"]})
+    engine = FakeMemoryEngine(ops=[], summary=summary)
+    out = await engine.summarize(transcript="user: hola\nmodel: hola!", mode="vida")
+    assert out == summary
+
+
+async def test_fake_memory_engine_summarize_default_is_empty() -> None:
+    # Sin summary prefijado: SessionSummary vacío (summary="") — el caller no crea episodio.
+    engine = FakeMemoryEngine(ops=[])
+    out = await engine.summarize(transcript="user: hola", mode="estudio")
+    assert out == SessionSummary()
+
+
+async def test_fake_memory_engine_summarize_records_calls() -> None:
+    engine = FakeMemoryEngine(ops=[])
+    await engine.summarize(transcript="t1", mode="vida")
+    assert len(engine.summarize_calls) == 1
+    assert engine.summarize_calls[0] == {"transcript": "t1", "mode": "vida"}
 
 
 # ---------------------------------------------------------------------------

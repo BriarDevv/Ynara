@@ -98,7 +98,7 @@ class SessionSummary:
 
 @runtime_checkable
 class MemoryEngine(Protocol):
-    """Contrato de extraccion de operaciones de memoria a partir de un turno."""
+    """Contrato del motor de memoria: extracción de ops por turno + resumen de sesión."""
 
     async def consolidate(
         self,
@@ -116,6 +116,16 @@ class MemoryEngine(Protocol):
 
         Returns:
             Lista de ``MemoryOp`` a aplicar. Vacia si no hay nada que guardar.
+        """
+        ...
+
+    async def summarize(self, *, transcript: str, mode: str) -> SessionSummary:
+        """Resume un transcript de sesión completo a un ``SessionSummary``.
+
+        Lo usa el worker episódico (``consolidate_session``) al cerrar la sesión.
+        El transcript NO se loguea (regla #4). Ante un fallo del LLM o JSON
+        inválido devuelve un ``SessionSummary`` vacío (``summary=""``) sin
+        propagar: el caller NO crea el episodio cuando el summary es vacío.
         """
         ...
 
@@ -410,11 +420,13 @@ class QwenMemoryEngine:
 
 
 class FakeMemoryEngine:
-    """Implementacion para tests: devuelve ops prefijadas sin llamar al LLM."""
+    """Implementacion para tests: ops + summary prefijados, sin llamar al LLM."""
 
-    def __init__(self, ops: list[MemoryOp]) -> None:
+    def __init__(self, ops: list[MemoryOp], *, summary: SessionSummary | None = None) -> None:
         self._ops = list(ops)
+        self._summary = summary if summary is not None else SessionSummary()
         self.consolidate_calls: list[dict[str, str]] = []
+        self.summarize_calls: list[dict[str, str]] = []
 
     async def consolidate(
         self,
@@ -427,6 +439,10 @@ class FakeMemoryEngine:
             {"user_msg": user_msg, "model_response": model_response, "mode": mode}
         )
         return list(self._ops)
+
+    async def summarize(self, *, transcript: str, mode: str) -> SessionSummary:
+        self.summarize_calls.append({"transcript": transcript, "mode": mode})
+        return self._summary
 
 
 # ---------------------------------------------------------------------------
