@@ -36,26 +36,35 @@ WezTerm, ConEmu).
 - Reset de memoria local (DESTRUCTIVO):
   `make reset-memory`.
 
-## Trabajar con vLLM en local
+## Trabajar con serving real (Ollama / vLLM)
 
 > **Hoy el backend usa `FakeLlmClient` y `FakeEmbeddingClient`** por
-> defecto — no se necesita ningún servidor de inferencia para
-> desarrollar o correr los tests. Apuntar a vLLM/Ollama real es
-> **opcional** y solo aplica cuando el servidor exista.
+> defecto (`LLM_BACKEND=fake`) — no se necesita ningún servidor de
+> inferencia para desarrollar o correr los tests. Apuntar al serving real
+> es **opcional**.
 
-Si querés apuntar a un servidor de inferencia real (vLLM o Ollama),
-configurá las siguientes variables en `apps/backend/.env`:
+El motor de serving local en 16 GB (4080 Super) es **Ollama/GGUF**
+(ADR-014): un solo endpoint (`:11434`) que sirve todos los modelos
+co-residentes. vLLM queda reservado a GPU de **24 GB+** (en 16 GB no
+entran dos LLM por proceso, medido en #207).
+
+Para apuntar al serving real, configurá en `apps/backend/.env`:
 
 ```sh
-# LLM_SERVING (ADR-013): lista de procesos vLLM, cada uno {base_url, models}.
+# LLM_SERVING (ADR-013): lista JSON de endpoints, cada uno {base_url, models}.
 # Los served_name (gemma4/qwen) salen de ynara.config.json[models].
-# Ej. Ollama dev (un endpoint sirve todos los modelos):
+# Default (Ollama, 16 GB): UN endpoint sirve todos los modelos.
 LLM_SERVING=[{"base_url":"http://localhost:11434/v1","models":["gemma4","qwen"]}]
-# Ej. vLLM co-residente (un proceso por modelo, distintos puertos):
+# vLLM (24 GB+): un proceso por modelo, distintos puertos.
 # LLM_SERVING=[{"base_url":"http://localhost:8001/v1","models":["gemma4"]},{"base_url":"http://localhost:8002/v1","models":["qwen"]}]
+
+# Prender el cliente real: REEMPLAZÁ el LLM_BACKEND=fake que trae .env.example
+# por 'vllm' (no agregues una segunda línea). 'vllm' es el nombre legacy del
+# cliente OpenAI-compatible: NO implica vLLM, hoy apunta a Ollama.
+LLM_BACKEND=vllm
 ```
 
-Si usás Ollama como backend:
+Si usás Ollama (default 16 GB):
 
 ```sh
 ollama serve
@@ -63,10 +72,11 @@ ollama pull gemma2:9b-instruct-q5_K_M  # ejemplo, no es el modelo final
 ollama pull qwen2.5:7b-instruct-q5_K_M
 ```
 
-Si tenés GPU NVIDIA y vLLM instalado:
+Si tenés GPU de 24 GB+ y vLLM instalado (3 procesos: gemma :8001 /
+qwen :8002 / bge :8003):
 
 ```sh
-./infra/vllm/start-vllm.sh  # PENDIENTE — infra track aparte
+./infra/vllm/start-vllm.sh
 ```
 
 ## Hot reload

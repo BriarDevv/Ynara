@@ -23,7 +23,8 @@
 | Health del backend | `curl https://api.ynara.app/v1/health` |
 | Logs backend (VPS) | `docker compose logs -f api` |
 | Logs Celery | `docker compose logs -f worker` |
-| Logs vLLM | `journalctl -u vllm-gemma -f` |
+| Logs inferencia (16 GB / Ollama) | logs/health de Ollama en `:11434` (p.ej. `curl http://localhost:11434/api/tags`) |
+| Logs inferencia (24 GB+ / vLLM) | `journalctl -u vllm-gemma -f` (idem `vllm-qwen` / `vllm-bge`) |
 | Estado de la DB | `psql $DATABASE_URL -c "SELECT now();"` |
 | Backup ad-hoc | `pg_dump $DATABASE_URL | gzip > backup-$(date +%F).sql.gz` |
 
@@ -40,13 +41,22 @@
 
 ### Latencia alta en inferencia
 
-> **(PENDIENTE — aplica cuando vLLM esté deployado; hoy el backend
-> usa `FakeLlmClient` y este escenario no aplica en dev/staging.)**
+> **Aplica solo con serving real.** En dev/test el backend usa
+> `FakeLlmClient` (`LLM_BACKEND=fake`) y este escenario no aplica.
+>
+> El motor depende de la GPU: en **16 GB** es **Ollama** (un endpoint
+> `:11434`); el deploy **vLLM** (`journalctl -u vllm-*`) aplica a GPU de
+> **24 GB+**.
 
 1. `nvidia-smi` → ver utilización GPU.
-2. `journalctl -u vllm-qwen -n 200` y `journalctl -u vllm-gemma -n 200`.
-3. Si VRAM saturada: bajar batch size o reiniciar un modelo (con
-   degradación temporal del modo afectado).
+2. Según el motor:
+   - **Ollama (16 GB):** revisar los logs/health de Ollama (`:11434`); si se
+     instaló con el installer oficial de Ollama (que crea su propia unit),
+     `journalctl -u ollama -n 200` (el repo no maneja esa unit).
+   - **vLLM (24 GB+):** `journalctl -u vllm-qwen -n 200` y
+     `journalctl -u vllm-gemma -n 200`.
+3. Si VRAM saturada: bajar batch size / `--max-model-len` o reiniciar un
+   modelo (con degradación temporal del modo afectado).
 
 ### Worker Celery atascado
 
