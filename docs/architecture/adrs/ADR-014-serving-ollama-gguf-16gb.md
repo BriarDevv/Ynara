@@ -86,8 +86,12 @@ La regla práctica: en 16 GB, vLLM tolera **un** LLM grande (+ bge), no dos.
 El agente (Qwen) hace tool-calling vía la API de Ollama (ya es lo que usa el
 smoke de dev). Los `--tool-call-parser` de ADR-009 D2 (`hermes`/`gemma4`) son
 flags de vLLM; en Ollama el template del modelo aplica internamente. El control
-de thinking de ADR-012 D4 / #205 se mapea en Ollama a `think: false`
-(conversacional) — el cliente ya lo contempla.
+de thinking de ADR-012 D4 / #205 se mapea en el endpoint OpenAI-compatible de
+Ollama a **`reasoning_effort`** (`"none"` = OFF, `"medium"`/`"high"` = ON), NO al
+`think` top-level de la API nativa: el endpoint OpenAI-compat de Ollama ignora
+`chat_template_kwargs` (verificado contra Ollama real). El cliente emite **ambos**
+params —`reasoning_effort` (lo honra Ollama y también vLLM) + `chat_template_kwargs`
+(vLLM sin reasoning-parser)— para funcionar en los dos motores.
 
 ### D5 — Cuantización
 
