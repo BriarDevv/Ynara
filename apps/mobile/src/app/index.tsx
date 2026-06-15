@@ -1,10 +1,10 @@
 import { Redirect } from "expo-router";
-import { ModePicker } from "@/features/chat/ModePicker";
+import { ChatHome } from "@/features/chat/ChatHome";
 import { useUserStore } from "@/stores/user";
 
 // Entrada de la app: sin onboarding completo → flujo de onboarding; ya
-// onboardeado → selector de modo del chat (no hay home mobile todavía;
-// FRONTEND-CHAT-PLAN.md M4 la deja como follow-up).
+// onboardeado → home del chat (conversaciones recientes + empezar una nueva).
+// No hay home mobile general todavía (FRONTEND-CHAT-PLAN M4).
 export default function Index() {
   const onboardingCompleted = useUserStore((s) => s.onboardingCompleted);
 
@@ -12,5 +12,5 @@ export default function Index() {
     return <Redirect href="/onboarding" />;
   }
 
-  return <ModePicker />;
+  return <ChatHome />;
 }

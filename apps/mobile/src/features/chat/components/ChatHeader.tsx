@@ -13,11 +13,11 @@ export function ChatHeader({ mode }: { mode: Mode }) {
     <View className="flex-row items-center justify-between border-b border-border px-4 py-3">
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Volver a los modos"
+        accessibilityLabel="Volver"
         onPress={() => router.back()}
         hitSlop={8}
       >
-        <Text className="text-body text-ink-soft">‹ Modos</Text>
+        <Text className="text-body text-ink-soft">‹ Atrás</Text>
       </Pressable>
       <ModeChip mode={mode} />
     </View>
