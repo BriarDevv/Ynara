@@ -48,6 +48,11 @@ from app.llm.schemas import (
 _CHAT_PATH = "/chat/completions"
 _MODELS_PATH = "/models"
 
+# Esfuerzo de razonamiento para thinking=True (param OpenAI-standard
+# ``reasoning_effort``). "none" desactiva el thinking; "medium" es un default
+# balanceado para el rol agente. Tuneable a "low"/"high"/"max" si hiciera falta.
+_THINKING_ON_EFFORT = "medium"
+
 # Firmas de overflow de contexto en el body de un 400 de vLLM. vLLM (y el
 # server OpenAI-compatible) devuelven un 400 plano cuando el prompt + la
 # generacion exceden la ventana; el body trae una de estas frases. Se matchea
@@ -232,13 +237,19 @@ class VllmClient:
         if tools:
             payload["tools"] = [self._encode_tool(t) for t in tools]
             payload["tool_choice"] = "auto"
-        # Control del modo de razonamiento por request (ADR-012 D4). vLLM acepta
-        # ``chat_template_kwargs.enable_thinking`` en el body; el valor request-level
-        # pisa el default del server. Solo se emite si el caller decide (True/False);
-        # con ``None`` la clave NO se agrega y se preserva el default del server (y
-        # asi el comportamiento previo exacto). Regla #4 intacta: esto solo gobierna
-        # el modo de razonamiento on-prem, no envia datos crudos a externos.
+        # Control del modo de razonamiento por request (ADR-012 D4). Solo se emite
+        # si el caller decide (True/False); con ``None`` no se agrega nada y se
+        # preserva el default del server (comportamiento previo exacto). Se emiten
+        # DOS params por compatibilidad de motor (ADR-014: 16GB=Ollama, 24GB+=vLLM):
+        #  - ``reasoning_effort`` (OpenAI-standard): el UNICO que honra el endpoint
+        #    OpenAI-compatible de Ollama ("none"=OFF, "medium"=ON); vLLM tambien lo
+        #    soporta. Verificado contra Ollama real: ignora chat_template_kwargs y
+        #    suprime el thinking solo con reasoning_effort.
+        #  - ``chat_template_kwargs.enable_thinking`` (vLLM-native): cubre vLLM sin
+        #    reasoning-parser, donde el flag va directo al chat template.
+        # Regla #4 intacta: esto solo gobierna el modo de razonamiento on-prem.
         if thinking is not None:
+            payload["reasoning_effort"] = _THINKING_ON_EFFORT if thinking else "none"
             payload["chat_template_kwargs"] = {"enable_thinking": thinking}
         return payload
 

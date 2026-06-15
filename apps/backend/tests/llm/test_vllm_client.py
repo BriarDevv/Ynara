@@ -133,7 +133,9 @@ async def test_complete_propagates_tool_parsing_error() -> None:
         await client.complete(model=_MODEL, messages=_messages())
 
 
-# ---------- thinking por rol -> chat_template_kwargs (ADR-012 D4, #205) ----------
+# ---------- thinking por rol: reasoning_effort + chat_template_kwargs (#205) ----------
+# reasoning_effort es el param que honra Ollama (motor 16GB, ADR-014); chat_template_kwargs
+# cubre vLLM. Se emiten ambos; verificado contra Ollama real.
 
 
 @pytest.mark.asyncio
@@ -152,6 +154,8 @@ async def test_complete_thinking_false_sets_enable_thinking_false() -> None:
     client = _client(handler)
     await client.complete(model=_MODEL, messages=_messages(), thinking=False)
     assert captured["payload"]["chat_template_kwargs"]["enable_thinking"] is False
+    # reasoning_effort: el param que honra Ollama (none = thinking OFF)
+    assert captured["payload"]["reasoning_effort"] == "none"
 
 
 @pytest.mark.asyncio
@@ -170,6 +174,8 @@ async def test_complete_thinking_true_sets_enable_thinking_true() -> None:
     client = _client(handler)
     await client.complete(model=_MODEL, messages=_messages(), thinking=True)
     assert captured["payload"]["chat_template_kwargs"]["enable_thinking"] is True
+    # reasoning_effort: el param que honra Ollama (medium = thinking ON)
+    assert captured["payload"]["reasoning_effort"] == "medium"
 
 
 @pytest.mark.asyncio
@@ -188,6 +194,7 @@ async def test_complete_thinking_none_omits_chat_template_kwargs() -> None:
     client = _client(handler)
     await client.complete(model=_MODEL, messages=_messages())
     assert "chat_template_kwargs" not in captured["payload"]
+    assert "reasoning_effort" not in captured["payload"]
 
 
 @pytest.mark.asyncio
@@ -209,6 +216,8 @@ async def test_stream_thinking_false_sets_enable_thinking_false() -> None:
     async for _ in client.stream(model=_MODEL, messages=_messages(), thinking=False):
         pass
     assert captured["payload"]["chat_template_kwargs"]["enable_thinking"] is False
+    # reasoning_effort: el param que honra Ollama (none = thinking OFF)
+    assert captured["payload"]["reasoning_effort"] == "none"
 
 
 @pytest.mark.asyncio
@@ -232,6 +241,8 @@ async def test_stream_thinking_true_sets_enable_thinking_true() -> None:
     async for _ in client.stream(model=_MODEL, messages=_messages(), thinking=True):
         pass
     assert captured["payload"]["chat_template_kwargs"]["enable_thinking"] is True
+    # reasoning_effort: el param que honra Ollama (medium = thinking ON)
+    assert captured["payload"]["reasoning_effort"] == "medium"
 
 
 @pytest.mark.asyncio
@@ -254,6 +265,7 @@ async def test_stream_thinking_none_omits_chat_template_kwargs() -> None:
     async for _ in client.stream(model=_MODEL, messages=_messages()):
         pass
     assert "chat_template_kwargs" not in captured["payload"]
+    assert "reasoning_effort" not in captured["payload"]
 
 
 # ---------- timeout configurable (#27) ----------
