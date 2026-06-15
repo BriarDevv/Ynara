@@ -192,6 +192,11 @@ class MemoryUpdateTool:
 
     Re-embeddea + re-cifra el hecho. Si el ``id`` no existe o pertenece a otro
     usuario, devuelve ``tool_error('not_found', ...)``.
+
+    El resultado se proyecta con ``_project_memory_result`` (igual que
+    ``memory.search``): solo ``{id, content, importance}``, omitiendo
+    ``user_id``, ``source_session_id`` y timestamps — el modelo NUNCA ve UUIDs
+    internos ni metadata de provenance (regla #4).
     """
 
     name = f"{_NAMESPACE}.update"
@@ -219,7 +224,10 @@ class MemoryUpdateTool:
         result = await self._store.update(memory_id, validated.content)
         if result is None:
             return tool_error("not_found", f"memoria '{validated.id}' no encontrada")
-        return result.model_dump(mode="json")
+        # Proyectar (igual que memory.search): el modelo NUNCA ve user_id,
+        # source_session_id ni timestamps (regla #4). Antes esto devolvia el
+        # model_dump completo y filtraba esa metadata interna al LLM.
+        return _project_memory_result(result)
 
 
 class MemoryDeleteTool:
