@@ -364,3 +364,7 @@ def downgrade() -> None:
     op.execute("DROP TYPE IF EXISTS memory_layer_enum")
     op.execute("DROP TYPE IF EXISTS mode_enum")
     op.execute("DROP EXTENSION IF EXISTS vector")
+    # pgcrypto se instala en upgrade(); dropearlo cierra el round-trip simetrico
+    # (auditoria backend). IF EXISTS = inocuo si ya no estaba; en Supabase/PG15+
+    # gen_random_uuid() vive en core, asi que dropearlo no rompe nada operativo.
+    op.execute('DROP EXTENSION IF EXISTS "pgcrypto"')
