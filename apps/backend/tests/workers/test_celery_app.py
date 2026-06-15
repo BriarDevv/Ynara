@@ -22,6 +22,7 @@ import subprocess
 import sys
 import textwrap
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 
@@ -34,6 +35,11 @@ from app.workers.celery_app import celery_app
 from app.workflows.audit_retention import purge_audit_log
 from app.workflows.consolidation import consolidate_session, consolidate_turn
 from app.workflows.decay import decay_procedural
+
+# Raíz del proyecto (apps/backend) para los subprocesos: garantiza que el
+# ``from app...`` del script tenga el paquete en el sys.path aunque pytest se
+# invoque desde otro cwd. test_celery_app.py vive en apps/backend/tests/workers/.
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 class TestReliabilityPolicy:
@@ -112,6 +118,56 @@ class TestBeatScheduleConsistency:
         entry = celery_app.conf.beat_schedule["decay-procedural-every-interval"]
         assert isinstance(entry["schedule"], timedelta)
         assert entry["schedule"].days >= 1
+
+
+class TestAutodiscoveryRegistersTasks:
+    """El autodiscovery del worker registra TODAS las tasks de ``app.workflows``.
+
+    Regresión: ``celery_app.autodiscover_tasks(packages=["app.workflows"])`` con el
+    ``related_name`` default ("tasks") busca un módulo ``app.workflows.tasks`` que NO
+    existe (las tasks viven en ``consolidation``/``decay``/``audit_retention``), y el
+    ``__init__`` del paquete no las importaba -> el worker arrancaba con el registro
+    vacío y rechazaba cada task encolada con ``Received unregistered task
+    'workflows.consolidate_turn'`` (KeyError). El registro de Celery es global y sticky
+    al proceso, así que este test corre en un SUBPROCESO limpio (igual que
+    ``test_import_does_not_crash_...``): de lo contrario los imports de tasks al tope de
+    este archivo enmascararían el bug.
+    """
+
+    def test_worker_autodiscovery_registers_all_workflow_tasks(self) -> None:
+        """Un proceso fresco que dispara el autodiscovery tiene las 4 tasks registradas."""
+        script = textwrap.dedent(
+            """
+            from app.workers.celery_app import celery_app
+
+            # Reproduce el bootstrap del worker: el autodiscovery importa el paquete
+            # app.workflows (find_related_module hace import_module('app.workflows')).
+            # Con el fix, su __init__ importa los modulos de tasks -> se registran.
+            celery_app.autodiscover_tasks(packages=["app.workflows"], force=True)
+
+            required = {
+                "workflows.consolidate_turn",
+                "workflows.consolidate_session",
+                "workflows.decay_procedural",
+                "workflows.purge_audit_log",
+            }
+            missing = required - set(celery_app.tasks)
+            assert not missing, sorted(missing)
+            print("OK", len(required))
+            """
+        )
+        result = subprocess.run(  # noqa: S603 -- input fijo: sys.executable + script hardcodeado, sin data externa
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=_BACKEND_ROOT,
+        )
+        assert result.returncode == 0, (
+            "el autodiscovery NO registro las tasks de workflows "
+            f"(stdout={result.stdout!r} stderr={result.stderr!r})"
+        )
+        assert "OK 4" in result.stdout
 
 
 class TestDecayIntervalImportTimeFallback:
