@@ -260,6 +260,28 @@ class VllmClient:
             encoded["tool_call_id"] = message.tool_call_id
         if message.name is not None:
             encoded["name"] = message.name
+        # Re-serializar las tool_calls del assistant al wire OpenAI (multi-turno con
+        # tool): sin esto el server (Ollama en 16GB / vLLM en 24GB+, ADR-014) recibe un
+        # assistant con ``content:null`` y SIN tool_calls -> 400 ("invalid message
+        # content type: <nil>"), el tool loop nunca cierra y el turno DEGRADA (con la
+        # consolidacion de memoria sin correr, porque un turno degradado no encola). El
+        # ``arguments`` viaja como JSON string (formato wire OpenAI), a diferencia del
+        # ``ToolCall.arguments`` de dominio que ya viene parseado a dict. Truthy check (no
+        # ``is not None``) a proposito: una lista vacia ``[]`` NO debe emitir
+        # ``"tool_calls": []`` (un assistant con ``content:null`` + tool_calls vacio seria
+        # tan invalido como sin la clave); solo se serializa si hay calls reales.
+        if message.tool_calls:
+            encoded["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.name,
+                        "arguments": json.dumps(tc.arguments, ensure_ascii=False),
+                    },
+                }
+                for tc in message.tool_calls
+            ]
         return encoded
 
     @staticmethod
