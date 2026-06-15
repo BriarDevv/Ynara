@@ -46,12 +46,25 @@ Detalle de tablas en `apps/backend/docs/MODELS.md`.
 
 El usuario puede:
 
-- **Ver toda su memoria.** Endpoint `GET /v1/memory` (filtrable por
-  capa).
-- **Editar entradas individuales.** `PATCH /v1/memory/{id}`.
-- **Borrar entradas individuales.** `DELETE /v1/memory/{id}`.
-- **Borrar todo.** `GET /v1/memory/wipe` (preview/dry-run por capa) +
-  `POST /v1/memory/wipe` (execute con `confirm` per-layer). Ya disponible.
+- **Ver toda su memoria.** `GET /v1/memory` es paginado (`limit` ∈
+  `[1, 100]`, default 50; `offset` ≥ 0) y devuelve `items` + `total` por
+  rama. Sin `?layer=` responde **agrupado** por las 3 capas
+  (`MemoryGroupedResponse`); con `?layer=<capa>` devuelve solo la página
+  de esa capa.
+- **Editar entradas individuales.** `PATCH /v1/memory/{layer}/{ref}`
+  (`ref` = UUID para semantic, `key` para procedural). La capa
+  `episodic` **no se edita**: `PATCH` sobre episódica devuelve **405**
+  (el resumen lo genera el worker de consolidación; se borra o se
+  regenera, no se reescribe a mano).
+- **Borrar entradas individuales.** `DELETE /v1/memory/{layer}/{ref}`
+  (`ref` = UUID para semantic/episodic, `key` para procedural) → **204**
+  sin body.
+- **Borrar todo.** `POST /v1/memory/wipe?dry_run=true` (preview read-only:
+  cuenta las 3 capas, no muta) + `POST /v1/memory/wipe` (execute
+  destructivo con `confirm` per-layer; **409** si los conteos no matchean
+  el estado actual, **422** si falta el confirm). **No existe** un
+  `GET /v1/memory/wipe`: el preview vive en el POST a propósito, para que
+  ningún prefetch o crawler toque la superficie destructiva.
   Script equivalente: `scripts/reset-memory.sh`.
 - **Pausar.** Activar modo "no escribas memoria" temporalmente.
   *(pendiente — endpoint `PATCH /v1/memory/settings` no implementado aún.)*
@@ -67,7 +80,12 @@ Cada operación sobre memoria queda registrada:
 - Origen: modelo (qwen/gemma) + modo activo + tool si aplica.
 - Hash de la entrada afectada.
 
-Retención del audit log: 24 meses.
+Retención del audit log: 24 meses, **enforced**. La purga la corre el
+worker Celery `purge_audit_log` (`app/workflows/audit_retention.py`,
+`AUDIT_RETENTION_DAYS = 730`), agendado mensualmente en el beat schedule
+(`purge-audit-log-monthly` en `app/workers/celery_app.py`): borra las
+filas de `audit_log` con `created_at` anterior al cutoff. El umbral vive
+en el worker (no en `ynara.config.json`).
 
 ## Borrado físico vs lógico
 
