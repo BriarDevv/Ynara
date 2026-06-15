@@ -65,9 +65,9 @@ class EpisodicMemoryCreate(YnaraBaseModel):
     ``is_sensitive`` se infiere del modo de la sesión (true para
     Bienestar).
 
-    Validación cross-field: si ``is_sensitive=True``, ``retention_days``
-    queda capeado a 365 (ver ADR-007 D2 — máximo 12 meses para
-    entradas sensibles). Espejo de la CHECK constraint
+    Validación cross-field: si ``is_sensitive=True`` y ``retention_days``
+    excede 365, se rechaza con ``ValidationError`` (ver ADR-007 D2 — máximo
+    12 meses para entradas sensibles). Espejo de la CHECK constraint
     ``retention_days_sensitive_cap`` en ``app/models/memory.py``.
     """
 

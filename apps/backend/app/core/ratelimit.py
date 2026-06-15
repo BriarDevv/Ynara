@@ -28,9 +28,12 @@ Decisiones de seguridad (NO re-litigar):
   ``True`` (permitir) y ``register_*`` no rompe. Volvemos al baseline pre-#63
   (login sin freno) en vez de auto-DoSearnos.
 
-Caveat documentado (TODO): ``ip`` es ``request.client.host``; detrás de un
-reverse-proxy puede ser la IP del proxy. El fix real (parsear ``X-Forwarded-For``
-con allowlist de proxies confiables) se difiere.
+Resolución de IP real (issue #151): ``ip`` ya NO es el ``request.client.host``
+crudo. ``resolve_client_ip`` lee la IP real del header ``REAL_IP_HEADER`` (p.ej.
+``CF-Connecting-IP``) SOLO cuando el peer inmediato está en la allowlist
+``trusted_proxy_ips`` (IPs/CIDRs de proxies confiables); si el peer no es de
+confianza se usa el peer host (sin tocar el header, anti-spoof). Default: la
+allowlist vacía => siempre el peer host (cero riesgo), igual que antes de #151.
 """
 
 from __future__ import annotations

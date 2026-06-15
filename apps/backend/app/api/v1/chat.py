@@ -15,13 +15,15 @@ Decisiones de diseno M9 (criticadas adversarialmente, NO re-litigar):
     sesion no se persiste. NO se commitea antes de ``route()``.
 
 (2) Sin historial multi-turno. ``route()`` arma ``messages`` desde cero (system
-    + user actual) en cada request; ningun turno se persiste todavia. El
-    ``sessions.id`` es solo el ancla (FK futura para episodica /
-    ``source_session_id``); M9 lo expone honesto sin sobre-vender memoria de
-    conversacion. M10 Ola 0: el enqueue de consolidacion ocurre DESPUES del
-    ``commit`` (ver ``_run_chat_turn``), asi que cuando M10 escriba una FK a
-    ``sessions.id`` la fila ya esta persistida cuando el worker procesa el turno
-    (sin race con el commit ni ``ForeignKeyViolation`` bajo carga).
+    + user actual) en cada request: "sin historial multi-turno" significa que
+    ``route()`` NO usa turnos previos como contexto, NO que no se persistan. Los
+    turnos SI se persisten (USER + MODEL via ``ConversationTurnStore`` en el step
+    3.5 de ``_run_chat_turn``, issue #209), como fuente que el worker episodico
+    (``consolidate_session``) lee al cerrar la sesion. El ``sessions.id`` es el
+    ancla (FK de los turnos y de la episodica / ``source_session_id``). M10 Ola 0:
+    el enqueue de consolidacion ocurre DESPUES del ``commit`` (ver
+    ``_run_chat_turn``), asi que la fila ya esta persistida cuando el worker
+    procesa el turno (sin race con el commit ni ``ForeignKeyViolation`` bajo carga).
 
 (3) Aislamiento por usuario. El ``user_id`` sale del JWT (``CurrentUser``); una
     ``ChatSession`` de otro usuario o inexistente da 404 (sin oraculo de
@@ -152,9 +154,12 @@ async def _run_chat_turn(
     heredan el enqueue. Misma condicion que tenia ``route()`` (``writes_memory``
     + turno no-degradado); mismos kwargs.
 
-    M9 NO entrega multi-turno: ``route()`` arma ``messages`` desde cero (system
-    + user actual) en cada llamada; ningun turno se persiste. El ``session_id``
-    es solo el ancla de la ``ChatSession`` (FK futura), no historial vivo.
+    Sin historial multi-turno: ``route()`` arma ``messages`` desde cero (system
+    + user actual) en cada llamada y NO usa turnos previos como contexto. Eso NO
+    significa que no se persistan: los 2 turnos (USER + MODEL) SI se guardan en el
+    step 3.5 via ``ConversationTurnStore`` (issue #209), en la misma transaccion
+    que la ``ChatSession``. El ``session_id`` es el ancla (FK de los turnos), no
+    historial vivo que el router reinyecte.
 
     Returns:
         Tupla ``(chat_session, resp)``: la ``ChatSession`` persistida (su

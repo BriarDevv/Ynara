@@ -1,4 +1,4 @@
-"""Carga y validacion de la config de runtime del LLM (ADR-009 D4).
+"""Carga y validacion de la config de runtime del LLM (ADR-013).
 
 Fusiona dos fuentes en un unico objeto inmutable:
 
@@ -6,7 +6,8 @@ Fusiona dos fuentes en un unico objeto inmutable:
   ``served_name``), ``modes`` y el bloque ``llm.serving`` (parsers,
   quantization, ``max_model_len``, timeouts).
 - ``Settings`` (``.env``) — valores por entorno: la lista ``LLM_SERVING``
-  con cada proceso vLLM (su base_url y los served_names que sirve, ADR-013).
+  con cada proceso de serving (vLLM o Ollama; su base_url y los served_names
+  que sirve, ADR-013).
 
 ``load_llm_config()`` es fail-fast: levanta ``LlmConfigError`` con un
 mensaje claro si la config es incoherente (modo que apunta a un modelo
@@ -39,8 +40,9 @@ class LlmConfigError(RuntimeError):
 class ServingConfig(BaseModel):
     """Bloque ``llm.serving`` de ``ynara.config.json``.
 
-    Valores provisionales hasta medir VRAM real en la 4080 Super
-    (ADR-009 D3). El schema los admite tal cual vienen del JSON.
+    Perfil de serving para vLLM/24GB+ (ADR-014 D5); en Ollama estos campos se
+    validan pero no se pasan al servidor (Ollama maneja quantization/kv-cache
+    internamente). El schema los admite tal cual vienen del JSON.
     """
 
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
@@ -56,7 +58,8 @@ class ModelConfig(BaseModel):
     """Un modelo de ``ynara.config.json[models][<key>]``.
 
     ``key`` es la clave del dict (p.ej. ``qwen-3.5-9b``); ``served_name``
-    es el ``--served-model-name`` que publica el proceso vLLM.
+    es el alias del modelo publicado por Ollama (o el ``--served-model-name``
+    en vLLM/24GB+).
     """
 
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
@@ -195,7 +198,9 @@ def _validate_coherence(
     # ADR-013: validar la lista LLM_SERVING (fail-fast: un .env mal armado no
     # debe bootear con ruteo roto o un httpx.AsyncClient huerfano).
     if not serving_endpoints:
-        raise LlmConfigError("LLM_SERVING está vacío: declarar al menos un proceso vLLM")
+        raise LlmConfigError(
+            "LLM_SERVING está vacío: declarar al menos un proceso de serving (vLLM o Ollama)"
+        )
     served_names = {model.served_name for model in models.values()}
     seen_base_urls: set[str] = set()
     for entry in serving_endpoints:

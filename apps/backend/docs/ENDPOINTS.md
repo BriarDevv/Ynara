@@ -293,8 +293,11 @@ una inexistente (sin oráculo de existencia ajena). Todas las read surfaces son
   - Response 404: sesión inexistente **o** de otro usuario — **mismo** 404 (status +
     `detail: "sesion no encontrada"`), **sin oráculo** de existencia ajena
     (aislamiento por `user_id` del JWT, igual que `resolve_chat_session`).
-  - Solo setea `ended_at`: **no** toca memoria, **no** encola consolidación (la
-    consolidación episódica es M10 Ola 4).
+  - Solo setea `ended_at`: **no** toca memoria. En el **primer cierre real**
+    (la sesión todavía no estaba cerrada), tras el commit encola
+    `consolidate_session.delay()` (consolidación episódica) best-effort
+    fail-open: si el broker está caído el close devuelve 200 igual. Un segundo
+    cierre (idempotente) **no** re-encola.
 - Response 401 (todas las rutas): sin token / token inválido (`get_current_user`).
 - Response 429 (todas las rutas): supera el rate-limit por `user_id` —
   `detail: "demasiados intentos, intente mas tarde"` (neutro) + header

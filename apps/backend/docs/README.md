@@ -16,7 +16,7 @@ correspondiente.
 Estos catálogos son el **qué**; el **cómo** vive en otro lado:
 
 - Mapa del código, capa LLM (`app/llm/`) y gates: [`../AGENTS.md`](../AGENTS.md).
-- Decisiones: [ADRs](../../../docs/architecture/adrs/) — ADR-002 (dual stack Gemma/Qwen), ADR-005 (Supabase MVP), ADR-009 (serving vLLM + parsers).
+- Decisiones: [ADRs](../../../docs/architecture/adrs/) — ADR-002 (dual stack Gemma/Qwen), ADR-005 (Supabase MVP), ADR-009 (serving vLLM + parsers), ADR-013 (LLM_SERVING reemplaza LLM_TOPOLOGY), ADR-014 (motor local 16GB Ollama/GGUF vs vLLM 24GB+).
 - Plan de la capa de inferencia: [`LLM-INFERENCE-INTEGRATION.md`](../../../docs/planning/LLM-INFERENCE-INTEGRATION.md).
 
 ## Regla

@@ -68,11 +68,16 @@ def context_budget(*, max_model_len: int, system_prompt: str) -> int:
     estimacion del system prompt base (``estimate_tokens``) y el
     ``COMPLETION_RESERVE_TOKENS`` (tokens reservados para la generacion). El
     resultado nunca es negativo: en el peor caso (prompt enorme + ventana chica,
-    p.ej. Gemma 4096) devuelve 0. Con budget 0, ``render_context_block`` igual
-    incluye un PISO MINIMO de las entradas mas relevantes (hasta ~3 semantic + 1
-    episodic + 5 procedural, ~200 tokens): el ``COMPLETION_RESERVE_TOKENS``
-    garantiza espacio para ese piso aun en Gemma 4096, asi que el piso nunca
-    provoca overflow real.
+    p.ej. Gemma 4096) devuelve 0.
+
+    Aun con budget 0, ``render_context_block`` NO recorta a cero: su recorte vive
+    en ``_truncate_to_budget``, cuyos ``while`` solo bajan hasta un limite INFERIOR
+    fijo por capa (episodic > 1, semantic > 3, procedural > 5). Ese limite inferior
+    es el "piso" — un efecto colateral del rango de los loops, NO una garantia
+    activa que el budget reserve. Es decir: con budget 0 igual quedan ~1 episodic +
+    3 semantic + 5 procedural porque los loops no recortan por debajo de eso, no
+    porque la formula deje ese espacio. El ``COMPLETION_RESERVE_TOKENS`` solo cubre
+    la generacion; el piso del recorte es independiente.
 
     La estimacion de tokens es ``estimate_tokens`` (``len // 3``), consistente
     con el truncado de ``render_context_block``.

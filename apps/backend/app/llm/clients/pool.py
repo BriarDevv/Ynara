@@ -1,9 +1,9 @@
 """Pool de clientes LLM y estrategia de ruteo (M3).
 
-El ``ClientPool`` agrupa varios ``LLMClient`` (uno por proceso vLLM,
-ADR-009 D1) y resuelve a que instancia mandar una request segun el campo
-``model``. La ``RoutingStrategy`` decide cual candidato elegir cuando hay
-mas de uno que sirve el modelo.
+El ``ClientPool`` agrupa varios ``LLMClient`` (uno por proceso de inferencia
+— Ollama en 16GB / vLLM en 24GB+, ADR-014) y resuelve a que instancia mandar
+una request segun el campo ``model``. La ``RoutingStrategy`` decide cual
+candidato elegir cuando hay mas de uno que sirve el modelo.
 
 Hoy la unica estrategia es ``FirstHealthy`` (toma el primero): alcanza
 para 1-2 procesos. El gancho de escalado (ADR-009, plan §4) es
@@ -95,9 +95,10 @@ def build_pool(
     """Arma el ``ClientPool`` desde ``config.serving_endpoints`` (ADR-013).
 
     La lista ``LLM_SERVING`` describe la topologia: cada entrada es un proceso
-    vLLM (un ``base_url`` + los served_names que sirve). Ya no hay enum: N
-    entradas = N procesos; varias entradas con el mismo served_name = N
-    instancias del mismo modelo (escalado, ADR-009 §4).
+    de inferencia (Ollama en 16GB / vLLM en 24GB+, ADR-014) — un ``base_url`` +
+    los served_names que sirve. Ya no hay enum: N entradas = N procesos; varias
+    entradas con el mismo served_name = N instancias del mismo modelo (escalado,
+    ADR-009 §4).
 
     Los clientes ya vienen construidos en ``clients_by_base_url`` (keyed por
     base_url); este helper solo los ordena segun la lista. El orden importa: es

@@ -12,9 +12,10 @@ registry (``registry.py``) envuelve cualquier excepcion que se escape de un
 ``execute`` para que el modelo jamas vea un traceback.
 
 ``to_spec`` arma el ``ToolSpec`` (de ``schemas.py``) en el formato OpenAI
-que el cliente vLLM espera: ``{"type": "function", "function": {...}}`` vive
-en la capa de serializacion del cliente; aca ``ToolSpec`` guarda
-``name`` / ``description`` / ``parameters`` planos y el cliente los envuelve.
+que el cliente LLM (OpenAI-compatible) espera: ``{"type": "function",
+"function": {...}}`` vive en la capa de serializacion del cliente; aca
+``ToolSpec`` guarda ``name`` / ``description`` / ``parameters`` planos y el
+cliente los envuelve.
 """
 
 from __future__ import annotations
@@ -95,8 +96,8 @@ class Tool(Protocol):
 def to_spec(tool: Tool) -> ToolSpec:
     """Arma el ``ToolSpec`` neutro de una tool.
 
-    El cliente vLLM se encarga de envolverlo en el wire OpenAI
-    (``{"type": "function", "function": {...}}``); aca solo aplanamos la
+    El cliente LLM (OpenAI-compatible) se encarga de envolverlo en el wire
+    OpenAI (``{"type": "function", "function": {...}}``); aca solo aplanamos la
     identidad + el JSON Schema.
     """
     return ToolSpec(

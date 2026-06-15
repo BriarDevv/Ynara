@@ -6,6 +6,16 @@ Aceptado
 ## Fecha
 2026-05-19
 
+> **NOTA DE ACTUALIZACIÓN (post-aceptación):** la cadencia del worker de decay
+> se corrigió de **"diaria"** a **por-intervalo**: el worker decae las entradas
+> no reforzadas en el último `DECAY_INTERVAL_DAYS` (default 14 días), NO todos
+> los días. Sin una columna de tracking, una corrida diaria con `confidence *=
+> 0.9` compondría el decay día a día (≈0.9^días) en vez de aplicarlo una vez por
+> intervalo. La cadencia por-intervalo es la única forma correcta sin compounding;
+> justificación completa en `apps/backend/app/workflows/decay.py`. El cuerpo
+> histórico de abajo (D1, "worker Celery diario", "Beat de Celery diario") se
+> conserva tal cual fue aceptado.
+
 ## Contexto
 
 [`docs/product/MEMORY.md`](../../product/MEMORY.md) sección "Open questions" declaraba tres decisiones operacionales pendientes que afectan el schema de las tablas sagradas (`semantic_memory`, `episodic_memory`, `procedural_memory`) y el flujo de lectura/escritura:

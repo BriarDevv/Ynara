@@ -65,6 +65,12 @@ _DEFAULT_DEGRADED_TEXT = "Estoy con un problema tecnico, proba en un ratito."
 # Al vencerse el budget se corta limpio y se devuelve la respuesta degradada
 # (mismo contrato que agotar la cadena), dando ademas un punto de cancelacion
 # async cooperativo. Es una cota defensiva, no el camino feliz.
+#
+# Relacion con ``request_timeout_s`` (ynara.config.json[llm.serving] = 120s, el
+# timeout POR request individual): este tope (90s) es deliberadamente MENOR que
+# un solo request timeout. Asi la cota global de la cadena corta ANTES de que
+# siquiera el primer request llegue a su propio timeout de 120s, garantizando un
+# techo de latencia agregada por debajo del peor caso de un request aislado.
 _DEFAULT_TOTAL_BUDGET_S: float = 90.0
 
 

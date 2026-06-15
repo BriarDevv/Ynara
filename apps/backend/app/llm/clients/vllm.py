@@ -1,9 +1,11 @@
-"""Cliente HTTP contra un proceso vLLM OpenAI-compatible (M2).
+"""Cliente HTTP contra un endpoint OpenAI-compatible (vLLM o Ollama,
+ADR-014 D1/D2). En 16GB apunta a Ollama; en 24GB+ a vLLM.
 
 ``VllmClient`` habla el endpoint ``/v1/chat/completions`` de un unico
-proceso vLLM (un modelo por proceso, ADR-009 D1). Recibe el
-``httpx.AsyncClient`` por constructor, asi que es testeable con
-``httpx.MockTransport`` sin red real. Nunca importa FastAPI ni vLLM.
+proceso de serving (un modelo por proceso vLLM, ADR-009 D1; Ollama puede
+servir varios modelos por endpoint). Recibe el ``httpx.AsyncClient`` por
+constructor, asi que es testeable con ``httpx.MockTransport`` sin red real.
+Nunca importa FastAPI ni vLLM.
 
 Mapeo de errores HTTP a la taxonomia (``app/llm/errors.py``):
 
