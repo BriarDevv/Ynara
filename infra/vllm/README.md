@@ -1,8 +1,16 @@
 # infra/vllm/
 
-Scripts para levantar el stack de inferencia de Ynara con vLLM en la
-máquina con RTX 4080 Super 16GB: **Gemma 4 12B** (conversacional),
-**Qwen 3.5-9B** (agente) y **bge-m3** (embeddings), co-residentes.
+> **⚠️ En 16 GB el serving local NO usa vLLM (ADR-014 / #207).** Medido: bajo
+> vLLM no entran dos LLM en la 4080 16 GB (Gemma 12B sola = ~11,6 GiB reales por
+> el overhead por-proceso). El serving local de 16 GB usa **Ollama/GGUF**
+> (12B+9B+bge = 14,55 GiB; ver
+> [ADR-014](../../docs/architecture/adrs/ADR-014-serving-ollama-gguf-16gb.md)).
+> Este directorio es la ruta vLLM para **GPU de 24 GB+**, con los checkpoints
+> AWQ confirmados en #207.
+
+Scripts para levantar el stack de inferencia de Ynara con vLLM en GPU de
+**24 GB+**: **Gemma 4 12B** (conversacional), **Qwen 3.5-9B** (agente) y
+**bge-m3** (embeddings).
 
 Ver [ADR-012](../../docs/architecture/adrs/ADR-012-conversational-model-12b-single-process.md)
 (modelo 12B + co-residencia) y
@@ -48,16 +56,21 @@ ADR-009 D1, no la cantidad de procesos del sistema. En dev con Ollama
 (un solo endpoint que sirve todos los modelos) la topología es la misma:
 `single_process` co-residente.
 
-## Configuración (provisional — issue #207)
+## Configuración (medida en #207, cerrada por ADR-014)
 
-Los valores de `start-vllm.sh` salen de la medición en Ollama/GGUF
-(ADR-012) y faltan confirmar bajo vLLM/AWQ:
+Medición vLLM 0.23.0 en la 4080 16 GB (pesos reales en VRAM): Gemma 12B
+**8,28 GiB**, Qwen 9B **8,41 GiB**, Qwen 4B ~4 GiB, bge **1,06 GiB**. Con
+~1,3–2 GiB de overhead torch + ~1,1 GiB de contexto CUDA **por proceso**, **dos
+LLM no entran en 16 GB** (Gemma 12B sola = ~11,6 GiB reales) → en 16 GB se usa
+Ollama (ADR-014). En **GPU de 24 GB+**, estos son los valores confirmados:
 
-- `--max-model-len`: Gemma 8192, Qwen 32768. Si los 3 no entran juntos,
-  bajar primero el de Qwen.
-- `--gpu-memory-utilization`: 0.50 / 0.36 / 0.06 provisionales (deben
-  sumar < 1 dejando aire para el escritorio/CUDA).
+- Checkpoints AWQ (ungated): `cyankiwi/gemma-4-12B-it-AWQ-INT4`,
+  `cyankiwi/Qwen3.5-9B-AWQ-4bit`, `BAAI/bge-m3`. Los `QuantTrio/*` están
+  inflados (Qwen 9B = 11,2 GiB); evitar.
+- `--max-num-seqs ≤192` en Qwen: es híbrido Mamba (el default 256 falla con
+  *"exceeds available Mamba cache blocks"*).
 - `--tool-call-parser`: `gemma4` (Gemma) / `hermes` (Qwen) — ADR-009 D2.
+- `--kv-cache-dtype fp8`: soportado en Ada (sm_89).
 
 ## Resueltas por ADR-012 (antes "Open questions")
 
