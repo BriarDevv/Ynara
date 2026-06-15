@@ -170,6 +170,18 @@ def _export_ratelimit_settings(*, export_max: int) -> Settings:
     )
 
 
+def _wipe_ratelimit_settings(*, wipe_max: int) -> Settings:
+    """Settings determinista para los tests de rate-limit del wipe (threshold chico)."""
+    return Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        DATABASE_URL="postgresql://test:test@localhost/test",
+        REDIS_URL="redis://localhost:6379/0",
+        JWT_SECRET="test-secret-no-usar-en-prod-min-32b",
+        MEMORY_WIPE_MAX_REQUESTS=wipe_max,
+        MEMORY_WIPE_WINDOW_SECONDS=3600,
+    )
+
+
 class _BoomRedisClient:
     """Cliente Redis que lanza en toda op: ejercita el fail-open del store."""
 
@@ -530,6 +542,118 @@ async def test_export_rate_limit_fail_open(db_session: AsyncSession) -> None:
             resp = await client.get("/v1/memory/export", headers=_bearer(user.id))
         assert resp.status_code == 200
         assert resp.json()["version"] == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# 6b. Rate-limit del wipe (execute): 429 por user_id; el preview no consume cuota
+# ---------------------------------------------------------------------------
+
+
+async def test_wipe_rate_limit_429(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N+1 executes del mismo user -> 429 con Retry-After. El preview no consume cuota.
+
+    Con wipe_max=2: 2 executes OK (idempotentes sobre user vacío, confirm {0,0,0}) y el 3ro
+    da 429 ANTES de tocar la DB. ``detail`` neutro (regla #4).
+    """
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _wipe_ratelimit_settings(wipe_max=2),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.memory.get_settings",
+        lambda: _wipe_ratelimit_settings(wipe_max=2),
+    )
+    user = await _seed_user(db_session)
+    confirm = {"expected_semantic": 0, "expected_episodic": 0, "expected_procedural": 0}
+
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            for _ in range(2):
+                ok = await client.post("/v1/memory/wipe", json=confirm, headers=_bearer(user.id))
+                assert ok.status_code == 200
+            # El 3er execute cruza el techo -> 429.
+            r429 = await client.post("/v1/memory/wipe", json=confirm, headers=_bearer(user.id))
+        assert r429.status_code == 429
+        assert "demasiados" in r429.json()["detail"]
+        assert r429.headers.get("Retry-After") == "3600"
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_wipe_preview_not_rate_limited(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El preview (?dry_run=true) NO consume cuota: con wipe_max=1, varios previews -> 200."""
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _wipe_ratelimit_settings(wipe_max=1),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.memory.get_settings",
+        lambda: _wipe_ratelimit_settings(wipe_max=1),
+    )
+    user = await _seed_user(db_session)
+
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            for _ in range(3):
+                r = await client.post("/v1/memory/wipe?dry_run=true", headers=_bearer(user.id))
+                assert r.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_wipe_rate_limit_fail_open(db_session: AsyncSession) -> None:
+    """Con un store que degrada (Redis caído), el wipe NO se bloquea (fail-open)."""
+    user = await _seed_user(db_session)
+    confirm = {"expected_semantic": 0, "expected_episodic": 0, "expected_procedural": 0}
+
+    store = RedisTokenStore(_BoomRedisClient())
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            resp = await client.post("/v1/memory/wipe", json=confirm, headers=_bearer(user.id))
+        assert resp.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_wipe_rate_limit_isolation_by_user(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El lockout del wipe de A no afecta a B: el bucket es por user_id."""
+    monkeypatch.setattr(
+        "app.core.ratelimit.get_settings",
+        lambda: _wipe_ratelimit_settings(wipe_max=1),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.memory.get_settings",
+        lambda: _wipe_ratelimit_settings(wipe_max=1),
+    )
+    user_a = await _seed_user(db_session)
+    user_b = await _seed_user(db_session)
+    confirm = {"expected_semantic": 0, "expected_episodic": 0, "expected_procedural": 0}
+
+    store = InMemoryTokenStore()
+    client = await _client(db_session, store=store)
+    try:
+        async with client:
+            # A agota su cuota (wipe_max=1): el 2do execute de A da 429.
+            a1 = await client.post("/v1/memory/wipe", json=confirm, headers=_bearer(user_a.id))
+            assert a1.status_code == 200
+            a2 = await client.post("/v1/memory/wipe", json=confirm, headers=_bearer(user_a.id))
+            assert a2.status_code == 429
+            # B no está afectado: su primer execute sigue dando 200.
+            r_b = await client.post("/v1/memory/wipe", json=confirm, headers=_bearer(user_b.id))
+        assert r_b.status_code == 200
     finally:
         app.dependency_overrides.clear()
 
