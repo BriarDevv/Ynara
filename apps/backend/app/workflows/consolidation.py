@@ -26,7 +26,6 @@ Reglas no negociables (ADR-010 + critica adversarial M8):
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 from datetime import UTC, datetime
 from uuid import UUID
@@ -48,6 +47,7 @@ from app.memory.audit import AuditStore
 from app.memory.config import MemoryConfigError, RetentionConfig, load_retention_config
 from app.memory.conversation_turns import ConversationTurnStore
 from app.memory.episodic import EpisodicMemoryStore
+from app.memory.hashing import compute_record_hash
 from app.memory.procedural import ProceduralMemoryStore
 from app.memory.semantic import SemanticMemoryStore
 from app.models.memory import EpisodicMemory
@@ -479,7 +479,7 @@ async def _consolidate_session_in_db(
         operation=AuditOperation.WRITE,
         target_layer=MemoryLayer.EPISODIC,
         target_id=out.id,
-        record_hash=hashlib.sha256(summary.summary.encode("utf-8")).hexdigest(),
+        record_hash=compute_record_hash(summary.summary),
         origin_model=LlmModel.QWEN,
         origin_mode=origin_mode,
         sensitive=is_sensitive,

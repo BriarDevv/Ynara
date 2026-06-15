@@ -66,9 +66,9 @@ from app.core.ratelimit import check_memory_export_rate_limit
 from app.enums import AuditOperation, MemoryLayer
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
-from app.llm.memory_engine import _procedural_hash_payload, _record_hash
 from app.memory.audit import AuditStore
 from app.memory.episodic import EpisodicMemoryStore
+from app.memory.hashing import compute_record_hash, procedural_hash_payload
 from app.memory.procedural import ProceduralMemoryStore
 from app.memory.semantic import SemanticMemoryStore
 from app.schemas.memory import (
@@ -402,7 +402,7 @@ async def wipe_memory(
             operation=AuditOperation.DELETE,
             target_layer=MemoryLayer.SEMANTIC,
             target_id=None,
-            record_hash=_record_hash(f"wipe:{MemoryLayer.SEMANTIC.value}"),
+            record_hash=compute_record_hash(f"wipe:{MemoryLayer.SEMANTIC.value}"),
             sensitive=False,
         )
     if epi_wiped > 0:
@@ -410,7 +410,7 @@ async def wipe_memory(
             operation=AuditOperation.DELETE,
             target_layer=MemoryLayer.EPISODIC,
             target_id=None,
-            record_hash=_record_hash(f"wipe:{MemoryLayer.EPISODIC.value}"),
+            record_hash=compute_record_hash(f"wipe:{MemoryLayer.EPISODIC.value}"),
             sensitive=True,
         )
     if proc_wiped > 0:
@@ -418,7 +418,7 @@ async def wipe_memory(
             operation=AuditOperation.DELETE,
             target_layer=MemoryLayer.PROCEDURAL,
             target_id=None,
-            record_hash=_record_hash(f"wipe:{MemoryLayer.PROCEDURAL.value}"),
+            record_hash=compute_record_hash(f"wipe:{MemoryLayer.PROCEDURAL.value}"),
             sensitive=False,
         )
 
@@ -546,7 +546,7 @@ async def update_memory(
             operation=AuditOperation.UPDATE,
             target_layer=MemoryLayer.SEMANTIC,
             target_id=sem_item.id,
-            record_hash=_record_hash(body.content),
+            record_hash=compute_record_hash(body.content),
             sensitive=False,
         )
         # El store solo hace flush(): el commit del request lo da el endpoint (igual que
@@ -574,7 +574,7 @@ async def update_memory(
         operation=AuditOperation.UPDATE,
         target_layer=MemoryLayer.PROCEDURAL,
         target_id=proc_item.id,
-        record_hash=_record_hash(_procedural_hash_payload(ref, body.value)),
+        record_hash=compute_record_hash(procedural_hash_payload(ref, body.value)),
         sensitive=False,
     )
     await session.commit()  # persistir la edición (ver nota en la rama semantic).
@@ -620,7 +620,7 @@ async def delete_memory(
             operation=AuditOperation.DELETE,
             target_layer=MemoryLayer.PROCEDURAL,
             target_id=None,
-            record_hash=_record_hash(ref),
+            record_hash=compute_record_hash(ref),
             sensitive=False,
         )
         await session.commit()  # persistir el borrado (ver nota en update_memory).
@@ -649,7 +649,7 @@ async def delete_memory(
         operation=AuditOperation.DELETE,
         target_layer=layer,
         target_id=memory_id,
-        record_hash=_record_hash(str(memory_id)),
+        record_hash=compute_record_hash(str(memory_id)),
         sensitive=(layer is MemoryLayer.EPISODIC),
     )
     await session.commit()  # persistir el borrado (ver nota en update_memory).

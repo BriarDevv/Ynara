@@ -16,12 +16,13 @@ SAVEPOINT —no la transacción externa— así que las filas de audit quedan co
 en la MISMA sesión y el rollback final del fixture limpia.
 
 REGLA #4: ningún assert toca contenido del usuario; solo metadata + ``record_hash``
-(sha256 hex) computado con los helpers canónicos del impl (``_record_hash`` /
-``_procedural_hash_payload``). Los caminos que NO mutan (404 / 422 / 409) NO auditan.
+(sha256 hex) computado con los helpers canónicos de ``app.memory.hashing``
+(``compute_record_hash`` / ``procedural_hash_payload``). Los caminos que NO mutan
+(404 / 422 / 409) NO auditan.
 
 Cobertura (cada caso consulta ``audit_log`` tras la llamada al endpoint):
-1. PATCH semantic OK   -> 1 fila UPDATE/SEMANTIC, target_id = id, hash = _record_hash(content).
-2. PATCH procedural OK -> 1 fila UPDATE/PROCEDURAL, hash = _record_hash(payload canónico).
+1. PATCH semantic OK -> 1 fila UPDATE/SEMANTIC, target_id=id, hash=compute_record_hash(content).
+2. PATCH procedural OK -> 1 fila UPDATE/PROCEDURAL, hash=compute_record_hash(payload canónico).
 3. DELETE semantic OK  -> 1 fila DELETE/SEMANTIC, target_id = UUID borrado.
 4. DELETE episodic OK  -> 1 fila DELETE/EPISODIC, sensitive=True conservador (sin descifrar).
 5. DELETE procedural OK -> 1 fila DELETE/PROCEDURAL, target_id is None.
@@ -45,9 +46,9 @@ from app.core.security import create_access_token
 from app.enums import AuditOperation, MemoryLayer, Mode
 from app.llm.clients.embedding import FakeEmbeddingClient
 from app.llm.clients.reranker import FakeReranker
-from app.llm.memory_engine import _procedural_hash_payload, _record_hash
 from app.main import app
 from app.memory.episodic import EpisodicMemoryStore
+from app.memory.hashing import compute_record_hash, procedural_hash_payload
 from app.memory.procedural import ProceduralMemoryStore
 from app.memory.semantic import SemanticMemoryStore
 from app.models.audit import AuditLog
@@ -159,7 +160,7 @@ async def test_patch_semantic_writes_audit_update(db_session: AsyncSession) -> N
         assert row.operation == AuditOperation.UPDATE
         assert row.target_layer == MemoryLayer.SEMANTIC
         assert row.target_id == item.id
-        assert row.record_hash == _record_hash(new_content)
+        assert row.record_hash == compute_record_hash(new_content)
         assert row.sensitive is False
         # Acción del usuario por HTTP: sin LLM/tool (distingue del audit de consolidación).
         assert row.origin_model is None
@@ -198,7 +199,7 @@ async def test_patch_procedural_writes_audit_update(db_session: AsyncSession) ->
         assert row.operation == AuditOperation.UPDATE
         assert row.target_layer == MemoryLayer.PROCEDURAL
         assert row.target_id == entry.id
-        assert row.record_hash == _record_hash(_procedural_hash_payload(entry.key, new_value))
+        assert row.record_hash == compute_record_hash(procedural_hash_payload(entry.key, new_value))
         assert row.sensitive is False
         assert row.origin_model is None
     finally:
@@ -229,7 +230,7 @@ async def test_delete_semantic_writes_audit_delete(db_session: AsyncSession) -> 
         assert row.operation == AuditOperation.DELETE
         assert row.target_layer == MemoryLayer.SEMANTIC
         assert row.target_id == item.id
-        assert row.record_hash == _record_hash(str(item.id))
+        assert row.record_hash == compute_record_hash(str(item.id))
         assert row.sensitive is False
         assert row.origin_model is None
     finally:
@@ -279,7 +280,7 @@ async def test_delete_episodic_writes_audit_delete_sensitive(
         assert row.operation == AuditOperation.DELETE
         assert row.target_layer == MemoryLayer.EPISODIC
         assert row.target_id == epi.id
-        assert row.record_hash == _record_hash(str(epi.id))
+        assert row.record_hash == compute_record_hash(str(epi.id))
         # Conservador: episódica -> sensitive=True SIEMPRE, sin descifrar para leer is_sensitive.
         assert row.sensitive is True
         assert row.origin_model is None
@@ -314,7 +315,7 @@ async def test_delete_procedural_writes_audit_null_target(db_session: AsyncSessi
         assert row.target_layer == MemoryLayer.PROCEDURAL
         # El delete-by-key no retorna id: target_id NULL, el hash de la key ata la fila.
         assert row.target_id is None
-        assert row.record_hash == _record_hash(entry.key)
+        assert row.record_hash == compute_record_hash(entry.key)
         assert row.sensitive is False
         assert row.origin_model is None
     finally:
@@ -373,7 +374,7 @@ async def test_wipe_execute_writes_one_audit_row_per_layer(db_session: AsyncSess
             MemoryLayer.PROCEDURAL,
         }
         for layer, row in by_layer.items():
-            assert row.record_hash == _record_hash(f"wipe:{layer.value}")
+            assert row.record_hash == compute_record_hash(f"wipe:{layer.value}")
         # EPISODIC va sensitive=True conservador (el wipe masivo no lee is_sensitive per-entry).
         assert by_layer[MemoryLayer.EPISODIC].sensitive is True
         assert by_layer[MemoryLayer.SEMANTIC].sensitive is False
@@ -410,7 +411,7 @@ async def test_wipe_execute_skips_empty_layers_in_audit(db_session: AsyncSession
         assert row.operation == AuditOperation.DELETE
         assert row.target_layer == MemoryLayer.SEMANTIC
         assert row.target_id is None
-        assert row.record_hash == _record_hash(f"wipe:{MemoryLayer.SEMANTIC.value}")
+        assert row.record_hash == compute_record_hash(f"wipe:{MemoryLayer.SEMANTIC.value}")
     finally:
         app.dependency_overrides.clear()
 

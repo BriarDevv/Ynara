@@ -27,7 +27,6 @@ Decisiones (ADR-010 + critica adversarial M8, NO re-litigar):
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import re
@@ -40,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode
 from app.llm.clients.base import LLMClient
 from app.llm.schemas import ChatMessage
+from app.memory.hashing import compute_record_hash, procedural_hash_payload
 from app.schemas.memory import ProceduralMemoryUpsert, SemanticMemoryCreate
 
 if TYPE_CHECKING:
@@ -434,26 +434,6 @@ class FakeMemoryEngine:
 # ---------------------------------------------------------------------------
 
 
-def _record_hash(value: str) -> str:
-    """sha256 hex (64 chars) del valor para el ``record_hash`` de ``audit_log``.
-
-    REGLA #4: el digest es unidireccional — la fila de auditoría guarda este
-    hash, NO el contenido en claro. Siempre devuelve 64 chars ``[0-9a-f]``, así
-    que el CHECK ``record_hash_sha256_hex`` del modelo nunca falla.
-    """
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-def _procedural_hash_payload(key: str, value: dict[str, Any]) -> str:
-    """Payload canónico ``(key, value)`` para el ``record_hash`` procedural.
-
-    Sede ÚNICA del formato del digest procedural (lo reusa el test): el ``value``
-    se serializa con ``sort_keys`` para que el mismo par dé siempre el mismo hash,
-    independiente del orden de las claves del dict.
-    """
-    return f"{key}\n{json.dumps(value, sort_keys=True, ensure_ascii=False)}"
-
-
 async def apply_ops(
     ops: list[MemoryOp],
     *,
@@ -615,7 +595,7 @@ async def _apply_single_op(
                 operation=AuditOperation.WRITE,
                 target_layer=MemoryLayer.SEMANTIC,
                 target_id=out.id,
-                record_hash=_record_hash(op.content),
+                record_hash=compute_record_hash(op.content),
             )
             return True
         if op.op == "UPDATE":
@@ -628,7 +608,7 @@ async def _apply_single_op(
                 operation=AuditOperation.UPDATE,
                 target_layer=MemoryLayer.SEMANTIC,
                 target_id=result.id,
-                record_hash=_record_hash(op.content),
+                record_hash=compute_record_hash(op.content),
             )
             return True
         if op.op == "DELETE":
@@ -641,7 +621,7 @@ async def _apply_single_op(
                 operation=AuditOperation.DELETE,
                 target_layer=MemoryLayer.SEMANTIC,
                 target_id=UUID(op.target_id),
-                record_hash=_record_hash(op.target_id),
+                record_hash=compute_record_hash(op.target_id),
             )
             return True
         return False
@@ -658,7 +638,7 @@ async def _apply_single_op(
                 operation=operation,
                 target_layer=MemoryLayer.PROCEDURAL,
                 target_id=out.id,
-                record_hash=_record_hash(_procedural_hash_payload(op.key, op.value)),
+                record_hash=compute_record_hash(procedural_hash_payload(op.key, op.value)),
             )
             return True
         if op.op == "DELETE":
@@ -673,7 +653,7 @@ async def _apply_single_op(
                 operation=AuditOperation.DELETE,
                 target_layer=MemoryLayer.PROCEDURAL,
                 target_id=None,
-                record_hash=_record_hash(op.key),
+                record_hash=compute_record_hash(op.key),
             )
             return True
         return False
