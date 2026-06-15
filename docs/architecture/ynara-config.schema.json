@@ -126,7 +126,7 @@
     },
     "memory": {
       "type": "object",
-      "description": "Memoria: engine/store/embedding_model/consolidation + thresholds de decay procedural (ADR-007 D1). `additionalProperties` queda en true para no romper esas keys ni las de retention futuras; los thresholds de decay no son `required` (el loader aplica defaults si faltan, compat con config viejo).",
+      "description": "Memoria: engine/store/embedding_model/consolidation + thresholds de decay procedural (ADR-007 D1) + retention episodica diferenciada (ADR-007 D2). `additionalProperties` queda en true para no romper las keys operativas; los thresholds de decay y retention no son `required` (el loader aplica defaults si faltan, compat con config viejo).",
       "additionalProperties": true,
       "properties": {
         "decay_interval_days": {
@@ -156,6 +156,28 @@
           "type": "integer",
           "minimum": 1,
           "description": "Antiguedad minima (dias sin reforzar) para el borrado fisico, ademas de la baja confianza. Default 90 (ADR-007 D1)."
+        },
+        "retention_default_days": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Retention (dias) de la memoria episodica no sensible. Default 365 (ADR-007 D2)."
+        },
+        "retention_sensitive_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "description": "Retention (dias) por defecto de la memoria episodica sensible (modo Bienestar). Debe caer en [retention_sensitive_min_days, retention_sensitive_max_days]. Default 180 (ADR-007 D2)."
+        },
+        "retention_sensitive_min_days": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimo configurable (dias) de la retention sensible via PATCH /v1/memory/settings. Default 30 (ADR-007 D2)."
+        },
+        "retention_sensitive_max_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "description": "Maximo configurable (dias) de la retention sensible. Cap duro de ADR-007 D2 (<=365). Default 365."
         }
       }
     },

@@ -32,6 +32,7 @@ from app.llm.clients.embedding import FakeEmbeddingClient
 from app.llm.clients.fakes import FakeLlmClient
 from app.llm.clients.reranker import FakeReranker
 from app.llm.schemas import CompletionResult
+from app.memory.config import MemoryConfigError, RetentionConfig
 from app.memory.conversation_turns import ConversationTurnStore
 from app.models.audit import AuditLog
 from app.models.conversation_turn import ConversationTurn
@@ -39,7 +40,11 @@ from app.models.memory import EpisodicMemory
 from app.models.session import ChatSession
 from app.models.user import User
 from app.schemas.conversation_turn import ConversationTurnCreate
-from app.workflows.consolidation import _async_consolidate_session, consolidate_session
+from app.workflows.consolidation import (
+    _async_consolidate_session,
+    _load_retention_config_safe,
+    consolidate_session,
+)
 
 USER_ID = str(uuid.uuid4())
 SESSION_ID = str(uuid.uuid4())
@@ -132,6 +137,31 @@ class TestConsolidateSessionWrapper:
             mock_async.return_value = 1
             result = consolidate_session(user_id=USER_ID, session_id=SESSION_ID, mode="vida")
         assert result is None
+
+
+class TestLoadRetentionConfigSafe:
+    """Tests del fallback defensivo ``_load_retention_config_safe`` (ADR-007 D2)."""
+
+    def test_returns_loaded_config_when_valid(self) -> None:
+        """Config valido -> el RetentionConfig cargado se devuelve tal cual."""
+        with patch(
+            "app.workflows.consolidation.load_retention_config",
+            return_value=RetentionConfig(retention_default_days=200),
+        ):
+            cfg = _load_retention_config_safe()
+        assert cfg.retention_default_days == 200
+
+    def test_falls_back_to_defaults_on_invalid_config(self) -> None:
+        """Config invalido (MemoryConfigError) -> defaults ADR-007 D2, NO crashea."""
+        with patch(
+            "app.workflows.consolidation.load_retention_config",
+            side_effect=MemoryConfigError("config roto"),
+        ):
+            cfg = _load_retention_config_safe()
+        # No propaga; cae a los defaults historicos (default=365, sensible=180).
+        assert cfg == RetentionConfig()
+        assert cfg.retention_default_days == 365
+        assert cfg.retention_sensitive_days == 180
 
 
 # ---------------------------------------------------------------------------
@@ -288,6 +318,97 @@ class TestAsyncConsolidateSession:
         ).scalar_one()
         assert row.is_sensitive is True
         assert 1 <= row.retention_days <= 365
+
+    async def test_default_retention_from_injected_config(self, db_session: AsyncSession) -> None:
+        """Un RetentionConfig inyectado cambia el ``retention_days`` default usado (ADR-007 D2).
+
+        Verifica el cableado config-driven: si se inyecta un config con
+        ``retention_default_days`` distinto del historico (365), el episodio NO
+        sensible se persiste con ESE valor, no con el hardcodeado.
+        """
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        await _seed_turns(db_session, user_id=user.id, session_id=cs.id)
+        client = _make_llm_with_summary("Sesion no sensible con retention custom.")
+
+        created = await _async_consolidate_session(
+            user_id=str(user.id),
+            session_id=str(cs.id),
+            mode="vida",
+            llm_client=client,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            retention_config=RetentionConfig(retention_default_days=200),
+            session=db_session,
+        )
+        assert created == 1
+        row = (
+            await db_session.execute(
+                select(EpisodicMemory).where(EpisodicMemory.session_id == cs.id)
+            )
+        ).scalar_one()
+        assert row.is_sensitive is False
+        assert row.retention_days == 200
+
+    async def test_sensitive_retention_from_injected_config(self, db_session: AsyncSession) -> None:
+        """Un RetentionConfig inyectado cambia el ``retention_days`` sensible (ADR-007 D2).
+
+        Modo Bienestar -> is_sensitive=True -> usa ``retention_sensitive_days`` del
+        config inyectado (90), no el historico (180).
+        """
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id, mode=Mode.BIENESTAR)
+        await _seed_turns(db_session, user_id=user.id, session_id=cs.id)
+        client = _make_llm_with_summary("Sesion sensible con retention custom.")
+
+        created = await _async_consolidate_session(
+            user_id=str(user.id),
+            session_id=str(cs.id),
+            mode="bienestar",
+            llm_client=client,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            retention_config=RetentionConfig(retention_sensitive_days=90),
+            session=db_session,
+        )
+        assert created == 1
+        row = (
+            await db_session.execute(
+                select(EpisodicMemory).where(EpisodicMemory.session_id == cs.id)
+            )
+        ).scalar_one()
+        assert row.is_sensitive is True
+        assert row.retention_days == 90
+
+    async def test_default_config_matches_historic_values(self, db_session: AsyncSession) -> None:
+        """Sin inyectar config, los defaults del loader = los valores historicos (180/365).
+
+        Garantia de no-cambio-de-comportamiento: el ``RetentionConfig()`` por
+        defaults espeja las constantes que estaban hardcodeadas (default=365,
+        sensible=180), asi que una sesion sensible sin config custom sigue dando 180.
+        """
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id, mode=Mode.BIENESTAR)
+        await _seed_turns(db_session, user_id=user.id, session_id=cs.id)
+        client = _make_llm_with_summary("Sesion sensible con defaults.")
+
+        created = await _async_consolidate_session(
+            user_id=str(user.id),
+            session_id=str(cs.id),
+            mode="bienestar",
+            llm_client=client,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            retention_config=RetentionConfig(),  # defaults explicitos
+            session=db_session,
+        )
+        assert created == 1
+        row = (
+            await db_session.execute(
+                select(EpisodicMemory).where(EpisodicMemory.session_id == cs.id)
+            )
+        ).scalar_one()
+        assert row.retention_days == 180
 
     async def test_idempotent_double_consolidation(self, db_session: AsyncSession) -> None:
         """Consolidar dos veces -> 1 episodio (la 2da es no-op por idempotencia)."""

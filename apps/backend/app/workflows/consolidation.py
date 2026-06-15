@@ -45,6 +45,7 @@ from app.llm.clients.reranker import Reranker
 from app.llm.config import load_llm_config
 from app.llm.memory_engine import QwenMemoryEngine, apply_ops
 from app.memory.audit import AuditStore
+from app.memory.config import MemoryConfigError, RetentionConfig, load_retention_config
 from app.memory.conversation_turns import ConversationTurnStore
 from app.memory.episodic import EpisodicMemoryStore
 from app.memory.procedural import ProceduralMemoryStore
@@ -99,6 +100,26 @@ def _build_reranker(settings: Settings) -> Reranker:
     el reranker real (cross-encoder) se gatea en la factory cuando exista.
     """
     return build_reranker(settings)
+
+
+def _load_retention_config_safe() -> RetentionConfig:
+    """Carga la retention de ``ynara.config.json[memory]``, default-safe ante fallo.
+
+    Capa de defensa adicional sobre la regla del modulo: un fallo de config NO
+    debe tumbar la consolidacion. Si ``load_retention_config()`` levanta
+    ``MemoryConfigError`` (JSON ilegible, valor invalido, key extra), se degrada al
+    ``RetentionConfig`` por defaults (=los valores historicos: default=365,
+    sensible=180) y se loguea un mensaje tecnico SIN datos de usuario (regla #4: la
+    config no es PII, pero igual no se vuelca el detalle del error a logs).
+    """
+    try:
+        return load_retention_config()
+    except MemoryConfigError:
+        logger.warning(
+            "consolidation: ynara.config.json[memory] de retention invalido, "
+            "usando defaults ADR-007 D2 (default=365, sensible=180)"
+        )
+        return RetentionConfig()
 
 
 def _parse_source_session_id(session_id: str) -> UUID | None:
@@ -335,11 +356,17 @@ def consolidate_turn(
 # - Regla #4: ningun contenido de usuario a logs (solo conteos / UUIDs /
 #   type(exc).__name__).
 # ---------------------------------------------------------------------------
-
-# retention_days para sesiones sensibles (modo Bienestar). El cap duro (<=365) lo
-# enforcea el model_validator de EpisodicMemoryCreate + la CHECK constraint
-# (ADR-007 D2). 180 espeja el default de ``users.retention_sensitive_days``.
-_SENSITIVE_RETENTION_DAYS = 180
+#
+# RETENTION CONFIG-DRIVEN (ADR-007 D2): los dias de retention (default y
+# sensible) salen de ``ynara.config.json[memory]`` via ``load_retention_config()``
+# (``app/memory/config.py``), NO de constantes hardcodeadas. Mismo patron que el
+# decay config-driven (#211): el ``RetentionConfig`` se inyecta en el cuerpo async
+# (``retention_config``) y, si es ``None`` (worker en prod), se carga del JSON. El
+# cap duro (<=365) para entradas sensibles lo sigue enforzando el model_validator
+# de ``EpisodicMemoryCreate`` + la CHECK constraint. Defaults del loader = los
+# valores que estaban hardcodeados aca (default=365, sensible=180): mismo
+# comportamiento si el config no trae las keys.
+# ---------------------------------------------------------------------------
 
 
 def _build_transcript(turns: list) -> str:
@@ -382,6 +409,7 @@ async def _consolidate_session_in_db(
     llm_client: LLMClient,
     embedder: EmbeddingClient,
     reranker: Reranker,
+    retention_config: RetentionConfig,
 ) -> int:
     """Nucleo de la consolidacion episodica sobre una ``session`` ya abierta.
 
@@ -411,12 +439,21 @@ async def _consolidate_session_in_db(
         return 0
 
     is_sensitive = origin_mode == Mode.BIENESTAR
+    # retention_days config-driven (ADR-007 D2): sensible vs default salen del
+    # RetentionConfig (``ynara.config.json[memory]``), no de constantes. El cap
+    # duro (<=365 para sensibles) lo enforcea el model_validator de
+    # EpisodicMemoryCreate + la CHECK constraint.
+    retention_days = (
+        retention_config.retention_sensitive_days
+        if is_sensitive
+        else retention_config.retention_default_days
+    )
     payload = EpisodicMemoryCreate(
         session_id=source_session_id,
         summary=summary.summary,
         occurred_at=datetime.now(UTC),
         is_sensitive=is_sensitive,
-        retention_days=_SENSITIVE_RETENTION_DAYS if is_sensitive else 365,
+        retention_days=retention_days,
         topics=summary.topics,
     )
 
@@ -470,6 +507,8 @@ async def _async_consolidate_session(
     llm_client: LLMClient | None = None,
     embedder: EmbeddingClient | None = None,
     reranker: Reranker | None = None,
+    # retention config inyectable para tests (None => cargar de ynara.config.json)
+    retention_config: RetentionConfig | None = None,
     # session inyectable para tests de integracion (evita crear engine nuevo)
     session: AsyncSession | None = None,
 ) -> int:
@@ -489,6 +528,12 @@ async def _async_consolidate_session(
     effective_llm = llm_client or _build_consolidation_llm(cfg)
     effective_embedder = embedder or _build_embedder(cfg)
     effective_reranker = reranker or _build_reranker(cfg)
+    # Retention config-driven (ADR-007 D2): inyectado en tests, o cargado de
+    # ``ynara.config.json[memory]`` en prod. Fallback defensivo: si el config es
+    # ilegible/invalido NO se tumba el worker (regla del modulo: un fallo de config
+    # nunca mata la consolidacion) -> se usa el RetentionConfig por defaults (=los
+    # valores historicos). El ``try/except`` del task sigue siendo la red final.
+    effective_retention = retention_config or _load_retention_config_safe()
 
     uid = UUID(user_id)
     source_session_id = _parse_source_session_id(session_id)
@@ -510,6 +555,7 @@ async def _async_consolidate_session(
                 llm_client=effective_llm,
                 embedder=effective_embedder,
                 reranker=effective_reranker,
+                retention_config=effective_retention,
             )
 
         # Modo produccion: engine con NullPool (decision #4).
@@ -527,6 +573,7 @@ async def _async_consolidate_session(
                 llm_client=effective_llm,
                 embedder=effective_embedder,
                 reranker=effective_reranker,
+                retention_config=effective_retention,
             )
             await db_session.commit()
 
