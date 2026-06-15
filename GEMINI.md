@@ -19,10 +19,10 @@
 
 ## Comandos específicos de Gemini
 
-<!-- TODO: completar a medida que el equipo defina comandos -->
-
-Los comandos locales viven en `.gemini/commands/`. Cualquier agregado
-requiere PR.
+Los comandos locales viven en `.gemini/commands/` (hoy vacío salvo
+`.gitkeep`). Cualquier agregado requiere PR. El único workflow de review
+del repo está en [`skills/pr-review/SKILL.md`](./skills/pr-review/SKILL.md)
+(en Claude Code se invoca con `/pr-review`).
 
 ## Comportamientos Gemini-specific
 

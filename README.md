@@ -6,7 +6,7 @@
 [![Web: Next.js 16](https://img.shields.io/badge/Web-Next.js%2016-black)](./apps/web)
 [![Mobile: Expo 53+](https://img.shields.io/badge/Mobile-Expo%2053%2B-1B1F23)](./apps/mobile)
 [![Backend: FastAPI + Pydantic v2](https://img.shields.io/badge/Backend-FastAPI%20%2B%20Pydantic%20v2-009688)](./apps/backend)
-[![LLM: vLLM (Gemma+Qwen)](https://img.shields.io/badge/LLM-vLLM%20(Gemma%2BQwen)-ff6b6b)](./infra/vllm)
+[![LLM: Ollama/GGUF (Gemma+Qwen)](https://img.shields.io/badge/LLM-Ollama%2FGGUF%20(Gemma%2BQwen)-ff6b6b)](./docs/architecture/adrs/ADR-014-serving-ollama-gguf-16gb.md)
 [![DB: Postgres 16 + pgvector](https://img.shields.io/badge/DB-Postgres%2016%20%2B%20pgvector-4169E1)](./docs/architecture/adrs/ADR-004-postgres-pgvector-vs-pinecone.md)
 [![AI-friendly](https://img.shields.io/badge/AI--friendly-Claude%20%C2%B7%20Codex%20%C2%B7%20Gemini-8e44ad)](./AGENTS.md)
 [![Phase: MVP](https://img.shields.io/badge/Phase-MVP-yellow)](./docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md)
@@ -14,8 +14,10 @@
 
 Cinco modos (productividad, estudio, bienestar, vida, memoria) sobre dos
 modelos propios (Gemma 4 12B + Qwen 3.5-9B), memoria semántica +
-episódica + procedural sobre Postgres + pgvector, todo on-prem. Sin datos
-de usuario saliendo del perímetro, sin lock-in a big tech.
+episódica + procedural sobre Postgres + pgvector, todo on-prem. El serving
+local corre con Ollama/GGUF en una RTX 4080 Super 16GB (vLLM reservado para
+GPU de 24GB+, ver [`ADR-014`](./docs/architecture/adrs/ADR-014-serving-ollama-gguf-16gb.md)).
+Sin datos de usuario saliendo del perímetro, sin lock-in a big tech.
 
 - **Humanos**: empezá por [Quick Start](#quick-start) y después
   [`docs/operations/LOCAL-DEV.md`](./docs/operations/LOCAL-DEV.md).
@@ -36,8 +38,8 @@ de usuario saliendo del perímetro, sin lock-in a big tech.
 | Capas de memoria | 3 (semántica, episódica, procedural) |
 | Tools del agente Qwen | 8 (calendar×2, reminder×2, memory×4) |
 | Apps | 3 (web Next.js 16, mobile Expo 53+, backend FastAPI) |
-| Packages compartidos | 4 (shared-types, shared-schemas, ui, config) |
-| ADRs aprobados | 10 |
+| Packages compartidos | 5 (shared-types, shared-schemas, ui, config, core) |
+| ADRs aprobados | 15 (ADR-001 a ADR-015) |
 | Skills reutilizables | 6 |
 | Archivos tracked | ~500 |
 | CODEOWNERS | 3 (@MateoGs013, @BriarDevv, @querques20) |
@@ -109,21 +111,23 @@ make dev-web                                    # Next.js :3000 (otra terminal)
 make dev-mobile                                 # Expo (opcional)
 ```
 
-### 5. (Opcional) Levantar vLLM local
+### 5. (Opcional) Levantar el serving local
 
-Si tenés la 4080 Super o GPU NVIDIA con CUDA 12.x:
+En la RTX 4080 Super 16GB el serving local es **Ollama/GGUF** (un solo proceso
+que sirve `gemma4` + `qwen` + bge-m3 co-residentes en `:11434`, ver
+[`ADR-014`](./docs/architecture/adrs/ADR-014-serving-ollama-gguf-16gb.md)). vLLM
+(`./infra/vllm/start-vllm.sh`, Gemma `:8000` + Qwen `:8001`) queda como ruta para
+GPU de 24GB+.
 
-```bash
-./infra/vllm/start-vllm.sh                      # Gemma :8000 + Qwen :8001
-```
-
-Sin GPU, el backend corre con Fakes (`FakeLlmClient`) por defecto. Para
-apuntar a Ollama/vLLM real, setear `LLM_BACKEND=vllm` (el flag que activa
-los clientes reales) y declarar el destino del serving en `LLM_SERVING`
-(lista JSON de procesos `{base_url, models}`) en `apps/backend/.env`.
-`LLM_SERVING` indica *dónde* corre cada modelo pero no activa por sí solo
-el serving real; el switch es `LLM_BACKEND`. En `production` el serving
-real se fuerza igual. Ver [`ADR-013`](./docs/architecture/adrs/ADR-013-serving-endpoints-config.md).
+Sin GPU, el backend corre con Fakes (`FakeLlmClient`) por defecto. Para apuntar al
+serving real, setear `LLM_BACKEND=vllm` (nombre **legacy** del cliente
+OpenAI-compatible: vale tanto para Ollama como para vLLM, no fuerza vLLM) y
+declarar el destino del serving en `LLM_SERVING` (lista JSON de procesos
+`{base_url, models}`) en `apps/backend/.env`. `LLM_SERVING` indica *dónde* corre
+cada modelo pero no activa por sí solo el serving real; el switch es
+`LLM_BACKEND`. En `production` el serving real se fuerza igual. Ver
+[`ADR-013`](./docs/architecture/adrs/ADR-013-serving-endpoints-config.md) y
+[`ADR-014`](./docs/architecture/adrs/ADR-014-serving-ollama-gguf-16gb.md).
 
 Guía paso a paso completa: [`docs/operations/INSTALL.md`](./docs/operations/INSTALL.md).
 Flujo de desarrollo diario: [`docs/operations/LOCAL-DEV.md`](./docs/operations/LOCAL-DEV.md).
@@ -156,7 +160,7 @@ Atajos completos en [`Makefile`](./Makefile).
 | Web | Next.js 16, TypeScript strict, Tailwind v4 (CSS-first), shadcn/ui, GSAP, Lenis, TanStack Query v5, Zustand v5, React Hook Form + Zod, Auth.js v5 |
 | Mobile | Expo SDK 53+, Expo Router (file-based), NativeWind, TanStack Query, Zustand, expo-secure-store, expo-notifications |
 | Backend | Python 3.12+, FastAPI, Pydantic v2, SQLAlchemy 2 async, Alembic, Celery 5.4+, uv, Ruff |
-| LLM | vLLM (prod), Ollama (dev), Unsloth + QLoRA (fine-tuning), LlamaIndex (orquestación) |
+| LLM | Ollama/GGUF (serving local 16GB, ADR-014), vLLM (reservado para 24GB+), Unsloth + QLoRA (fine-tuning), LlamaIndex (orquestación) |
 | DB (MVP) | Supabase como Postgres 16 gestionado + pgvector, Redis (Upstash o Docker) |
 | DB (V2) | Postgres 16 self-hosted + pgvector, Redis self-hosted |
 | Monorepo | pnpm 10+, Turborepo 2.x, Biome 2.x |
@@ -164,13 +168,17 @@ Atajos completos en [`Makefile`](./Makefile).
 
 ## Modelos (dual-stack)
 
-| Modelo | Rol | Lee memoria | Escribe memoria | Llama tools | Endpoint |
+| Modelo | Rol | Lee memoria | Escribe memoria | Llama tools | Served name |
 | --- | --- | --- | --- | --- | --- |
-| **Gemma 4 12B** (dense) | Conversacional | Sí | No | No | `:8000/v1` |
-| **Qwen 3.5-9B** | Agente | Sí | Sí | Sí | `:8001/v1` |
+| **Gemma 4 12B** (dense) | Conversacional | Sí | No | No | `gemma4` |
+| **Qwen 3.5-9B** | Agente | Sí | Sí | Sí | `qwen` |
 
 Razonamiento: [`ADR-002`](./docs/architecture/adrs/ADR-002-gemma-qwen-dual-stack.md).
-Ambos corren cuantizados (Q4/Q5) en una RTX 4080 Super 16GB vía vLLM.
+En la RTX 4080 Super 16GB ambos corren cuantizados (GGUF Q4_K_M) en Ollama, en
+**un solo proceso** que sirve los dos modelos co-residentes + bge-m3 sobre el
+endpoint OpenAI-compatible `:11434/v1` (ver [`ADR-014`](./docs/architecture/adrs/ADR-014-serving-ollama-gguf-16gb.md)).
+vLLM (con sus procesos por modelo en `:8000`/`:8001`) queda reservado para GPU de
+24GB+.
 
 ## Memoria (3 capas)
 
@@ -180,9 +188,12 @@ Ambos corren cuantizados (Q4/Q5) en una RTX 4080 Super 16GB vía vLLM.
 | **Episódica** | Resúmenes de sesiones pasadas con embedding | Postgres + pgvector + JSONB metadata | Qwen al cerrar sesión |
 | **Procedural** | Preferencias y patrones | Postgres + JSONB | Qwen + heurísticas |
 
-Tablas sagradas — cualquier migración requiere tests + 1 aprobación
-humana explícita (regla #3 de [`AGENTS.md`](./AGENTS.md)). Derechos del usuario
-(export, borrado, pausa, audit log) en
+Estas 3 capas + el `audit_log` son **tablas sagradas**: cualquier migración
+requiere tests + 1 aprobación humana explícita (regla #3 de
+[`AGENTS.md`](./AGENTS.md)). Aparte existe `conversation_turns`, una tabla
+**operativa** (no sagrada): buffer append-only de los turnos crudos de una
+sesión, cifrado AES-256-GCM per-user, que el worker episódico lee al cerrar la
+sesión y luego purga. Derechos del usuario (export, borrado, pausa, audit log) en
 [`docs/product/MEMORY.md`](./docs/product/MEMORY.md).
 
 ## Flujo de un mensaje
@@ -236,10 +247,11 @@ ynara/
 │   ├── shared-types/        # types TS compartidos web/mobile
 │   ├── shared-schemas/      # Zod schemas (mirror de Pydantic)
 │   ├── ui/                  # componentes UI compartidos
+│   ├── core/                # lógica no-visual compartida web/mobile (stores, hooks, API) — ADR-012
 │   └── config/              # tsconfig.base + biome + eslint
 │
 ├── docs/
-│   ├── architecture/        # 10 ADRs + 3 diagramas Mermaid
+│   ├── architecture/        # 15 ADRs (ADR-001..015) + 3 diagramas Mermaid
 │   ├── product/             # VISION, MODES, MEMORY, TONE-OF-VOICE
 │   ├── operations/          # INSTALL, LOCAL-DEV, DEPLOY, RUNBOOK, MIGRATION
 │   └── conventions/         # COMMITS, GLOSSARY, AI-GUIDELINES, CODE-STYLE
@@ -254,7 +266,8 @@ ynara/
 │   ├── add-llm-tool/        # agregar una tool al agente Qwen
 │   ├── add-memory-type/     # agregar una capa de memoria (proceso pesado)
 │   ├── adr-create/          # crear un ADR
-│   └── create-ui-component/ # crear un componente UI
+│   ├── create-ui-component/ # crear un componente UI
+│   └── pr-review/           # workflow de review de PR (/pr-review)
 │
 ├── scripts/                 # init, seed, reset-memory, export-user-data
 ├── tests/e2e/               # Playwright (TODO configurar)
@@ -309,8 +322,8 @@ para V2 post-validación de producto.
 
 | Fase | DB | Cache | Inferencia | Por qué |
 | --- | --- | --- | --- | --- |
-| **MVP** (hoy) | Supabase (Postgres 16 + pgvector) | Upstash o Docker | vLLM on-prem | Velocidad sin DevOps inicial |
-| **V2** (post-PMF) | Postgres 16 self-hosted | Redis self-hosted | vLLM on-prem | Alineado a "infra propia" |
+| **MVP** (hoy) | Supabase (Postgres 16 + pgvector) | Upstash o Docker | Ollama/GGUF on-prem (16GB; vLLM en 24GB+) | Velocidad sin DevOps inicial |
+| **V2** (post-PMF) | Postgres 16 self-hosted | Redis self-hosted | on-prem (Ollama 16GB / vLLM 24GB+) | Alineado a "infra propia" |
 
 **Reglas que hacen la migración trivial**:
 

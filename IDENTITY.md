@@ -9,15 +9,19 @@
 Ynara es un asistente personal adaptativo con memoria propia. Acompaña
 a estudiantes y profesionales jóvenes de LATAM en su día a día: les
 ayuda a producir, estudiar, descomprimir y recordar. No es un chatbot
-genérico ni un wrapper de otro modelo: corre sobre infraestructura
-propia y aprende **del usuario**, no del mercado.
+genérico ni un wrapper de otro modelo: la inferencia corre sobre
+modelos e infraestructura propios y aprende **del usuario**, no del
+mercado. En fase MVP la persistencia vive en una DB gestionada
+(Supabase como Postgres); el self-host de la base es el objetivo de V2
+(ver [`ADR-005`](./docs/architecture/adrs/ADR-005-supabase-mvp-postgres-selfhosted-v2.md)).
 
 ## Los 4 pilares de marca
 
 1. **Productividad** — Ynara ejecuta. Agenda, recuerda, organiza,
    actúa. No solo conversa: cierra loops.
 2. **Memoria** — Ynara recuerda. Lo importante, lo útil, lo personal.
-   Memoria propia, on-prem, controlada por el usuario.
+   Memoria propia y soberana, controlada por el usuario; self-host de la
+   base como objetivo de V2 (hoy DB gestionada en fase MVP).
 3. **Compañía** — Ynara está. Acompaña en lo cotidiano sin invadir,
    sin moralizar, sin terapizar. Presencia, no presión.
 4. **Adaptación** — Ynara se modula. Cambia de tono y de modo según

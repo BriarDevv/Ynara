@@ -63,12 +63,17 @@
      aprobación humana de la regla #3 inspeccione un commit específico.
 
 3. **Tests**: antes de pedir review.
-   - `pnpm test` en el root corre todo.
-   - Por app: `pnpm --filter web test`, `pnpm --filter mobile test`,
-     `cd apps/backend && uv run pytest`.
+   - `pnpm test` en el root corre **solo el frontend JS/TS** (web =
+     vitest, mobile = stub). `apps/backend` **no** está en el workspace
+     pnpm/turbo, así que `pnpm test` no lo toca.
+   - Backend (Python): `cd apps/backend && uv run pytest` (o `make test`,
+     que corre ambos lenguajes).
+   - Por app frontend: `pnpm --filter web test`, `pnpm --filter mobile test`.
 
 4. **Lint y format**:
-   - JS/TS: `pnpm biome check --apply`.
+   - JS/TS: `pnpm biome check .` para solo verificar; `pnpm biome check
+     --write .` para auto-fix (Biome 2.x reemplazó `--apply` por
+     `--write`; `--write --unsafe` para los fixes inseguros).
    - Python: `cd apps/backend && uv run ruff check . && uv run ruff format .`.
 
 5. **PR**:
