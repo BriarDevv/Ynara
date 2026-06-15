@@ -62,7 +62,7 @@ from app.core.deps import (
     get_embedder,
     get_reranker,
 )
-from app.core.ratelimit import check_memory_export_rate_limit
+from app.core.ratelimit import check_memory_export_rate_limit, check_memory_wipe_rate_limit
 from app.enums import AuditOperation, MemoryLayer
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
@@ -268,6 +268,7 @@ async def export_memory(
 async def wipe_memory(
     session: DbSession,
     user_id: CurrentUser,
+    store: TokenStoreDep,
     embedder: EmbedderDep,
     reranker: RerankerDep,
     body: MemoryWipeConfirm | None = None,
@@ -284,7 +285,9 @@ async def wipe_memory(
       como los ``expected_*`` del execute.
     - ``dry_run`` ausente o ``false`` → **EXECUTE** (destructivo, irreversible): exige el
       ``body`` (``MemoryWipeConfirm``); si falta → **422**. Reconcuenta + compara contra
-      los ``expected_*`` y borra o aborta (ver flujo abajo).
+      los ``expected_*`` y borra o aborta (ver flujo abajo). **Rate-limited** por ``user_id``
+      (techo bajo por hora, antes de tocar la DB); el preview no consume cuota. **429** con
+      ``Retry-After`` si se cruza el techo. fail-open si Redis cae.
 
     El preview vive en un POST (no en un GET) A PROPÓSITO: un GET debe ser seguro e
     idempotente, pero ``/memory/wipe`` es la superficie de una operación DESTRUCTIVA; un
@@ -335,6 +338,11 @@ async def wipe_memory(
         ``MemoryWipePreview`` (con ``?dry_run=true``) o ``MemoryWipeResult`` (execute) con
         los conteos por capa + ``total``.
     """
+    # EXECUTE rate-limit (P1 seguridad): el wipe destructivo es por-usuario y caro de
+    # auditar; el preview (dry_run) es read-only y NO se frena. Chequeado ANTES de tocar la
+    # DB. fail-open si Redis cae. 429 con Retry-After (mismo shape que export/auth).
+    if not dry_run and not await check_memory_wipe_rate_limit(store, user_id=str(user_id)):
+        raise too_many_requests(get_settings().memory_wipe_window_seconds)
     semantic, episodic, procedural = build_memory_stores(
         session, user_id, embedder=embedder, reranker=reranker
     )
