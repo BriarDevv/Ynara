@@ -35,6 +35,7 @@ from app.workers.celery_app import celery_app
 from app.workflows.audit_retention import purge_audit_log
 from app.workflows.consolidation import consolidate_session, consolidate_turn
 from app.workflows.decay import decay_procedural
+from app.workflows.episodic_retention import purge_episodic_memory
 
 # Raíz del proyecto (apps/backend) para los subprocesos: garantiza que el
 # ``from app...`` del script tenga el paquete en el sys.path aunque pytest se
@@ -104,6 +105,13 @@ class TestBeatScheduleConsistency:
         assert purge_audit_log.name in celery_app.tasks
         assert purge_audit_log.name == "workflows.purge_audit_log"
 
+    def test_purge_episodic_memory_task_is_registered(self) -> None:
+        """``purge_episodic_memory`` (retention episodica, referenciada por el beat)
+        esta registrada. El beat ``purge-episodic-memory-every-interval`` apunta a
+        ``workflows.purge_episodic_memory``."""
+        assert purge_episodic_memory.name in celery_app.tasks
+        assert purge_episodic_memory.name == "workflows.purge_episodic_memory"
+
     def test_every_beat_task_is_registered(self) -> None:
         """Generico: TODO ``task`` del beat_schedule existe en el registro real.
 
@@ -150,6 +158,7 @@ class TestAutodiscoveryRegistersTasks:
                 "workflows.consolidate_session",
                 "workflows.decay_procedural",
                 "workflows.purge_audit_log",
+                "workflows.purge_episodic_memory",
             }
             missing = required - set(celery_app.tasks)
             assert not missing, sorted(missing)
@@ -167,7 +176,7 @@ class TestAutodiscoveryRegistersTasks:
             "el autodiscovery NO registro las tasks de workflows "
             f"(stdout={result.stdout!r} stderr={result.stderr!r})"
         )
-        assert "OK 4" in result.stdout
+        assert "OK 5" in result.stdout
 
 
 class TestDecayIntervalImportTimeFallback:

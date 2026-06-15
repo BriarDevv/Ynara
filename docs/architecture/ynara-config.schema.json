@@ -178,6 +178,12 @@
           "minimum": 1,
           "maximum": 365,
           "description": "Maximo configurable (dias) de la retention sensible. Cap duro de ADR-007 D2 (<=365). Default 365."
+        },
+        "episodic_retention_interval_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30,
+          "description": "Cadencia (dias) del beat que borra episodios vencidos (purge_episodic_memory). NO es un periodo de retention: es cada cuanto corre el worker. Default 1 (diario), configurable. Cap 30 (mensual): guarda de privacidad para no dejar episodios sensibles vencidos vivos demasiado tiempo."
         }
       }
     },

@@ -77,7 +77,8 @@
     "retention_default_days": 365,
     "retention_sensitive_days": 180,
     "retention_sensitive_min_days": 30,
-    "retention_sensitive_max_days": 365
+    "retention_sensitive_max_days": 365,
+    "episodic_retention_interval_days": 1
   },
   "infrastructure": {
     "phase": "mvp",

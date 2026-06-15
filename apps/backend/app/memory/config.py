@@ -100,6 +100,17 @@ class RetentionConfig(BaseModel):
     retention_sensitive_days: int = Field(default=180, gt=0)
     retention_sensitive_min_days: int = Field(default=30, gt=0)
     retention_sensitive_max_days: int = Field(default=365, gt=0)
+    # Cadencia (en dias) del worker de retention episodica (beat). NO es un periodo
+    # de retention: es cada cuanto corre ``purge_episodic_memory`` para borrar los
+    # episodios vencidos (``created_at + retention_days < now``). Default 1 (diario)
+    # por privacidad — los episodios sensibles vencidos se borran pronto — pero es
+    # configurable (operador puede subirlo). Cadencia, no compounding: a diferencia
+    # del decay (14d para evitar compounding sin ``last_decayed_at``), la retention
+    # solo borra lo ya vencido, asi que correrla mas seguido es inocuo. Cap ``<=30``
+    # (mensual): una cadencia mayor dejaria los episodios sensibles vencidos vivos
+    # demasiado tiempo (hasta retention_days + interval); el cap es una guarda de
+    # privacidad contra una misconfiguracion (espeja el cap duro de las otras keys).
+    episodic_retention_interval_days: int = Field(default=1, gt=0, le=30)
 
     @model_validator(mode="after")
     def _check_retention_coherent(self) -> RetentionConfig:
