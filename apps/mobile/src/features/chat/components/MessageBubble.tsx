@@ -50,12 +50,20 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
     );
   }
 
-  // assistant
+  // assistant — mientras streamea: cursor al final + live region para que el
+  // lector de pantalla anuncie el texto que va llegando.
+  const streaming = message.status === "streaming";
   return (
     <View className="flex-row justify-start">
       <View className="max-w-[85%] flex-row gap-3">
         <View className={cn("mt-1 w-0.5 self-stretch rounded-pill", MODE_DOT_CLASS[mode])} />
-        <Text className="flex-1 text-body text-ink">{message.text}</Text>
+        <Text
+          className="flex-1 text-body text-ink"
+          accessibilityLiveRegion={streaming ? "polite" : "none"}
+        >
+          {message.text}
+          {streaming ? <Text className="text-ink-soft">▋</Text> : null}
+        </Text>
       </View>
     </View>
   );
