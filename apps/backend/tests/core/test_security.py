@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
-from jose import jwt
 
 from app.core.config import Settings
 from app.core.security import (
@@ -24,7 +24,7 @@ from app.core.security import (
     verify_token,
 )
 
-_SECRET = "test-secret-no-usar-en-prod"
+_SECRET = "test-secret-no-usar-en-prod-min-32b"
 _ALG = "HS256"
 
 
@@ -73,7 +73,7 @@ def test_tampered_token_rejected(patched_settings: Settings) -> None:
 
 def test_wrong_secret_rejected(patched_settings: Settings) -> None:
     # Firmado con OTRO secret -> la verificacion con el secret de la app falla.
-    foreign = jwt.encode({"sub": "x"}, "otro-secret", algorithm=_ALG)
+    foreign = jwt.encode({"sub": "x"}, "otro-secret-distinto-min-32-bytes!!", algorithm=_ALG)
     with pytest.raises(InvalidTokenError):
         verify_access_token(foreign)
 
@@ -94,7 +94,7 @@ def test_garbage_token_rejected(patched_settings: Settings) -> None:
 
 
 def test_token_without_exp_rejected(patched_settings: Settings) -> None:
-    # Defensa en profundidad: verify exige exp aunque jose no lo requiera.
+    # Defensa en profundidad: verify exige exp aunque PyJWT no lo requiera por default.
     no_exp = jwt.encode({"sub": "x"}, _SECRET, algorithm=_ALG)
     with pytest.raises(InvalidTokenError):
         verify_access_token(no_exp)
@@ -198,11 +198,11 @@ def test_legacy_token_without_type_accepted_as_access(patched_settings: Settings
 
 
 def test_invalid_token_message_does_not_leak_cause(patched_settings: Settings) -> None:
-    """El str de InvalidTokenError es estático ('token inválido'); no filtra jose (regla #4)."""
+    """El str de InvalidTokenError es estático ('token inválido'); no filtra PyJWT (regla #4)."""
     with pytest.raises(InvalidTokenError) as exc_info:
         verify_access_token("no-es-un-jwt")
     assert str(exc_info.value) == "token inválido"
-    # El detalle de jose queda solo en __cause__, nunca en el mensaje expuesto.
+    # El detalle de PyJWT queda solo en __cause__, nunca en el mensaje expuesto.
     assert "no-es-un-jwt" not in str(exc_info.value)
 
 

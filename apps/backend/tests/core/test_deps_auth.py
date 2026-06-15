@@ -25,7 +25,7 @@ from app.core.token_store import InMemoryTokenStore
 
 # ---------- settings determinista ----------
 
-_SECRET = "test-secret-no-usar-en-prod"
+_SECRET = "test-secret-no-usar-en-prod-min-32b"
 _ALG = "HS256"
 
 
@@ -95,10 +95,10 @@ def test_no_auth_header_returns_401(client: TestClient) -> None:
 
 def test_expired_token_returns_401(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # Mintear con expiración -1 minuto usando un Settings con expire=-1.
-    # jose permite exp en el pasado al encode; la verificación lo rechaza.
+    # PyJWT permite exp en el pasado al encode; la verificación lo rechaza.
     from datetime import UTC, datetime, timedelta
 
-    from jose import jwt as _jwt
+    import jwt as _jwt
 
     expired_token = _jwt.encode(
         {

@@ -336,8 +336,8 @@ async def refresh(body: RefreshRequest, store: TokenStoreDep, request: Request) 
     ``get_grace_marker`` None si Redis cae (un retry cae a rama 3 pero
     ``revoke_family`` también es no-op -> 401 sin revocación persistente).
 
-    Regla #4: 401 uniforme; ni jose, ni el token, ni el ``jti``/``sid`` se loguean
-    ni se devuelven (``verify_token`` deja el detalle de jose solo en ``__cause__``).
+    Regla #4: 401 uniforme; ni PyJWT, ni el token, ni el ``jti``/``sid`` se loguean
+    ni se devuelven (``verify_token`` deja el detalle de PyJWT solo en ``__cause__``).
     """
     try:
         payload = verify_token(body.refresh_token, expected_type="refresh")

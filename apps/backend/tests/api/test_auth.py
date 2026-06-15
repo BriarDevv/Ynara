@@ -771,21 +771,22 @@ async def test_refresh_con_access_token_401(db_session: AsyncSession) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 23. /auth/refresh con token basura -> 401 y sin leak de jose/token
+# 23. /auth/refresh con token basura -> 401 y sin leak de PyJWT/token
 # ---------------------------------------------------------------------------
 
 
 async def test_refresh_token_basura_401_sin_leak(db_session: AsyncSession) -> None:
-    """/refresh con firma mala -> 401; el response.text no filtra jose ni el token."""
+    """/refresh con firma mala -> 401; el response.text no filtra PyJWT ni el token."""
     client = await _client(db_session)
     try:
         async with client:
             garbage = "no-es-un-jwt-valido-12345"
             resp = await client.post("/v1/auth/refresh", json={"refresh_token": garbage})
         assert resp.status_code == 401
-        # Regla #4: ni el token crudo ni el detalle de jose en la respuesta.
+        # Regla #4: ni el token crudo ni el detalle de la lib JWT en la respuesta.
         assert garbage not in resp.text
         assert "jose" not in resp.text.lower()
+        assert "pyjwt" not in resp.text.lower()
         assert "signature" not in resp.text.lower()
     finally:
         app.dependency_overrides.clear()
@@ -1095,7 +1096,7 @@ async def test_token_viejo_sin_jti_me_200(db_session: AsyncSession) -> None:
     """Un access sin claim jti (pre-#63) autentica /me (se saltea el blocklist check)."""
     from datetime import UTC, datetime, timedelta
 
-    from jose import jwt
+    import jwt
 
     from app.core.config import get_settings
 
@@ -1374,7 +1375,7 @@ def _ratelimit_settings(*, max_attempts: int = 5, register_max: int = 10, refres
         _env_file=None,  # type: ignore[call-arg]
         DATABASE_URL="postgresql://test:test@localhost/test",
         REDIS_URL="redis://localhost:6379/0",
-        JWT_SECRET="test-secret-no-usar-en-prod",
+        JWT_SECRET="test-secret-no-usar-en-prod-min-32b",
         AUTH_LOGIN_MAX_ATTEMPTS=max_attempts,
         AUTH_LOGIN_WINDOW_SECONDS=900,
         AUTH_LOGIN_LOCKOUT_SECONDS=900,
@@ -1404,7 +1405,7 @@ def _mint_refresh_with_jti_no_sid(sub: str) -> str:
     """Mintea a mano un refresh CON jti+type pero SIN sid (token pre-item 1)."""
     from datetime import UTC, datetime, timedelta
 
-    from jose import jwt
+    import jwt
 
     from app.core.config import get_settings
 

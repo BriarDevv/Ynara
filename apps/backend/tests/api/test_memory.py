@@ -164,7 +164,7 @@ def _export_ratelimit_settings(*, export_max: int) -> Settings:
         _env_file=None,  # type: ignore[call-arg]
         DATABASE_URL="postgresql://test:test@localhost/test",
         REDIS_URL="redis://localhost:6379/0",
-        JWT_SECRET="test-secret-no-usar-en-prod",
+        JWT_SECRET="test-secret-no-usar-en-prod-min-32b",
         MEMORY_EXPORT_MAX_REQUESTS=export_max,
         MEMORY_EXPORT_WINDOW_SECONDS=3600,
     )
