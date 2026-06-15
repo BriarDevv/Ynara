@@ -18,7 +18,10 @@
 
 ### 1. Provisionar Postgres self-hosted
 
-- Postgres 16 con `shared_preload_libraries = 'pgvector'`.
+- Postgres 16 con `pgvector` instalado (la imagen `pgvector/pgvector:pg16`
+  usada en CI es una referencia válida). La extensión `vector` NO requiere
+  `shared_preload_libraries`; sí lo requiere `pg_stat_statements`
+  (observabilidad, paso 2): `shared_preload_libraries = 'pg_stat_statements'`.
 - Tuning base: `shared_buffers`, `work_mem`, `maintenance_work_mem`
   según RAM disponible.
 - Crear extensión: `CREATE EXTENSION IF NOT EXISTS vector;`.
