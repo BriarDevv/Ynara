@@ -13,7 +13,7 @@ los dominios, así que un access NO sirve como refresh aunque la firma valide.
 
 Ningún mensaje de error filtra datos del usuario (regla #4): ``verify_token``
 levanta ``InvalidTokenError`` sin distinguir expirado-vs-firma-inválida-vs-type
-incorrecto (no dar un oráculo); el detalle de ``jose`` queda en la cadena de la
+incorrecto (no dar un oráculo); el detalle de ``PyJWT`` queda en la cadena de la
 excepción (``__cause__``), NUNCA en el string del error ni en una respuesta.
 """
 
@@ -24,7 +24,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 import bcrypt
-from jose import JWTError, jwt
+import jwt
 
 from app.core.config import get_settings
 
@@ -158,7 +158,7 @@ def _decode_token(token: str) -> dict[str, Any]:
     """Decodifica + valida firma/exp. Levanta ``InvalidTokenError`` ante cualquier fallo.
 
     No distingue el motivo (firma/exp/malformado) hacia afuera: el string es
-    estático (``"token inválido"``); el detalle de ``jose`` queda solo en
+    estático (``"token inválido"``); el detalle de ``PyJWT`` queda solo en
     ``__cause__`` (regla #4: nunca en la respuesta ni en un log con ``str(exc)``).
     """
     settings = get_settings()
@@ -167,14 +167,14 @@ def _decode_token(token: str) -> dict[str, Any]:
             token,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
-            # Defensa en profundidad: exigir exp (jose no lo requiere por
-            # default) para que ningún token sin expiración sea válido.
-            # python-jose usa `require_exp`, no el `require: [...]` de PyJWT.
-            # `jti` NO se exige (require_jti) para no romper tokens viejos en
-            # vuelo minteados antes de #63 (sin jti).
-            options={"require_exp": True, "verify_exp": True},
+            # Defensa en profundidad: exigir `exp` presente (PyJWT por default NO
+            # lo requiere) para que ningún token sin expiración sea válido. En
+            # PyJWT el claim obligatorio va en `require: [...]` (no el `require_exp`
+            # de python-jose, que PyJWT ignoraría en silencio). `jti` NO se exige
+            # para no romper tokens viejos en vuelo minteados antes de #63 (sin jti).
+            options={"require": ["exp"], "verify_exp": True},
         )
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise InvalidTokenError("token inválido") from exc
 
 
@@ -209,7 +209,7 @@ def verify_access_token(token: str) -> dict[str, Any]:
     ``InvalidTokenError`` si la firma es inválida, el token expiró, está
     malformado o su ``type`` no es ``"access"`` (un refresh no autentica como
     access). Acepta tokens viejos sin ``type`` (compat de despliegue). El detalle
-    de ``jose`` queda en la cadena de la excepción para debug, NUNCA expuesto.
+    de ``PyJWT`` queda en la cadena de la excepción para debug, NUNCA expuesto.
     """
     return verify_token(token, expected_type="access")
 

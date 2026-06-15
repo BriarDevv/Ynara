@@ -114,7 +114,7 @@ def _sessions_ratelimit_settings(*, sessions_max: int) -> Settings:
         _env_file=None,  # type: ignore[call-arg]
         DATABASE_URL="postgresql://test:test@localhost/test",
         REDIS_URL="redis://localhost:6379/0",
-        JWT_SECRET="test-secret-no-usar-en-prod",
+        JWT_SECRET="test-secret-no-usar-en-prod-min-32b",
         SESSIONS_MAX_REQUESTS=sessions_max,
         SESSIONS_WINDOW_SECONDS=60,
     )

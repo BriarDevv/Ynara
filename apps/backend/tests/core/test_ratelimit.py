@@ -46,7 +46,7 @@ def _settings() -> Settings:
         _env_file=None,  # type: ignore[call-arg]
         DATABASE_URL="postgresql://test:test@localhost/test",
         REDIS_URL="redis://localhost:6379/0",
-        JWT_SECRET="test-secret-no-usar-en-prod",
+        JWT_SECRET="test-secret-no-usar-en-prod-min-32b",
         AUTH_LOGIN_MAX_ATTEMPTS=_MAX_ATTEMPTS,
         AUTH_LOGIN_WINDOW_SECONDS=900,
         AUTH_LOGIN_LOCKOUT_SECONDS=900,
