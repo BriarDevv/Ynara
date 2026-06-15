@@ -123,7 +123,13 @@ RerankerDep = Annotated[Reranker, Depends(get_reranker)]
 async def _semantic_page(
     store: SemanticMemoryStore, *, limit: int, offset: int
 ) -> SemanticMemoryPage:
-    """Arma la ``SemanticMemoryPage``: ``items`` paginados + ``total`` del user."""
+    """Arma la ``SemanticMemoryPage``: ``items`` paginados + ``total`` del user.
+
+    ``count`` + ``list_all`` NO son atómicos (dos statements bajo READ COMMITTED): si el
+    worker inserta/borra entre ambos, ``total`` puede diferir de la página por ~1 fila. Es
+    el trade-off ACEPTADO de toda paginación (staleness benigno, se reconcilia en el próximo
+    fetch). El export —que necesita consistencia total— usa ``list_all()`` sin ``count``.
+    """
     items = await store.list_all(limit=limit, offset=offset)
     total = await store.count()
     # ``total or 0`` por consistencia con sessions.py (el COUNT siempre da int acá, pero
@@ -134,7 +140,10 @@ async def _semantic_page(
 async def _episodic_page(
     store: EpisodicMemoryStore, *, limit: int, offset: int
 ) -> EpisodicMemoryPage:
-    """Arma la ``EpisodicMemoryPage``: ``items`` paginados + ``total`` del user."""
+    """Arma la ``EpisodicMemoryPage``: ``items`` paginados + ``total`` del user.
+
+    ``count`` + ``list_all`` no atómicos (TOCTOU benigno de paginación): ver ``_semantic_page``.
+    """
     items = await store.list_all(limit=limit, offset=offset)
     total = await store.count()
     # ``total or 0`` por consistencia con sessions.py (ver nota en ``_semantic_page``).
@@ -148,7 +157,8 @@ async def _procedural_page(
 
     Paginación en Postgres (``limit``/``offset``) + ``count()``, igual que
     ``_semantic_page`` / ``_episodic_page``. Antes ``list_all()`` traía TODAS las
-    filas y la página se recortaba en Python (no escalaba si la capa crecía).
+    filas y la página se recortaba en Python (no escalaba si la capa crecía). El
+    ``count`` + ``list_all`` no son atómicos (TOCTOU benigno: ver ``_semantic_page``).
     """
     items = await store.list_all(limit=limit, offset=offset)
     total = await store.count()

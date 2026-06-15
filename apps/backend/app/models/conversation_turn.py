@@ -6,6 +6,12 @@ turnos crudos (user/modelo) de una sesión, la **fuente** que el worker episódi
 ``episodic_memory`` (sagrada). Una vez consolidados, los turnos se **purgan**
 (``ConversationTurnStore.purge_session``): no son almacenamiento de largo plazo.
 
+Append-only: un turno se inserta una vez y nunca se modifica (se consolida y se
+purga, no se edita). Por eso ``updated_at`` (heredado del ``TimestampMixin``)
+siempre iguala a ``created_at``; se conserva por uniformidad con los ``*Out`` de
+las 3 capas de memoria —todos exponen ``updated_at``—, no porque los turnos se
+actualicen.
+
 A pesar de ser operativa, el ``content`` viaja **cifrado AES-256-GCM per-user**
 (``BYTEA``) vía ``app/core/crypto.py``, igual que ``semantic_memory.content`` /
 ``episodic_memory.summary`` (regla #4: cero PII en claro en la DB). El cifrado lo
