@@ -102,7 +102,7 @@ class MemoryPatchRequest(YnaraBaseModel):
 
 
 class MemoryWipePreview(YnaraBaseModel):
-    """Dry-run de ``GET /v1/memory/wipe``: conteos por capa de lo que se borraría.
+    """Dry-run de ``POST /v1/memory/wipe?dry_run=true``: conteos por capa de lo que se borraría.
 
     Read-only: el endpoint cuenta las 3 capas del user (``count()`` por store) y arma este
     preview. ``total`` es la suma de las 3 capas. **Solo enteros** (regla #4): NUNCA un campo

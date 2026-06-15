@@ -16,11 +16,13 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class ServingEndpoint(BaseModel):
-    """Un proceso vLLM del serving (ADR-013): su ``base_url`` y los
-    ``models`` (served_names) que anuncia.
+    """Un endpoint de serving (ADR-013): su ``base_url`` y los ``models``
+    (served_names) que anuncia. En 16GB el motor es Ollama/GGUF; en 24GB+ es
+    vLLM (ADR-014). El cliente HTTP es OpenAI-compatible, asi que la entrada
+    es la misma para ambos motores.
 
-    Cada entrada de ``LLM_SERVING`` = un proceso. ``served_name``, parsers
-    y quantization NO van acá: siguen en ``ynara.config.json`` (ADR-009 D4).
+    Cada entrada de ``LLM_SERVING`` = un endpoint/proceso. ``served_name``,
+    parsers y quantization NO van acá: siguen en ``ynara.config.json`` (ADR-009 D4).
     """
 
     base_url: str
@@ -50,11 +52,12 @@ class Settings(BaseSettings):
     celery_broker_url: str = Field("", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field("", alias="CELERY_RESULT_BACKEND")
 
-    # LLM serving (ADR-013): lista explícita de procesos vLLM. Cada entrada
-    # describe un proceso — su base_url y los served_names que sirve — y vive
-    # en .env (JSON). served_name, parsers y quantization siguen en
-    # ynara.config.json (ADR-009 D4). pydantic-settings parsea el JSON del env
-    # var para tipos complejos automáticamente (sin NoDecode).
+    # LLM serving (ADR-013): lista explícita de endpoints de serving (Ollama en
+    # 16GB / vLLM en 24GB+, ADR-014). Cada entrada describe un endpoint — su
+    # base_url y los served_names que sirve — y vive en .env (JSON). served_name,
+    # parsers y quantization siguen en ynara.config.json (ADR-009 D4).
+    # pydantic-settings parsea el JSON del env var para tipos complejos
+    # automáticamente (sin NoDecode).
     llm_serving: list[ServingEndpoint] = Field(
         default_factory=lambda: [
             ServingEndpoint(base_url="http://localhost:8001/v1", models=["gemma4"]),
@@ -63,10 +66,13 @@ class Settings(BaseSettings):
         alias="LLM_SERVING",
     )
     # `llm_backend` elige entre el Fake determinista (default, sin GPU) y los
-    # clientes vLLM reales. Paralelo a `embedding_backend`. En production el
+    # clientes HTTP reales. Paralelo a `embedding_backend`. En production el
     # serving real se fuerza igual (ver factory); este flag lo prende en
     # dev/staging (p.ej. apuntando a Ollama o a un vLLM local) SIN mentir
     # `environment` (que dispara los fail-fast de prod: JWT fuerte, CORS, key).
+    # El valor 'vllm' es un nombre legacy del cliente HTTP OpenAI-compatible: NO
+    # implica vLLM, es compatible tanto con el motor local de 16GB (Ollama/GGUF,
+    # ADR-014) como con vLLM en 24GB+.
     llm_backend: Literal["fake", "vllm"] = Field("fake", alias="LLM_BACKEND")
 
     # Embeddings (ADR-008: bge-m3 1024-dim on-prem). `embedding_backend` elige
@@ -221,6 +227,12 @@ class Settings(BaseSettings):
 
         Mantiene una sola fuente de verdad para el broker/result-backend cuando el
         deploy no las define por separado. Un valor explícito SIEMPRE se respeta.
+
+        Mutar ``self`` acá es el patrón idiomático de los ``model_validator(mode=
+        'after')`` de Pydantic v2 (el validator corre sobre la instancia ya
+        construida y devuelve ``self``): NO es una violación de inmutabilidad —
+        ocurre durante la construcción del modelo, antes de que el objeto se
+        exponga al resto de la app.
         """
         if not self.celery_broker_url:
             self.celery_broker_url = self.redis_url

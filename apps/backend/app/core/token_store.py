@@ -65,6 +65,11 @@ _INCR_WITH_TTL_LUA = (
 # que está caído cuando este alerting dispara.
 _DEGRADED_ALERT_WINDOW_SECONDS = 60.0
 # op-name -> último monotonic en que se emitió un capture_message para esa op.
+# El estado es POR-PROCESO (dict en memoria del worker), intencional bajo el
+# despliegue single-worker actual: 1 alert por op por ventana. Con N workers el
+# gate NO se comparte (no puede apoyarse en Redis, que es lo que está caído), así
+# que se esperan hasta N alerts por ventana (uno por proceso). Aceptable: el
+# objetivo es acotar el ruido, no garantizar exactamente-uno global.
 _last_degraded_alert: dict[str, float] = {}
 
 

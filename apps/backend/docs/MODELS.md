@@ -111,7 +111,7 @@ Decay exponencial sobre `confidence`; worker Celery diario aplica
 | `user_id` | UUID FK → users.id, ON DELETE CASCADE | indexed |
 | `key` | VARCHAR(120) NOT NULL | UNIQUE con `user_id` |
 | `value` | JSONB NOT NULL | Plain, sin cifrar |
-| `confidence` | REAL NOT NULL DEFAULT 1.0 | 0-1, decay aplica desde `last_reinforced_at` |
+| `confidence` | DOUBLE PRECISION NOT NULL DEFAULT 1.0 | 0-1, decay aplica desde `last_reinforced_at` (`sa.Float()` genera `double precision` en Postgres) |
 | `last_reinforced_at` | TIMESTAMPTZ NOT NULL DEFAULT now() | Resetea con cada `upsert` del mismo key |
 | `stale` | BOOLEAN NOT NULL DEFAULT false | `true` cuando `confidence < 0.3`. El router no inyecta automáticamente entradas stale; el agente decide si preguntar al usuario |
 | `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
@@ -258,11 +258,16 @@ e incluye:
 
 1. Extensión `pgvector` activa.
 2. Los 4 enums (`mode_enum`, `memory_layer_enum`, `llm_model_enum`,
-   `audit_operation_enum`).
+   `audit_operation_enum`). El enum `turn_role_enum` NO está acá: se agrega en la
+   migración `20260614_1700_conversation_turns_table` (ver abajo).
 3. Las 6 tablas en orden de FKs: `users` → `sessions` → `semantic_memory`,
    `episodic_memory`, `procedural_memory`, `audit_log`.
 4. Índices HNSW sobre embeddings.
 5. Tests up/downgrade ida y vuelta.
+
+La migración `20260614_1700_conversation_turns_table` agrega el enum
+`turn_role_enum` + la tabla `conversation_turns` (FKs a `users` y `sessions`),
+llevando el total a **7 tablas** (#209).
 
 Ver [`docs/MIGRATIONS.md`](./MIGRATIONS.md) para la política completa.
 

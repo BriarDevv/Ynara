@@ -3,9 +3,10 @@
 
 Las dos read surfaces (list paginado + detail) y el cierre lifecycle comparten
 el MISMO aislamiento por usuario: el ``user_id`` sale del JWT (``CurrentUser``) y
-todo query filtra por el. El close ademas setea ``ended_at`` (trigger que mas
-adelante, M10 Ola 4, dispara la consolidacion episodica); aca entrega SOLO el
-lifecycle, sin tocar memoria ni encolar nada.
+todo query filtra por el. El close ademas setea ``ended_at`` y, en el PRIMER
+cierre real, encola ``consolidate_session`` DESPUES del commit (consolidacion
+episodica), con semantica best-effort fail-open: el broker caido NO rompe el
+close. No toca memoria de forma sincrona.
 
 Decisiones de diseno (criticadas, NO re-litigar):
 

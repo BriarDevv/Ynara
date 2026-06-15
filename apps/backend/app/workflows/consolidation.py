@@ -73,7 +73,8 @@ def _build_embedder(settings: Settings) -> EmbeddingClient:
 
     Delega en la factory (``build_embedder``): ``embedding_backend='fake'``
     (default sin GPU) -> ``FakeEmbeddingClient``; ``'vllm'`` -> cliente real
-    (aun no implementado, falla fuerte). El gate vive en un solo lugar.
+    (``VllmEmbeddingClient``, ya implementado; en 16GB apunta a Ollama via su
+    API OpenAI-compatible de embeddings, ADR-014). El gate vive en un solo lugar.
     """
     return build_embedder(settings)
 
@@ -84,9 +85,9 @@ def _build_consolidation_llm(settings: Settings) -> LLMClient:
     Delega en la factory (``build_llm_client``): en dev/test devuelve el
     ``FakeLlmClient`` (sin resultados encolados -> el ``QwenMemoryEngine``
     aplica 0 ops y commitea sin efectos, comportamiento historico de M8); en
-    production devuelve el ``ResilientClient`` real contra el pool de vLLM.
-    El served set sale de ``ynara.config.json`` (incluye 'qwen', el modelo de
-    consolidacion).
+    production devuelve el ``ResilientClient`` real contra el servidor
+    Ollama/GGUF local (ADR-014; vLLM en 24GB+). El served set sale de
+    ``ynara.config.json`` (incluye 'qwen', el modelo de consolidacion).
     """
     return build_llm_client(settings, load_llm_config())
 

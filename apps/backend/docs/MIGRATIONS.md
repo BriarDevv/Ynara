@@ -81,8 +81,10 @@ uv run alembic downgrade <rev>  # bajar a revisión específica
 
 > ⚠️ El roundtrip `downgrade` **destruye datos**: corré estos comandos SOLO contra
 > una DB de tests (`TEST_DATABASE_URL`, p.ej. `localhost:5433/ynara_test`), **nunca**
-> contra el `DATABASE_URL` de dev — que resuelve a la **Supabase de prod**. `env.py`
-> apunta el roundtrip a `TEST_DATABASE_URL` justamente por esto.
+> contra el `DATABASE_URL` de dev. Por default ese `DATABASE_URL` apunta a la DB
+> **local** (`localhost:5433/ynara_dev`); el riesgo de tocar prod aplica solo si se
+> cambió manualmente a la Supabase de prod (OPCION B del `.env.example`). `env.py`
+> apunta el roundtrip a `TEST_DATABASE_URL` justamente para evitarlo en cualquier caso.
 
 ```sh
 uv run alembic check            # ¿el modelo coincide con la última migración?

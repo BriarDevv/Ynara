@@ -2,8 +2,9 @@
 
 FastAPI + Pydantic v2 + SQLAlchemy 2 async + Alembic + Celery + uv.
 Cabeza del producto: **router LLM, memoria y tools del agente**. Toda
-inferencia es on-prem (vLLM dual: Gemma conversacional + Qwen agente);
-ningún dato de usuario sale del perímetro (regla #4).
+inferencia es on-prem (Ollama/GGUF en 16GB; vLLM para 24GB+ — ADR-014):
+Gemma conversacional + Qwen agente; ningún dato de usuario sale del
+perímetro (regla #4).
 
 ## Antes de tocar nada
 

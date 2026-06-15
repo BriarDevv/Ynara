@@ -40,7 +40,9 @@
     }
   }
   ```
-- **Errores posibles**: `calendar_unauthorized`, `overlap`, `invalid_time`.
+- **Estado**: stub. El único error emitido hoy es `invalid_arguments` (argumentos
+  malformados, p.ej. fecha que no es ISO 8601). No hay integración real con un
+  calendario todavía.
 
 ### calendar.list_events
 

@@ -1,13 +1,16 @@
 """Normalizador de tool calls en formato OpenAI (M2).
 
-vLLM convierte el formato custom de cada modelo (``gemma4`` / ``hermes``)
-a tool calls OpenAI estandar en el response HTTP. Por eso el backend
-**siempre** ve ``tool_calls`` en formato OpenAI, sin importar el modelo, y
-alcanza con UN solo normalizador en Python.
+El servidor de inferencia convierte el formato custom de cada modelo
+(``gemma4`` / ``hermes``) a tool calls OpenAI estandar en el response HTTP.
+El cliente HTTP del backend es OpenAI-compatible (sirve igual para Ollama en
+16GB o vLLM en 24GB+, ADR-014), asi que **siempre** ve ``tool_calls`` en
+formato OpenAI sin importar el modelo, y alcanza con UN solo normalizador en
+Python.
 
 El mapping ``tool_parsers`` de ``ynara.config.json`` (``hermes`` /
 ``gemma4``) documenta que flag ``--tool-call-parser`` lanzar en el SERVER
-vLLM (infra); **no se usa para parsear en Python**.
+vLLM (infra de 24GB+); **no se usa para parsear en Python**. En Ollama ese
+flag NO aplica: el parsing de tool calls es interno al modelo/servidor.
 
 Shape OpenAI esperado en ``message.tool_calls[i]``::
 

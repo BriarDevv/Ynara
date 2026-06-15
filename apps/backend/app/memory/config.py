@@ -16,7 +16,7 @@ erroneo, key extra) o cuando la combinacion de thresholds es incoherente
 Este modulo es un sibling de COMPORTAMIENTO de las tablas sagradas
 (``semantic``/``episodic``/``procedural``/``audit``): parsea config, no toca
 columnas. Queda como punto de extension unico para futuras keys de
-``[memory]`` (las 4 de retention de ADR-007 D1, deuda hermana fuera del
+``[memory]`` (las 4 de retention de ADR-007 D2, deuda hermana fuera del
 scope de #211): un ``RetentionConfig`` futuro vive aca sin re-arquitectura.
 """
 

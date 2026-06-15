@@ -62,10 +62,12 @@ celery_app.conf.update(
     # consolidate_turn (ADD semantic sin dedup) NO duplica hechos al reintentar.
     # task_acks_late=True + retries es Ola 3 (search-before-add idempotente).
     task_acks_late=False,
-    # Solo surte efecto con task_acks_late=True (Ola 3): rechaza/reencola un mensaje
-    # AUN NO ackeado si el worker muere. Bajo el at-most-once actual (early-ack) es
-    # INERTE — el mensaje ya se ackeo antes de ejecutar. Se deja seteado como
-    # preparacion para Ola 3; hoy NO da proteccion de crash por si mismo.
+    # ⚠️ INERTE HOY (early-ack / at-most-once): este flag NO da ninguna proteccion
+    # de crash bajo la config actual. Solo surte efecto con task_acks_late=True
+    # (Ola 3): recien ahi rechaza/reencola un mensaje AUN NO ackeado si el worker
+    # muere. Con task_acks_late=False el mensaje YA se ackeo antes de ejecutar, asi
+    # que no hay nada que reencolar. Se deja seteado SOLO como preparacion para
+    # Ola 3; no asumir que protege contra worker-lost hoy.
     task_reject_on_worker_lost=True,
     # Sin pipelining: un mensaje por worker a la vez (tasks pesadas, no rafagas).
     worker_prefetch_multiplier=1,

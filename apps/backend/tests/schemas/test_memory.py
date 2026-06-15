@@ -116,7 +116,7 @@ class TestEpisodicMemoryCreate:
                 retention_days=days,
             )
 
-    def test_sensitive_retention_capped_at_365(self) -> None:
+    def test_sensitive_retention_over_365_rejected(self) -> None:
         """ADR-007 D2: is_sensitive=True ⇒ retention_days ≤ 365."""
         with pytest.raises(ValidationError, match="ADR-007 D2"):
             EpisodicMemoryCreate(
