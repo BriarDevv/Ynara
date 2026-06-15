@@ -21,7 +21,7 @@ WezTerm, ConEmu).
    `git checkout -b feat/web-modo-bienestar`.
 2. Editar código.
 3. Lint + format:
-   - JS/TS: `pnpm biome check --apply`.
+   - JS/TS: `pnpm biome check --write`.
    - Python: `cd apps/backend && uv run ruff check . --fix && uv run ruff format .`.
 4. Tests:
    - `pnpm turbo test`.
@@ -92,7 +92,7 @@ qwen :8002 / bge :8003):
 
 - `pnpm turbo run dev --filter web --filter backend` levanta solo
   esos dos.
-- `pnpm biome check --apply` antes de commitear suele evitar
+- `pnpm biome check --write` antes de commitear suele evitar
   reverts.
 - Para debuggear queries SQL de SQLAlchemy: setear
   `SQLALCHEMY_ECHO=1` en `.env`.

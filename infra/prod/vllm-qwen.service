@@ -1,5 +1,8 @@
 # Ynara · vLLM · Qwen 3.5-9B (agente) — systemd unit de produccion.
 #
+# ACTUALIZACION (ADR-014): en 16 GB el motor es Ollama/GGUF, NO vLLM. Esta unit es la
+# ruta vLLM para GPU de 24 GB+; la topologia ADR-012 D2 de abajo es el plan original.
+#
 # Companion de vllm-gemma.service (issue #212). Topologia ADR-012 D2: single_process
 # co-residente — gemma 12B + qwen 9B + bge-m3 en la MISMA GPU sin swap. Una unit por
 # proceso (ADR-013: N procesos = N units). Levantar el stack completo:

@@ -91,7 +91,7 @@ lint-py:
 format: format-js format-py
 
 format-js:
-	pnpm biome check --apply .
+	pnpm biome check --write .
 
 format-py:
 	cd apps/backend && uv run ruff format .

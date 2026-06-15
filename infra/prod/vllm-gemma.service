@@ -1,8 +1,13 @@
 # Ynara · vLLM · Gemma 4 12B (conversacional) — systemd unit de produccion.
 #
+# ACTUALIZACION (ADR-014): en GPU de 16 GB el motor de serving es Ollama/GGUF, NO
+# vLLM (los 3 modelos no co-residen bajo vLLM en 16 GB — medicion #207). Esta unit
+# es la ruta vLLM para GPU de 24 GB+; la topologia ADR-012 D2 de abajo es el plan
+# original que ADR-014 acoto a 24 GB+.
+#
 # Reemplaza el `start-vllm.sh` (dev) por una unit por proceso en prod (issue #212).
 # Topologia ADR-012 D2: single_process co-residente — los 3 modelos (gemma 12B +
-# qwen 9B + bge-m3) co-residen en la MISMA GPU (RTX 4080 Super 16 GB) sin swap.
+# qwen 9B + bge-m3) co-residen en la MISMA GPU de 24 GB+ (ADR-014) sin swap.
 # Una unit por proceso (espeja ADR-013: N procesos = N units); habilitar las 3
 # juntas para levantar el stack completo bajo systemd:
 #   systemctl enable --now vllm-gemma.service vllm-qwen.service vllm-bge.service
