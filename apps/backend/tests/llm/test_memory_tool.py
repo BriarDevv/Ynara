@@ -286,6 +286,14 @@ class TestMemoryUpdate:
         assert "error" not in result
         assert result["content"] == "actualizado"  # type: ignore[index]
         assert store.update_calls[0]["memory_id"] == mem_id
+        # Proyeccion (regla #4): el modelo ve solo {id, content, importance}, NUNCA
+        # user_id, source_session_id ni timestamps (mismo contrato que memory.search).
+        assert result["id"] == str(mem_id)  # type: ignore[index]
+        assert "importance" in result
+        assert "user_id" not in result
+        assert "source_session_id" not in result
+        assert "created_at" not in result
+        assert "updated_at" not in result
 
     async def test_store_returns_none_yields_not_found(self) -> None:
         store = FakeSemanticStore(update_result=None)
