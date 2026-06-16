@@ -11,9 +11,8 @@ import { useUserStore } from "@/stores/user";
 /**
  * Layout del flujo de onboarding.
  *
- * - Si el user ya completó onboarding → redirect a `/` (que vuelve a
- *   bounciar a `/onboarding`). TODO(Sesión 5): cambiar a `/home` cuando
- *   exista. Sin esto, un user con `onboardingCompleted=true` que tipea
+ * - Si el user ya completó onboarding → redirect a `/hoy` (la tab Hoy del
+ *   app shell). Sin esto, un user con `onboardingCompleted=true` que tipea
  *   `/onboarding/*` cae en un 404 muerto.
  * - Header sticky con ProgressDots + skip-all.
  * - El [step]/page renderiza el step actual; la prop `total/current`
@@ -26,8 +25,9 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
   const completed = useUserStore((s) => s.onboardingCompleted);
 
   useEffect(() => {
-    // TODO(Sesión 5): cambiar a "/home" cuando exista.
-    if (completed) router.replace("/");
+    // Completo → directo a la home real; `/hoy` exige onboardingCompleted, así
+    // que no rebota (evita el salto extra por `/`).
+    if (completed) router.replace("/hoy");
   }, [completed, router]);
 
   if (completed) return null;
@@ -59,7 +59,8 @@ function OnboardingHeaderWithProgress() {
 
   const handleSkipAll = () => {
     reset();
-    // TODO(Sesión 5): cambiar a "/home" cuando exista.
+    // Tras el reset el user sigue sin onboarding completo: `/` lo reenvía a
+    // `/onboarding` (arranque limpio). No va a `/hoy` (lo bloquearía el guard).
     router.replace("/");
   };
 
