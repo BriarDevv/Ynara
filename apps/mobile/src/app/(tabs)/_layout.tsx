@@ -63,6 +63,26 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="memoria"
+        options={{
+          title: "Memoria",
+          tabBarIcon: ({ color, focused }) => (
+            // Diamante (motivo de memoria de la marca): cuadrado rotado 45°.
+            <View
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: 3,
+                borderWidth: 2,
+                borderColor: color,
+                backgroundColor: focused ? color : "transparent",
+                transform: [{ rotate: "45deg" }],
+              }}
+            />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
