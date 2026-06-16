@@ -9,11 +9,21 @@
 type ApiConfig = {
   baseUrl: string;
   getToken: () => string | null;
+  /**
+   * Transporte HTTP. Default: el `fetch` global, resuelto en cada llamada (no la
+   * referencia capturada) para que un parche posterior —MSW sobre el fetch global
+   * en web— tome efecto. Inyectable para mock-first sin tocar los hooks: mobile
+   * cablea un mock-fetch del dominio "Hoy" cuando `EXPO_PUBLIC_ENABLE_MOCKS` está
+   * prendido y delega el resto (auth incluido) al fetch real. Core siempre pasa
+   * una URL string ya resuelta.
+   */
+  fetchImpl: (input: string, init?: RequestInit) => Promise<Response>;
 };
 
 let config: ApiConfig = {
   baseUrl: "http://localhost:8080",
   getToken: () => null,
+  fetchImpl: (input, init) => fetch(input, init),
 };
 
 /** Cablea base URL y token provider. Cada app lo llama una vez al cargar. */
@@ -82,7 +92,7 @@ async function request<T>(path: string, init: FetchInit = {}): Promise<T> {
     applyAuthHeader(headers, url);
   }
 
-  const response = await fetch(url, {
+  const response = await config.fetchImpl(url, {
     ...init,
     headers,
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
