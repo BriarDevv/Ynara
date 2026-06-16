@@ -19,7 +19,7 @@ const HOLD_MS = 1500;
  * - Si el usuario pidió `motion=reduce` (o el OS lo pide y no hay override),
  *   se omite la animación y el mark se muestra estático.
  * - El parent maneja el unmount via `onComplete` (típicamente navegando
- *   a `/?welcome=true` — TODO(Sesión 5): cambiar a `/home`).
+ *   a `/hoy?welcome=true`, la tab Hoy del app shell).
  */
 export function CelebrationOutro({ onComplete }: Props) {
   const motion = useA11yStore((s) => s.motion);

@@ -29,7 +29,8 @@ type Returns = {
  *  4. Resetea el draft del onboarding.
  *  5. Setea `isCelebrating=true` para que la UI monte `CelebrationOutro`.
  *  6. Cuando `CelebrationOutro` llama `triggerOutroComplete()`, navega
- *     a `/?welcome=true` (TODO(Sesión 5): cambiar a `/home?welcome=true`).
+ *     a `/hoy?welcome=true` (la tab Hoy del app shell; el query param dispara
+ *     el toast de bienvenida que `HoyView` consume y limpia).
  *
  * El a11y vive en `useA11yStore` (D3), no en el draft.
  */
@@ -102,8 +103,7 @@ export function useCompleteOnboarding(): Returns & {
   }, [mutation]);
 
   const triggerOutroComplete = useCallback(() => {
-    // TODO(Sesión 5): cambiar a "/home?welcome=true" cuando exista.
-    router.replace("/?welcome=true");
+    router.replace("/hoy?welcome=true");
   }, [router]);
 
   return {
