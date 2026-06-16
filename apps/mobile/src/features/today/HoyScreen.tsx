@@ -5,10 +5,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useUserStore } from "@/stores/user";
 import { HoyHeader } from "./components/HoyHeader";
 import { PrioritiesSection } from "./components/PrioritiesSection";
+import { RecapSection } from "./components/RecapSection";
+import { SuggestionsSection } from "./components/SuggestionsSection";
 
 /**
  * Pantalla **Hoy** (mobile) — la home real post-onboarding (wireframe 06):
- * header + Prioridades del día. Sugerencias y Recap llegan en la fase siguiente.
+ * header + Prioridades del día + Sugerencias ("Ynara sugiere") + Recap.
  * Espejo de `HoyView` de web, sin el fondo aurora ni el stagger GSAP (flourishes
  * exclusivos de web).
  *
@@ -27,6 +29,8 @@ export function HoyScreen() {
       <ScrollView contentContainerClassName="gap-8 px-6 py-8">
         <HoyHeader displayName={displayName} activeMode={activeMode} now={now} />
         <PrioritiesSection />
+        <SuggestionsSection />
+        <RecapSection />
       </ScrollView>
     </SafeAreaView>
   );
