@@ -1,5 +1,6 @@
 import { formatEntryDate, type TimelineEntry } from "@ynara/core/features/memory";
-import { Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Pressable, Text, View } from "react-native";
 import { cn } from "@/lib/cn";
 import { LAYER_BY_ID, LAYER_DOT_CLASS } from "../layers";
 
@@ -13,14 +14,26 @@ type Props = {
 
 /**
  * Una fila del timeline de memoria: dot de la capa + etiqueta + el recuerdo +
- * su fecha relativa. Espejo de `TimelineEntryRow` de web (sin el ícono de
- * `@ynara/ui` ni el link al detalle: navegar al detalle llega en el PR siguiente).
- * RN no soporta `divide-y` → separador con `border-t` por fila salvo la primera.
+ * su fecha relativa. **Tappable** → abre el detalle (`/memoria/[ref]?capa=`): la
+ * capa viaja por query porque la ruta `[ref]` es de un solo segmento y el
+ * detalle del backend necesita `{layer}/{ref}`. RN no soporta `divide-y` → el
+ * separador es un `border-t` por fila salvo la primera.
  */
 export function TimelineEntryRow({ entry, now, first }: Props) {
+  const router = useRouter();
   const layer = LAYER_BY_ID[entry.layer];
   return (
-    <View className={cn("flex-row items-start gap-3 py-3.5", !first && "border-t border-border")}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${layer.label}: ${entry.title}`}
+      onPress={() =>
+        router.push({ pathname: "/memoria/[ref]", params: { ref: entry.ref, capa: entry.layer } })
+      }
+      className={cn(
+        "flex-row items-start gap-3 py-3.5 active:opacity-60",
+        !first && "border-t border-border",
+      )}
+    >
       <View className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-pill", LAYER_DOT_CLASS[entry.layer])} />
       <View className="min-w-0 flex-1 gap-1">
         <Text className="text-caption text-ink-soft">{layer.label}</Text>
@@ -31,6 +44,7 @@ export function TimelineEntryRow({ entry, now, first }: Props) {
       <Text className="mt-0.5 shrink-0 text-body-sm text-ink-soft">
         {formatEntryDate(entry.date, now)}
       </Text>
-    </View>
+      <Text className="mt-0.5 shrink-0 text-body text-ink-faint">›</Text>
+    </Pressable>
   );
 }
