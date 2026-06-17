@@ -11,6 +11,7 @@ import { HttpResponse, http } from "msw";
 import { agendaHandlers } from "@/features/agenda/mocks";
 import { cannedActions, cannedReply, isAgentMode } from "@/features/chat/constants";
 import { memoryHandlers } from "@/features/memory/mocks";
+import { profileHandlers } from "@/features/profile/mocks";
 import { todayHandlers } from "@/features/today/mocks";
 import { env } from "./env";
 
@@ -185,6 +186,9 @@ export const handlers = [
       },
     });
   }),
+
+  // Perfil (PATCH /v1/users/me) — Fase G. Handlers viven con la feature.
+  ...profileHandlers,
 
   // Memoria — Fase C. Handlers + fixtures viven con la feature.
   ...memoryHandlers,

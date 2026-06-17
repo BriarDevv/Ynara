@@ -1,21 +1,15 @@
 import type { Metadata } from "next";
-import { TabPlaceholder } from "@/components/TabPlaceholder";
+import { TuView } from "@/features/profile/components/TuView";
 
 export const metadata: Metadata = {
   title: "Tú",
 };
 
 /**
- * Tab **Tú** (perfil/ajustes). Stub hasta la Fase G, donde se deriva del
- * design system (no hay wireframe): perfil + memoria/búsqueda + a11y +
- * retención/export/wipe + logout.
+ * Tab **Tú** (build-plan Fase G): perfil, memoria, a11y y cuenta. La page
+ * (server) aporta el título; la vista real es client (`TuView`, hooks + fondo
+ * vivo). El guard del grupo `(app)` exige onboarding completo.
  */
 export default function TuPage() {
-  return (
-    <TabPlaceholder
-      icon="adaptacion"
-      title="Tú"
-      hint="Tu perfil, tu memoria y cómo Ynara se adapta a vos. En camino."
-    />
-  );
+  return <TuView />;
 }
