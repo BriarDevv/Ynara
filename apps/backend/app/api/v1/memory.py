@@ -81,6 +81,8 @@ from app.schemas.memory_api import (
     MemoryExport,
     MemoryGroupedResponse,
     MemoryPatchRequest,
+    MemorySearchHit,
+    MemorySearchResponse,
     MemoryWipeConfirm,
     MemoryWipePreview,
     MemoryWipeResult,
@@ -449,6 +451,95 @@ async def wipe_memory(
         procedural=proc_wiped,
         total=sem_wiped + epi_wiped + proc_wiped,
     )
+
+
+# --- Búsqueda semántica (GET /v1/memory/search) ---------------------------------
+# Top-N por capa SEMÁNTICAMENTE buscable (semantic + episodic). El `score` es un
+# proxy por RANK con el mismo decaimiento que el mock del front (contrato de
+# presentación): el reranker del store no expone su score crudo y la firma sagrada
+# (`app/memory/`) no se toca (regla #3). Procedural NO entra: es key-value, el store
+# no embeddea ni hace búsqueda semántica.
+_SEARCH_LIMIT_PER_LAYER = 10
+_SEARCH_SCORE_TOP = 0.95
+_SEARCH_SCORE_STEP = 0.08
+_SEARCH_SCORE_FLOOR = 0.5
+
+
+def _rank_score(index: int) -> float:
+    """Score 0..1 decreciente por posición (proxy de relevancia; ver ``MemorySearchHit``)."""
+    return max(_SEARCH_SCORE_FLOOR, _SEARCH_SCORE_TOP - index * _SEARCH_SCORE_STEP)
+
+
+def _build_search_response(
+    query: str,
+    semantic_results: list[SemanticMemoryOut],
+    episodic_results: list[EpisodicMemoryOut],
+) -> MemorySearchResponse:
+    """Mapea los ``*Out`` ya rankeados (semantic + episodic) al envelope de búsqueda.
+
+    Orden: primero los hechos (semantic), luego los momentos (episodic) — espeja el
+    mock del front. El ``score`` se asigna por posición en la lista combinada
+    (``_rank_score(len(results))`` en cada append). ``ref`` = UUID; ``snippet`` =
+    ``content`` / ``summary`` ya descifrado por el store; ``occurred_at`` =
+    ``created_at`` (semantic) / ``occurred_at`` (episodic).
+    """
+    results: list[MemorySearchHit] = []
+    for sem in semantic_results:
+        results.append(
+            MemorySearchHit(
+                layer=MemoryLayer.SEMANTIC,
+                ref=str(sem.id),
+                snippet=sem.content,
+                score=_rank_score(len(results)),
+                occurred_at=sem.created_at,
+            )
+        )
+    for epi in episodic_results:
+        results.append(
+            MemorySearchHit(
+                layer=MemoryLayer.EPISODIC,
+                ref=str(epi.id),
+                snippet=epi.summary,
+                score=_rank_score(len(results)),
+                occurred_at=epi.occurred_at,
+            )
+        )
+    return MemorySearchResponse(query=query, total=len(results), results=results)
+
+
+@router.get("/memory/search", response_model=MemorySearchResponse, status_code=200)
+async def search_memory(
+    session: DbSession,
+    user_id: CurrentUser,
+    embedder: EmbedderDep,
+    reranker: RerankerDep,
+    q: Annotated[str, Query(min_length=1, max_length=200)],
+) -> MemorySearchResponse:
+    """Búsqueda semántica en la memoria del usuario (hechos + momentos).
+
+    - ``q`` es la query (requerida; 1..200 chars → 422 fuera de rango). El front la
+      dispara con ≥2 chars; acá una query en blanco tras ``strip`` devuelve un
+      resultado vacío (200, no 422).
+    - Corre el pipeline del store (embed → ANN top-K → descifrar → rerank) sobre las
+      capas semánticamente buscables (``SemanticMemoryStore`` / ``EpisodicMemoryStore``),
+      top-``_SEARCH_LIMIT_PER_LAYER`` por capa. NO toca ``app/memory/`` (regla #3):
+      solo llama a ``search`` (read).
+    - AISLAMIENTO: los stores filtran por ``user_id`` (del JWT) en el ``__init__``;
+      jamás se busca en memoria ajena.
+
+    Regla #4: el ``snippet`` viaja descifrado (el store descifra in-process); el blob
+    cifrado nunca entra a la respuesta. ``score`` es un proxy por rank.
+    """
+    query = q.strip()
+    if not query:
+        return MemorySearchResponse(query=q, total=0, results=[])
+
+    semantic, episodic, _procedural = build_memory_stores(
+        session, user_id, embedder=embedder, reranker=reranker
+    )
+    semantic_results = await semantic.search(query, limit=_SEARCH_LIMIT_PER_LAYER)
+    episodic_results = await episodic.search(query, limit=_SEARCH_LIMIT_PER_LAYER)
+    return _build_search_response(query, semantic_results, episodic_results)
 
 
 @router.get("/memory/{layer}/{ref}", response_model=None, status_code=200)
