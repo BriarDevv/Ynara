@@ -3,9 +3,11 @@ import type {
   MemoryList,
   MemorySearchHit,
   MemorySearchResponse,
+  MemoryWipeConfirm,
   ProceduralMemoryOut,
   SemanticMemoryOut,
 } from "@ynara/shared-schemas";
+import { MemoryWipeConfirmSchema } from "@ynara/shared-schemas";
 import { HttpResponse, http } from "msw";
 import { env } from "@/lib/env";
 
@@ -322,5 +324,80 @@ export const memoryHandlers = [
       }
     }
     return removed ? new HttpResponse(null, { status: 204 }) : memoryNotFound();
+  }),
+
+  // `GET /v1/memory/export` — export versionado de las 3 capas completas
+  // (descifradas, sin paginar). El shape sigue `MemoryExportSchema`.
+  http.get(apiUrl("/v1/memory/export"), () => {
+    const list = getStore();
+    return HttpResponse.json({
+      version: 1,
+      exported_at: new Date().toISOString(),
+      semantic: list.semantic.items,
+      episodic: list.episodic.items,
+      procedural: list.procedural.items,
+    });
+  }),
+
+  // `POST /v1/memory/wipe` — preview (`?dry_run=true`) o execute.
+  //
+  // dry_run=true  → 200 con conteos actuales (lo que se borraría). No muta.
+  // execute       → valida `expected_*`; si no coinciden con el recount →
+  //                 409 con conteos actuales y NO borra nada (guarda de
+  //                 intención, regla #3). Si coinciden → vacía las 3 capas.
+  http.post(apiUrl("/v1/memory/wipe"), async ({ request }) => {
+    const url = new URL(request.url);
+    const isDryRun = url.searchParams.get("dry_run") === "true";
+    const list = getStore();
+
+    const semantic = list.semantic.items.length;
+    const episodic = list.episodic.items.length;
+    const procedural = list.procedural.items.length;
+    const total = semantic + episodic + procedural;
+
+    if (isDryRun) {
+      return HttpResponse.json({ semantic, episodic, procedural, total });
+    }
+
+    // Execute: requiere body con los expected_* (guarda de intención).
+    const json = await request.json().catch(() => null);
+    const parsed = MemoryWipeConfirmSchema.safeParse(json);
+    if (!parsed.success) {
+      return HttpResponse.json(
+        { error: "validation", detail: "body inválido: faltan o son inválidos expected_*" },
+        { status: 422 },
+      );
+    }
+
+    const { expected_semantic, expected_episodic, expected_procedural } =
+      parsed.data as MemoryWipeConfirm;
+
+    // Reconteo actual; si no coincide con los expected → 409, sin borrar nada.
+    if (
+      expected_semantic !== semantic ||
+      expected_episodic !== episodic ||
+      expected_procedural !== procedural
+    ) {
+      return HttpResponse.json(
+        {
+          message: "los conteos cambiaron, revisá de nuevo",
+          semantic,
+          episodic,
+          procedural,
+          total,
+        },
+        { status: 409 },
+      );
+    }
+
+    // Coinciden → vaciar las 3 capas del store.
+    list.semantic.items = [];
+    list.semantic.total = 0;
+    list.episodic.items = [];
+    list.episodic.total = 0;
+    list.procedural.items = [];
+    list.procedural.total = 0;
+
+    return HttpResponse.json({ semantic, episodic, procedural, total });
   }),
 ];

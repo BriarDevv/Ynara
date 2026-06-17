@@ -7,8 +7,19 @@ export {
   SEARCH_MIN_LENGTH,
   useDeleteMemory,
   useMemoryDetail,
+  useMemoryExport,
   useMemoryRelated,
   useMemorySearch,
   useMemoryTimeline,
+  useMemoryWipeExecute,
+  useMemoryWipePreview,
   usePatchMemory,
 } from "@ynara/core/features/memory";
+
+// Tipos del dominio wipe/export (Fase G — tab Tú).
+export type {
+  MemoryExport,
+  MemoryWipeConfirm,
+  MemoryWipePreview,
+  MemoryWipeResult,
+} from "@ynara/shared-schemas";
