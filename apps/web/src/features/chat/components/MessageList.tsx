@@ -7,6 +7,7 @@ import { useChatAutoScroll } from "../useChatAutoScroll";
 import { EmptyConversation } from "./EmptyConversation";
 import { JumpToBottomButton } from "./JumpToBottomButton";
 import { MessageBubble } from "./MessageBubble";
+import { TypingIndicator } from "./TypingIndicator";
 
 /**
  * Lista de mensajes de la conversación (a11y + auto-scroll inteligente, §10 / PR #9).
@@ -22,12 +23,20 @@ import { MessageBubble } from "./MessageBubble";
  * estés cerca del fondo; si scrolleás arriba, pausa y aparece el botón "ir al
  * final". Es scroll nativo sobre este scroller propio (`data-lenis-prevent`),
  * coordinado con Lenis (#7): Lenis maneja el `<main>` —inerte en chat—, no este.
+ *
+ * Typing indicator: se muestra cuando `isStreaming` es true y el último mensaje
+ * del assistant todavía no tiene texto parcial (placeholder en "streaming" sin
+ * texto = Ynara aún está procesando antes del primer token).
  */
 type Props = {
   messages: ChatUiMessage[];
   mode: ModeId;
   /** Reintentar el último mensaje del usuario que falló. */
   onRetry: (messageId: string) => void;
+  /** True mientras hay un stream SSE abierto (viene de `useChatStream`). */
+  isStreaming?: boolean;
+  /** Callback para enviar un prompt sugerido desde el estado vacío. */
+  onSend?: (text: string) => void;
 };
 
 /** El último mensaje de assistant que cerró en "done" (o undefined). */
@@ -39,7 +48,21 @@ function lastDoneAssistant(messages: ChatUiMessage[]): ChatUiMessage | undefined
   return undefined;
 }
 
-export function MessageList({ messages, mode, onRetry }: Props) {
+/**
+ * True si el assistant placeholder más reciente está en "streaming" pero
+ * todavía no acumuló texto (= Ynara procesando antes del primer token).
+ */
+function isWaitingForFirstToken(messages: ChatUiMessage[]): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m?.role === "assistant") {
+      return m.status === "streaming" && !m.text;
+    }
+  }
+  return false;
+}
+
+export function MessageList({ messages, mode, onRetry, isStreaming = false, onSend }: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   // El contenido "crece" al llegar un mensaje nuevo o al sumar un token al
@@ -52,7 +75,12 @@ export function MessageList({ messages, mode, onRetry }: Props) {
   const growthKey = `${messages.length}:${last?.id ?? ""}:${last?.text?.length ?? 0}`;
   const { showJumpButton, jumpToBottom } = useChatAutoScroll(scrollerRef, growthKey);
 
-  const isStreaming = messages.some((m) => m.status === "streaming");
+  const streamingFromStore = messages.some((m) => m.status === "streaming");
+  // Combinamos el flag externo (hook) con el interno (store) para mayor robustez.
+  const streaming = isStreaming || streamingFromStore;
+
+  // Mostrar el typing indicator cuando hay stream activo y aún no hay texto parcial.
+  const showTypingIndicator = isStreaming && isWaitingForFirstToken(messages);
 
   // Región viva dedicada: anuncia el texto del assistant UNA vez al cerrar en
   // "done". Al montar, adopta el historial ya presente sin anunciarlo (no
@@ -89,7 +117,7 @@ export function MessageList({ messages, mode, onRetry }: Props) {
   );
 
   if (messages.length === 0) {
-    return <EmptyConversation mode={mode} />;
+    return <EmptyConversation mode={mode} onSend={onSend ?? (() => {})} />;
   }
 
   return (
@@ -110,7 +138,7 @@ export function MessageList({ messages, mode, onRetry }: Props) {
         // ese foco programático (es la región scrolleable, no un control).
         tabIndex={-1}
         className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 outline-none"
-        aria-busy={isStreaming}
+        aria-busy={streaming}
         data-lenis-prevent
       >
         {messages.map((message) => (
@@ -125,6 +153,9 @@ export function MessageList({ messages, mode, onRetry }: Props) {
             }
           />
         ))}
+
+        {/* Typing indicator: Ynara procesando antes del primer token */}
+        {showTypingIndicator && <TypingIndicator modeId={mode} />}
       </div>
 
       {/* Región viva dedicada (visualmente oculta): el lector de pantalla
