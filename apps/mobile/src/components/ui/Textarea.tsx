@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
-import { Text, TextInput, type TextInputProps, View } from "react-native";
+import { TextInput, type TextInputProps, View } from "react-native";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 
 type Props = Omit<TextInputProps, "className"> & {

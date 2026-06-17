@@ -1,6 +1,7 @@
 import { MODE_INTRO } from "@ynara/core/features/chat";
 import type { Mode } from "@ynara/shared-schemas";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/Text";
 
 /**
  * Estado vacío de la conversación: la intro del modo (copy compartido de

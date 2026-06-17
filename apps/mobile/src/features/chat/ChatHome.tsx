@@ -1,8 +1,9 @@
 import type { Mode } from "@ynara/shared-schemas";
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MODE_DESCRIPTORS, MODE_DOT_CLASS } from "@/components/ui/modes";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { useChatStore } from "@/stores/chat";
 import { useUserStore } from "@/stores/user";
@@ -32,7 +33,7 @@ export function ChatHome() {
     <SafeAreaView className="flex-1 bg-bg-canvas" edges={["top", "bottom"]}>
       <ScrollView contentContainerClassName="gap-6 px-6 py-8">
         <View className="gap-2">
-          <Text className="text-title font-semibold text-ink-deep">¿De qué hablamos?</Text>
+          <Text className="text-title font-display text-ink-deep">¿De qué hablamos?</Text>
           <Text className="text-body text-ink-soft">
             Retomá una conversación o empezá una nueva.
           </Text>

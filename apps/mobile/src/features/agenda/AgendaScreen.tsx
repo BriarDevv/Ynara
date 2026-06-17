@@ -1,8 +1,9 @@
 import { useEvents } from "@ynara/core/features/agenda";
 import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChipGroup } from "@/components/ui/ChipGroup";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { AgendaSkeleton } from "./components/AgendaSkeleton";
 import { DayView } from "./components/DayView";
@@ -51,7 +52,7 @@ export function AgendaScreen() {
         {/* Header */}
         <View className="gap-4">
           <View className="flex-row items-center justify-between gap-3">
-            <Text className="text-title text-ink">Agenda</Text>
+            <Text className="text-title font-display text-ink">Agenda</Text>
             <ChipGroup options={VIEW_OPTIONS} value={view} onChange={(v) => setView(v)} />
           </View>
 

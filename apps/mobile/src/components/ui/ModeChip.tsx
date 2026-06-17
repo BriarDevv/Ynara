@@ -1,5 +1,6 @@
 import type { Mode } from "@ynara/shared-schemas";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { MODE_BY_ID, MODE_DOT_CLASS } from "./modes";
 

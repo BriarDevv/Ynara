@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
+import { Text } from "@/components/ui/Text";
 
 type Props = {
   eyebrow?: string;
@@ -21,7 +22,7 @@ export function StepShell({ eyebrow, title, subtitle, children, footer }: Props)
       <ScrollView contentContainerClassName="gap-8 px-6 py-8" keyboardShouldPersistTaps="handled">
         <View className="gap-3">
           {eyebrow ? <Text className="text-caption text-ink-soft">{eyebrow}</Text> : null}
-          <Text className="text-title font-semibold text-ink-deep">{title}</Text>
+          <Text className="text-title font-display text-ink-deep">{title}</Text>
           {subtitle ? <Text className="text-body text-ink-soft">{subtitle}</Text> : null}
         </View>
         <View className="gap-6">{children}</View>

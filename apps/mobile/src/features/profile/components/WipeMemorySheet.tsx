@@ -1,9 +1,10 @@
 import { useMemoryWipeExecute, useMemoryWipePreview } from "@ynara/core/features/memory";
 import type { MemoryWipePreview } from "@ynara/shared-schemas";
 import { useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "@/components/ui/Button";
+import { Text } from "@/components/ui/Text";
 import { TextField } from "@/components/ui/TextField";
 import { ApiError } from "@/lib/api";
 
@@ -110,7 +111,7 @@ export function WipeMemorySheet({ open, onClose }: Props) {
         <SafeAreaView edges={["bottom"]} className="rounded-t-xl bg-bg">
           <View className="gap-5 px-6 pb-6 pt-5">
             <View className="gap-1">
-              <Text className="text-title font-semibold text-ink-deep">Borrar toda la memoria</Text>
+              <Text className="text-title font-display text-ink-deep">Borrar toda la memoria</Text>
               <Text className="text-body-sm text-ink-soft">
                 Esta acción es irreversible. Ynara olvidará todo lo que guardó con vos.
               </Text>

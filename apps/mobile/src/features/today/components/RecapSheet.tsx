@@ -1,6 +1,7 @@
 import type { Recap } from "@ynara/shared-schemas";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Text } from "@/components/ui/Text";
 import { formatHoyDate } from "../format";
 
 type Props = {
@@ -25,7 +26,7 @@ export function RecapSheet({ open, onClose, recap }: Props) {
         <SafeAreaView edges={["bottom"]} className="rounded-t-xl bg-bg">
           <View className="gap-5 px-6 pb-6 pt-5">
             <View className="gap-1">
-              <Text className="text-title font-semibold text-ink-deep">Recap del día</Text>
+              <Text className="text-title font-display text-ink-deep">Recap del día</Text>
               <Text className="text-body-sm text-ink-soft">
                 {formatHoyDate(new Date(recap.date))}
               </Text>

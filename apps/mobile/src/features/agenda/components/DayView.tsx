@@ -1,5 +1,6 @@
 import type { AgendaEvent } from "@ynara/core/features/agenda";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/Text";
 import { eventsForDay } from "../format";
 import { AgendaEventRow } from "./AgendaEventRow";
 

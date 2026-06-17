@@ -2,8 +2,9 @@ import { useMutation } from "@tanstack/react-query";
 import { type AuthSession, logIn, signUp } from "@ynara/core/features/auth";
 import { LoginRequestSchema, SignupRequestSchema } from "@ynara/shared-schemas";
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { Button } from "@/components/ui/Button";
+import { Text } from "@/components/ui/Text";
 import { TextField } from "@/components/ui/TextField";
 // Import con side-effect: configura el cliente API (baseUrl + token) y reexpone
 // ApiError. Garantiza que `configureApi` corrió antes de la primera llamada.

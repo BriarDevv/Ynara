@@ -1,5 +1,6 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { ProgressDots } from "@/components/ui/ProgressDots";
+import { Text } from "@/components/ui/Text";
 
 type Props = {
   total: number;

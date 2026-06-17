@@ -4,10 +4,11 @@ import type { TextSize } from "@ynara/core/stores";
 import { DisplayNameSchema } from "@ynara/shared-schemas";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, Share, Text, View } from "react-native";
+import { Pressable, ScrollView, Share, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "@/components/ui/Button";
 import { ChipGroup } from "@/components/ui/ChipGroup";
+import { Text } from "@/components/ui/Text";
 import { TextField } from "@/components/ui/TextField";
 import { Toggle } from "@/components/ui/Toggle";
 import { useA11yStore } from "@/stores/a11y";
@@ -140,7 +141,7 @@ export function TuScreen() {
       <ScrollView contentContainerClassName="gap-6 px-6 py-8">
         {/* Título */}
         <View className="gap-1">
-          <Text className="text-title font-semibold text-ink-deep">Tú</Text>
+          <Text className="text-title font-display text-ink-deep">Tú</Text>
           <Text className="text-body text-ink-soft">Tu perfil y preferencias de Ynara.</Text>
         </View>
 

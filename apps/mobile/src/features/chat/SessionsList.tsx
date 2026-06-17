@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { ModeChip } from "@/components/ui/ModeChip";
+import { Text } from "@/components/ui/Text";
 import { relativeTime } from "@/lib/relativeTime";
 import { useChatStore } from "@/stores/chat";
 

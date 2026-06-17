@@ -1,5 +1,6 @@
 import type { Action } from "@ynara/shared-schemas";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/Text";
 
 /**
  * Card de una acción ejecutada por el agente (modos Qwen) — `Action` del

@@ -78,6 +78,15 @@ module.exports = {
         title: ["28px", "34px"],
         hero: ["34px", "40px"],
       },
+      fontFamily: {
+        // Cuerpo (DM Sans) y titulares (Space Grotesk). Cargadas en el root con
+        // expo-font (ver src/lib/fonts.ts). Los pesos van como familias aparte.
+        body: ["DMSans-Regular", "system-ui", "sans-serif"],
+        "body-medium": ["DMSans-Medium", "system-ui", "sans-serif"],
+        "body-semibold": ["DMSans-SemiBold", "system-ui", "sans-serif"],
+        display: ["SpaceGrotesk-SemiBold", "system-ui", "sans-serif"],
+        "display-medium": ["SpaceGrotesk-Medium", "system-ui", "sans-serif"],
+      },
     },
   },
   plugins: [],

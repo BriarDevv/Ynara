@@ -1,8 +1,9 @@
 import { SEARCH_MIN_LENGTH, useMemorySearch } from "@ynara/core/features/memory";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Text } from "@/components/ui/Text";
 import { MemoryTimelineSkeleton } from "./components/MemoryTimelineSkeleton";
 import { SearchResultRow } from "./components/SearchResultRow";
 
@@ -53,7 +54,7 @@ export function BuscarScreen() {
           <Text className="text-button text-ink-soft">‹ Memoria</Text>
         </Pressable>
 
-        <Text className="text-title font-semibold text-ink-deep">Buscar</Text>
+        <Text className="text-title font-display text-ink-deep">Buscar</Text>
 
         <View className="h-12 flex-row items-center gap-3 rounded-lg border border-border bg-bg-soft px-4">
           <TextInput

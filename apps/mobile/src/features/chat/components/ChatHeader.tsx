@@ -1,7 +1,8 @@
 import type { Mode } from "@ynara/shared-schemas";
 import { useRouter } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { ModeChip } from "@/components/ui/ModeChip";
+import { Text } from "@/components/ui/Text";
 
 /**
  * Header de la conversación: volver al selector de modo (cambiar de modo =
