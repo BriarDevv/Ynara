@@ -7,6 +7,7 @@ import { Toast } from "@/components/ui/Toast";
 import { useActiveMode } from "@/hooks/useActiveMode";
 import { useUserStore } from "@/stores/user";
 import { AnticipationsSection } from "./AnticipationsSection";
+import { CheckinSection } from "./CheckinSection";
 import { HoyHeader } from "./HoyHeader";
 import { OfflineBanner } from "./OfflineBanner";
 import { PrioritiesSection } from "./PrioritiesSection";
@@ -66,6 +67,9 @@ export function HoyView() {
         </div>
         <div data-hero-reveal>
           <SuggestionsSection />
+        </div>
+        <div data-hero-reveal>
+          <CheckinSection />
         </div>
         <div data-hero-reveal>
           <RecapSection />
