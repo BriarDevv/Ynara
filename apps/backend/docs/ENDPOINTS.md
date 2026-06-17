@@ -164,6 +164,18 @@ Invariantes (regla #3 / ADR-007 / ADR-010):
     (`{ "items": [...], "total": N }`).
   - Response 422: `limit` fuera de `[1, 100]`, `offset < 0`, o `layer` inválida.
   - `content` / `summary` van descifrados; el embedding no se expone.
+- **GET** `/v1/memory/search?q=` — búsqueda semántica en hechos + momentos.
+  - Query: `q: string (1..200)` (requerida). Vacía tras `strip` → 200 con `total: 0`.
+  - Response 200: `{ "query": string, "total": N, "results": MemorySearchHit[] }` donde
+    `MemorySearchHit = { layer, ref, snippet, score (0..1), occurred_at }`. Orden:
+    `semantic` (hechos) primero, luego `episodic` (momentos); `score` es un **proxy por
+    rank** decreciente (el store no expone el score crudo del reranker y su firma
+    sagrada no se toca, regla #3). `procedural` **no** entra (key-value, sin búsqueda
+    semántica).
+  - Response 422: `q` ausente o fuera de `1..200`.
+  - Permisos: **usuario autenticado** (su propia memoria; los stores filtran por
+    `user_id`). El `snippet` va descifrado (regla #4); el blob cifrado nunca viaja. Sin
+    migración; **no** toca `app/memory/` (solo llama a `search`, read).
 - **GET** `/v1/memory/{layer}/{ref}` — detalle de **un** ítem por capa + referencia.
   - Path: `layer: {semantic, episodic, procedural}`; `ref: UUID` para
     semantic/episodic, `key (str)` para procedural.

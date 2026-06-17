@@ -20,6 +20,7 @@ from typing import Any
 
 from pydantic import Field
 
+from app.enums import MemoryLayer
 from app.schemas.base import YnaraBaseModel
 from app.schemas.memory import (
     EpisodicMemoryOut,
@@ -149,3 +150,30 @@ class MemoryWipeResult(YnaraBaseModel):
     episodic: int
     procedural: int
     total: int
+
+
+class MemorySearchHit(YnaraBaseModel):
+    """Un resultado de ``GET /v1/memory/search`` (NO sagrado, envelope del wire).
+
+    ``ref`` es el UUID (semantic/episodic); ``snippet`` es el ``content`` /
+    ``summary`` ya **descifrado** por el store (el blob cifrado nunca viaja);
+    ``occurred_at`` es cuándo ocurrió/se creó. ``score`` es un proxy de relevancia
+    0..1 derivado del **RANK**: el reranker del store no expone su score crudo y la
+    firma sagrada (``app/memory/``) no se toca (regla #3), pero el store ya
+    devuelve los resultados **ordenados por relevancia**, así que esa posición se
+    codifica como score decreciente (mismo decaimiento que el mock del front).
+    """
+
+    layer: MemoryLayer
+    ref: str
+    snippet: str
+    score: float = Field(ge=0.0, le=1.0)
+    occurred_at: datetime | None
+
+
+class MemorySearchResponse(YnaraBaseModel):
+    """Respuesta de ``GET /v1/memory/search?q=``. ``total`` = cantidad de hits."""
+
+    query: str
+    total: int
+    results: list[MemorySearchHit]
