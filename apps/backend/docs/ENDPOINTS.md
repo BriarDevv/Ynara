@@ -16,6 +16,14 @@
   - Permisos: público. Sin throttling aplicativo (no hay rate-limit por minuto).
   - Uso: el orquestador no rutea tráfico mientras devuelva 503.
 
+## /v1/modes
+
+- **GET** `/v1/modes` — catálogo de modos declarados en `ynara.config.json[modes]`.
+  - Request: ninguno.
+  - Response 200: `{ "modes": [ { "id": "productividad", "model": "qwen-3.5-9b", "memory_layers": ["semantic", "episodic"], "tools_enabled": ["calendar", "reminder", "memory"], "tone": "neutro-eficaz" }, … ] }`. Los modos vienen en **orden de declaración** de la config (el orden del Mode Switcher). `id` es uno de `productividad | estudio | bienestar | vida | memoria`.
+  - Permisos: **público** (mismo tier que `/health`). Es metadata de producto, no datos de usuario; los mismos campos ya viajan en el bundle del front. Sin rate-limit.
+  - Uso: fuente **server-driven** del Mode Switcher del front (cambiar los modos no requiere rebuild). El front mapea cada `id` a su label/gradiente local.
+
 ## /v1/auth
 
 JSON-only (sin OAuth2 form / `python-multipart`). Contrato + decisiones de
