@@ -9,13 +9,15 @@ const INACTIVE_TINT = "rgba(36,44,63,0.45)"; // colors.ink.muted
 
 /**
  * Layout de tabs — la home post-onboarding: **Hoy** · **Agenda** · **Chat** ·
- * **Memoria**. Hace de gate: sin onboarding completo manda al wizard. La
- * conversación (`/chat/[sessionId]`) vive en el stack raíz, así que abre
- * full-screen por encima del tab bar.
+ * **Tú** (Memoria accesible desde Tú). Hace de gate: sin onboarding completo
+ * manda al wizard. La conversación (`/chat/[sessionId]`) vive en el stack raíz,
+ * así que abre full-screen por encima del tab bar.
  *
  * Iconos geométricos con Views (sin `@expo/vector-icons`, que no es dep directa
  * de mobile): cuadrado redondeado = Hoy, círculo con aguja = Agenda, pill = Chat,
- * diamante = Memoria; se rellenan al estar activo.
+ * persona (círculo + base) = Tú; se rellenan al estar activo. Memoria sigue siendo
+ * una ruta navegable (`/memoria`, `/buscar`) pero no aparece como tab
+ * (`href: null`); se accede desde la sección Memoria de Tú.
  */
 export default function TabsLayout() {
   const onboardingCompleted = useUserStore((s) => s.onboardingCompleted);
@@ -97,23 +99,40 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {/* Memoria: ruta navegable desde Tú, pero sin tab visible en el bar. */}
+      <Tabs.Screen name="memoria" options={{ href: null }} />
+
       <Tabs.Screen
-        name="memoria"
+        name="tu"
         options={{
-          title: "Memoria",
+          title: "Tú",
           tabBarIcon: ({ color, focused }) => (
-            // Diamante (motivo de memoria de la marca): cuadrado rotado 45°.
-            <View
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: 3,
-                borderWidth: 2,
-                borderColor: color,
-                backgroundColor: focused ? color : "transparent",
-                transform: [{ rotate: "45deg" }],
-              }}
-            />
+            // Persona: círculo (cabeza) + semicírculo (base/hombros).
+            <View style={{ width: 16, height: 16, alignItems: "center" }}>
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 999,
+                  borderWidth: 2,
+                  borderColor: color,
+                  backgroundColor: focused ? color : "transparent",
+                }}
+              />
+              <View
+                style={{
+                  width: 14,
+                  height: 7,
+                  borderTopLeftRadius: 7,
+                  borderTopRightRadius: 7,
+                  borderWidth: 2,
+                  borderBottomWidth: 0,
+                  borderColor: color,
+                  backgroundColor: focused ? color : "transparent",
+                  marginTop: 1,
+                }}
+              />
+            </View>
           ),
         }}
       />

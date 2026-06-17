@@ -1,8 +1,11 @@
 import type {
   EpisodicMemoryOut,
+  MemoryExport,
   MemoryList,
   MemorySearchHit,
   MemorySearchResponse,
+  MemoryWipeConflict,
+  MemoryWipeCounts,
   ProceduralMemoryOut,
   SemanticMemoryOut,
 } from "@ynara/shared-schemas";
@@ -307,6 +310,84 @@ export function memoryMockResponse(input: string, init?: RequestInit): Response 
       return json(list[layer]);
     }
     return invalidLayer();
+  }
+
+  // GET /v1/memory/export — export JSON versionado de las 3 capas completas.
+  if (method === "GET" && path.endsWith("/v1/memory/export")) {
+    const list = getStore();
+    const body: MemoryExport = {
+      version: 1,
+      exported_at: new Date().toISOString(),
+      semantic: list.semantic.items,
+      episodic: list.episodic.items,
+      procedural: list.procedural.items,
+    };
+    return json(body);
+  }
+
+  // POST /v1/memory/wipe — preview (dry_run=true) o execute.
+  if (method === "POST" && path.endsWith("/v1/memory/wipe")) {
+    const list = getStore();
+    const isDryRun = getParam(query, "dry_run") === "true";
+
+    if (isDryRun) {
+      // Preview: conteos actuales sin borrar nada.
+      const counts: MemoryWipeCounts = {
+        semantic: list.semantic.items.length,
+        episodic: list.episodic.items.length,
+        procedural: list.procedural.items.length,
+        total:
+          list.semantic.items.length + list.episodic.items.length + list.procedural.items.length,
+      };
+      return json(counts);
+    }
+
+    // Execute: valida que el body traiga los expected_*.
+    const body = parseBody(init?.body);
+    if (
+      body === null ||
+      typeof body.expected_semantic !== "number" ||
+      typeof body.expected_episodic !== "number" ||
+      typeof body.expected_procedural !== "number"
+    ) {
+      return json({ error: "validation", detail: "expected_* requeridos", field: "body" }, 422);
+    }
+
+    // Recount actual antes de borrar.
+    const actualSemantic = list.semantic.items.length;
+    const actualEpisodic = list.episodic.items.length;
+    const actualProcedural = list.procedural.items.length;
+
+    // 409 si los expected no coinciden con el recount — nada se borra.
+    if (
+      body.expected_semantic !== actualSemantic ||
+      body.expected_episodic !== actualEpisodic ||
+      body.expected_procedural !== actualProcedural
+    ) {
+      const conflict: MemoryWipeConflict = {
+        message: "Los conteos cambiaron desde el preview. Revisá y confirmá de nuevo.",
+        semantic: actualSemantic,
+        episodic: actualEpisodic,
+        procedural: actualProcedural,
+        total: actualSemantic + actualEpisodic + actualProcedural,
+      };
+      return json(conflict, 409);
+    }
+
+    // Borrado: vacía las 3 capas y devuelve los rowcounts reales.
+    const result: MemoryWipeCounts = {
+      semantic: actualSemantic,
+      episodic: actualEpisodic,
+      procedural: actualProcedural,
+      total: actualSemantic + actualEpisodic + actualProcedural,
+    };
+    list.semantic.items = [];
+    list.semantic.total = 0;
+    list.episodic.items = [];
+    list.episodic.total = 0;
+    list.procedural.items = [];
+    list.procedural.total = 0;
+    return json(result);
   }
 
   return null;

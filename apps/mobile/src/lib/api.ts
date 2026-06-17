@@ -1,19 +1,21 @@
 import { configureApi } from "@ynara/core/api";
 import { agendaMockResponse } from "@/features/agenda/mocks";
 import { memoryMockResponse } from "@/features/memory/mocks";
+import { profileMockResponse } from "@/features/profile/mocks";
 import { todayMockFetch } from "@/features/today/mocks";
 import { useUserStore } from "@/stores/user";
 import { env } from "./env";
 
-// Mock-first encadenado por dominio: Memoria y Agenda responden sync
-// (Response | null); si el path no es de ninguno, cae al mock de Hoy, que
-// maneja sus paths o delega el resto —auth incluido— al fetch real. Con el
-// flag off no se setea fetchImpl (queda el default = fetch global).
+// Mock-first encadenado por dominio: Memoria → Agenda → Perfil → Hoy (terminal).
+// Cada handler devuelve Response|null; null pasa al siguiente. Hoy delega el
+// resto —auth incluido— al fetch real. Con el flag off no se setea fetchImpl.
 const mockFetch: (input: string, init?: RequestInit) => Promise<Response> = (input, init) => {
   const mem = memoryMockResponse(input, init);
   if (mem) return Promise.resolve(mem);
   const agenda = agendaMockResponse(input, init);
   if (agenda) return Promise.resolve(agenda);
+  const profile = profileMockResponse(input, init);
+  if (profile) return Promise.resolve(profile);
   return todayMockFetch(input, init);
 };
 
