@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { buildAnticipations } from "../anticipations";
 import { AnticipationCard } from "./AnticipationCard";
@@ -11,6 +12,9 @@ import { AnticipationCard } from "./AnticipationCard";
  *
  * `aria-live="polite"` anuncia el cambio al stack de accesibilidad cuando
  * las cards aparecen o desaparecen dinámicamente.
+ *
+ * Incluye un link discreto "Ver todos los avisos" → `/avisos` para acceso
+ * desde mobile (que no tiene el peek del sidebar).
  */
 export function AnticipationsSection() {
   const initial = useMemo(() => buildAnticipations(), []);
@@ -29,6 +33,13 @@ export function AnticipationsSection() {
           onDismiss={() => setDismissed((prev) => new Set([...prev, anticipation.id]))}
         />
       ))}
+      {/* Link discreto hacia /avisos — accesible en mobile donde no hay sidebar peek */}
+      <Link
+        href="/avisos"
+        className="self-end text-caption text-[var(--color-ink-soft)] underline-offset-2 transition-colors hover:text-[var(--color-ink)] hover:underline"
+      >
+        Ver todos los avisos
+      </Link>
     </section>
   );
 }
