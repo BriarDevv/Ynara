@@ -50,6 +50,13 @@
   --color-bg-canvas: #faf9f5;
   /* Crema cálido: pills, chip containers, secciones alternas. */
   --color-bg-soft: #f3f0ea;
+  /* Vidrio (glassmorphism): superficies semi-translúcidas sobre el campo vivo
+     (tarjeta de Anticipación, composer del chat). 88% opaco — alto a propósito
+     para legibilidad sobre un fondo animado/teñido (NN/g + Axess Lab: menos
+     transparencia = más contraste). Bajo `prefers-reduced-transparency` pasa a
+     sólido (ver media query al final). `--color-bg` es theme-aware, así que el
+     vidrio sigue el tema sin re-declararse. */
+  --color-glass: color-mix(in srgb, var(--color-bg) 88%, transparent);
 
   /* ---- Bordes ---- */
   --color-border: rgb(36 44 63 / 0.12);
@@ -427,6 +434,21 @@ html.theme-dark.theme-high-contrast {
  * Sin !important: la specificity de html.motion-on (0,1,1) le gana al
  * selector universal (0,0,0) del bloque OS-pref.
  */
+
+/*
+ * Reduced-transparency (preferencia de a11y del SO): el usuario pidió menos
+ * transparencia. El vidrio (`--color-glass`) pasa a SÓLIDO (el campo vivo deja
+ * de colarse por detrás del texto) y la atmósfera del campo se atenúa fuerte.
+ * `!important` para ganarle al `opacity` inline del LivingField.
+ */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --color-glass: var(--color-bg);
+  }
+  .field-atmosphere {
+    opacity: 0.08 !important;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   html:not(.motion-on) *,

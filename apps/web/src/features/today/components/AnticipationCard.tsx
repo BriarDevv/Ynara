@@ -27,9 +27,9 @@ export function AnticipationCard({ anticipation, onDismiss }: Props) {
   const tint = mode.tintVar;
   const fill = mode.fillVar;
 
-  // Glass: fondo semi-transparente + borde teñido por el modo.
-  // `color-mix` en lugar de rgba para mantener la fuente única en tokens.
-  const glassBg = `color-mix(in srgb, var(--color-bg) 70%, transparent)`;
+  // Glass: token `--color-glass` (88% opaco, sólido bajo reduced-transparency)
+  // para legibilidad sobre el campo vivo + borde teñido por el modo.
+  const glassBg = `var(--color-glass)`;
   const glassBorder = `color-mix(in srgb, ${tint} 22%, transparent)`;
   const glassShadow = `0 30px 60px -40px color-mix(in srgb, ${tint} 50%, transparent)`;
 

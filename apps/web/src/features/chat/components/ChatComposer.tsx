@@ -103,7 +103,7 @@ export function ChatComposer({ onSend, busy, mode, initialText = "" }: Props) {
       <div
         className="flex items-end gap-2 rounded-[24px] border p-2 pl-3 shadow-soft backdrop-blur-[10px] transition-colors"
         style={{
-          backgroundColor: "color-mix(in srgb, var(--color-bg) 72%, transparent)",
+          backgroundColor: "var(--color-glass)",
           borderColor: `color-mix(in srgb, ${tintVar} 22%, var(--color-border))`,
         }}
       >
