@@ -47,7 +47,11 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
       <div className="mx-auto flex w-full max-w-[680px] flex-col gap-6 px-6 pb-10 pt-10">
         <h1 className="text-title text-[var(--color-ink-deep)]">Buscar</h1>
 
-        <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] px-4 focus-within:border-[var(--color-accent)]">
+        {/* Buscador como única superficie suave de la vista: vidrio sobre el
+            campo vivo (`--color-glass` se vuelve sólido con
+            prefers-reduced-transparency) + blur, con el borde teñido por la
+            memoria al enfocar. */}
+        <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-glass)] px-4 backdrop-blur-md transition-colors duration-[var(--duration-fast)] focus-within:border-[var(--color-memory)]">
           <Icon name="buscar" size={20} className="shrink-0 text-[var(--color-ink-soft)]" />
           <input
             type="search"
