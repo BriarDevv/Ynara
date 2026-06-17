@@ -11,9 +11,9 @@ import { useCreateEvent } from "../api";
 type Props = {
   /** Tono AA-safe del modo activo (fill) para el FAB con el "+" blanco. */
   fillVar: string;
+  /** Modo activo de la pantalla: preselecciona el selector de modo del Sheet. */
+  activeMode: ModeId;
 };
-
-const DEFAULT_MODE: ModeId = "productividad";
 
 /**
  * FAB redondo "+" fijo en la esquina inferior derecha + Sheet de creación
@@ -22,7 +22,7 @@ const DEFAULT_MODE: ModeId = "productividad";
  * El FAB se tiñe con el modo activo de la pantalla. El Sheet usa `useCreateEvent`
  * y cierra al crear exitosamente.
  */
-export function EventFab({ fillVar }: Props) {
+export function EventFab({ fillVar, activeMode }: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [startAt, setStartAt] = useState(() => {
@@ -30,11 +30,12 @@ export function EventFab({ fillVar }: Props) {
     const d = new Date();
     d.setMinutes(0, 0, 0);
     d.setHours(d.getHours() + 1);
-    // datetime-local espera "YYYY-MM-DDTHH:MM"
-    return d.toISOString().slice(0, 16);
+    // datetime-local interpreta el string como hora LOCAL; compensamos el
+    // offset antes de serializar para no correr la hora por timezone.
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   });
   const [durationMin, setDurationMin] = useState("60");
-  const [modeId, setModeId] = useState<ModeId>(DEFAULT_MODE);
+  const [modeId, setModeId] = useState<ModeId>(activeMode);
   const [error, setError] = useState<string | null>(null);
 
   const { mutateAsync, isPending } = useCreateEvent();
@@ -72,7 +73,7 @@ export function EventFab({ fillVar }: Props) {
       // Limpiar y cerrar
       setTitle("");
       setDurationMin("60");
-      setModeId(DEFAULT_MODE);
+      setModeId(activeMode);
       setOpen(false);
     } catch {
       setError("No pudimos crear el evento. Intentá de nuevo.");
