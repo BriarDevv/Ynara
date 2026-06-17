@@ -21,8 +21,22 @@ vi.mock("next/link", () => ({
 // buildAnticipations: mock estable para el badge de avisos pendientes.
 vi.mock("@/features/today/anticipations", () => ({
   buildAnticipations: () => [
-    { id: "ant-1", kind: "Anticipación", time: "10:30", text: "Test", mode: "productividad", actions: [] },
-    { id: "ant-2", kind: "Recordatorio", time: "12:00", text: "Test 2", mode: "bienestar", actions: [] },
+    {
+      id: "ant-1",
+      kind: "Anticipación",
+      time: "10:30",
+      text: "Test",
+      mode: "productividad",
+      actions: [],
+    },
+    {
+      id: "ant-2",
+      kind: "Recordatorio",
+      time: "12:00",
+      text: "Test 2",
+      mode: "bienestar",
+      actions: [],
+    },
   ],
 }));
 
