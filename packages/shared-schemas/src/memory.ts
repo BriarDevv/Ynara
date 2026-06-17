@@ -161,3 +161,68 @@ export const MemorySearchResponseSchema = z.object({
   results: z.array(MemorySearchHitSchema),
 });
 export type MemorySearchResponse = z.infer<typeof MemorySearchResponseSchema>;
+
+// ---------- Export (`GET /v1/memory/export`) ----------
+
+/**
+ * Export JSON versionado de las 3 capas **completas** (sin paginar, descifradas).
+ * Mirror de la respuesta de `GET /v1/memory/export`; el backend lo sirve además
+ * con `Content-Disposition: attachment` (descarga directa del dueño).
+ */
+export const MemoryExportSchema = z.object({
+  version: z.literal(1),
+  exported_at: z.string().datetime({ offset: true }),
+  semantic: z.array(SemanticMemoryOutSchema),
+  episodic: z.array(EpisodicMemoryOutSchema),
+  procedural: z.array(ProceduralMemoryOutSchema),
+});
+export type MemoryExport = z.infer<typeof MemoryExportSchema>;
+
+// ---------- Wipe total (`POST /v1/memory/wipe`) — SAGRADO (regla #3) ----------
+
+/**
+ * Conteos por capa + total. Lo devuelve tanto el **preview** (`?dry_run=true`: lo
+ * que se borraría) como el **result** (rowcounts REALES borrados). Solo enteros
+ * (regla #4): nunca viaja `content` / `summary`.
+ */
+export const MemoryWipeCountsSchema = z.object({
+  semantic: z.number().int().nonnegative(),
+  episodic: z.number().int().nonnegative(),
+  procedural: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+export type MemoryWipeCounts = z.infer<typeof MemoryWipeCountsSchema>;
+
+/** Preview del wipe (`POST /v1/memory/wipe?dry_run=true`). Siempre 200, aun en 0. */
+export const MemoryWipePreviewSchema = MemoryWipeCountsSchema;
+export type MemoryWipePreview = z.infer<typeof MemoryWipePreviewSchema>;
+
+/** Receipt del wipe ejecutado (rowcounts reales borrados). */
+export const MemoryWipeResultSchema = MemoryWipeCountsSchema;
+export type MemoryWipeResult = z.infer<typeof MemoryWipeResultSchema>;
+
+/**
+ * Body del **execute** (`POST /v1/memory/wipe`, sin `dry_run`): los conteos
+ * per-capa que el cliente vio en un preview fresco (guarda de INTENCIÓN — prueba
+ * que el humano vio el plan). Obligatorio; el backend lo valida con `extra=forbid`.
+ */
+export const MemoryWipeConfirmSchema = z.object({
+  expected_semantic: z.number().int().nonnegative(),
+  expected_episodic: z.number().int().nonnegative(),
+  expected_procedural: z.number().int().nonnegative(),
+});
+export type MemoryWipeConfirm = z.infer<typeof MemoryWipeConfirmSchema>;
+
+/**
+ * `detail` del **409** (los `expected_*` no coinciden con el recount): los
+ * conteos ACTUALES + un `message`, para re-confirmar con un preview fresco.
+ * **Nada** se borró ni commiteó.
+ */
+export const MemoryWipeConflictSchema = z.object({
+  message: z.string(),
+  semantic: z.number().int().nonnegative(),
+  episodic: z.number().int().nonnegative(),
+  procedural: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+export type MemoryWipeConflict = z.infer<typeof MemoryWipeConflictSchema>;
