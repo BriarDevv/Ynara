@@ -114,6 +114,15 @@ seguridad en el docstring de [`../app/api/v1/auth.py`](../app/api/v1/auth.py).
   - **fail-open**: si Redis cae, el rate-limit se desactiva (auth sigue
     funcionando, sin throttling aplicativo).
 
+## /v1/users
+
+- **PATCH** `/v1/users/me` — update parcial del perfil propio.
+  - Request: `UserUpdate = { display_name?: string (<=40), onboarding_completed?: bool, retention_sensitive_days?: int (30..365) }`. Solo se aplican los campos **enviados con valor no nulo** (`exclude_none`); un PATCH sin campos es un no-op idempotente, y no se puede pisar con `null` un campo NOT NULL.
+  - Response 200: `UserOut` (incluye `id` / `email` / `display_name` / `onboarding_completed` / `retention_sensitive_days` / timestamps; **nunca** `password_hash`).
+  - Response 401: sin token / token inválido / expirado, **o** el `sub` válido ya no tiene fila (identidad propia caduca, mismo criterio que `/v1/auth/me`; **nunca** 404).
+  - Response 422: `retention_sensitive_days` fuera de `30..365`, o `display_name` > 40.
+  - Permisos: **usuario autenticado** (su propio perfil). Tabla `users` (operativa, **no** sagrada); sin migración (columnas existentes).
+
 ## /v1/chat
 
 Dos endpoints: uno no-streaming (JSON) y uno SSE. Contrato + justificación en

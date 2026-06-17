@@ -17,7 +17,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app import __version__
-from app.api.v1 import auth, chat, health, memory, modes, sessions
+from app.api.v1 import auth, chat, health, memory, modes, sessions, users
 from app.core.config import get_settings
 from app.core.db_guard import guard_against_prod_db_in_dev
 from app.core.deps import get_engine
@@ -229,3 +229,4 @@ app.include_router(chat.router, prefix="/v1", tags=["chat"])
 app.include_router(sessions.router, prefix="/v1", tags=["sessions"])
 app.include_router(memory.router, prefix="/v1", tags=["memory"])
 app.include_router(modes.router, prefix="/v1", tags=["modes"])
+app.include_router(users.router, prefix="/v1", tags=["users"])
