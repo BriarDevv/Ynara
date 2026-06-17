@@ -103,6 +103,20 @@
   }
 }
 
+/* Typing indicator: cada punto sube y baja con un fade staggered (DESIGN.md §8). */
+@keyframes ynara-typing-dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
 /* Toast: entrada 300ms / salida 200ms (DESIGN.md §8.2). */
 @keyframes ynara-toast-in {
   from {
@@ -193,5 +207,11 @@
   .anim-toast-out {
     animation: ynara-toast-out var(--duration-base, 200ms)
       var(--ease-out-soft, ease-out) both;
+  }
+
+  /* Puntos del typing indicator: stagger via --dot-index (0, 1, 2). */
+  .anim-typing-dot {
+    animation: ynara-typing-dot 1200ms ease-in-out infinite;
+    animation-delay: calc(var(--dot-index, 0) * 160ms);
   }
 }

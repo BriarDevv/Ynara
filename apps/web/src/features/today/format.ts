@@ -31,6 +31,18 @@ export function formatHoyDate(now: Date): string {
   return capitalize(DATE_FMT.format(now));
 }
 
+/**
+ * Saludo según la hora local (wireframe 06 / mockup): "Buen día" hasta el
+ * mediodía, "Buenas tardes" hasta las 20h, "Buenas noches" después. El nombre
+ * lo agrega el header (`${greet(now)}, ${nombre}.`).
+ */
+export function greet(now: Date): string {
+  const h = now.getHours();
+  if (h < 12) return "Buen día";
+  if (h < 20) return "Buenas tardes";
+  return "Buenas noches";
+}
+
 /** Reloj corto "15:30" (variante Hoy vacío, wireframe 07). */
 export function formatClock(now: Date): string {
   return CLOCK_FMT.format(now);

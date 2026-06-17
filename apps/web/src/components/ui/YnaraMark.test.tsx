@@ -15,17 +15,15 @@ describe("YnaraMark", () => {
     expect(svg).toHaveAttribute("height", "48");
   });
 
-  it("la variante color usa los stops de la paleta oficial v4 (§3.4)", () => {
+  it("la variante color usa los gradientes oficiales del isotipo", () => {
     const { container } = render(<YnaraMark variant="color" />);
     const html = container.innerHTML;
-    expect(html).toContain("var(--color-azul");
-    expect(html).toContain("var(--color-celeste");
-    expect(html).toContain("var(--color-lavanda");
-    expect(html).toContain("var(--color-violeta");
-    expect(html).toContain("var(--color-violaceo");
+    // Los 3 gradientes oficiales (diamante violeta, forma azul, relieve).
+    expect(container.querySelectorAll("linearGradient").length).toBeGreaterThanOrEqual(3);
+    expect(html).toContain("#305ba6"); // azul oficial de la forma
+    expect(html).toContain("#8265a3"); // violeta del diamante
     // Y no quedó ningún stop legacy fuera de paleta.
     expect(html).not.toContain("blue-base");
-    expect(html).not.toContain("violet-from");
     expect(html).not.toContain("#1f66db");
   });
 
@@ -42,14 +40,14 @@ describe("YnaraMark", () => {
     }
   });
 
-  it("avatar es un cuadrado redondeado Noche con la silueta marfil", () => {
+  it("avatar es un cuadrado redondeado con el símbolo oficial a color", () => {
     const { container } = render(<YnaraMark variant="avatar" />);
     const svg = container.querySelector("svg");
-    expect(svg).toHaveAttribute("viewBox", "0 0 800 800");
+    expect(svg).toHaveAttribute("viewBox", "0 0 1012.54 1009.81");
     const rect = container.querySelector("rect");
-    expect(rect).toHaveAttribute("rx", "176");
-    expect(container.innerHTML).toContain("var(--color-noche");
-    expect(container.innerHTML).toContain("var(--color-marfil");
+    expect(rect).toHaveAttribute("rx", "175.55");
+    // Símbolo a color → gradientes oficiales presentes.
+    expect(container.querySelectorAll("linearGradient").length).toBeGreaterThanOrEqual(3);
   });
 
   it("dos logos en la misma página no comparten id de gradiente (useId)", () => {

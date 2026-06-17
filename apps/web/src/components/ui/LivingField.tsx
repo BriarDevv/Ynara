@@ -652,7 +652,7 @@ export function LivingField({
       {/* Capa canvas con fade-mask: baja opacidad por diseño — es atmósfera,
           no protagonista (§2.3). */}
       <div
-        className="absolute inset-0"
+        className="field-atmosphere absolute inset-0"
         style={{
           opacity: dark ? 0.52 : 0.5,
           maskImage: mask,

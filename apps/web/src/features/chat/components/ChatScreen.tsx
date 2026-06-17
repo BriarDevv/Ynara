@@ -55,9 +55,15 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
       <LivingField variant="constellation" modeId={session.mode} />
       <div className="mx-auto flex h-full w-full max-w-[720px] flex-col">
         <ChatHeader mode={session.mode} />
-        <MessageList messages={messages ?? []} mode={session.mode} onRetry={handleRetry} />
+        <MessageList
+          messages={messages ?? []}
+          mode={session.mode}
+          onRetry={handleRetry}
+          isStreaming={stream.isStreaming}
+          onSend={handleSend}
+        />
         <div className="px-4 pb-4">
-          <ChatComposer onSend={handleSend} busy={stream.isStreaming} />
+          <ChatComposer onSend={handleSend} busy={stream.isStreaming} mode={session.mode} />
         </div>
       </div>
     </div>

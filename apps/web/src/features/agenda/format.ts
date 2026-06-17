@@ -60,3 +60,40 @@ export function isOnDay(event: AgendaEvent, day: Date): boolean {
 export function eventsForDay(events: AgendaEvent[], day: Date): AgendaEvent[] {
   return events.filter((e) => isOnDay(e, day)).sort((a, b) => a.start_at.localeCompare(b.start_at));
 }
+
+// ── Helpers de grilla horaria (DayView / WeekView) ──────────────────────────
+
+/** Hora decimal de un evento (ej. 10:30 → 10.5). */
+export function eventStartHour(event: AgendaEvent): number {
+  const d = new Date(event.start_at);
+  return d.getHours() + d.getMinutes() / 60;
+}
+
+/**
+ * Top en px del evento dentro de la grilla (0 = hora de inicio de la grilla).
+ * `H0` = primera hora visible (ej. 8), `rowPx` = px por hora.
+ */
+export function gridTop(event: AgendaEvent, H0: number, rowPx: number): number {
+  return (eventStartHour(event) - H0) * rowPx;
+}
+
+/**
+ * Altura en px del bloque del evento, mínimo `minPx`.
+ * `rowPx` = px por hora.
+ */
+export function gridHeight(event: AgendaEvent, rowPx: number, minPx = 20): number {
+  return Math.max(minPx, (event.duration_min / 60) * rowPx);
+}
+
+/** Hora decimal actual. */
+export function nowHour(): number {
+  const d = new Date();
+  return d.getHours() + d.getMinutes() / 60;
+}
+
+/** ¿El evento cae (al menos parcialmente) en la ventana horaria [H0, H1]? */
+export function isInRange(event: AgendaEvent, H0: number, H1: number): boolean {
+  const start = eventStartHour(event);
+  const end = start + event.duration_min / 60;
+  return end > H0 && start < H1;
+}

@@ -50,7 +50,9 @@ type Props = {
  */
 export function YnaraWordmark({ height = 22, variant = "color", className }: Props) {
   const id = useId();
-  const VIEWBOX_W = 65.5;
+  // Mismas medidas que el lockup oficial del mockup (brand.jsx): símbolo en caja
+  // 22×22 a (0,0), texto en x=28.6/baseline 19.8, viewBox 73.7×22.
+  const VIEWBOX_W = 73.7;
   const VIEWBOX_H = 22;
   const width = height * (VIEWBOX_W / VIEWBOX_H);
 
@@ -66,13 +68,16 @@ export function YnaraWordmark({ height = 22, variant = "color", className }: Pro
       // excede el viewBox por unas décimas, igual se ve (no se recorta).
       style={{ overflow: "visible", display: "block" }}
     >
-      {/* Símbolo: escala 0.0332 (alto 542 → ~18), pies (y=590) sobre la
-          baseline 19.8, borde izquierdo en x≈0.6. */}
-      <g transform="translate(-4.58 0.21) scale(0.03321)">
+      {/* Símbolo oficial en caja 22×22 a (0,0) — equivalente al `<use
+          width=22 height=22>` del mockup: scale 22/1012.54 = 0.021728. El
+          artwork tiene su padding propio, así sus pies caen sobre la baseline
+          del texto (y≈19.8) → símbolo y wordmark comparten la MISMA base. Va en
+          un <g> (no <svg> anidado) para no duplicar el role=img del lockup. */}
+      <g transform="scale(0.021728)">
         <YnaraSymbol variant={SYMBOL_VARIANT[variant]} idPrefix={id} />
       </g>
       <text
-        x="20.4"
+        x="28.6"
         y="19.8"
         fontSize="14.3"
         fontWeight="600"

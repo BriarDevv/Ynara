@@ -10,13 +10,13 @@ describe("YnaraWordmark", () => {
     expect(imgs[0]).toHaveAttribute("aria-label", "Ynara");
   });
 
-  it("renderiza el símbolo + el texto Ynara compartiendo baseline", () => {
+  it("renderiza el símbolo oficial + el texto Ynara", () => {
     const { container } = render(<YnaraWordmark />);
     const text = container.querySelector("text");
     expect(text?.textContent).toBe("Ynara");
-    // Baseline del texto y pies del símbolo en la misma y (19.8).
+    // Baseline del texto y pies del símbolo en la misma y (19.8), como el mockup.
     expect(text).toHaveAttribute("y", "19.8");
-    // El símbolo va dentro de un <g> transformado (no align a mano).
+    // El símbolo oficial va dentro de un <g> transformado (no align a mano).
     expect(container.querySelector("g[transform]")).toBeInTheDocument();
   });
 
@@ -24,8 +24,8 @@ describe("YnaraWordmark", () => {
     const { container } = render(<YnaraWordmark height={44} />);
     const svg = container.querySelector("svg");
     expect(svg).toHaveAttribute("height", "44");
-    // width = 44 * (65.5 / 22) = 131
-    expect(svg).toHaveAttribute("width", "131");
+    // width = 44 * (73.7 / 22) = 147.4
+    expect(svg).toHaveAttribute("width", "147.4");
   });
 
   it("la variante mono-light tiñe texto y símbolo en marfil (para Noche)", () => {
@@ -36,10 +36,9 @@ describe("YnaraWordmark", () => {
     expect(html).not.toContain("linearGradient");
   });
 
-  it("la variante color usa los stops oficiales y texto en Noche fijo (fondo claro)", () => {
+  it("la variante color usa los gradientes oficiales y texto en Noche fijo (fondo claro)", () => {
     const { container } = render(<YnaraWordmark variant="color" />);
-    const html = container.innerHTML;
-    expect(html).toContain("var(--color-azul");
+    expect(container.querySelector("linearGradient")).toBeInTheDocument();
     // Tono fijo, no `--color-ink-*` que seguiría el tema (se elige por fondo).
     expect(container.querySelector("text")).toHaveAttribute("fill", "var(--color-noche, #242c3f)");
   });

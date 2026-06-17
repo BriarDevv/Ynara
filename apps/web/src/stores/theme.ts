@@ -19,7 +19,9 @@ type ThemeActions = {
 };
 
 const initialState: ThemeState = {
-  theme: "light",
+  // Noche por default (paridad con el mockup canónico, que es dark-first).
+  // El usuario puede pasar a claro desde el switcher; persiste su elección.
+  theme: "dark",
 };
 
 /**

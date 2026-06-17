@@ -1,23 +1,34 @@
 import { useId } from "react";
 
 /**
- * Variante por fondo del símbolo (DESIGN.md §11.1):
- * - `color`: la "Y" azul→celeste con relieve + diamante violeta. Sobre claro/neutro.
- * - `mono-dark` (`#242C3F`): silueta sólida sobre claro cuando se quiere mono.
- * - `mono-light` (`#F3F0EA`): silueta sobre Noche o fondos de marca (jamás el
- *   símbolo a color sobre Noche — pierde contraste, §11.1).
- * - `avatar`: cuadrado redondeado (app-icon) — símbolo mono-light sobre Noche.
- *   Solo como ícono de app, nunca inline en un lockup.
+ * Isotipo **oficial** de Ynara (`docs/brand` / mockup `index.html` → `#ynara-symbol`).
+ * Geometría exacta del artwork de marca (viewBox 1012.54×1009.81): el diamante
+ * violeta + la forma azul con relieve. NO redibujar a mano — esta es la fuente.
+ *
+ * Variantes por fondo (DESIGN.md §11.1):
+ * - `color`: artwork a color con sus gradientes. Sobre claro/neutro.
+ * - `mono-dark` (`#242C3F`) / `mono-light` (`#F3F0EA`): silueta sólida.
+ * - `avatar`: app-icon — cuadrado redondeado con el símbolo a color.
  */
 export type YnaraMarkVariant = "color" | "mono-dark" | "mono-light" | "avatar";
 
-// Geometría del símbolo (viewBox 800×700). Compartida entre YnaraMark y
-// YnaraWordmark — única fuente de los paths, sin duplicar.
-const PATH_Y_BASE =
-  "M352 590 C352 590 352 470 352 427 C352 375 324 318 257 212 C241 188 218 173 192 181 C167 188 156 211 168 233 C221 335 269 413 302 485 C320 523 329 557 329 590 L471 590 C471 557 480 523 498 485 C531 413 579 335 632 233 C644 211 633 188 608 181 C582 173 559 188 543 212 C476 318 448 375 448 427 C448 470 448 590 448 590 Z";
-const PATH_Y_RELIEF =
-  "M403 590 C403 541 394 498 378 457 C348 385 312 320 255 227 C247 213 238 201 233 192 C252 186 269 194 281 213 C343 311 379 372 399 422 C419 372 455 311 517 213 C529 194 546 186 565 192 C560 201 551 213 543 227 C486 320 450 385 420 457 C404 498 395 541 395 590 Z";
-const PATH_DIAMOND = "M400 48 L464 112 L400 176 L336 112 Z";
+// ── Geometría oficial (viewBox 1012.54 × 1009.81) ──────────────────────────
+// Paths transcriptos 1:1 del isotipo oficial. El diamante es un rect rotado 45°;
+// la forma principal es `PATH_MAIN`; `PATH_HL` es el relieve (solo en color).
+const DIAMOND = {
+  x: 422.72,
+  y: 141.9,
+  w: 169.7,
+  h: 168.93,
+  rx: 17.08,
+  transform: "translate(308.73 -292.6) rotate(45)",
+} as const;
+
+const PATH_MAIN =
+  "M820.99,335.09c-49.27,52.6-62.12,60.65-106.09,109.14-50.19,55.36-66.07,80.85-74.08,94.62-6.88,11.82-23.51,41.74-36.59,81.69-13.87,42.4-18.58,80.28-19.97,111.23-.08,1.88-.16,3.74-.22,5.57-.76,22.58.15,41.17.22,54.77v101.74c0,11.14-9.03,20.16-20.16,20.16h-117.54c-11.14,0-20.17-9.02-20.17-20.16v-197.78c-.54-4.12-1.13-8.35-1.78-12.69-4.88-32.62-9.95-51.11-13.58-62.84-3.98-12.89-14.42-43.59-36.59-81.69-8.01-13.77-23.89-39.26-74.08-94.62-43.96-48.49-56.82-56.54-106.09-109.14-15.74-16.8-29.13-31.13-40.04-43.19-.01-.02-.03-.03-.05-.05-5.07-5.61-9.6-10.72-13.57-15.37-.03-.03-.05-.05-.07-.08-16.3-19.04-23.38-30.26-20.31-35.19.12-.19.25-.37.39-.55,0,0,.13-.17.28-.32,12.69-13.4,73.8,9.52,73.8,9.52,4.39,1.65,65.61,24.95,121.94,62.84,3.75,2.52,7.39,5.05,7.39,5.05,11.75,8.16,32.79,23.44,56.95,44.86.02.01.03.03.05.04,15.91,14.11,33.17,30.86,50.01,49.98.12.12.22.23.31.34.27.3.49.55.67.76.12.14.23.26.31.36.06.08.13.15.2.23.05.05.07.08.07.08.05.05.09.11.14.16,21.5,24.66,42.24,53.19,58.51,84.97h0c5.77,11.28,10.98,22.96,15.46,35.02.32.84.62,1.68.92,2.52.3-.85.61-1.69.93-2.52.25-.66.49-1.32.75-1.98,46.96-123.85,170.08-206.9,189.31-219.87,84.27-56.85,185.98-88.22,196.41-71.49,5.45,8.73-20.97,37.23-74.04,93.88Z";
+
+const PATH_HL =
+  "M584.17,791.52v94.41c-.17.07-.35.12-.52.14-18.27,2.15-17.66-209.61-132.5-324.38-54.45-54.41-87.55-77.11-87.55-77.11,0,0-40.39-27.69-74.3-57.48-1.06-.93-2.1-1.86-2.1-1.86-3.27-2.95-7.68-7.23-23.79-23.07-30.01-29.52-45.29-44.57-59.3-59.02-16.19-16.7-13.25-14.2-24.36-25.44-12.56-12.71-20.38-20.01-26.72-26.4-.01-.02-.03-.03-.05-.05-4.91-4.95-8.93-9.38-13.6-15.37-.03-.03-.05-.05-.07-.08-15.01-19.27-23.39-30.02-20.36-35.19.13-.22.27-.39.39-.55,0,0,3.28-4.21,12.4-3.92,63.97,2.02,131.61,44.77,131.61,44.77,27.03,13.34,46.36,26.22,59.27,35.78,17.03,12.62,57.73,45.29,57.75,45.31,0,0,.01,0,.02.02,0,0,.02.01.03.02,23.97,20.67,44.48,43.53,50.14,49.98.12.12.22.23.31.34.27.3.49.55.67.76.12.14.23.26.31.36.06.08.13.15.2.23.05.05.07.08.07.08.03.03.11.13.14.16,15.92,18.18,47.44,54.75,69.92,109.23.06.14,1.76,4.52,5.16,13.28,14.8,38.1,22.2,57.15,27.76,71.72,19.45,50.96,21.67,60.42,39.79,106.05,3.78,9.52,6.95,17.33,9.05,22.49-.76,22.58.15,41.17.22,54.77Z";
 
 const MONO_FILL = {
   "mono-dark": "var(--color-noche, #242c3f)",
@@ -25,11 +36,11 @@ const MONO_FILL = {
 } as const;
 
 /**
- * Contenido del símbolo en coordenadas 800×700, sin el `<svg>` contenedor —
- * para que YnaraMark lo envuelva en su viewBox y YnaraWordmark lo anide en su
- * lockup. `idPrefix` (de `useId`) hace únicos los ids de los gradientes: sin
- * esto, dos logos en la misma página comparten `id` y el segundo hereda el
- * gradiente del primero.
+ * Contenido del símbolo oficial en coordenadas 1012.54×1009.81, sin el `<svg>`
+ * contenedor — para que `YnaraMark` lo envuelva y `YnaraWordmark` lo anide.
+ * `idPrefix` (de `useId`) hace únicos los ids de los gradientes: sin esto, dos
+ * logos en la misma página comparten `id` y el segundo hereda el gradiente del
+ * primero.
  */
 export function YnaraSymbol({
   variant,
@@ -39,64 +50,83 @@ export function YnaraSymbol({
   idPrefix: string;
 }) {
   if (variant === "mono-dark" || variant === "mono-light") {
-    // Silueta plana: el relieve es un realce que en mono no aporta (cae dentro
-    // de la base, mismo color), así que se omite — base + diamante alcanzan.
+    // Silueta plana: el relieve cae dentro de la forma (mismo color), se omite.
     const fill = MONO_FILL[variant];
     return (
       <>
-        <path d={PATH_Y_BASE} fill={fill} />
-        <path d={PATH_DIAMOND} fill={fill} />
+        <rect
+          fill={fill}
+          x={DIAMOND.x}
+          y={DIAMOND.y}
+          width={DIAMOND.w}
+          height={DIAMOND.h}
+          rx={DIAMOND.rx}
+          ry={DIAMOND.rx}
+          transform={DIAMOND.transform}
+        />
+        <path fill={fill} d={PATH_MAIN} />
       </>
     );
   }
 
-  // Variante color: stops de la paleta oficial v4 (§3.4) — azul→celeste en la
-  // "Y", celeste→lavanda en el relieve y violeta→violáceo en el diamante. Los
-  // fallbacks hex cubren el caso en que `var()` no resuelva (Safari viejo con
-  // SVG fuera del flujo CSS). Migrado de los stops legacy blue-base/relief/violet.
-  const baseId = `${idPrefix}-base`;
-  const reliefId = `${idPrefix}-relief`;
-  const diamondId = `${idPrefix}-diamond`;
+  // Variante color: los 3 gradientes oficiales (violeta del diamante, azul de la
+  // forma, highlight del relieve). Coordenadas userSpaceOnUse del artwork real.
+  const purple = `${idPrefix}-purple`;
+  const blue = `${idPrefix}-blue`;
+  const hl = `${idPrefix}-hl`;
   return (
     <>
       <defs>
         <linearGradient
-          id={baseId}
-          x1="240"
-          y1="590"
-          x2="560"
-          y2="160"
+          id={purple}
+          x1="394.92"
+          y1="226.37"
+          x2="620.21"
+          y2="226.37"
+          gradientTransform="translate(-11.4 425.21) rotate(-45)"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0" stopColor="var(--color-azul, #2f5aa6)" />
-          <stop offset="1" stopColor="var(--color-celeste, #6e92cc)" />
+          <stop offset="0" stopColor="#8265a3" />
+          <stop offset=".33" stopColor="#7b559b" />
+          <stop offset=".98" stopColor="#692e87" />
+          <stop offset="1" stopColor="#692d87" />
         </linearGradient>
         <linearGradient
-          id={reliefId}
-          x1="330"
-          y1="580"
-          x2="470"
-          y2="185"
+          id={blue}
+          x1="119.53"
+          y1="575.07"
+          x2="895.73"
+          y2="575.07"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0" stopColor="var(--color-celeste, #6e92cc)" stopOpacity="0.88" />
-          <stop offset="1" stopColor="var(--color-lavanda, #8b9ad0)" stopOpacity="0.55" />
+          <stop offset=".5" stopColor="#305ba6" />
+          <stop offset=".85" stopColor="#242552" />
         </linearGradient>
         <linearGradient
-          id={diamondId}
-          x1="400"
-          y1="48"
-          x2="400"
-          y2="168"
+          id={hl}
+          x1="118.34"
+          y1="561.11"
+          x2="584.17"
+          y2="561.11"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0" stopColor="var(--color-violeta, #8165a3)" />
-          <stop offset="1" stopColor="var(--color-violaceo, #5c6fb3)" />
+          <stop offset=".18" stopColor="#305ba6" />
+          <stop offset=".76" stopColor="#fff" />
+          <stop offset=".94" stopColor="#305ba6" />
         </linearGradient>
       </defs>
-      <path d={PATH_Y_BASE} fill={`url(#${baseId})`} />
-      <path d={PATH_Y_RELIEF} fill={`url(#${reliefId})`} />
-      <path d={PATH_DIAMOND} fill={`url(#${diamondId})`} />
+      <rect
+        fill={`url(#${purple})`}
+        x={DIAMOND.x}
+        y={DIAMOND.y}
+        width={DIAMOND.w}
+        height={DIAMOND.h}
+        rx={DIAMOND.rx}
+        ry={DIAMOND.rx}
+        transform={DIAMOND.transform}
+      />
+      <path fill={`url(#${blue})`} d={PATH_MAIN} />
+      <path fill={`url(#${hl})`} opacity=".21" d={PATH_HL} />
     </>
   );
 }
@@ -108,38 +138,48 @@ type Props = {
   title?: string;
 };
 
+const VIEWBOX = "0 0 1012.54 1009.81";
+
 /**
- * Símbolo de Ynara (la "Y" + diamante). Logo SVG con variante por fondo
- * (§11.1). Decorativo o semántico según `title`: con título lleva
- * `role="img"` + `aria-label`. Para el lockup símbolo+wordmark usar
- * `YnaraWordmark` (baseline compartida), nunca componer a mano.
+ * Isotipo de Ynara con variante por fondo (§11.1). Decorativo o semántico según
+ * `title`: con título lleva `role="img"` + `aria-label`. Para el lockup
+ * símbolo+wordmark usar `YnaraWordmark`.
  */
 export function YnaraMark({ size = 96, variant = "color", className, title = "Ynara" }: Props) {
   const id = useId();
 
   if (variant === "avatar") {
-    // App-icon: cuadrado redondeado Noche con la silueta marfil centrada. El
-    // símbolo (contenido 800×700) se escala 0.85 y se centra en el box 800×800.
+    // App-icon oficial (#ynara-avatar): cuadrado redondeado claro con el símbolo
+    // a color centrado. rx 175.55 sobre el lado 1012.54.
     return (
       <svg
-        viewBox="0 0 800 800"
+        viewBox={VIEWBOX}
         width={size}
         height={size}
         role="img"
         aria-label={title}
         className={className}
       >
-        <rect width="800" height="800" rx="176" fill="var(--color-noche, #242c3f)" />
-        <g transform="translate(60 129) scale(0.85)">
-          <YnaraSymbol variant="mono-light" idPrefix={id} />
-        </g>
+        <rect
+          x="1"
+          y="1"
+          width="1010.54"
+          height="1007.81"
+          rx="175.55"
+          ry="175.55"
+          fill="#ffffff"
+          stroke="var(--color-noche, #242c3f)"
+          strokeOpacity="0.1"
+          strokeWidth="1.5"
+        />
+        <YnaraSymbol variant="color" idPrefix={id} />
       </svg>
     );
   }
 
   return (
     <svg
-      viewBox="0 0 800 700"
+      viewBox={VIEWBOX}
       width={size}
       height={size}
       role="img"

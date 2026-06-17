@@ -42,13 +42,21 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
   }
 
   if (message.role === "user") {
+    // Burbuja teñida por el modo (mockup): fondo del color del modo a baja
+    // opacidad + borde sutil, esquina inferior-derecha más cerrada. El texto
+    // queda en ink (legible sobre el tinte suave, en claro y en Noche).
+    const tintVar = MODE_BY_ID[mode].tintVar;
     return (
       <div className="flex justify-end">
         <div
           className={cn(
-            "max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] bg-[var(--color-bg-soft)] px-4 py-3 text-body text-[var(--color-ink)]",
+            "max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-[7px] border px-4 py-2.5 text-body text-[var(--color-ink)]",
             message.status === "sending" && "opacity-70",
           )}
+          style={{
+            backgroundColor: `color-mix(in srgb, ${tintVar} 14%, var(--color-bg))`,
+            borderColor: `color-mix(in srgb, ${tintVar} 30%, transparent)`,
+          }}
         >
           {message.text}
         </div>
