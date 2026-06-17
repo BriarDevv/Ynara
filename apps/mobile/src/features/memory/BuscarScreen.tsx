@@ -1,8 +1,9 @@
 import { SEARCH_MIN_LENGTH, useMemorySearch } from "@ynara/core/features/memory";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Text } from "@/components/ui/Text";
 import { MemoryTimelineSkeleton } from "./components/MemoryTimelineSkeleton";
 import { SearchResultRow } from "./components/SearchResultRow";
 
@@ -12,7 +13,7 @@ const SUGGESTIONS = ["tesis", "brief de Õmi", "jerga técnica", "foco"] as cons
 const DEBOUNCE_MS = 250;
 
 /** Color del placeholder del input (RN no lo toma del className NativeWind). */
-const PLACEHOLDER_COLOR = "rgba(36,44,63,0.45)";
+const PLACEHOLDER_COLOR = "rgba(243,240,234,0.40)";
 
 /**
  * Pantalla **Búsqueda** (wireframes 18/19) — espejo de `BuscarView` de web. Input
@@ -53,7 +54,7 @@ export function BuscarScreen() {
           <Text className="text-button text-ink-soft">‹ Memoria</Text>
         </Pressable>
 
-        <Text className="text-title font-semibold text-ink-deep">Buscar</Text>
+        <Text className="text-title font-display text-ink-deep">Buscar</Text>
 
         <View className="h-12 flex-row items-center gap-3 rounded-lg border border-border bg-bg-soft px-4">
           <TextInput

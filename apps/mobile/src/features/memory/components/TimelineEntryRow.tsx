@@ -1,6 +1,7 @@
 import { formatEntryDate, type TimelineEntry } from "@ynara/core/features/memory";
 import { useRouter } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { LAYER_BY_ID, LAYER_DOT_CLASS } from "../layers";
 

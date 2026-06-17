@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { OptionCard } from "@/components/ui/OptionCard";
+import { Text } from "@/components/ui/Text";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";

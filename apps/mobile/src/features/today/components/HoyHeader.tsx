@@ -1,7 +1,8 @@
 import type { Mode } from "@ynara/shared-schemas";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { ModeChip } from "@/components/ui/ModeChip";
 import { MODE_BY_ID } from "@/components/ui/modes";
+import { Text } from "@/components/ui/Text";
 import { formatHoyDate } from "../format";
 
 type Props = {
@@ -31,7 +32,7 @@ export function HoyHeader({ displayName, activeMode, now }: Props) {
         </View>
       </View>
       <View className="gap-1">
-        <Text className="text-title font-semibold text-ink-deep">Hoy</Text>
+        <Text className="text-title font-display text-ink-deep">Hoy</Text>
         <Text className="text-body text-ink-soft">{formatHoyDate(now)}</Text>
       </View>
     </View>

@@ -1,6 +1,7 @@
 import { useSuggestions } from "@ynara/core/features/today";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { SuggestionCard } from "@/components/ui/SuggestionCard";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { SuggestionsSkeleton } from "./SuggestionsSkeleton";
 

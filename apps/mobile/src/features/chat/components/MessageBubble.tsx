@@ -1,8 +1,9 @@
 import type { ChatUiMessage } from "@ynara/core/features/chat";
 import type { Mode } from "@ynara/shared-schemas";
 import { chatErrorCopy } from "@ynara/shared-schemas";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { MODE_DOT_CLASS } from "@/components/ui/modes";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { ActionCard } from "./ActionCard";
 

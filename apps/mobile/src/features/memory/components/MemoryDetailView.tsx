@@ -1,7 +1,8 @@
 import { formatFullDate, presentDetail, type TimelineEntry } from "@ynara/core/features/memory";
 import type { MemoryItemOut, MemoryLayer } from "@ynara/shared-schemas";
 import type { ReactNode } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { LAYER_BY_ID, LAYER_DOT_CLASS } from "../layers";
 import { TimelineEntryRow } from "./TimelineEntryRow";

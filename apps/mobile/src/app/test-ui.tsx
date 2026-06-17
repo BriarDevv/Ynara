@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Card, TextField } from "@/components/ui";
+import { Text } from "@/components/ui/Text";
 
 // Showcase de dev de los componentes base (espejo del /test-ds de la web).
 // Sirve para QA visual de tokens + primitives. No es parte del producto.

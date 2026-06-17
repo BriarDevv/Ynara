@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Pressable, type PressableProps, Text } from "react-native";
+import { Pressable, type PressableProps } from "react-native";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "ghost" | "subtle";

@@ -1,5 +1,6 @@
 import type { Task } from "@ynara/shared-schemas";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { formatTaskMeta } from "../format";
 

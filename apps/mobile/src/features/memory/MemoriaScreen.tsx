@@ -1,9 +1,10 @@
 import { groupByBucket, type TimelineFilter, useMemoryTimeline } from "@ynara/core/features/memory";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChipGroup } from "@/components/ui/ChipGroup";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { MemoryTimelineSkeleton } from "./components/MemoryTimelineSkeleton";
 import { TimelineEntryRow } from "./components/TimelineEntryRow";
@@ -36,7 +37,7 @@ export function MemoriaScreen() {
     <SafeAreaView className="flex-1 bg-bg-canvas" edges={["top"]}>
       <ScrollView contentContainerClassName="gap-6 px-6 py-8">
         <View className="gap-2">
-          <Text className="text-title font-semibold text-ink-deep">Memoria</Text>
+          <Text className="text-title font-display text-ink-deep">Memoria</Text>
           <Text className="text-body text-ink-soft">
             Todo lo que Ynara fue guardando con vos, en orden.
           </Text>

@@ -1,5 +1,6 @@
 import { useTasks, useToggleTask } from "@ynara/core/features/today";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { PrioritiesSkeleton } from "./PrioritiesSkeleton";
 import { PriorityRow } from "./PriorityRow";

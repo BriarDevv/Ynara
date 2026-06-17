@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "@/components/ui/Text";
 
 /**
  * CTA "Recap pendiente" (wireframe 06): card azul de marca, full-width, que

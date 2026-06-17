@@ -2,9 +2,10 @@ import { useDeleteMemory, usePatchMemory } from "@ynara/core/features/memory";
 import type { MemoryItemOut, MemoryLayer, SemanticMemoryOut } from "@ynara/shared-schemas";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "@/components/ui/Button";
+import { Text } from "@/components/ui/Text";
 import { Textarea } from "@/components/ui/Textarea";
 
 type Props = {
@@ -76,7 +77,7 @@ export function MemoryDetailActions({ layer, item }: Props) {
           <SafeAreaView edges={["bottom"]} className="rounded-t-xl bg-bg">
             <View className="gap-4 px-6 pb-6 pt-5">
               <View className="gap-1">
-                <Text className="text-title font-semibold text-ink-deep">Editar el recuerdo</Text>
+                <Text className="text-title font-display text-ink-deep">Editar el recuerdo</Text>
                 <Text className="text-body-sm text-ink-soft">
                   Ajustá lo que Ynara guardó. Se vuelve a indexar al guardar.
                 </Text>
@@ -117,7 +118,7 @@ export function MemoryDetailActions({ layer, item }: Props) {
           <SafeAreaView edges={["bottom"]} className="rounded-t-xl bg-bg">
             <View className="gap-4 px-6 pb-6 pt-5">
               <View className="gap-1">
-                <Text className="text-title font-semibold text-ink-deep">
+                <Text className="text-title font-display text-ink-deep">
                   ¿Borrar este recuerdo?
                 </Text>
                 <Text className="text-body-sm text-ink-soft">

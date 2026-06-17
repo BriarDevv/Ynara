@@ -1,6 +1,7 @@
 import { CHAT_TEXT_MAX_LENGTH } from "@ynara/shared-schemas";
 import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -11,7 +12,7 @@ type Props = {
   onCancel?: () => void;
 };
 
-const PLACEHOLDER_COLOR = "rgba(36,44,63,0.45)";
+const PLACEHOLDER_COLOR = "rgba(243,240,234,0.40)";
 const COUNTER_THRESHOLD = CHAT_TEXT_MAX_LENGTH - 300;
 
 /**

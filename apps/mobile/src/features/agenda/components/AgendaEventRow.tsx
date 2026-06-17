@@ -1,6 +1,7 @@
 import type { AgendaEvent } from "@ynara/core/features/agenda";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { MODE_DOT_CLASS } from "@/components/ui/modes";
+import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { formatEventRange } from "../format";
 
