@@ -6,12 +6,16 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MODE_BY_ID, MODES } from "@/components/ui/modes";
 import { YnaraWordmark } from "@/components/ui/YnaraWordmark";
+import { buildAnticipations } from "@/features/today/anticipations";
 import { useActiveMode } from "@/hooks/useActiveMode";
 import { cn } from "@/lib/cn";
 import { useActiveModeStore } from "@/stores/mode";
 import { applyThemeClass, useThemeStore } from "@/stores/theme";
 import { useUserStore } from "@/stores/user";
 import { isNavItemActive, NAV_ITEMS } from "./nav-items";
+
+/** Cantidad de avisos pendientes (mock; cuando exista el endpoint, sale de ahí). */
+const AVISOS_COUNT = buildAnticipations().length;
 
 /**
  * Navegación principal del app shell, en dos chrome por breakpoint
@@ -218,8 +222,27 @@ export function SidebarNav() {
           </ul>
         </div>
 
-        {/* Peeks: memoria + búsqueda. */}
+        {/* Peeks: avisos + memoria + búsqueda. */}
         <div className="flex flex-col">
+          {/* Peek "Ynara se adelanta" → /avisos, con badge de pendientes */}
+          <Link
+            href="/avisos"
+            aria-label={`Ynara se adelanta — ${AVISOS_COUNT} avisos pendientes`}
+            className="flex items-center gap-3 rounded-[var(--radius-md)] px-2 py-2.5 text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink)]"
+          >
+            <Icon name="recordatorio" size={20} strokeWidth={2} />
+            <span className="flex-1 text-body-sm">Ynara se adelanta</span>
+            {AVISOS_COUNT > 0 && (
+              <span
+                aria-hidden
+                className="flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white"
+                style={{ backgroundColor: "var(--mode-memoria)" }}
+              >
+                {AVISOS_COUNT}
+              </span>
+            )}
+            <Icon name="chevron" size={16} strokeWidth={2} />
+          </Link>
           <Link
             href="/memoria"
             className="flex items-center gap-3 rounded-[var(--radius-md)] px-2 py-2.5 text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink)]"

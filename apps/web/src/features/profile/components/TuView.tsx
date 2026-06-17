@@ -18,6 +18,7 @@ import { useActiveMode } from "@/hooks/useActiveMode";
 import { applyA11yClasses, type TextSize, useA11yStore } from "@/stores/a11y";
 import { applyThemeClass, type ThemePreference, useThemeStore } from "@/stores/theme";
 import { useUserStore } from "@/stores/user";
+import { PaywallSheet } from "./PaywallSheet";
 import { WipeMemoryDialog } from "./WipeMemoryDialog";
 
 // ---------------------------------------------------------------------------
@@ -226,6 +227,9 @@ export function TuView() {
   // Dialog de wipe
   const [wipeOpen, setWipeOpen] = useState(false);
 
+  // Paywall sheet
+  const [paywallOpen, setPaywallOpen] = useState(false);
+
   // Toast
   const [toast, setToast] = useState<{ message: string; variant: "success" | "error" } | null>(
     null,
@@ -349,9 +353,20 @@ export function TuView() {
             <h1 className="text-title text-[var(--color-ink-deep)] leading-tight">
               {displayName ?? "Vos"}
             </h1>
-            <span className="text-caption mt-1 inline-block rounded-full bg-[var(--color-bg-soft)] px-2.5 py-0.5 text-[var(--color-ink-soft)]">
-              Plan gratis
-            </span>
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-caption inline-block rounded-full bg-[var(--color-bg-soft)] px-2.5 py-0.5 text-[var(--color-ink-soft)]">
+                Plan gratis
+              </span>
+              <button
+                type="button"
+                onClick={() => setPaywallOpen(true)}
+                className="text-caption inline-block rounded-full px-2.5 py-0.5 font-semibold text-white transition-opacity hover:opacity-90 active:opacity-75"
+                style={{ backgroundColor: MODE_BY_ID.bienestar.fillVar }}
+                aria-label="Subir a Premium"
+              >
+                Subir a Premium
+              </button>
+            </div>
           </div>
         </div>
 
@@ -513,6 +528,9 @@ export function TuView() {
         onClose={() => setWipeOpen(false)}
         onSuccess={() => setToast({ message: "Memoria borrada.", variant: "success" })}
       />
+
+      {/* Sheet de paywall — maquetado, sin pago real */}
+      <PaywallSheet open={paywallOpen} onClose={() => setPaywallOpen(false)} />
     </div>
   );
 }

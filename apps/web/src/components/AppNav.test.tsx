@@ -18,6 +18,13 @@ vi.mock("next/link", () => ({
     </a>
   ),
 }));
+// buildAnticipations: mock estable para el badge de avisos pendientes.
+vi.mock("@/features/today/anticipations", () => ({
+  buildAnticipations: () => [
+    { id: "ant-1", kind: "Anticipación", time: "10:30", text: "Test", mode: "productividad", actions: [] },
+    { id: "ant-2", kind: "Recordatorio", time: "12:00", text: "Test 2", mode: "bienestar", actions: [] },
+  ],
+}));
 
 // Import después de los mocks.
 const { MobileTabBar, SidebarNav } = await import("./AppNav");
@@ -94,5 +101,14 @@ describe("SidebarNav", () => {
     // Tras montar (useEffect), la variante pasa a mono-light.
     expect(container.innerHTML).toContain("var(--color-marfil");
     expect(container.querySelector("linearGradient")).not.toBeInTheDocument();
+  });
+
+  it("muestra el peek 'Ynara se adelanta' con link a /avisos", () => {
+    mockPathname = "/hoy";
+    render(<SidebarNav />);
+    const peek = screen.getByRole("link", {
+      name: /Ynara se adelanta/i,
+    });
+    expect(peek).toHaveAttribute("href", "/avisos");
   });
 });
