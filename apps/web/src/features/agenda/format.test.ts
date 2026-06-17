@@ -5,7 +5,11 @@ import {
   eventsForDay,
   formatEventRange,
   formatTime,
+  gridHeight,
+  gridTop,
+  isInRange,
   isOnDay,
+  nowHour,
   startOfWeek,
   weekDays,
 } from "./format";
@@ -101,5 +105,46 @@ describe("isOnDay / eventsForDay", () => {
   it("eventsForDay filtra al día y ordena por inicio", () => {
     const result = eventsForDay([evening, otherDay, morning], day);
     expect(result.map((e) => e.start_at)).toEqual([morning.start_at, evening.start_at]);
+  });
+});
+
+describe("gridTop / gridHeight / isInRange", () => {
+  const ev = makeEvent({ start_at: localISO(2026, 4, 7, 10, 30), duration_min: 90 });
+
+  it("gridTop posiciona correctamente respecto a H0", () => {
+    // 10:30 − 8:00 = 2.5h * 52px = 130px
+    expect(gridTop(ev, 8, 52)).toBeCloseTo(130, 1);
+  });
+
+  it("gridTop da 0 cuando el evento empieza justo en H0", () => {
+    const ev0 = makeEvent({ start_at: localISO(2026, 4, 7, 8, 0), duration_min: 60 });
+    expect(gridTop(ev0, 8, 52)).toBe(0);
+  });
+
+  it("gridHeight calcula en función de la duración", () => {
+    // 90min / 60 * 52px = 78px
+    expect(gridHeight(ev, 52)).toBeCloseTo(78, 1);
+  });
+
+  it("gridHeight respeta el mínimo", () => {
+    const corto = makeEvent({ start_at: localISO(2026, 4, 7, 10, 0), duration_min: 5 });
+    expect(gridHeight(corto, 52, 20)).toBe(20);
+  });
+
+  it("isInRange verdadero cuando el evento está en la ventana", () => {
+    expect(isInRange(ev, 8, 20)).toBe(true);
+  });
+
+  it("isInRange falso para evento completamente fuera", () => {
+    const tarde = makeEvent({ start_at: localISO(2026, 4, 7, 21, 0), duration_min: 60 });
+    expect(isInRange(tarde, 8, 20)).toBe(false);
+  });
+});
+
+describe("nowHour", () => {
+  it("devuelve un número entre 0 y 24", () => {
+    const h = nowHour();
+    expect(h).toBeGreaterThanOrEqual(0);
+    expect(h).toBeLessThan(24);
   });
 });
