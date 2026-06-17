@@ -471,6 +471,15 @@ export function TuView() {
           </A11yCard>
         </SettingsGroup>
 
+        {/* ── Sección: Privacidad (calibración de confianza — NN/g) ── */}
+        <SettingsGroup label="Privacidad">
+          <SettingsRow
+            first
+            title="On-prem · tus datos no salen del perímetro"
+            sub="Tus charlas y tu memoria viven en servidores propios. Nada se manda a terceros."
+          />
+        </SettingsGroup>
+
         {/* ── Sección: Cuenta ── */}
         <SettingsGroup label="Cuenta">
           <div data-hero-reveal className="pt-2">
