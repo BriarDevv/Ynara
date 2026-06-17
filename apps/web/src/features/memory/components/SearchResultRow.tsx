@@ -2,6 +2,7 @@ import type { MemorySearchHit } from "@ynara/shared-schemas";
 import { Icon } from "@ynara/ui";
 import Link from "next/link";
 import type { CSSProperties } from "react";
+import { Diamond } from "@/components/ui/Diamond";
 import { cn } from "@/lib/cn";
 import { LAYER_BY_ID } from "../layers";
 import { formatEntryDate } from "../timeline";
@@ -32,9 +33,9 @@ export function SearchResultRow({ hit, now, index }: Props) {
           "hover:bg-[var(--color-bg-soft)]",
         )}
       >
-        <span aria-hidden className="mt-0.5 shrink-0 self-start text-[var(--color-memory)]">
-          <Icon name={layer.icon} size={18} />
-        </span>
+        {/* Marcador de capa: diamante teñido por la capa (paridad con el
+            timeline y el mockup). */}
+        <Diamond size={11} color={layer.color} className="mt-[7px] self-start" />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="text-caption text-[var(--color-ink-soft)]">{layer.label}</span>
           <span className="line-clamp-2 text-body text-[var(--color-ink)]">{hit.snippet}</span>

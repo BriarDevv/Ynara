@@ -14,6 +14,12 @@ export type LayerDescriptor = {
   /** Frase que explica qué guarda la capa, para filtros y vacíos. */
   blurb: string;
   icon: IconName;
+  /**
+   * Color del marcador de la capa (Diamond del timeline/búsqueda), como el
+   * mockup tiñe cada fila por su tag. Token del palette de marca (AA-safe como
+   * relleno de un marcador chico; el texto sigue en `--color-ink-*`).
+   */
+  color: string;
 };
 
 export const MEMORY_LAYERS: readonly LayerDescriptor[] = [
@@ -22,18 +28,21 @@ export const MEMORY_LAYERS: readonly LayerDescriptor[] = [
     label: "Hechos",
     blurb: "Lo que Ynara sabe de vos",
     icon: "idea",
+    color: "var(--color-celeste)",
   },
   {
     id: "episodic",
     label: "Momentos",
     blurb: "Lo que fue pasando",
     icon: "dialogo",
+    color: "var(--color-violeta)",
   },
   {
     id: "procedural",
     label: "Costumbres",
     blurb: "Cómo te gusta trabajar",
     icon: "adaptacion",
+    color: "var(--color-violaceo)",
   },
 ] as const;
 

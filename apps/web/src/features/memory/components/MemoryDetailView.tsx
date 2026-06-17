@@ -47,14 +47,23 @@ export function MemoryDetailView({ layer, item, related, relatedPending, now, ac
 
         <header className="flex flex-col gap-5">
           <span className="inline-flex w-fit items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] px-3 py-1 text-caption text-[var(--color-ink-soft)]">
-            <Icon name={layerInfo.icon} size={14} className="text-[var(--color-memory)]" />
+            <Icon name={layerInfo.icon} size={14} color={layerInfo.color} />
             {layerInfo.label}
           </span>
           <h1 className="text-title text-balance text-[var(--color-ink-deep)]">{p.quote}</h1>
           {p.note ? (
-            <p className="text-body-sm max-w-[var(--measure-prose)] border-l-2 border-[var(--color-border)] pl-4 text-[var(--color-ink-soft)]">
-              {p.note}
-            </p>
+            // Nota de contexto como cita editorial (paridad con el bloque de
+            // cita del mockup): barra de acento de la capa + superficie suave.
+            <div className="flex max-w-[var(--measure-prose)] gap-3 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-bg-soft)] px-4 py-3.5">
+              <span
+                aria-hidden
+                className="w-[3px] shrink-0 self-stretch rounded-full"
+                style={{ backgroundColor: layerInfo.color }}
+              />
+              <p className="text-body-sm italic leading-relaxed text-[var(--color-ink-soft)]">
+                {p.note}
+              </p>
+            </div>
           ) : null}
         </header>
 
