@@ -2,11 +2,19 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  type MemoryExport,
+  MemoryExportSchema,
   type MemoryItemOut,
   type MemoryLayer,
   MemoryListSchema,
   type MemorySearchResponse,
   MemorySearchResponseSchema,
+  type MemoryWipeConfirm,
+  MemoryWipeConfirmSchema,
+  type MemoryWipePreview,
+  MemoryWipePreviewSchema,
+  type MemoryWipeResult,
+  MemoryWipeResultSchema,
   memoryOutSchemaFor,
   type ProceduralMemoryPatch,
   ProceduralMemoryPatchSchema,
@@ -146,6 +154,57 @@ export function useDeleteMemory(layer: MemoryLayer, ref: string) {
     mutationFn: () => api.delete<void>(`/v1/memory/${layer}/${encodeURIComponent(ref)}`),
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: qk.memory.detail(layer, ref) });
+      queryClient.invalidateQueries({ queryKey: qk.memory.all() });
+    },
+  });
+}
+
+/**
+ * Export de toda la memoria (`GET /v1/memory/export`). Mutation (no query): se
+ * dispara con el click de "exportar", no en cada render. Valida el export
+ * versionado con Zod; la vista convierte el JSON devuelto en una descarga.
+ */
+export function useMemoryExport() {
+  return useMutation({
+    mutationFn: async (): Promise<MemoryExport> => {
+      const raw = await api.get<unknown>("/v1/memory/export");
+      return MemoryExportSchema.parse(raw);
+    },
+  });
+}
+
+/**
+ * Preview del wipe total (`POST /v1/memory/wipe?dry_run=true`): conteos por capa
+ * de lo que se borraría. Read-only. Va por POST (no GET) a propósito — el backend
+ * mueve la superficie destructiva fuera del verbo seguro para que ningún
+ * prefetch/crawler la gatille. El cliente usa estos conteos como los `expected_*`
+ * del execute.
+ */
+export function useMemoryWipePreview() {
+  return useMutation({
+    mutationFn: async (): Promise<MemoryWipePreview> => {
+      const raw = await api.post<unknown>("/v1/memory/wipe?dry_run=true");
+      return MemoryWipePreviewSchema.parse(raw);
+    },
+  });
+}
+
+/**
+ * Ejecuta el wipe TOTAL (`POST /v1/memory/wipe`) — **DESTRUCTIVO e irreversible**.
+ * El body lleva los `expected_*` (los conteos del preview fresco; guarda de
+ * intención). Si no coinciden con el recount del backend, responde **409**
+ * (`ApiError` con `MemoryWipeConflict` en `.body`) y **nada** se borra. Al
+ * confirmar, invalida toda la cache de memoria (quedó vacía).
+ */
+export function useMemoryWipeExecute() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (confirm: MemoryWipeConfirm): Promise<MemoryWipeResult> => {
+      const body = MemoryWipeConfirmSchema.parse(confirm);
+      const raw = await api.post<unknown>("/v1/memory/wipe", body);
+      return MemoryWipeResultSchema.parse(raw);
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qk.memory.all() });
     },
   });
