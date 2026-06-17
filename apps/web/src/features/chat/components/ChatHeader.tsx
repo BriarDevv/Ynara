@@ -2,15 +2,19 @@
 
 import { Icon } from "@ynara/ui";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { ModeChip } from "@/components/ui/ModeChip";
-import type { ModeId } from "@/components/ui/modes";
+import { MODE_BY_ID, type ModeId } from "@/components/ui/modes";
+import { ModeSwitcher } from "./ModeSwitcher";
 
 /**
  * Header de la conversación: volver a la home + `ModeChip` del modo de la
- * sesión. El `ModeSwitcher` (cambiar de modo = nueva sesión) llega en W5.
+ * sesión, que ahora abre el `ModeSwitcher` (cambiar de modo = sesión nueva,
+ * chat plan §4.4 / W5).
  */
 export function ChatHeader({ mode }: { mode: ModeId }) {
   const router = useRouter();
+  const [switcherOpen, setSwitcherOpen] = useState(false);
 
   return (
     <header className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-3">
@@ -22,7 +26,17 @@ export function ChatHeader({ mode }: { mode: ModeId }) {
       >
         <Icon name="atras" size={20} />
       </button>
-      <ModeChip modeId={mode} />
+      <button
+        type="button"
+        onClick={() => setSwitcherOpen(true)}
+        aria-haspopup="dialog"
+        aria-label={`Modo ${MODE_BY_ID[mode].label}. Cambiar de modo`}
+        className="inline-flex items-center gap-1 rounded-[var(--radius-pill)] py-1 pr-2 text-[var(--color-ink-soft)] hover:bg-[var(--color-bg-soft)]"
+      >
+        <ModeChip modeId={mode} />
+        <Icon name="chevron" size={16} />
+      </button>
+      <ModeSwitcher open={switcherOpen} onClose={() => setSwitcherOpen(false)} currentMode={mode} />
     </header>
   );
 }
