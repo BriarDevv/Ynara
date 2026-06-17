@@ -1,0 +1,105 @@
+import { describe, expect, it } from "vitest";
+import type { AgendaEvent } from "./api";
+import {
+  eventEnd,
+  eventsForDay,
+  formatEventRange,
+  formatTime,
+  isOnDay,
+  startOfWeek,
+  weekDays,
+} from "./format";
+
+/**
+ * `start_at` derivado de un `Date` **local** (no un ISO con offset fijo): así las
+ * aserciones de hora local son independientes del huso donde corra el CI.
+ */
+const localISO = (y: number, mo: number, d: number, h: number, mi: number) =>
+  new Date(y, mo, d, h, mi).toISOString();
+
+const makeEvent = (
+  overrides: Partial<AgendaEvent> & Pick<AgendaEvent, "start_at" | "duration_min">,
+): AgendaEvent => ({
+  id: "0193d001-0000-4000-8000-000000000001",
+  title: "Bloque",
+  mode: null,
+  status: "confirmed",
+  location: null,
+  ...overrides,
+});
+
+describe("formatTime", () => {
+  it("formatea la hora local como HH:MM con zero-pad", () => {
+    expect(formatTime(localISO(2026, 4, 7, 14, 5))).toBe("14:05");
+    expect(formatTime(localISO(2026, 4, 7, 9, 0))).toBe("09:00");
+  });
+});
+
+describe("eventEnd / formatEventRange", () => {
+  it("deriva el fin como inicio + duración", () => {
+    const ev = makeEvent({ start_at: localISO(2026, 4, 7, 10, 0), duration_min: 90 });
+    expect(eventEnd(ev).getHours()).toBe(11);
+    expect(eventEnd(ev).getMinutes()).toBe(30);
+  });
+
+  it("arma el rango legible inicio – fin", () => {
+    const ev = makeEvent({ start_at: localISO(2026, 4, 7, 10, 0), duration_min: 90 });
+    expect(formatEventRange(ev)).toBe("10:00 – 11:30");
+  });
+
+  it("cruza la medianoche sin romperse", () => {
+    const ev = makeEvent({ start_at: localISO(2026, 4, 7, 23, 30), duration_min: 60 });
+    expect(formatEventRange(ev)).toBe("23:30 – 00:30");
+  });
+});
+
+describe("startOfWeek", () => {
+  it("devuelve el lunes 00:00 de la semana que contiene la fecha", () => {
+    const d = new Date(2026, 4, 7, 15, 30);
+    const monday = startOfWeek(d);
+    expect(monday.getDay()).toBe(1); // lunes
+    expect(monday.getHours()).toBe(0);
+    expect(monday.getMinutes()).toBe(0);
+    expect(monday.getTime()).toBeLessThanOrEqual(d.getTime());
+    expect(d.getTime() - monday.getTime()).toBeLessThan(7 * 24 * 60 * 60 * 1000);
+  });
+
+  it("es idempotente sobre un lunes", () => {
+    const monday = startOfWeek(new Date(2026, 4, 7, 12, 0));
+    expect(startOfWeek(monday).getTime()).toBe(monday.getTime());
+  });
+});
+
+describe("weekDays", () => {
+  it("devuelve 7 días lunes→domingo a las 00:00", () => {
+    const days = weekDays(new Date(2026, 4, 7, 9, 0));
+    expect(days).toHaveLength(7);
+    expect(days.map((d) => d.getDay())).toEqual([1, 2, 3, 4, 5, 6, 0]);
+    expect(days.every((d) => d.getHours() === 0 && d.getMinutes() === 0)).toBe(true);
+  });
+});
+
+describe("isOnDay / eventsForDay", () => {
+  const day = new Date(2026, 4, 7, 0, 0);
+  const morning = makeEvent({ start_at: localISO(2026, 4, 7, 9, 0), duration_min: 30 });
+  const evening = makeEvent({
+    id: "0193d001-0000-4000-8000-000000000002",
+    start_at: localISO(2026, 4, 7, 18, 0),
+    duration_min: 30,
+  });
+  const otherDay = makeEvent({
+    id: "0193d001-0000-4000-8000-000000000003",
+    start_at: localISO(2026, 4, 8, 9, 0),
+    duration_min: 30,
+  });
+
+  it("isOnDay matchea solo el día local", () => {
+    expect(isOnDay(morning, day)).toBe(true);
+    expect(isOnDay(otherDay, day)).toBe(false);
+  });
+
+  it("eventsForDay filtra al día y ordena por inicio", () => {
+    const result = eventsForDay([evening, otherDay, morning], day);
+    expect(result.map((e) => e.start_at)).toEqual([morning.start_at, evening.start_at]);
+  });
+});
