@@ -135,3 +135,20 @@ async def test_patch_rejects_out_of_range_retention(db_session: AsyncSession) ->
         assert resp.status_code == 422
     finally:
         app.dependency_overrides.clear()
+
+
+async def test_patch_unknown_user_returns_401(db_session: AsyncSession) -> None:
+    # Token VÁLIDO para un user_id SIN fila (identidad propia caduca, p.ej. user
+    # borrado) → 401 (no 404), mismo criterio que /auth/me. No se siembra el user.
+    ghost_id = uuid.uuid4()
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.patch(
+                "/v1/users/me",
+                headers=_bearer(ghost_id),
+                json={"display_name": "x"},
+            )
+        assert resp.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
