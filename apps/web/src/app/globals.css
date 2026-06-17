@@ -105,6 +105,13 @@
   /* Acento puntual (focus-ring, text-link). Alineado al CTA primary. */
   --color-accent: var(--color-blue-flat);
 
+  /*
+   * Ring de "seleccionado" (OptionCard, etc.) — theme-aware porque el azul de
+   * marca es oscuro y, como línea sobre el navy del tema Noche, no llega al 3:1.
+   * Claro: azul plano (≈7:1 sobre blanco). Noche: se re-declara a celeste claro.
+   */
+  --color-selected-ring: var(--color-blue-flat);
+
   /* Errores (form fields invalid, toasts variant=error). */
   --color-error: #c0392b;
   --color-error-soft: rgb(192 57 43 / 0.12);
@@ -390,6 +397,10 @@ html.theme-dark {
   /* Memoria (§3.5): el texto/icono de modo va claro sobre oscuro —
      lavanda claro (4.1:1 sobre #313a52, ok para icono/acento >=3:1). */
   --color-memory: var(--color-lavanda);
+
+  /* Ring de seleccionado: celeste claro (≈4:1 sobre la card) para que la
+     línea se vea sobre el navy; el azul plano de marca queda invisible acá. */
+  --color-selected-ring: var(--color-celeste);
 
   /* Elevation (§7): card y canvas se separan por superficie + borde;
      las sombras quedan sutiles, con alphas recalibrados sobre Noche. */

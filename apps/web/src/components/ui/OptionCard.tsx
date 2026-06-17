@@ -28,21 +28,20 @@ export function OptionCard({
       disabled={disabled}
       aria-pressed={selected}
       /*
-       * Selected sobrio: ring inset de --color-blue-flat (no fill oscuro).
-       * Antes el selected pintaba bg-ink (azul casi negro) con hairline
-       * gradient encima — quedaba "pesado" sobre canvas ivory. Ahora el
-       * card mantiene fondo blanco y se distingue por el ring azul de
-       * marca + sombra más marcada, que se lee como "elegido" sin pisar
-       * el lenguaje papel-sobre-canvas.
+       * Superficie propia (`--color-bg-soft`) + borde `border-strong` para que
+       * la opción se distinga del contenedor en AMBOS temas — el StepShell de
+       * desktop es una card `--color-bg`, y un OptionCard `--color-bg` adentro
+       * (con borde al 10%) era invisible en Noche. Selected: ring inset de
+       * `--color-selected-ring` (theme-aware: azul de marca en claro, celeste
+       * en Noche, porque el azul oscuro no contrasta como línea sobre navy).
        *
-       * `ring-inset` evita layout shift entre estados (no expande la box
-       * por agregar border).
+       * `ring-inset` evita layout shift entre estados (no expande la box).
        */
       className={cn(
-        "relative w-full rounded-[var(--radius-md)] border bg-[var(--color-bg)] p-4 text-left transition-[transform,box-shadow,border-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)] disabled:cursor-not-allowed disabled:opacity-50",
+        "relative w-full rounded-[var(--radius-md)] border bg-[var(--color-bg-soft)] p-4 text-left transition-[transform,box-shadow,border-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)] disabled:cursor-not-allowed disabled:opacity-50",
         selected
-          ? "border-transparent text-[var(--color-ink-deep)] shadow-soft ring-2 ring-inset ring-[var(--color-blue-flat)]"
-          : "border-[var(--color-border)] text-[var(--color-ink)] hover:border-[var(--color-border-strong)] hover:shadow-soft",
+          ? "border-transparent text-[var(--color-ink-deep)] shadow-soft ring-2 ring-inset ring-[var(--color-selected-ring)]"
+          : "border-[var(--color-border-strong)] text-[var(--color-ink)] hover:border-[var(--color-ink-muted)] hover:shadow-soft",
         className,
       )}
     >
