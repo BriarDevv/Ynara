@@ -17,9 +17,10 @@ export type LayerDescriptor = {
   /**
    * Color del marcador de la capa (Diamond del timeline/búsqueda), como el
    * mockup tiñe cada fila por su tag. Token del palette de marca (AA-safe como
-   * relleno de un marcador chico; el texto sigue en `--color-ink-*`).
+   * relleno de un marcador chico; el texto sigue en `--color-ink-*`). Se tipa
+   * como `var(--color-*)` para blindar contra hex hardcodeado.
    */
-  color: string;
+  color: `var(--color-${string})`;
 };
 
 export const MEMORY_LAYERS: readonly LayerDescriptor[] = [

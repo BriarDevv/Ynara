@@ -11,8 +11,9 @@ import { useUserStore } from "@/stores/user";
  *
  * Promovido desde `HoyView` (era local) porque el fondo vivo lo necesita en
  * más de una vista: tiñe el clima del canvas de Hoy y Memoria (DESIGN.md
- * §2.2). El Chat no lo usa: ahí el modo preciso es el de la sesión
- * (`session.mode`), que el usuario eligió al arrancar la conversación.
+ * §2.2). El **landing** del chat (`ChatHome`) lo usa para arrancar la sesión
+ * nueva en el modo activo; la conversación ya **abierta** sigue atada a su
+ * `session.mode` (una sesión = un modo).
  *
  * El filtro `m in MODE_BY_ID` defiende contra basura persistida en
  * `ynara.user` (localStorage editado o versiones viejas del store).
