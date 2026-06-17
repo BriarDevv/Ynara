@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   EpisodicMemoryOutSchema,
+  MemoryExportSchema,
   MemoryListSchema,
   MemorySearchResponseSchema,
+  MemoryWipeConfirmSchema,
+  MemoryWipeConflictSchema,
+  MemoryWipePreviewSchema,
+  MemoryWipeResultSchema,
   memoryOutSchemaFor,
   ProceduralMemoryOutSchema,
   SemanticMemoryOutSchema,
@@ -135,5 +140,69 @@ describe("MemorySearchResponseSchema", () => {
         results: [{ layer: "semantic", ref: UUID, snippet: "x", score: 1.5, occurred_at: null }],
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("MemoryExportSchema", () => {
+  it("acepta un export versionado de las 3 capas", () => {
+    const parsed = MemoryExportSchema.parse({
+      version: 1,
+      exported_at: ISO,
+      semantic: [semantic],
+      episodic: [episodic],
+      procedural: [procedural],
+    });
+    expect(parsed.version).toBe(1);
+    expect(parsed.semantic).toHaveLength(1);
+  });
+
+  it("rechaza version distinta de 1", () => {
+    expect(
+      MemoryExportSchema.safeParse({
+        version: 2,
+        exported_at: ISO,
+        semantic: [],
+        episodic: [],
+        procedural: [],
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("Memory wipe", () => {
+  const counts = { semantic: 3, episodic: 1, procedural: 0, total: 4 };
+
+  it("preview y result aceptan conteos + total", () => {
+    expect(MemoryWipePreviewSchema.parse(counts)).toEqual(counts);
+    expect(MemoryWipeResultSchema.parse(counts)).toEqual(counts);
+  });
+
+  it("rechaza conteos negativos", () => {
+    expect(
+      MemoryWipePreviewSchema.safeParse({ semantic: -1, episodic: 0, procedural: 0, total: 0 })
+        .success,
+    ).toBe(false);
+  });
+
+  it("confirm exige los 3 expected_*", () => {
+    expect(
+      MemoryWipeConfirmSchema.parse({
+        expected_semantic: 3,
+        expected_episodic: 1,
+        expected_procedural: 0,
+      }),
+    ).toEqual({ expected_semantic: 3, expected_episodic: 1, expected_procedural: 0 });
+    expect(MemoryWipeConfirmSchema.safeParse({ expected_semantic: 3 }).success).toBe(false);
+  });
+
+  it("conflict trae message + conteos actuales", () => {
+    const conflict = {
+      message: "los conteos cambiaron",
+      semantic: 5,
+      episodic: 2,
+      procedural: 1,
+      total: 8,
+    };
+    expect(MemoryWipeConflictSchema.parse(conflict)).toEqual(conflict);
   });
 });

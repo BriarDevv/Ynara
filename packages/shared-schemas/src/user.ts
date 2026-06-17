@@ -35,3 +35,41 @@ export const OnboardResponseSchema = z.object({
   onboardedAt: z.number(),
 });
 export type OnboardResponse = z.infer<typeof OnboardResponseSchema>;
+
+/*
+ * Perfil del backend — mirror de `/v1/users/me` (Tanda 1, ya en `main`). "Pydantic
+ * gana, Zod sigue": si el backend cambia el contrato, se corrige este mirror en el
+ * mismo PR. Tabla `users` operativa (no sagrada).
+ */
+
+/** Días de retención de memoria sensible. Pydantic: `int (30..365)`. */
+export const RetentionDaysSchema = z.number().int().min(30).max(365);
+
+/**
+ * Body de `PATCH /v1/users/me` — update parcial del perfil propio. Todos los
+ * campos opcionales (`exclude_none` en el backend: un PATCH sin campos es no-op).
+ * `display_name` reutiliza la validación del onboarding (más estricta que el
+ * `<=40` del backend: tightening de cliente sobre lo que se manda).
+ */
+export const UserUpdateSchema = z.object({
+  display_name: DisplayNameSchema.optional(),
+  onboarding_completed: z.boolean().optional(),
+  retention_sensitive_days: RetentionDaysSchema.optional(),
+});
+export type UserUpdate = z.infer<typeof UserUpdateSchema>;
+
+/**
+ * Respuesta de `PATCH /v1/users/me` (y `GET /v1/auth/me`): `UserOut`. **Nunca**
+ * incluye `password_hash`. `retention_sensitive_days` va como entero pelado (la
+ * respuesta refleja el valor guardado; el rango lo garantiza el backend).
+ */
+export const UserOutSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  display_name: z.string(),
+  onboarding_completed: z.boolean(),
+  retention_sensitive_days: z.number().int(),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+});
+export type UserOut = z.infer<typeof UserOutSchema>;
