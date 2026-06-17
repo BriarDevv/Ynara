@@ -264,9 +264,12 @@ body {
 
   .text-title {
     font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
-    font-weight: 700;
-    font-size: clamp(1.75rem, 1.35rem + 2vw, 2.125rem);
-    line-height: 1.12;
+    font-weight: 600;
+    /* Títulos de pantalla (Hoy/Agenda/Tú): 32px en mobile → 40px en desktop,
+       como el mockup (más presentes y editoriales). Peso 600 + line-height
+       ajustado para el look display del mock. Ver DESIGN.md §4. */
+    font-size: clamp(2rem, 1.6rem + 2vw, 2.5rem);
+    line-height: 1.04;
     letter-spacing: -0.025em;
   }
 
