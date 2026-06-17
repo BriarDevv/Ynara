@@ -1,4 +1,5 @@
 import { groupByBucket, type TimelineFilter, useMemoryTimeline } from "@ynara/core/features/memory";
+import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,6 +24,7 @@ const FILTER_OPTIONS = [
  * en el PR siguiente.
  */
 export function MemoriaScreen() {
+  const router = useRouter();
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const { data, isPending, isError, refetch, isFetching } = useMemoryTimeline(filter);
 
@@ -39,6 +41,15 @@ export function MemoriaScreen() {
             Todo lo que Ynara fue guardando con vos, en orden.
           </Text>
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Buscar en tu memoria"
+          onPress={() => router.push("/buscar")}
+          className="h-12 flex-row items-center rounded-lg border border-border bg-bg-soft px-4 active:opacity-70"
+        >
+          <Text className="flex-1 text-body text-ink-soft">Buscá en tu memoria…</Text>
+        </Pressable>
 
         <ChipGroup
           label="Filtrar por tipo"
