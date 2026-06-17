@@ -8,6 +8,7 @@ import {
   SignupRequestSchema,
 } from "@ynara/shared-schemas";
 import { HttpResponse, http } from "msw";
+import { agendaHandlers } from "@/features/agenda/mocks";
 import { cannedActions, cannedReply, isAgentMode } from "@/features/chat/constants";
 import { memoryHandlers } from "@/features/memory/mocks";
 import { todayHandlers } from "@/features/today/mocks";
@@ -190,4 +191,7 @@ export const handlers = [
 
   // Hoy (tasks/suggestions/recap) — Fase E. PROVISIONAL: sin backend todavía.
   ...todayHandlers,
+
+  // Agenda (eventos día/semana) — Fase F. PROVISIONAL: sin backend todavía.
+  ...agendaHandlers,
 ];
