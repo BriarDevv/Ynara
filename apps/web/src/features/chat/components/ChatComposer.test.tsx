@@ -8,7 +8,7 @@ describe("ChatComposer", () => {
   it("Enter envía el texto trimmeado y limpia el textarea", async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
-    render(<ChatComposer onSend={onSend} busy={false} />);
+    render(<ChatComposer onSend={onSend} busy={false} mode="productividad" />);
 
     const textarea = screen.getByLabelText("Escribí tu mensaje");
     await user.type(textarea, "  hola mundo  ");
@@ -21,7 +21,7 @@ describe("ChatComposer", () => {
   it("Shift+Enter inserta newline y NO envía", async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
-    render(<ChatComposer onSend={onSend} busy={false} />);
+    render(<ChatComposer onSend={onSend} busy={false} mode="productividad" />);
 
     const textarea = screen.getByLabelText("Escribí tu mensaje");
     await user.type(textarea, "linea1");
@@ -35,7 +35,7 @@ describe("ChatComposer", () => {
 
   it("el botón enviar está deshabilitado si está vacío o solo espacios", async () => {
     const user = userEvent.setup();
-    render(<ChatComposer onSend={vi.fn()} busy={false} />);
+    render(<ChatComposer onSend={vi.fn()} busy={false} mode="productividad" />);
 
     const send = screen.getByLabelText("Enviar");
     expect(send).toBeDisabled();
@@ -47,7 +47,7 @@ describe("ChatComposer", () => {
   it("no envía cuando busy", async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
-    render(<ChatComposer onSend={onSend} busy={true} />);
+    render(<ChatComposer onSend={onSend} busy={true} mode="productividad" />);
 
     const textarea = screen.getByLabelText("Escribí tu mensaje");
     expect(textarea).toBeDisabled();
@@ -56,13 +56,13 @@ describe("ChatComposer", () => {
   });
 
   it("no muestra contador con texto corto", () => {
-    render(<ChatComposer onSend={vi.fn()} busy={false} />);
+    render(<ChatComposer onSend={vi.fn()} busy={false} mode="productividad" />);
     fireEvent.change(screen.getByLabelText("Escribí tu mensaje"), { target: { value: "hola" } });
     expect(screen.queryByText(`/ ${CHAT_TEXT_MAX_LENGTH}`)).toBeNull();
   });
 
   it("muestra el contador y bloquea el envío cuando se pasa del límite", () => {
-    render(<ChatComposer onSend={vi.fn()} busy={false} />);
+    render(<ChatComposer onSend={vi.fn()} busy={false} mode="productividad" />);
     const tooLong = "a".repeat(CHAT_TEXT_MAX_LENGTH + 5);
     fireEvent.change(screen.getByLabelText("Escribí tu mensaje"), { target: { value: tooLong } });
 

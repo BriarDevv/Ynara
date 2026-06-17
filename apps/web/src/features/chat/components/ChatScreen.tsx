@@ -57,7 +57,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         <ChatHeader mode={session.mode} />
         <MessageList messages={messages ?? []} mode={session.mode} onRetry={handleRetry} />
         <div className="px-4 pb-4">
-          <ChatComposer onSend={handleSend} busy={stream.isStreaming} />
+          <ChatComposer onSend={handleSend} busy={stream.isStreaming} mode={session.mode} />
         </div>
       </div>
     </div>
