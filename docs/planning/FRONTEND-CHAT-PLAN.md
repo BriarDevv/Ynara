@@ -66,7 +66,7 @@ Este documento es el plan del **segundo slice navegable** del frontend de Ynara:
 | Design system + tokens | `apps/web/src/app/globals.css` | Burbujas, tints por modo, motion |
 | Tints por modo | `apps/web/src/components/ui/modes.ts` (`MODES`, `gradientClass`) | Acento de cada conversación según modo |
 | `ModeChip` | `apps/web/src/components/ui/ModeChip.tsx` | Header de la conversación + switcher |
-| `ModeSwitcher` | `apps/web/src/features/home/components/ModeSwitcher.tsx` | Cambiar de modo (= nueva sesión) |
+| `ModeSheet` | `apps/web/src/components/ui/ModeSheet.tsx` | Picker de modo global (Hoy/Chat/nav); cambiar = sesión nueva |
 | `ChatInputDocked` | `apps/web/src/features/home/components/ChatInputDocked.tsx` | **Se evoluciona** a composer real |
 | Fetcher tipado + `ApiError` | `apps/web/src/lib/api.ts` | Requests al `/v1/chat` mock |
 | Infra MSW + toggle | `apps/web/src/lib/api.mocks.ts`, `lib/env.ts` (`shouldEnableMocks`) | Handlers del chat |
@@ -342,7 +342,7 @@ home  ──(escribir / elegir recomendación)──▶  crea sesión en el modo
 ### 4.4 Modo y sesión
 
 - El modo se fija **al crear la sesión** (desde la home **[web]** o el switcher).
-- El `ModeSwitcher` en el header: cambiar de modo **arranca una sesión nueva** (no muta la actual). Confirmar con el usuario antes de descartar una conversación a medio escribir.
+- El `ModeSheet` (picker compartido) desde el header: cambiar de modo fija el modo global y **arranca una sesión nueva** (no muta la actual).
 - El header muestra el `ModeChip` del modo de la sesión.
 
 ### 4.5 Errores y resiliencia
@@ -552,7 +552,7 @@ Fases con 1 PR por fase. Tres tracks: **compartido** (S0), **web** (W1–W6, re�
 #### 7.5 Fase W5 — Integración home + sesiones web
 **Branch**: `feat/chat-web-home` · **PR**: `feat(web): arranque desde home + historial`
 1. Home: enviar desde `ChatInputDocked` o recomendación → crea sesión → navega a `/chat/[id]` con prefill.
-2. `ModeSwitcher`: cambiar de modo arranca sesión nueva (confirmación si hay borrador).
+2. `ModeSheet` (picker global compartido): cambiar de modo arranca sesión nueva.
 3. `EmptySessions` → `SessionsList` real (mock).
 
 **Done**: flujo home → chat completo; historial navegable.

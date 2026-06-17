@@ -4,18 +4,28 @@ import { Icon } from "@ynara/ui";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ModeChip } from "@/components/ui/ModeChip";
+import { ModeSheet } from "@/components/ui/ModeSheet";
 import { MODE_BY_ID, type ModeId } from "@/components/ui/modes";
 import { YnaraOrb } from "@/components/ui/YnaraOrb";
-import { ModeSwitcher } from "./ModeSwitcher";
+import { useChatStore } from "../store";
 
 /**
  * Header de la conversación (mockup): volver + **presencia de Ynara** (orbe
  * teñido por el modo + "Ynara") y, a la derecha, el `ModeChip` que abre el
- * `ModeSwitcher` (cambiar de modo = sesión nueva, chat plan §4.4 / W5).
+ * `ModeSheet` compartido. Elegir un modo fija el modo activo global; como una
+ * sesión = un modo, si el modo elegido difiere del de esta conversación se
+ * arranca una conversación nueva en él (la actual queda guardada).
  */
 export function ChatHeader({ mode }: { mode: ModeId }) {
   const router = useRouter();
+  const createSession = useChatStore((s) => s.createSession);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  const onAfterPick = (next: ModeId) => {
+    if (next === mode) return;
+    const id = createSession(next);
+    router.push(`/chat/${id}`);
+  };
 
   return (
     <header className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-3">
@@ -44,7 +54,12 @@ export function ChatHeader({ mode }: { mode: ModeId }) {
         <ModeChip modeId={mode} />
         <Icon name="chevron" size={16} />
       </button>
-      <ModeSwitcher open={switcherOpen} onClose={() => setSwitcherOpen(false)} currentMode={mode} />
+      <ModeSheet
+        open={switcherOpen}
+        onClose={() => setSwitcherOpen(false)}
+        current={mode}
+        onAfterPick={onAfterPick}
+      />
     </header>
   );
 }

@@ -236,7 +236,9 @@ export function SidebarNav() {
               <span
                 aria-hidden
                 className="flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white"
-                style={{ backgroundColor: "var(--mode-memoria)" }}
+                // fill (no tint): el tint de memoria es lavanda claro y el
+                // número blanco encima fallaría AA; el *-fill es AA-safe.
+                style={{ backgroundColor: "var(--mode-memoria-fill)" }}
               >
                 {AVISOS_COUNT}
               </span>

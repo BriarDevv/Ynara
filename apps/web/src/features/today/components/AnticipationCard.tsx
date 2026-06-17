@@ -88,7 +88,7 @@ export function AnticipationCard({ anticipation, onDismiss }: Props) {
                 // `fill` (no `tint`): tono AA-safe del modo para texto blanco
                 // (en memoria el tint es lavanda claro y fallaría AA).
                 backgroundColor: fill,
-                color: "#fff",
+                color: "var(--color-on-dark)",
                 border: "none",
               }}
             >

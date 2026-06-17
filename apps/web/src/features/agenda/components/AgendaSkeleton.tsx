@@ -1,7 +1,7 @@
 /**
  * Placeholder de la Agenda mientras carga `GET /v1/events`: tres bloques con el
- * pulso suave del sistema (`.anim-pulse-soft`), espejando la silueta de
- * `EventBlock` (spine + rango + título) para evitar el salto de layout.
+ * pulso suave del sistema (`.anim-pulse-soft`), espejando la silueta de una
+ * fila de evento (spine + rango + título) para evitar el salto de layout.
  */
 export function AgendaSkeleton() {
   return (

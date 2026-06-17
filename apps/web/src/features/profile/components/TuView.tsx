@@ -1,7 +1,6 @@
 "use client";
 
 import { DisplayNameSchema } from "@ynara/shared-schemas";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -19,118 +18,8 @@ import { applyA11yClasses, type TextSize, useA11yStore } from "@/stores/a11y";
 import { applyThemeClass, type ThemePreference, useThemeStore } from "@/stores/theme";
 import { useUserStore } from "@/stores/user";
 import { PaywallSheet } from "./PaywallSheet";
+import { A11yCard, ChevronRight, SettingsGroup, SettingsRow } from "./settings-rows";
 import { WipeMemoryDialog } from "./WipeMemoryDialog";
-
-// ---------------------------------------------------------------------------
-// Componentes de filas calmas (sin caja, separadas por hairline)
-// ---------------------------------------------------------------------------
-
-/**
- * Fila aireada del perfil: ícono opcional + título + subtítulo + acción/chevron.
- * Separada de la fila anterior por un borde hairline (`border-t`) salvo la primera.
- */
-function SettingsRow({
-  icon,
-  title,
-  sub,
-  action,
-  first = false,
-  as: Tag = "div",
-  onClick,
-  href,
-}: {
-  icon?: React.ReactNode;
-  title: string;
-  sub?: string;
-  action?: React.ReactNode;
-  first?: boolean;
-  as?: "div" | "button";
-  onClick?: () => void;
-  href?: string;
-}) {
-  const rowClass = [
-    "flex items-center gap-3 py-4",
-    !first ? "border-t border-[var(--color-border)]" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const inner = (
-    <>
-      {icon && (
-        <div
-          className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] bg-[var(--color-bg-soft)]"
-          aria-hidden="true"
-        >
-          {icon}
-        </div>
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="text-body font-medium text-[var(--color-ink)]">{title}</p>
-        {sub && <p className="text-caption mt-0.5 text-[var(--color-ink-soft)]">{sub}</p>}
-      </div>
-      {action && <div className="flex-shrink-0">{action}</div>}
-    </>
-  );
-
-  if (href) {
-    return (
-      <Link href={href} className={`${rowClass} w-full`}>
-        {inner}
-      </Link>
-    );
-  }
-
-  if (Tag === "button" || onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={`${rowClass} w-full bg-transparent text-left`}
-      >
-        {inner}
-      </button>
-    );
-  }
-
-  return <div className={rowClass}>{inner}</div>;
-}
-
-/**
- * Grupo de filas calmas con label de sección en caption uppercase.
- */
-function SettingsGroup({
-  label,
-  children,
-  dataHeroReveal = true,
-}: {
-  label: string;
-  children: React.ReactNode;
-  dataHeroReveal?: boolean;
-}) {
-  return (
-    <section {...(dataHeroReveal ? { "data-hero-reveal": true } : {})}>
-      <p className="text-caption mb-1 font-semibold uppercase tracking-widest text-[var(--color-ink-soft)]">
-        {label}
-      </p>
-      <div>{children}</div>
-    </section>
-  );
-}
-
-/**
- * Bloque de a11y con sus 3 controles — mantiene card sutil para agrupar.
- */
-function A11yCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      data-hero-reveal
-      className="flex flex-col gap-6 rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-bg)] p-6"
-    >
-      {children}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Opciones
@@ -157,31 +46,6 @@ const THEME_OPTIONS = [
 type RetentionValue = "30" | "90" | "180" | "365";
 
 // ---------------------------------------------------------------------------
-// Ícono SVG de chevron derecho
-// ---------------------------------------------------------------------------
-
-function ChevronRight() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-      className="text-[var(--color-ink-faint)]"
-    >
-      <path
-        d="M6 4l4 4-4 4"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Vista principal
 // ---------------------------------------------------------------------------
 
@@ -193,7 +57,9 @@ function ChevronRight() {
  * Mantiene TODA la funcionalidad existente: editar nombre (`useUpdateMe` +
  * `setDisplayName`), retención, exportar memoria, borrar memoria
  * (`WipeMemoryDialog`), links a /memoria y /buscar, a11y vía `useA11yStore`
- * + `applyA11yClasses`, logout (`useUserStore.reset()` + router).
+ * + `applyA11yClasses`, logout (`useUserStore.reset()` + router). Las filas
+ * calmas (`SettingsRow`/`SettingsGroup`/`A11yCard`/`ChevronRight`) viven en
+ * `./settings-rows` para mantener este archivo bajo 500 líneas.
  */
 export function TuView() {
   const router = useRouter();

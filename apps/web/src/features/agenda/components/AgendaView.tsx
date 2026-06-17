@@ -153,7 +153,7 @@ export function AgendaView() {
       </HeroReveal>
 
       {/* FAB flotante */}
-      <EventFab fillVar={fabFill} />
+      <EventFab fillVar={fabFill} activeMode={activeMode} />
     </div>
   );
 }
