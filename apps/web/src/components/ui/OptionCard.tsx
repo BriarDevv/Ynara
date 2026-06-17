@@ -28,20 +28,24 @@ export function OptionCard({
       disabled={disabled}
       aria-pressed={selected}
       /*
-       * Superficie propia (`--color-bg-soft`) + borde `border-strong` para que
-       * la opción se distinga del contenedor en AMBOS temas — el StepShell de
-       * desktop es una card `--color-bg`, y un OptionCard `--color-bg` adentro
-       * (con borde al 10%) era invisible en Noche. Selected: ring inset de
-       * `--color-selected-ring` (theme-aware: azul de marca en claro, celeste
-       * en Noche, porque el azul oscuro no contrasta como línea sobre navy).
-       *
-       * `ring-inset` evita layout shift entre estados (no expande la box).
+       * La definición de la card viene del BORDE (border-2), no de la diferencia
+       * de fondo: el StepShell de desktop es una card `--color-bg` y en claro
+       * `bg-soft` ≈ blanco, así que un hairline tenue no alcanzaba (la opción
+       * "no se veía"). El ring de Tailwind tampoco renderizaba el estado
+       * seleccionado. Reposo: borde gris medio (`ink-muted`). Seleccionado:
+       * borde de marca theme-aware (`selected-ring`: azul en claro, celeste en
+       * Noche, porque el azul oscuro no contrasta como línea sobre navy).
        */
       className={cn(
-        "relative w-full rounded-[var(--radius-md)] border bg-[var(--color-bg-soft)] p-4 text-left transition-[transform,box-shadow,border-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)] disabled:cursor-not-allowed disabled:opacity-50",
+        // Borde de 2px que SIEMPRE renderiza (no dependemos del ring de Tailwind
+        // ni de que bg-soft contraste con el contenedor — en claro bg-soft ≈
+        // blanco). Reposo: gris medio (`ink-muted`). Seleccionado: color de
+        // marca theme-aware (`selected-ring`). `border-2` en ambos estados →
+        // sin layout shift.
+        "relative w-full rounded-[var(--radius-md)] border-2 bg-[var(--color-bg-soft)] p-4 text-left transition-[transform,box-shadow,border-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)] disabled:cursor-not-allowed disabled:opacity-50",
         selected
-          ? "border-transparent text-[var(--color-ink-deep)] shadow-soft ring-2 ring-inset ring-[var(--color-selected-ring)]"
-          : "border-[var(--color-border-strong)] text-[var(--color-ink)] hover:border-[var(--color-ink-muted)] hover:shadow-soft",
+          ? "border-[var(--color-selected-ring)] text-[var(--color-ink-deep)] shadow-soft"
+          : "border-[var(--color-ink-muted)] text-[var(--color-ink)] hover:border-[var(--color-ink)] hover:shadow-soft",
         className,
       )}
     >
