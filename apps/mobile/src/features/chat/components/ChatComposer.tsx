@@ -12,7 +12,7 @@ type Props = {
   onCancel?: () => void;
 };
 
-const PLACEHOLDER_COLOR = "rgba(36,44,63,0.45)";
+const PLACEHOLDER_COLOR = "rgba(243,240,234,0.40)";
 const COUNTER_THRESHOLD = CHAT_TEXT_MAX_LENGTH - 300;
 
 /**

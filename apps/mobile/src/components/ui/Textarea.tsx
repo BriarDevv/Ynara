@@ -10,7 +10,7 @@ type Props = Omit<TextInputProps, "className"> & {
   className?: string;
 };
 
-const PLACEHOLDER_COLOR = "rgba(36,44,63,0.45)";
+const PLACEHOLDER_COLOR = "rgba(243,240,234,0.40)";
 
 /**
  * Sibling de TextField para texto multilínea (RN). Espejo del `Textarea` web:

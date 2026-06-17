@@ -12,7 +12,7 @@ type Props = Omit<TextInputProps, "className"> & {
 };
 
 // ink-soft (rgba(36,44,63,0.70)) — el placeholder va por prop, no por className.
-const PLACEHOLDER_COLOR = "rgba(36,44,63,0.45)";
+const PLACEHOLDER_COLOR = "rgba(243,240,234,0.40)";
 
 /**
  * Campo de texto base (RN). Espejo del `TextField` de la web, portado a

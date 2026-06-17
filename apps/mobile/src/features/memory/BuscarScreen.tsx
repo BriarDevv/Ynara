@@ -13,7 +13,7 @@ const SUGGESTIONS = ["tesis", "brief de Õmi", "jerga técnica", "foco"] as cons
 const DEBOUNCE_MS = 250;
 
 /** Color del placeholder del input (RN no lo toma del className NativeWind). */
-const PLACEHOLDER_COLOR = "rgba(36,44,63,0.45)";
+const PLACEHOLDER_COLOR = "rgba(243,240,234,0.40)";
 
 /**
  * Pantalla **Búsqueda** (wireframes 18/19) — espejo de `BuscarView` de web. Input

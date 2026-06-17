@@ -2,6 +2,7 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import { colorScheme } from "nativewind";
 import { useEffect } from "react";
 import "../global.css";
 // Side-effect: polyfill de crypto.randomUUID (RN no lo trae) — lo usa el chat
@@ -16,6 +17,11 @@ import { Providers } from "./providers";
 // Mantiene el splash hasta que las fuentes de marca estén listas (evita el
 // "flash" de la fuente del sistema en el primer render).
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Tema oscuro por default (el mockup arranca oscuro). Las vars de `:root` ya son
+// oscuras; esto alinea el color scheme de NativeWind/RN (StatusBar, componentes
+// nativos que respetan Appearance, y los `dark:` variants si se usaran).
+colorScheme.set("dark");
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(FONT_MAP);

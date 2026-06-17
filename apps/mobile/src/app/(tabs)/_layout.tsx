@@ -4,8 +4,11 @@ import { useUserStore } from "@/stores/user";
 
 // Tints del tab bar: van como valores crudos porque React Navigation no toma
 // classNames de NativeWind. Espejan los tokens de tailwind.config.js.
-const ACTIVE_TINT = "#2f5aa6"; // colors.azul
-const INACTIVE_TINT = "rgba(36,44,63,0.45)"; // colors.ink.muted
+const ACTIVE_TINT = "#6e92cc"; // colors.celeste (resalta sobre el tab bar oscuro)
+const INACTIVE_TINT = "rgba(243,240,234,0.45)"; // marfil tenue (ink-muted en oscuro)
+// Fondo y borde del tab bar en oscuro (React Navigation no toma classNames).
+const TAB_BAR_BG = "#2b3346"; // colors.bg (surface)
+const TAB_BAR_BORDER = "rgba(243,240,234,0.10)"; // colors.border
 
 /**
  * Layout de tabs — la home post-onboarding: **Hoy** · **Agenda** · **Chat** ·
@@ -29,6 +32,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: ACTIVE_TINT,
         tabBarInactiveTintColor: INACTIVE_TINT,
+        tabBarStyle: { backgroundColor: TAB_BAR_BG, borderTopColor: TAB_BAR_BORDER },
       }}
     >
       <Tabs.Screen
