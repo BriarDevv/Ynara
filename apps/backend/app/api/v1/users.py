@@ -35,6 +35,12 @@ async def update_me(
       ``retention_sensitive_days`` 30-365 → 422 fuera de rango).
     - 401 (no 404) si el ``sub`` válido ya no tiene fila: es la identidad PROPIA
       caduca, mismo criterio que ``/v1/auth/me`` (re-autenticarse).
+    - **Sin rate-limit** (a diferencia de sessions/memory, que sí lo tienen): es un
+      write de bajo costo sobre la PROPIA fila (un UPDATE puntual), sin vector de
+      enumeración ni de DoS (no escanea ni dispara trabajo caro). Omisión
+      deliberada; si se quisiera cobertura uniforme con el resto de los endpoints
+      autenticados, sumar un bucket por ``user_id`` (patrón
+      ``check_sessions_rate_limit``) es trivial.
 
     Regla #4: ``UserOut`` nunca expone ``password_hash`` (no es campo del schema).
     """
