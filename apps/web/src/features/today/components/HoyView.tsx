@@ -6,6 +6,7 @@ import { LivingField } from "@/components/ui/LivingField";
 import { Toast } from "@/components/ui/Toast";
 import { useActiveMode } from "@/hooks/useActiveMode";
 import { useUserStore } from "@/stores/user";
+import { AnticipationsSection } from "./AnticipationsSection";
 import { HoyHeader } from "./HoyHeader";
 import { OfflineBanner } from "./OfflineBanner";
 import { PrioritiesSection } from "./PrioritiesSection";
@@ -56,6 +57,9 @@ export function HoyView() {
         <OfflineBanner />
         <div data-hero-reveal>
           <HoyHeader displayName={displayName} activeMode={activeMode} now={now} />
+        </div>
+        <div data-hero-reveal>
+          <AnticipationsSection />
         </div>
         <div data-hero-reveal>
           <PrioritiesSection />
