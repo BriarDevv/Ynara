@@ -83,7 +83,8 @@ describe("SidebarNav", () => {
     const lockup = screen.getByRole("link", { name: "Ynara — ir a Hoy" });
     expect(within(lockup).getByRole("img", { name: "Ynara" })).toBeInTheDocument();
     expect(container.querySelector("linearGradient")).toBeInTheDocument();
-    expect(container.innerHTML).toContain("var(--color-azul");
+    // Isotipo oficial → gradiente con el azul de marca (#305ba6).
+    expect(container.innerHTML).toContain("#305ba6");
   });
 
   it("en Noche monta el wordmark mono-light (silueta marfil, sin gradiente)", () => {

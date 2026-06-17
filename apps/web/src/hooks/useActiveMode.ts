@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { MODE_BY_ID, type ModeId } from "@/components/ui/modes";
+import { useActiveModeStore } from "@/stores/mode";
 import { useUserStore } from "@/stores/user";
 
 /**
@@ -17,9 +18,13 @@ import { useUserStore } from "@/stores/user";
  * `ynara.user` (localStorage editado o versiones viejas del store).
  */
 export function useActiveMode(): ModeId {
+  // Override manual del sidebar (paridad mockup): si el usuario eligió un modo,
+  // gana; si no (`null`), se deriva del onboarding como antes.
+  const override = useActiveModeStore((s) => s.mode);
   const interestedModes = useUserStore((s) => s.interestedModes);
   return useMemo<ModeId>(() => {
+    if (override && override in MODE_BY_ID) return override;
     const first = interestedModes.find((m) => m in MODE_BY_ID);
     return first ?? "productividad";
-  }, [interestedModes]);
+  }, [override, interestedModes]);
 }
