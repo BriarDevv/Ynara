@@ -27,4 +27,7 @@ export const qk = {
     suggestions: () => ["today", "suggestions"] as const,
     recap: () => ["today", "recap"] as const,
   },
+  agenda: {
+    all: () => ["agenda", "events"] as const,
+  },
 } as const;
