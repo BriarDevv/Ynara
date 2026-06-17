@@ -11,7 +11,8 @@ export { ONBOARDING_STEPS, STEP_INDEX };
 export const STEP_COPY: Record<OnboardingStep, { title: string; subtitle: string }> = {
   auth: {
     title: "Antes que nada",
-    subtitle: "Me hace falta una cuenta para acordarme de vos.",
+    subtitle:
+      "Me hace falta una cuenta para acordarme de vos. Tus datos viven en servidores propios — no se comparten.",
   },
   nombre: {
     title: "¿Cómo te llamo?",
