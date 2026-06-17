@@ -8,12 +8,14 @@ const ACTIVE_TINT = "#2f5aa6"; // colors.azul
 const INACTIVE_TINT = "rgba(36,44,63,0.45)"; // colors.ink.muted
 
 /**
- * Layout de tabs — la home post-onboarding: **Hoy** + **Chat**. Hace de gate:
- * sin onboarding completo manda al wizard. La conversación (`/chat/[sessionId]`)
- * vive en el stack raíz, así que abre full-screen por encima del tab bar.
+ * Layout de tabs — la home post-onboarding: **Hoy** · **Agenda** · **Chat** ·
+ * **Memoria**. Hace de gate: sin onboarding completo manda al wizard. La
+ * conversación (`/chat/[sessionId]`) vive en el stack raíz, así que abre
+ * full-screen por encima del tab bar.
  *
  * Iconos geométricos con Views (sin `@expo/vector-icons`, que no es dep directa
- * de mobile): cuadrado redondeado = Hoy, pill = Chat; se rellenan al estar activo.
+ * de mobile): cuadrado redondeado = Hoy, círculo con aguja = Agenda, pill = Chat,
+ * diamante = Memoria; se rellenan al estar activo.
  */
 export default function TabsLayout() {
   const onboardingCompleted = useUserStore((s) => s.onboardingCompleted);
@@ -42,6 +44,38 @@ export default function TabsLayout() {
                 backgroundColor: focused ? color : "transparent",
               }}
             />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="agenda"
+        options={{
+          title: "Agenda",
+          tabBarIcon: ({ color, focused }) => (
+            // Reloj / calendario: círculo con una línea horizontal (aguja).
+            <View
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: 999,
+                borderWidth: 2,
+                borderColor: color,
+                backgroundColor: focused ? color : "transparent",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {!focused ? (
+                <View
+                  style={{
+                    width: 6,
+                    height: 1.5,
+                    borderRadius: 1,
+                    backgroundColor: color,
+                  }}
+                />
+              ) : null}
+            </View>
           ),
         }}
       />
