@@ -1,3 +1,43 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* Tema OSCURO (activo por default) — valores del mockup
+     (Nueva carpeta/src/ynara/brand.jsx, makeTheme(dark)). */
+  :root {
+    --bg-canvas: #242c3f;
+    --bg: #2b3346;
+    --bg-soft: #313a52;
+    --bg-hi: #3a4460;
+    --ink-deep: #ffffff;
+    --ink: #f4f2ec;
+    --ink-soft: #aeb4c9;
+    --ink-muted: #7c84a0;
+    --ink-faint: rgba(244, 242, 236, 0.18);
+    --border: rgba(243, 240, 234, 0.1);
+    --border-strong: rgba(243, 240, 234, 0.18);
+    --glass: rgba(26, 32, 48, 0.72);
+    --chip: rgba(243, 240, 234, 0.07);
+    --chip-border: rgba(243, 240, 234, 0.14);
+  }
+
+  /* Tema CLARO (definido pero INACTIVO; sin toggle en F1). Se activará en una
+     fase posterior aplicando la clase `light` o vars() en el root. */
+  .light {
+    --bg-canvas: #f1eee7;
+    --bg: #ffffff;
+    --bg-soft: #faf8f3;
+    --bg-hi: #ffffff;
+    --ink-deep: #1b2233;
+    --ink: #232b3e;
+    --ink-soft: #5c6377;
+    --ink-muted: #9aa0b0;
+    --ink-faint: rgba(36, 44, 63, 0.18);
+    --border: rgba(36, 44, 63, 0.09);
+    --border-strong: rgba(36, 44, 63, 0.16);
+    --glass: rgba(255, 255, 255, 0.74);
+    --chip: rgba(36, 44, 63, 0.05);
+    --chip-border: rgba(36, 44, 63, 0.1);
+  }
+}

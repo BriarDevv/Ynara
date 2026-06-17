@@ -3,48 +3,53 @@
 // Fuente de marca: manual de identidad 2026 (paleta sólida, no gradientes).
 // NativeWind corre sobre Tailwind 3, así que los tokens van en theme.extend
 // (la web usa Tailwind 4 CSS-first; los VALORES son los mismos).
+// Los colores semánticos salen de variables CSS (src/global.css): tema oscuro
+// por default, con un set claro inactivo listo para un toggle futuro.
 // Las fuentes (Space Grotesk / DM Sans) se cargan aparte con expo-font.
-const ink = "#242c3f";
 module.exports = {
   content: ["./src/**/*.{ts,tsx}"],
   presets: [require("nativewind/preset")],
   theme: {
     extend: {
       colors: {
-        // Texto (ink)
+        // Texto (ink) — variables de tema
         ink: {
-          DEFAULT: ink,
-          deep: "#1b2233",
-          soft: "rgba(36,44,63,0.70)",
-          muted: "rgba(36,44,63,0.45)",
-          faint: "rgba(36,44,63,0.18)",
+          DEFAULT: "var(--ink)",
+          deep: "var(--ink-deep)",
+          soft: "var(--ink-soft)",
+          muted: "var(--ink-muted)",
+          faint: "var(--ink-faint)",
         },
         "on-dark": "#ffffff",
-        // Fondos
+        // Fondos / superficies — variables de tema
         bg: {
-          DEFAULT: "#ffffff",
-          canvas: "#faf9f5",
-          soft: "#f3f0ea",
+          DEFAULT: "var(--bg)",
+          canvas: "var(--bg-canvas)",
+          soft: "var(--bg-soft)",
+          hi: "var(--bg-hi)",
         },
-        // Bordes
+        // Bordes — variables de tema
         border: {
-          DEFAULT: "rgba(36,44,63,0.12)",
-          strong: "rgba(36,44,63,0.22)",
+          DEFAULT: "var(--border)",
+          strong: "var(--border-strong)",
         },
-        // CTA primario (azul plano de marca)
+        // Superficies translúcidas (glass / chips) — variables de tema
+        glass: "var(--glass)",
+        chip: { DEFAULT: "var(--chip)", border: "var(--chip-border)" },
+        // CTA primario (azul plano de marca) — fijo en ambos temas
         "blue-flat": {
           DEFAULT: "#2f5aa6",
           hover: "#26498a",
           active: "#1f3c75",
         },
-        // Paleta oficial del manual
+        // Paleta oficial del manual — fija
         azul: "#2f5aa6",
         indigo: "#434a82",
         violaceo: "#5c6fb3",
         violeta: "#8165a3",
         celeste: "#6e92cc",
         lavanda: { DEFAULT: "#8b9ad0", deep: "#565f81" },
-        noche: ink,
+        noche: "#242c3f",
         marfil: "#f3f0ea",
         // Errores
         error: { DEFAULT: "#c0392b", soft: "rgba(192,57,43,0.12)" },
