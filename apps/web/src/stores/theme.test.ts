@@ -17,20 +17,20 @@ describe("useThemeStore", () => {
     delete document.documentElement.dataset.theme;
   });
 
-  it("arranca en claro (default de marca, §3.1)", () => {
-    expect(useThemeStore.getState().theme).toBe("light");
+  it("arranca en Noche (default dark-first, paridad con el mockup)", () => {
+    expect(useThemeStore.getState().theme).toBe("dark");
   });
 
   it("setTheme cambia el tema", () => {
-    useThemeStore.getState().setTheme("dark");
-    expect(useThemeStore.getState().theme).toBe("dark");
+    useThemeStore.getState().setTheme("light");
+    expect(useThemeStore.getState().theme).toBe("light");
   });
 
-  it("toggleTheme alterna claro ↔ Noche", () => {
-    useThemeStore.getState().toggleTheme();
-    expect(useThemeStore.getState().theme).toBe("dark");
+  it("toggleTheme alterna Noche ↔ claro", () => {
     useThemeStore.getState().toggleTheme();
     expect(useThemeStore.getState().theme).toBe("light");
+    useThemeStore.getState().toggleTheme();
+    expect(useThemeStore.getState().theme).toBe("dark");
   });
 
   it("persiste bajo la key ynara.theme", () => {

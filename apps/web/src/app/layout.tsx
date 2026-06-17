@@ -15,17 +15,17 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  const fontClasses = `${fontDisplay.variable} ${fontBody.variable} text-size-md`;
+  const fontClasses = `${fontDisplay.variable} ${fontBody.variable} text-size-md theme-dark`;
   return (
     <html
       lang="es-AR"
-      // `data-theme="light"` es el DEFAULT server-rendered (tema claro,
-      // DESIGN.md §3.1). Si el usuario eligió Noche, el pre-paint de abajo
-      // lo pisa a "dark" + html.theme-dark ANTES del primer paint, y el
-      // ThemeApplier (providers.tsx) lo mantiene en sync tras hidratar.
-      // `color-scheme` por tema vive en globals.css, así el browser nunca
-      // aplica `prefers-color-scheme` por su cuenta.
-      data-theme="light"
+      // Noche es el DEFAULT server-rendered (paridad con el mockup dark-first):
+      // `data-theme="dark"` + `.theme-dark`. Si el usuario eligió claro, el
+      // pre-paint de abajo le saca la clase + pone data-theme="light" ANTES del
+      // primer paint (sin flash), y el ThemeApplier (providers.tsx) lo mantiene
+      // en sync tras hidratar. `color-scheme` por tema vive en globals.css, así
+      // el browser nunca aplica `prefers-color-scheme` por su cuenta.
+      data-theme="dark"
       suppressHydrationWarning
       className={fontClasses}
     >
