@@ -52,15 +52,17 @@ export function AnticipationCard({ anticipation, onDismiss }: Props) {
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <span className="text-body font-semibold text-[var(--color-ink)]">Ynara</span>
-            {/* Badge del kind: fill del modo como color de texto (contraste AA)
-                sobre un fondo con color-mix de ese mismo fill al 20%. */}
+            {/* Badge del kind: pill SÓLIDO con el fill del modo + texto blanco
+                (AA por diseño). Antes usaba el fill como color de TEXTO sobre un
+                color-mix tenue — invisible sobre la card oscura (el fill es un
+                tono medio-oscuro, AA-safe sólo COMO fondo de texto blanco). */}
             <span
-              className="text-[10px] font-bold tracking-[0.04em]"
+              className="text-[10px] font-bold uppercase tracking-[0.06em]"
               style={{
                 padding: "2px 8px",
                 borderRadius: "var(--radius-pill)",
-                backgroundColor: `color-mix(in srgb, ${fill} 20%, transparent)`,
-                color: fill,
+                backgroundColor: fill,
+                color: "var(--color-on-dark)",
               }}
             >
               {anticipation.kind}
@@ -99,7 +101,7 @@ export function AnticipationCard({ anticipation, onDismiss }: Props) {
               key={action.label}
               type="button"
               onClick={onDismiss}
-              className="flex-1 rounded-[var(--radius-md)] py-3 text-[13.5px] font-semibold text-[var(--color-ink-soft)] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:text-[var(--color-ink)]"
+              className="flex-1 rounded-[var(--radius-md)] py-3 text-[13.5px] font-semibold text-[var(--color-ink)] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:bg-[var(--color-bg-soft)]"
               style={{
                 backgroundColor: "transparent",
                 border: "1px solid var(--color-border-strong)",
