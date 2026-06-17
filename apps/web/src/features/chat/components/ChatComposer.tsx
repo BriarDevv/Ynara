@@ -46,6 +46,8 @@ export function ChatComposer({ onSend, busy, mode, initialText = "" }: Props) {
   const [text, setText] = useState(initialText);
   const ref = useRef<HTMLTextAreaElement>(null);
   const tintVar = MODE_BY_ID[mode].tintVar;
+  // Fill (AA-safe) para el botón de enviar, que lleva el ícono blanco.
+  const fillVar = MODE_BY_ID[mode].fillVar;
 
   // Autosize hasta MAX_ROWS; después scrollea internamente. Se corre en el
   // onChange (el textarea ya tiene el contenido nuevo, así que scrollHeight es
@@ -125,7 +127,7 @@ export function ChatComposer({ onSend, busy, mode, initialText = "" }: Props) {
           // Botón redondo teñido por el modo de la sesión (mockup); gris cuando
           // está deshabilitado (vacío o esperando respuesta).
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--color-on-dark)] transition-[background-color,opacity] duration-[var(--duration-fast)] disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ backgroundColor: canSend ? tintVar : "var(--color-border-strong)" }}
+          style={{ backgroundColor: canSend ? fillVar : "var(--color-border-strong)" }}
         >
           <Icon name="enviar" size={18} />
         </button>

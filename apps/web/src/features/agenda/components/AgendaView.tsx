@@ -61,8 +61,8 @@ export function AgendaView() {
   const onNow =
     view === "dia" ? isSameDay(anchor, now) : isSameDay(startOfWeek(anchor), startOfWeek(now));
 
-  // Tint del modo activo para el FAB
-  const tintVar = MODE_BY_ID[activeMode].tintVar;
+  // Fill (AA-safe) del modo activo para el FAB con el "+" blanco.
+  const fabFill = MODE_BY_ID[activeMode].fillVar;
 
   return (
     <div className="relative isolate flex min-h-full flex-col">
@@ -153,7 +153,7 @@ export function AgendaView() {
       </HeroReveal>
 
       {/* FAB flotante */}
-      <EventFab tintVar={tintVar} />
+      <EventFab fillVar={fabFill} />
     </div>
   );
 }

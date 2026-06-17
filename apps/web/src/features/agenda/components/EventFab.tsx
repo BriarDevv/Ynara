@@ -9,8 +9,8 @@ import { TextField } from "@/components/ui/TextField";
 import { useCreateEvent } from "../api";
 
 type Props = {
-  /** Color de tinte del modo activo (para el FAB). */
-  tintVar: string;
+  /** Tono AA-safe del modo activo (fill) para el FAB con el "+" blanco. */
+  fillVar: string;
 };
 
 const DEFAULT_MODE: ModeId = "productividad";
@@ -22,7 +22,7 @@ const DEFAULT_MODE: ModeId = "productividad";
  * El FAB se tiñe con el modo activo de la pantalla. El Sheet usa `useCreateEvent`
  * y cierra al crear exitosamente.
  */
-export function EventFab({ tintVar }: Props) {
+export function EventFab({ fillVar }: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [startAt, setStartAt] = useState(() => {
@@ -87,7 +87,7 @@ export function EventFab({ tintVar }: Props) {
         aria-label="Crear evento"
         onClick={handleOpen}
         className="fixed bottom-6 right-6 z-20 flex h-12 w-12 items-center justify-center rounded-full text-[var(--color-on-dark)] shadow-[0_8px_20px_-8px_var(--color-accent)] transition-transform duration-[var(--duration-base)] ease-[var(--ease-out-soft)] active:scale-95 md:bottom-8 md:right-8"
-        style={{ backgroundColor: tintVar }}
+        style={{ backgroundColor: fillVar }}
       >
         <span aria-hidden className="text-2xl font-light leading-none">
           +
