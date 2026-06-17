@@ -1,4 +1,9 @@
+"use client";
+
+import { Diamond } from "@/components/ui/Diamond";
 import { Sheet } from "@/components/ui/Sheet";
+import { YnaraOrb } from "@/components/ui/YnaraOrb";
+import { useActiveMode } from "@/hooks/useActiveMode";
 import type { Recap } from "../api";
 import { formatHoyDate } from "../format";
 
@@ -8,37 +13,82 @@ type Props = {
   recap: Recap;
 };
 
+/** Stats mock derivados de los highlights (cifras grandes, §mockup RecapSheet). */
+const MOCK_STATS = [
+  { value: "3/5", label: "Tareas hechas" },
+  { value: "90 min", label: "Foco" },
+  { value: "1", label: "Pendiente" },
+] as const;
+
 /**
- * Sheet del recap del día (wireframe 15 / build-plan E4): el borrador que Ynara
- * armó del día — un headline editorial + los highlights. Cerrar el día de
- * verdad (regenerar con el LLM, marcar `pending: false`) es la Fase H2 /
- * backend; acá se muestra el borrador y se puede cerrar el sheet.
+ * Sheet del recap del día (wireframe 15 / build-plan E4): header con orbe +
+ * fecha, stats con cifras grandes, insights con Diamond como bullet.
+ * Los stats son mock hasta que el endpoint devuelva cifras reales (Fase H2).
  */
 export function RecapSheet({ open, onClose, recap }: Props) {
+  const activeMode = useActiveMode();
+
   return (
     <Sheet
       open={open}
       onClose={onClose}
       title="Recap del día"
+      titleHidden
       description={formatHoyDate(new Date(recap.date))}
     >
-      <div className="flex flex-col gap-5">
-        {recap.headline ? (
-          <p className="text-subtitle text-[var(--color-ink)]">{recap.headline}</p>
-        ) : null}
+      <div className="flex flex-col gap-6">
+        {/* Header: orbe + fecha + título */}
+        <div className="flex items-center gap-3.5">
+          <YnaraOrb size={42} modeId={activeMode} />
+          <div className="min-w-0">
+            <p className="text-caption uppercase tracking-[.14em] text-[var(--color-ink-faint)]">
+              {formatHoyDate(new Date(recap.date))}
+            </p>
+            <h2 className="mt-0.5 text-[1.4rem] font-semibold leading-[1.05] tracking-tight text-[var(--color-ink)]">
+              Cómo te fue hoy
+            </h2>
+          </div>
+        </div>
 
+        {/* Stats: cifras grandes, aireadas, sin caja */}
+        <div className="flex gap-8 px-0.5">
+          {MOCK_STATS.map((s) => (
+            <div key={s.label}>
+              <div className="text-[1.6rem] font-semibold leading-none tracking-tight text-[var(--color-ink)]">
+                {s.value}
+              </div>
+              <div className="mt-1.5 text-[11.5px] leading-tight text-[var(--color-ink-soft)]">
+                {s.label}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Insights: label + lista con Diamond como bullet */}
         {recap.highlights.length > 0 ? (
-          <ul className="flex flex-col gap-3">
-            {recap.highlights.map((highlight) => (
-              <li key={highlight} className="flex items-start gap-3">
-                <span
-                  aria-hidden
-                  className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-ink-faint)]"
-                />
-                <span className="text-body text-[var(--color-ink-soft)]">{highlight}</span>
-              </li>
-            ))}
-          </ul>
+          <div>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[.14em] text-[var(--color-ink-faint)]">
+              Ynara observó
+            </p>
+            <ul className="flex flex-col">
+              {recap.highlights.map((highlight, i) => (
+                <li
+                  key={highlight}
+                  className="flex items-start gap-3 py-2.5"
+                  style={
+                    i < recap.highlights.length - 1
+                      ? { borderBottom: "1px solid var(--color-border)" }
+                      : undefined
+                  }
+                >
+                  <span className="mt-[5px] shrink-0">
+                    <Diamond size={9} color="var(--color-blue-flat)" />
+                  </span>
+                  <span className="text-body text-[var(--color-ink)]">{highlight}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : (
           <p className="text-body text-[var(--color-ink-soft)]">
             Todavía no hay nada para repasar. A medida que pase el día, esto se llena.
@@ -50,7 +100,7 @@ export function RecapSheet({ open, onClose, recap }: Props) {
           onClick={onClose}
           className="text-button mt-1 self-start rounded-[var(--radius-pill)] bg-[var(--color-bg-soft)] px-5 py-2.5 text-[var(--color-ink)] transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-border)]"
         >
-          Listo
+          Cerrar el día
         </button>
       </div>
     </Sheet>
