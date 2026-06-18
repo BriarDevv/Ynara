@@ -38,6 +38,21 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
   const active = debounced.trim().length >= SEARCH_MIN_LENGTH;
   const search = useMemorySearch(debounced);
 
+  // Mensaje conciso para la región viva sr-only (M1): el contenido visual de
+  // resultados cambia sin avisar al lector de pantalla, así que anunciamos el
+  // estado/recuento al settle de cada búsqueda (debounced, no por tecla).
+  const liveStatus = !active
+    ? ""
+    : search.isLoading
+      ? "Buscando…"
+      : search.isError
+        ? "No pudimos completar la búsqueda."
+        : search.data && search.data.total === 0
+          ? `Sin resultados para «${search.data.query}».`
+          : search.data
+            ? `${search.data.total} ${search.data.total === 1 ? "resultado" : "resultados"} para «${search.data.query}».`
+            : "";
+
   return (
     <div className="relative isolate flex min-h-full flex-col">
       {/* Fondo vivo de Búsqueda (network: misma textura que Memoria, de la que
@@ -73,6 +88,13 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
               <Icon name="cerrar" size={18} />
             </button>
           ) : null}
+        </div>
+
+        {/* Región viva: anuncia estado/resultados al lector de pantalla (el
+            contenido visual de abajo cambia sin avisar — M1). role="status"
+            ya implica aria-live=polite + aria-atomic; lo explicitamos. */}
+        <div role="status" aria-live="polite" className="sr-only">
+          {liveStatus}
         </div>
 
         {!active ? (
