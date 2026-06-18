@@ -328,6 +328,15 @@ body {
     letter-spacing: -0.006em;
   }
 
+  /* Oculta la scrollbar manteniendo el scroll (filas horizontales de chips/
+     prompts con peek). La affordance la da el chip cortado en el borde. */
+  .scrollbar-none {
+    scrollbar-width: none; /* Firefox */
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none; /* WebKit */
+  }
+
   /* Gradientes como background */
   .bg-gradient-blue-base {
     background-image: var(--gradient-blue-base);
