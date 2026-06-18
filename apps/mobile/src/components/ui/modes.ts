@@ -38,3 +38,18 @@ export const MODE_DOT_CLASS: Record<Mode, string> = {
   vida: "bg-mode-vida",
   memoria: "bg-mode-memoria",
 };
+
+/**
+ * Clase NativeWind del color **fill** por modo (DESIGN.md §3.5): el tono que
+ * puede llevar texto blanco encima (CTA teñida, icono/texto de modo) pasando
+ * WCAG AA. Todos usan su color base salvo Memoria, que usa el tono deep
+ * (`mode-memoria-deep`) porque su lavanda claro falla AA con blanco. Mapa
+ * estático: NativeWind necesita el className literal en build time.
+ */
+export const MODE_FILL_CLASS: Record<Mode, string> = {
+  productividad: "bg-mode-productividad",
+  estudio: "bg-mode-estudio",
+  bienestar: "bg-mode-bienestar",
+  vida: "bg-mode-vida",
+  memoria: "bg-mode-memoria-deep",
+};
