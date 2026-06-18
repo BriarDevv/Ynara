@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
 import { Textarea } from "@/components/ui/Textarea";
 import { YnaraOrb } from "@/components/ui/YnaraOrb";
@@ -21,19 +22,27 @@ const MOODS: Mood[] = [
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** Confirmación del check-in (botón "Listo"), aparte de onClose: el parent
+   * puede dar feedback (toast). El backend real llega en Fase H2. */
+  onDone?: () => void;
 };
 
 /**
  * Sheet de check-in matinal (wireframe 14 / build-plan §3): mood 5 opciones,
  * slider de energía 0-10, nota opcional. Estado local — sin backend por ahora.
  */
-export function CheckinSheet({ open, onClose }: Props) {
+export function CheckinSheet({ open, onClose, onDone }: Props) {
   const activeMode = useActiveMode();
   const [mood, setMood] = useState<MoodId | null>(null);
   const [energy, setEnergy] = useState(6);
   const [note, setNote] = useState("");
 
   function handleClose() {
+    onClose();
+  }
+
+  function handleDone() {
+    onDone?.();
     onClose();
   }
 
@@ -71,9 +80,9 @@ export function CheckinSheet({ open, onClose }: Props) {
                   style={
                     selected
                       ? {
-                          borderColor: "var(--color-blue-flat)",
+                          borderColor: "var(--color-selected-ring)",
                           backgroundColor: "var(--color-bg-soft)",
-                          boxShadow: "0 0 0 2px inset var(--color-blue-flat)",
+                          boxShadow: "0 0 0 2px inset var(--color-selected-ring)",
                         }
                       : {
                           borderColor: "var(--color-border)",
@@ -90,7 +99,7 @@ export function CheckinSheet({ open, onClose }: Props) {
                       height: selected ? 16 : 12,
                       borderRadius: 3,
                       backgroundColor: selected
-                        ? "var(--color-blue-flat)"
+                        ? "var(--color-selected-ring)"
                         : "var(--color-border-strong)",
                     }}
                   />
@@ -141,13 +150,9 @@ export function CheckinSheet({ open, onClose }: Props) {
           onChange={(e) => setNote(e.target.value)}
         />
 
-        <button
-          type="button"
-          onClick={handleClose}
-          className="text-button w-full rounded-[var(--radius-md)] bg-[var(--color-blue-flat)] px-6 py-3 text-[var(--color-on-dark)] shadow-soft transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-blue-flat-hover)] active:bg-[var(--color-blue-flat-active)]"
-        >
+        <Button variant="primary" fullWidth onClick={handleDone}>
           Listo
-        </button>
+        </Button>
       </div>
     </Sheet>
   );
