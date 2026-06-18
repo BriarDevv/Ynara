@@ -202,9 +202,10 @@ export function SidebarNav() {
                     <span
                       className={cn(
                         "flex-1 text-body-sm",
-                        on ? "font-semibold" : "text-[var(--color-ink-soft)]",
+                        on
+                          ? "font-semibold text-[var(--color-ink)]"
+                          : "text-[var(--color-ink-soft)]",
                       )}
-                      style={on ? { color: m.tintVar } : undefined}
                     >
                       {m.label}
                     </span>
