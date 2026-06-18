@@ -41,7 +41,7 @@ export function RecapSheet({ open, onClose, recap }: Props) {
         <div className="flex items-center gap-3.5">
           <YnaraOrb size={42} modeId={activeMode} />
           <div className="min-w-0">
-            <p className="text-caption uppercase tracking-[.14em] text-[var(--color-ink-faint)]">
+            <p className="text-caption uppercase tracking-[.14em] text-[var(--color-ink-soft)]">
               {formatHoyDate(new Date(recap.date))}
             </p>
             <h2 className="mt-0.5 text-[1.4rem] font-semibold leading-[1.05] tracking-tight text-[var(--color-ink)]">
@@ -67,7 +67,7 @@ export function RecapSheet({ open, onClose, recap }: Props) {
         {/* Insights: label + lista con Diamond como bullet */}
         {recap.highlights.length > 0 ? (
           <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-[.14em] text-[var(--color-ink-faint)]">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[.14em] text-[var(--color-ink-soft)]">
               Ynara observó
             </p>
             <ul className="flex flex-col">

@@ -286,7 +286,7 @@ export function TuView() {
             onClick={handleExport}
             action={
               memoryExport.isPending ? (
-                <span className="text-caption text-[var(--color-ink-faint)]">Exportando…</span>
+                <span className="text-caption text-[var(--color-ink-soft)]">Exportando…</span>
               ) : (
                 <ChevronRight />
               )
@@ -372,7 +372,7 @@ export function TuView() {
 
         {/* ── Footer ── */}
         <footer data-hero-reveal className="mt-2 text-center">
-          <p className="text-caption text-[var(--color-ink-faint)]">
+          <p className="text-caption text-[var(--color-ink-soft)]">
             Ynara · MVP 2026
             <br />
             Pensar mejor, recordar siempre.

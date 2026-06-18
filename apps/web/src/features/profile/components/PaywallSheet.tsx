@@ -73,7 +73,7 @@ export function PaywallSheet({ open, onClose }: Props) {
           {/* Precio */}
           <div className="text-center">
             <p className="text-title font-semibold text-[var(--color-ink-deep)]">$6.900/mes</p>
-            <p className="text-caption mt-0.5 text-[var(--color-ink-faint)]">
+            <p className="text-caption mt-0.5 text-[var(--color-ink-soft)]">
               Cancelás cuando querés.
             </p>
           </div>

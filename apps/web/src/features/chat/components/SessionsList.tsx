@@ -42,7 +42,7 @@ export function SessionsList() {
             >
               <span className="flex items-center justify-between gap-2">
                 <ModeChip modeId={session.mode} />
-                <span className="text-caption text-[var(--color-ink-faint)]">
+                <span className="text-caption text-[var(--color-ink-soft)]">
                   {relativeTime(session.updatedAt)}
                 </span>
               </span>

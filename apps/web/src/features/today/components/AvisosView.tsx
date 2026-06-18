@@ -72,7 +72,7 @@ export function AvisosView() {
         {/* Resueltos */}
         {resolved.length > 0 && (
           <section aria-label="Avisos resueltos" data-hero-reveal>
-            <p className="mb-2 px-0.5 text-caption font-bold uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
+            <p className="mb-2 px-0.5 text-caption font-bold uppercase tracking-[0.14em] text-[var(--color-ink-soft)]">
               Resueltos
             </p>
             <ul className="flex flex-col" aria-live="polite">
@@ -113,7 +113,7 @@ export function AvisosView() {
 
         {/* Nota Premium */}
         <footer
-          className="flex items-center justify-center gap-2 pt-2 text-caption text-[var(--color-ink-faint)]"
+          className="flex items-center justify-center gap-2 pt-2 text-caption text-[var(--color-ink-soft)]"
           data-hero-reveal
         >
           {/* Punto decorativo en lugar de ícono inexistente */}
