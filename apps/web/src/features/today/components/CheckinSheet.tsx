@@ -55,7 +55,7 @@ export function CheckinSheet({ open, onClose }: Props) {
 
         {/* Mood */}
         <fieldset className="flex flex-col gap-3 border-none p-0">
-          <legend className="mb-1 text-[11px] font-bold uppercase tracking-[.14em] text-[var(--color-ink-faint)]">
+          <legend className="mb-1 text-[11px] font-bold uppercase tracking-[.14em] text-[var(--color-ink-soft)]">
             Mood
           </legend>
           <div className="flex justify-between gap-2">
@@ -97,7 +97,7 @@ export function CheckinSheet({ open, onClose }: Props) {
                   <span
                     className="text-[10.5px] font-semibold leading-tight"
                     style={{
-                      color: selected ? "var(--color-ink-deep)" : "var(--color-ink-faint)",
+                      color: selected ? "var(--color-ink-deep)" : "var(--color-ink-soft)",
                     }}
                   >
                     {m.label}
@@ -111,11 +111,11 @@ export function CheckinSheet({ open, onClose }: Props) {
         {/* Energía */}
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between px-0.5">
-            <span className="text-[11px] font-bold uppercase tracking-[.14em] text-[var(--color-ink-faint)]">
+            <span className="text-[11px] font-bold uppercase tracking-[.14em] text-[var(--color-ink-soft)]">
               Energía
             </span>
             <span className="text-[16px] font-semibold text-[var(--color-blue-flat)]">
-              {energy} <span className="text-[13px] text-[var(--color-ink-faint)]">/ 10</span>
+              {energy} <span className="text-[13px] text-[var(--color-ink-soft)]">/ 10</span>
             </span>
           </div>
           <input

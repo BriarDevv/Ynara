@@ -173,7 +173,7 @@ export function SidebarNav() {
 
         {/* Modo · cómo te acompaña — re-tiñe toda la app (useActiveMode). */}
         <div>
-          <p className="px-1.5 pb-2 text-caption font-bold uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
+          <p className="px-1.5 pb-2 text-caption font-bold uppercase tracking-[0.14em] text-[var(--color-ink-soft)]">
             Modo · cómo te acompaña
           </p>
           <ul className="flex flex-col gap-px">

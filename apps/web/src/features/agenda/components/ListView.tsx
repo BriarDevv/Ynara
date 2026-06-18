@@ -88,7 +88,7 @@ function EventRow({ event, now: _now }: RowProps) {
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         {/* Día breve (lunes 7) */}
-        <span className="text-caption text-[var(--color-ink-faint)]">
+        <span className="text-caption text-[var(--color-ink-soft)]">
           {dayLabel} {dayNum}
         </span>
         {/* Título */}
