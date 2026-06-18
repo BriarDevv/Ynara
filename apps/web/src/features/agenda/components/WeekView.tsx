@@ -76,7 +76,7 @@ function WeekGrid({ days, events, now, pxh }: WeekGridProps) {
           const today = isSameDay(day, now);
           return (
             <div key={day.toISOString()} className="flex flex-1 flex-col items-center gap-0.5">
-              <span className="text-[10px] font-semibold uppercase text-[var(--color-ink-faint)]">
+              <span className="text-[12px] font-semibold uppercase text-[var(--color-ink-soft)]">
                 {formatWeekdayShort(day)}
               </span>
               <span
@@ -105,7 +105,7 @@ function WeekGrid({ days, events, now, pxh }: WeekGridProps) {
             style={{ top: (h - H0) * pxh }}
           >
             <span
-              className="absolute right-full pr-1 text-[9px] font-semibold leading-none tabular-nums text-[var(--color-ink-faint)]"
+              className="absolute right-full pr-1 text-[12px] font-semibold leading-none tabular-nums text-[var(--color-ink-soft)]"
               style={{ top: -6, width: LEFT_GUTTER }}
             >
               {h}
@@ -144,7 +144,7 @@ function WeekGrid({ days, events, now, pxh }: WeekGridProps) {
           return (
             <span
               key={modeId}
-              className="flex items-center gap-1.5 text-[11px] text-[var(--color-ink-soft)]"
+              className="flex items-center gap-1.5 text-[12px] text-[var(--color-ink-soft)]"
             >
               <span
                 aria-hidden
