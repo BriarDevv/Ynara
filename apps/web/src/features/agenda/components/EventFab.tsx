@@ -87,7 +87,7 @@ export function EventFab({ fillVar, activeMode }: Props) {
         type="button"
         aria-label="Crear evento"
         onClick={handleOpen}
-        className="fixed bottom-6 right-6 z-20 flex h-12 w-12 items-center justify-center rounded-full text-[var(--color-on-dark)] shadow-[0_8px_20px_-8px_var(--color-accent)] transition-transform duration-[var(--duration-base)] ease-[var(--ease-out-soft)] active:scale-95 md:bottom-8 md:right-8"
+        className="fixed bottom-[calc(4.5rem_+_env(safe-area-inset-bottom))] right-6 z-20 flex h-12 w-12 items-center justify-center rounded-full text-[var(--color-on-dark)] shadow-[0_8px_20px_-8px_var(--color-accent)] transition-transform duration-[var(--duration-base)] ease-[var(--ease-out-soft)] active:scale-95 md:right-8 lg:bottom-8"
         style={{ backgroundColor: fillVar }}
       >
         <span aria-hidden className="text-2xl font-light leading-none">
