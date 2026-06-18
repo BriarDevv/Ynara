@@ -79,6 +79,7 @@ export function AgendaView() {
             </div>
             {/* ChipGroup de vistas */}
             <ChipGroup
+              ariaLabel="Vista de agenda"
               options={VIEW_OPTIONS}
               value={view}
               onChange={(v) => {
