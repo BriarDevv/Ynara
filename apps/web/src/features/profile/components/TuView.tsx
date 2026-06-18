@@ -19,6 +19,7 @@ import { useActiveMode } from "@/hooks/useActiveMode";
 import { applyA11yClasses, type TextSize, useA11yStore } from "@/stores/a11y";
 import { applyThemeClass, type ThemePreference, useThemeStore } from "@/stores/theme";
 import { useUserStore } from "@/stores/user";
+import { LogoutDialog } from "./LogoutDialog";
 import { PaywallSheet } from "./PaywallSheet";
 import { A11yCard, ChevronRight, SettingsGroup, SettingsRow } from "./settings-rows";
 import { WipeMemoryDialog } from "./WipeMemoryDialog";
@@ -71,6 +72,7 @@ export function TuView() {
   // Store de usuario
   const displayName = useUserStore((s) => s.displayName);
   const setDisplayName = useUserStore((s) => s.setDisplayName);
+  const isEphemeral = useUserStore((s) => s.isEphemeral);
   const resetUser = useUserStore((s) => s.reset);
 
   // Store de tema
@@ -97,6 +99,9 @@ export function TuView() {
 
   // Paywall sheet
   const [paywallOpen, setPaywallOpen] = useState(false);
+
+  // Dialog de confirmación de logout
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   // Toast
   const [toast, setToast] = useState<{ message: string; variant: "success" | "error" } | null>(
@@ -247,7 +252,12 @@ export function TuView() {
             <h1 className="text-title text-[var(--color-ink-deep)] leading-tight">
               {displayName ?? "Vos"}
             </h1>
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {isEphemeral ? (
+                <span className="text-caption inline-block rounded-full bg-[var(--color-bg-soft)] px-2.5 py-0.5 text-[var(--color-ink-soft)]">
+                  Invitado
+                </span>
+              ) : null}
               <span className="text-caption inline-block rounded-full bg-[var(--color-bg-soft)] px-2.5 py-0.5 text-[var(--color-ink-soft)]">
                 Plan gratis
               </span>
@@ -406,7 +416,7 @@ export function TuView() {
         {/* ── Sección: Cuenta ── */}
         <SettingsGroup label="Cuenta">
           <div data-hero-reveal className="pt-2">
-            <Button variant="secondary" onClick={handleLogout}>
+            <Button variant="secondary" onClick={() => setLogoutOpen(true)}>
               Cerrar sesión
             </Button>
           </div>
@@ -435,6 +445,14 @@ export function TuView() {
         open={wipeOpen}
         onClose={() => setWipeOpen(false)}
         onSuccess={() => setToast({ message: "Memoria borrada.", variant: "success" })}
+      />
+
+      {/* Confirmación de cierre de sesión (destructivo si la cuenta es efímera) */}
+      <LogoutDialog
+        open={logoutOpen}
+        isEphemeral={isEphemeral}
+        onClose={() => setLogoutOpen(false)}
+        onConfirm={handleLogout}
       />
 
       {/* Sheet de paywall — maquetado, sin pago real */}
