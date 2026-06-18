@@ -23,6 +23,15 @@ type Props<T extends string> = {
  *  - `tabIndex={selected ? 0 : -1}`: el grupo entra una sola vez con Tab.
  *  - ArrowLeft/Right (y Home/End): mueven la selección dentro del grupo.
  *
+ * Reflow (M4): la barra es `w-fit max-w-full overflow-x-auto`, así que hugea su
+ * contenido pero nunca excede al padre; cuando los chips no entran (mobile)
+ * scrollea en X en vez de clippear. Los chips son `shrink-0` y el wrapper
+ * externo `min-w-0` para achicarse en filas flex. La affordance es el peek del
+ * chip cortado + el scrollbar nativo (no hay utility `scrollbar-none` en el
+ * repo); el `focus()` de la navegación por flechas auto-scrollea el chip a la
+ * vista. El overflow clippea el `box-shadow` del chip seleccionado en los
+ * lados, pero es imperceptible por el alpha bajo de `--shadow-soft` + el `p-1`.
+ *
  * Referencia: https://www.w3.org/WAI/ARIA/apd/patterns/radio/
  */
 export function ChipGroup<T extends string>({
@@ -73,7 +82,7 @@ export function ChipGroup<T extends string>({
   };
 
   return (
-    <div className={cn("flex flex-col gap-3", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-3", className)}>
       {label ? (
         <span id={`${groupId}-label`} className="text-caption text-[var(--color-ink-soft)]">
           {label}
@@ -83,7 +92,8 @@ export function ChipGroup<T extends string>({
         role="radiogroup"
         aria-labelledby={label ? `${groupId}-label` : undefined}
         onKeyDown={handleKeyDown}
-        className="inline-flex w-fit gap-2 rounded-[var(--radius-pill)] bg-[var(--color-bg-soft)] p-1"
+        // Reflow horizontal (M4) — ver JSDoc del componente.
+        className="inline-flex w-fit max-w-full gap-2 overflow-x-auto rounded-[var(--radius-pill)] bg-[var(--color-bg-soft)] p-1"
       >
         {options.map((opt) => {
           const selected = opt.value === value;
@@ -101,7 +111,7 @@ export function ChipGroup<T extends string>({
               tabIndex={selected ? 0 : -1}
               onClick={() => onChange(opt.value)}
               className={cn(
-                "text-button rounded-[var(--radius-pill)] px-4 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
+                "text-button shrink-0 rounded-[var(--radius-pill)] px-4 py-2 transition-colors duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
                 selected
                   ? "bg-[var(--color-bg)] text-[var(--color-ink)] shadow-soft"
                   : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)]",
