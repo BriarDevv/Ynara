@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { useOnboardingResumeStore } from "@/features/onboarding/resumeStore";
 import { useUserStore } from "@/stores/user";
 
 /**
@@ -26,6 +27,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       router.replace("/onboarding");
       return;
     }
+    // Entramos a la app autenticada → ya no estamos resumiendo el onboarding;
+    // limpiar el flag acá (mount-effect idempotente, safe bajo StrictMode, a
+    // diferencia de un cleanup de unmount que se dispara en el doble-render).
+    useOnboardingResumeStore.getState().setResuming(false);
     setChecked(true);
   }, [onboardingCompleted, router]);
 
