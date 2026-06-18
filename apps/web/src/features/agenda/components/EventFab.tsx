@@ -126,9 +126,9 @@ export function EventFab({ fillVar, activeMode }: Props) {
             required
           />
 
-          {/* Selector de modo */}
-          <div className="flex flex-col gap-1.5">
-            <span className="text-caption text-[var(--color-ink-soft)]">Modo</span>
+          {/* Selector de modo — fieldset/legend = grupo con nombre accesible */}
+          <fieldset className="flex flex-col gap-1.5 border-none p-0">
+            <legend className="text-caption text-[var(--color-ink-soft)]">Modo</legend>
             <div className="flex flex-wrap gap-2">
               {MODES.map((m) => {
                 const selected = m.id === modeId;
@@ -157,7 +157,7 @@ export function EventFab({ fillVar, activeMode }: Props) {
                 );
               })}
             </div>
-          </div>
+          </fieldset>
 
           {error ? (
             <p role="alert" className="text-body-sm text-[var(--color-error)]">
