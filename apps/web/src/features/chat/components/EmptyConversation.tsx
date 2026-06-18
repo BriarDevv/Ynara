@@ -41,7 +41,7 @@ export function EmptyConversation({ mode, onSend }: Props) {
               style={{
                 borderColor: `color-mix(in srgb, var(--mode-${mode}) 35%, transparent)`,
                 backgroundColor: `color-mix(in srgb, var(--mode-${mode}) 10%, transparent)`,
-                color: `color-mix(in srgb, var(--mode-${mode}) 70%, var(--color-ink))`,
+                color: "var(--color-ink)",
                 outlineColor: `var(--mode-${mode})`,
               }}
             >

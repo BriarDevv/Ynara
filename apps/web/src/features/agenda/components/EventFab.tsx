@@ -144,7 +144,7 @@ export function EventFab({ fillVar, activeMode }: Props) {
                         ? {
                             backgroundColor: `color-mix(in srgb, ${MODE_BY_ID[m.id].tintVar} 20%, var(--color-bg))`,
                             borderColor: MODE_BY_ID[m.id].tintVar,
-                            color: MODE_BY_ID[m.id].tintVar,
+                            color: "var(--color-ink)",
                           }
                         : {
                             borderColor: "var(--color-border)",
