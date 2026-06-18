@@ -105,7 +105,7 @@ function DayGrid({ events, day, now, rowPx }: GridProps) {
           style={{ top: (h - H0) * rowPx }}
         >
           {/* Etiqueta de hora */}
-          <span className="absolute right-full top-[-7px] w-8 pr-2 text-right text-[11px] font-semibold leading-none tabular-nums text-[var(--color-ink-faint)]">
+          <span className="absolute right-full top-[-7px] w-8 pr-2 text-right text-[12px] font-semibold leading-none tabular-nums text-[var(--color-ink-soft)]">
             {String(h).padStart(2, "0")}
           </span>
           {/* Línea fina */}
