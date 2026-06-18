@@ -1,8 +1,15 @@
 import { MODE_BY_ID } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
 import type { AgendaEvent } from "../api";
-import { eventsForDay, gridHeight, gridTop, isInRange, weekDays } from "../format";
-import { formatDayNum, formatWeekdayShort, isSameDay } from "../labels";
+import {
+  eventsForDay,
+  formatEventRange,
+  gridHeight,
+  gridTop,
+  isInRange,
+  weekDays,
+} from "../format";
+import { formatDayLong, formatDayNum, formatWeekdayShort, isSameDay } from "../labels";
 
 // ── Constantes de la grilla ─────────────────────────────────────────────────
 const H0 = 8;
@@ -167,6 +174,34 @@ export function WeekView({ events, anchor, now }: Props) {
 
   return (
     <>
+      {/* Alternativa accesible (C1): el grid visual es aria-hidden por ser una
+          representación espacial que no linealiza; este resumen sr-only expone
+          los mismos eventos (mismo recorte 8–20h que la grilla) para lectores
+          de pantalla, un ítem de lista por día. */}
+      <ul className="sr-only" aria-label="Resumen de eventos de la semana">
+        {days.map((day) => {
+          const dayEvents = eventsForDay(events, day).filter((e) => isInRange(e, H0, H1));
+          return (
+            <li key={day.toISOString()}>
+              {formatDayLong(day)}
+              {isSameDay(day, now) ? " (hoy)" : ""}:{" "}
+              {dayEvents.length === 0
+                ? "sin eventos"
+                : dayEvents
+                    .map(
+                      (e) =>
+                        `${e.title}, ${formatEventRange(e)}${
+                          e.mode ? `, modo ${MODE_BY_ID[e.mode].label}` : ""
+                        }${e.location ? `, en ${e.location}` : ""}${
+                          e.status === "cancelled" ? ", cancelado" : ""
+                        }`,
+                    )
+                    .join("; ")}
+            </li>
+          );
+        })}
+      </ul>
+
       {/* Mobile: PXH menor, scroll horizontal si hace falta */}
       <div className="overflow-x-auto md:hidden">
         <div className="min-w-[320px]">
