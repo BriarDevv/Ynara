@@ -26,7 +26,7 @@ const VIEW_OPTIONS = [
 ] as const satisfies readonly { value: ViewMode; label: string }[];
 
 const NAV_BUTTON =
-  "inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-ink-soft)] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:border-[var(--color-ink)] hover:text-[var(--color-ink)]";
+  "inline-flex h-11 w-11 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-ink-soft)] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:border-[var(--color-ink)] hover:text-[var(--color-ink)]";
 
 /**
  * Vista **Agenda** — Lista / Día / Semana con grilla horaria (mockup
