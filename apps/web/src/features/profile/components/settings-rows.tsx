@@ -40,7 +40,7 @@ export function SettingsRow({
     <>
       {icon && (
         <div
-          className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[10px] bg-[var(--color-bg-soft)]"
+          className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-bg-soft)]"
           aria-hidden="true"
         >
           {icon}
@@ -48,7 +48,7 @@ export function SettingsRow({
       )}
       <div className="min-w-0 flex-1">
         <p className="text-body font-medium text-[var(--color-ink)]">{title}</p>
-        {sub && <p className="text-caption mt-0.5 text-[var(--color-ink-soft)]">{sub}</p>}
+        {sub && <p className="text-body-sm mt-0.5 text-[var(--color-ink-soft)]">{sub}</p>}
       </div>
       {action && <div className="flex-shrink-0">{action}</div>}
     </>
