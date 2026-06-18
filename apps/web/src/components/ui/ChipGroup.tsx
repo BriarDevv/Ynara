@@ -10,6 +10,9 @@ type ChipOption<T extends string> = {
 
 type Props<T extends string> = {
   label?: string;
+  /** Nombre accesible del radiogroup cuando no hay `label` visible (ej. el
+   * switcher de vistas de la Agenda, que va al lado del h1 sin label propio). */
+  ariaLabel?: string;
   options: readonly ChipOption<T>[];
   value: T;
   onChange: (value: T) => void;
@@ -36,6 +39,7 @@ type Props<T extends string> = {
  */
 export function ChipGroup<T extends string>({
   label,
+  ariaLabel,
   options,
   value,
   onChange,
@@ -91,6 +95,7 @@ export function ChipGroup<T extends string>({
       <div
         role="radiogroup"
         aria-labelledby={label ? `${groupId}-label` : undefined}
+        aria-label={label ? undefined : ariaLabel}
         onKeyDown={handleKeyDown}
         // Reflow horizontal (M4) — ver JSDoc del componente.
         className="inline-flex w-fit max-w-full gap-2 overflow-x-auto rounded-[var(--radius-pill)] bg-[var(--color-bg-soft)] p-1"
