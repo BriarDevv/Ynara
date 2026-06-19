@@ -1,3 +1,4 @@
+import { type ColumnPlacement, layoutColumns } from "@ynara/core/features/agenda";
 import { MODE_BY_ID } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
 import type { AgendaEvent } from "../api";
@@ -8,6 +9,7 @@ import {
   gridHeight,
   gridTop,
   nowHour,
+  toLayoutInterval,
   weekDays,
 } from "../format";
 import { formatDayLong, formatDayNum, formatWeekdayShort, isSameDay } from "../labels";
@@ -50,30 +52,39 @@ const hhmm = (d: Date) =>
 type ColEventProps = {
   event: AgendaEvent;
   minH: number;
+  /** Columna asignada por el algoritmo de solapamiento (lado-a-lado). */
+  placement: ColumnPlacement;
 };
 
 /** Barra de evento posicionada absolute dentro de su columna, con título y
  *  hora adentro (no solo una barra teñida). Decorativa: el grid es aria-hidden
  *  y el resumen sr-only expone los mismos eventos a lectores de pantalla. */
-function ColEvent({ event, minH }: ColEventProps) {
+function ColEvent({ event, minH, placement }: ColEventProps) {
   const tintVar = event.mode ? MODE_BY_ID[event.mode].tintVar : "var(--color-border-strong)";
   const cancelled = event.status === "cancelled";
   const tentative = event.status === "tentative";
   const top = gridTop(event, minH, PXH);
   const height = gridHeight(event, PXH, 24);
 
+  // Sub-columnas dentro de la columna del día para los solapados (gap 1px). Un
+  // evento sin solapes ocupa el ancho completo del día (cols = 1).
+  const widthPct = 100 / placement.cols;
+  const leftPct = placement.col * widthPct;
+
   return (
     <article
       aria-hidden
       title={event.title}
       className={cn(
-        "absolute inset-x-[3px] flex flex-col gap-px overflow-hidden rounded-[var(--radius-sm)] px-1.5 py-1",
+        "absolute flex flex-col gap-px overflow-hidden rounded-[var(--radius-sm)] px-1.5 py-1",
         tentative && "border border-dashed border-[var(--color-border-strong)]",
         cancelled && "opacity-50",
       )}
       style={{
         top,
         height,
+        left: `calc(${leftPct}% + 1px)`,
+        width: `calc(${widthPct}% - 2px)`,
         backgroundColor: `color-mix(in srgb, ${tintVar} 16%, var(--color-bg))`,
         borderLeft: `2px solid ${tintVar}`,
       }}
@@ -167,6 +178,8 @@ function WeekGrid({ days, events, now }: WeekGridProps) {
         {/* Columnas de días */}
         {days.map((day, colIdx) => {
           const dayEvents = eventsForDay(events, day);
+          // Columnas para los solapados de ESTE día (cada día es independiente).
+          const placements = layoutColumns(dayEvents.map(toLayoutInterval));
           return (
             <div
               key={day.toISOString()}
@@ -177,7 +190,12 @@ function WeekGrid({ days, events, now }: WeekGridProps) {
               )}
             >
               {dayEvents.map((event) => (
-                <ColEvent key={event.id} event={event} minH={minH} />
+                <ColEvent
+                  key={event.id}
+                  event={event}
+                  minH={minH}
+                  placement={placements.get(event.id) ?? { col: 0, cols: 1 }}
+                />
               ))}
             </div>
           );

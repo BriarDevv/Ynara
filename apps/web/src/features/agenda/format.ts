@@ -1,3 +1,4 @@
+import type { LayoutInterval } from "@ynara/core/features/agenda";
 import type { AgendaEvent } from "./api";
 
 /**
@@ -96,4 +97,13 @@ export function isInRange(event: AgendaEvent, H0: number, H1: number): boolean {
   const start = eventStartHour(event);
   const end = start + event.duration_min / 60;
   return end > H0 && start < H1;
+}
+
+/**
+ * Intervalo (en minutos del día local) para el algoritmo de columnas de
+ * `@ynara/core`. Permite acomodar lado-a-lado los eventos concurrentes.
+ */
+export function toLayoutInterval(event: AgendaEvent): LayoutInterval {
+  const start = eventStartHour(event) * 60;
+  return { id: event.id, start, end: start + event.duration_min };
 }
