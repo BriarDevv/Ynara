@@ -10,7 +10,9 @@ import {
   hourBounds,
   isInRange,
   isOnDay,
+  monthGridDays,
   nowHour,
+  startOfMonth,
   startOfWeek,
   weekDays,
 } from "./format";
@@ -195,5 +197,43 @@ describe("hourBounds", () => {
 
   it("respeta una ventana base custom", () => {
     expect(hourBounds([], [day], 0, 24)).toEqual({ minH: 0, maxH: 24 });
+  });
+});
+
+describe("startOfMonth", () => {
+  it("devuelve el día 1 a las 00:00 del mes de la fecha", () => {
+    const d = startOfMonth(new Date(2026, 4, 17, 15, 30));
+    expect(d.getDate()).toBe(1);
+    expect(d.getMonth()).toBe(4);
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getHours()).toBe(0);
+    expect(d.getMinutes()).toBe(0);
+  });
+});
+
+describe("monthGridDays", () => {
+  it("devuelve 42 días (6 semanas) de lunes a domingo", () => {
+    const days = monthGridDays(new Date(2026, 4, 17));
+    expect(days).toHaveLength(42);
+    expect(days[0]?.getDay()).toBe(1); // lunes
+    expect(days[41]?.getDay()).toBe(0); // domingo
+  });
+
+  it("la grilla arranca en el lunes de la semana del día 1", () => {
+    const days = monthGridDays(new Date(2026, 4, 17));
+    const first = days[0];
+    expect(first?.getDay()).toBe(1);
+    const firstOfMonth = new Date(2026, 4, 1).getTime();
+    expect(first?.getTime()).toBeLessThanOrEqual(firstOfMonth);
+    expect(firstOfMonth - (first?.getTime() ?? 0)).toBeLessThan(7 * 24 * 60 * 60 * 1000);
+  });
+
+  it("cubre todos los días del mes (mayo: 31)", () => {
+    const days = monthGridDays(new Date(2026, 4, 17));
+    const inMonth = days.filter((d) => d.getMonth() === 4 && d.getFullYear() === 2026);
+    expect(inMonth).toHaveLength(31);
+    const nums = inMonth.map((d) => d.getDate());
+    expect(nums).toContain(1);
+    expect(nums).toContain(31);
   });
 });
