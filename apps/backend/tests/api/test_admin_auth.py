@@ -13,7 +13,7 @@ Cobertura:
 1. Sin token -> 401 (los 6 endpoints, vía ``get_current_user``).
 2. Token de un user NO admin -> 401 (``get_current_admin``).
 3. Token de un user ``is_admin=True`` -> 200 (los 6 endpoints).
-4. El 401 de no-admin tiene el MISMO ``detail`` que un 401 de token ausente (sin oráculo).
+4. El 401 de no-admin tiene el MISMO ``detail`` que un 401 de token inválido (sin oráculo).
 """
 
 from __future__ import annotations
@@ -107,16 +107,25 @@ async def test_admin_admin_user_200(db_session: AsyncSession, path: str) -> None
         app.dependency_overrides.clear()
 
 
-async def test_admin_401_same_detail_no_oracle(db_session: AsyncSession) -> None:
-    """El 401 de no-admin y el de token ausente comparten el MISMO ``detail`` (sin oráculo)."""
+async def test_admin_non_admin_same_detail_as_bad_token(db_session: AsyncSession) -> None:
+    """Anti-oráculo (regla #4): un user válido pero NO admin recibe el MISMO 401
+    ``detail`` que un token INVÁLIDO (``UNAUTHORIZED_DETAIL``) — no se puede
+    distinguir "token válido pero no admin" de "token inválido".
+
+    El caso sin token (``OAuth2PasswordBearer`` con ``auto_error``, detail propio
+    de FastAPI) lo cubre ``test_admin_without_token_401``; ese es otro eje (faltan
+    credenciales), no un oráculo sobre la condición de admin."""
     user = await _seed_user(db_session, is_admin=False)
     client = await _client(db_session)
     try:
         async with client:
-            no_token = await client.get("/v1/admin/overview")
+            bad_token = await client.get(
+                "/v1/admin/overview",
+                headers={"Authorization": "Bearer not-a-real-jwt"},
+            )
             non_admin = await client.get("/v1/admin/overview", headers=_bearer(user.id))
-        assert no_token.status_code == 401
+        assert bad_token.status_code == 401
         assert non_admin.status_code == 401
-        assert non_admin.json()["detail"] == no_token.json()["detail"]
+        assert non_admin.json()["detail"] == bad_token.json()["detail"]
     finally:
         app.dependency_overrides.clear()
