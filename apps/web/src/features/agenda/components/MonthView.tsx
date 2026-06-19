@@ -79,8 +79,10 @@ function DayCell({ day, events, inMonth, isToday, onSelect }: DayCellProps) {
                 event.status === "cancelled" && "line-through opacity-60",
               )}
               style={{
-                backgroundColor: `color-mix(in srgb, ${tintVar} 18%, var(--color-bg))`,
-                borderLeft: `2px solid ${tintVar}`,
+                // 16% = mismo tint que Day/Week (una sola fuente del valor).
+                backgroundColor: `color-mix(in srgb, ${tintVar} 16%, var(--color-bg))`,
+                // Spine dashed para tentative (paridad de estado con Day/Week).
+                borderLeft: `2px ${event.status === "tentative" ? "dashed" : "solid"} ${tintVar}`,
               }}
             >
               {event.title}
