@@ -7,6 +7,7 @@ import { HeroReveal } from "@/components/ui/HeroReveal";
 import { LivingField } from "@/components/ui/LivingField";
 import { MODE_BY_ID } from "@/components/ui/modes";
 import { useActiveMode } from "@/hooks/useActiveMode";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/cn";
 import { useEvents } from "../api";
 import { startOfWeek } from "../format";
@@ -25,6 +26,11 @@ const VIEW_OPTIONS = [
   { value: "semana", label: "Semana" },
 ] as const satisfies readonly { value: ViewMode; label: string }[];
 
+// La grilla de 7 columnas es el patrón equivocado en un teléfono (celdas
+// ilegibles bajo ~360px: ninguna app líder la muestra en vertical). En mobile
+// la Agenda vive en Lista/Día; "Semana" queda como vista desktop-only.
+const DESKTOP_QUERY = "(min-width: 768px)";
+
 const NAV_BUTTON =
   "inline-flex h-11 w-11 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-ink-soft)] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:border-[var(--color-ink)] hover:text-[var(--color-ink)]";
 
@@ -36,13 +42,22 @@ const NAV_BUTTON =
  */
 export function AgendaView() {
   const activeMode = useActiveMode();
+  const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const [now] = useState(() => new Date());
-  const [view, setView] = useState<ViewMode>("semana");
+  const [view, setView] = useState<ViewMode>("lista");
   const [anchor, setAnchor] = useState<Date>(() => new Date());
 
   const { data, isPending, isError, refetch, isFetching } = useEvents();
 
-  const stepDays = view === "dia" ? 1 : 7;
+  // "Semana" solo existe en desktop. En mobile se oculta del switcher y, si
+  // quedó seteada al venir de un viewport ancho, cae a Lista para no renderizar
+  // la grilla de 7 columnas en pantalla angosta.
+  const viewOptions = isDesktop
+    ? VIEW_OPTIONS
+    : VIEW_OPTIONS.filter((opt) => opt.value !== "semana");
+  const effectiveView: ViewMode = !isDesktop && view === "semana" ? "lista" : view;
+
+  const stepDays = effectiveView === "dia" ? 1 : 7;
   const shift = (direction: -1 | 1) => {
     setAnchor((prev) => {
       const next = new Date(prev);
@@ -52,14 +67,12 @@ export function AgendaView() {
   };
 
   const periodLabel =
-    view === "dia"
-      ? formatDayLong(anchor)
-      : view === "lista"
-        ? formatWeekRange(startOfWeek(anchor))
-        : formatWeekRange(startOfWeek(anchor));
+    effectiveView === "dia" ? formatDayLong(anchor) : formatWeekRange(startOfWeek(anchor));
 
   const onNow =
-    view === "dia" ? isSameDay(anchor, now) : isSameDay(startOfWeek(anchor), startOfWeek(now));
+    effectiveView === "dia"
+      ? isSameDay(anchor, now)
+      : isSameDay(startOfWeek(anchor), startOfWeek(now));
 
   // Fill (AA-safe) del modo activo para el FAB con el "+" blanco.
   const fabFill = MODE_BY_ID[activeMode].fillVar;
@@ -80,8 +93,8 @@ export function AgendaView() {
             {/* ChipGroup de vistas */}
             <ChipGroup
               ariaLabel="Vista de agenda"
-              options={VIEW_OPTIONS}
-              value={view}
+              options={viewOptions}
+              value={effectiveView}
               onChange={(v) => {
                 setView(v);
                 // Al cambiar a lista, volver a la semana actual
@@ -91,12 +104,12 @@ export function AgendaView() {
           </div>
 
           {/* Navegación anterior / hoy / siguiente (oculta en lista) */}
-          {view !== "lista" && (
+          {effectiveView !== "lista" && (
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => shift(-1)}
-                aria-label={view === "dia" ? "Día anterior" : "Semana anterior"}
+                aria-label={effectiveView === "dia" ? "Día anterior" : "Semana anterior"}
                 className={NAV_BUTTON}
               >
                 <span aria-hidden>‹</span>
@@ -115,7 +128,7 @@ export function AgendaView() {
               <button
                 type="button"
                 onClick={() => shift(1)}
-                aria-label={view === "dia" ? "Día siguiente" : "Semana siguiente"}
+                aria-label={effectiveView === "dia" ? "Día siguiente" : "Semana siguiente"}
                 className={NAV_BUTTON}
               >
                 <span aria-hidden>›</span>
@@ -143,9 +156,9 @@ export function AgendaView() {
                 </button>
               }
             />
-          ) : view === "lista" ? (
+          ) : effectiveView === "lista" ? (
             <ListView events={data} now={now} />
-          ) : view === "dia" ? (
+          ) : effectiveView === "dia" ? (
             <DayView events={data} day={anchor} now={now} />
           ) : (
             <WeekView events={data} anchor={anchor} now={now} />
