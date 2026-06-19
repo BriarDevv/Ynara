@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChipGroup } from "@/components/ui/ChipGroup";
+import { LivingField } from "@/components/ui/LivingField";
 import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { MemoryTimelineSkeleton } from "./components/MemoryTimelineSkeleton";
@@ -20,9 +21,9 @@ const FILTER_OPTIONS = [
  * Pantalla **Memoria** (timeline, wireframe 17) — espejo de `MemoryView` de web.
  * Conecta a `GET /v1/memory` (mock-first) vía `useMemoryTimeline` y resuelve los
  * 4 estados: cargando (skeleton), error (con reintento), vacío y la lista
- * cronológica agrupada por bucket temporal (Hoy / Esta semana / …). Sin el fondo
- * `network` animado de web (flourishes diferidos). El detalle del recuerdo llega
- * en el PR siguiente.
+ * cronológica agrupada por bucket temporal (Hoy / Esta semana / …). Con el fondo
+ * vivo `network` (F3, Skia) detrás del contenido, teñido por el modo activo. El
+ * detalle del recuerdo llega en el PR siguiente.
  */
 export function MemoriaScreen() {
   const router = useRouter();
@@ -34,72 +35,75 @@ export function MemoriaScreen() {
   const groups = useMemo(() => (data ? groupByBucket(data, now) : []), [data, now]);
 
   return (
-    <SafeAreaView className="flex-1 bg-bg-canvas" edges={["top"]}>
-      <ScrollView contentContainerClassName="gap-6 px-6 py-8">
-        <View className="gap-2">
-          <Text className="text-title font-display text-ink-deep">Memoria</Text>
-          <Text className="text-body text-ink-soft">
-            Todo lo que Ynara fue guardando con vos, en orden.
-          </Text>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Buscar en tu memoria"
-          onPress={() => router.push("/buscar")}
-          className="h-12 flex-row items-center rounded-lg border border-border bg-bg-soft px-4 active:opacity-70"
-        >
-          <Text className="flex-1 text-body text-ink-soft">Buscá en tu memoria…</Text>
-        </Pressable>
-
-        <ChipGroup
-          label="Filtrar por tipo"
-          options={FILTER_OPTIONS}
-          value={filter}
-          onChange={setFilter}
-        />
-
-        {isPending ? (
-          <MemoryTimelineSkeleton />
-        ) : isError ? (
-          <View className="gap-2 rounded-lg border border-border bg-bg p-4">
-            <Text className="text-body text-ink">No pudimos traer tu memoria</Text>
-            <Text className="text-body-sm text-ink-soft">
-              Puede ser un problema de conexión. Probá de nuevo.
+    <View className="flex-1 bg-bg-canvas">
+      <LivingField variant="network" />
+      <SafeAreaView className="flex-1" edges={["top"]}>
+        <ScrollView contentContainerClassName="gap-6 px-6 py-8">
+          <View className="gap-2">
+            <Text className="text-title font-display text-ink-deep">Memoria</Text>
+            <Text className="text-body text-ink-soft">
+              Todo lo que Ynara fue guardando con vos, en orden.
             </Text>
-            <Pressable onPress={() => refetch()} disabled={isFetching} hitSlop={8}>
-              <Text className={cn("text-button text-ink underline", isFetching && "opacity-50")}>
-                Reintentar
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Buscar en tu memoria"
+            onPress={() => router.push("/buscar")}
+            className="h-12 flex-row items-center rounded-lg border border-border bg-bg-soft px-4 active:opacity-70"
+          >
+            <Text className="flex-1 text-body text-ink-soft">Buscá en tu memoria…</Text>
+          </Pressable>
+
+          <ChipGroup
+            label="Filtrar por tipo"
+            options={FILTER_OPTIONS}
+            value={filter}
+            onChange={setFilter}
+          />
+
+          {isPending ? (
+            <MemoryTimelineSkeleton />
+          ) : isError ? (
+            <View className="gap-2 rounded-lg border border-border bg-bg p-4">
+              <Text className="text-body text-ink">No pudimos traer tu memoria</Text>
+              <Text className="text-body-sm text-ink-soft">
+                Puede ser un problema de conexión. Probá de nuevo.
               </Text>
-            </Pressable>
-          </View>
-        ) : groups.length === 0 ? (
-          <View className="gap-1 rounded-lg border border-border bg-bg p-4">
-            <Text className="text-body text-ink">Todavía no hay nada acá</Text>
-            <Text className="text-body-sm text-ink-soft">
-              A medida que charlen, Ynara va a ir recordando lo importante. Esto se llena solo.
-            </Text>
-          </View>
-        ) : (
-          <View className="gap-8">
-            {groups.map((group) => (
-              <View key={group.bucket} className="gap-3">
-                <Text className="text-caption text-ink-soft">{group.bucket}</Text>
-                <View>
-                  {group.entries.map((entry, index) => (
-                    <TimelineEntryRow
-                      key={`${entry.layer}:${entry.ref}`}
-                      entry={entry}
-                      now={now}
-                      first={index === 0}
-                    />
-                  ))}
+              <Pressable onPress={() => refetch()} disabled={isFetching} hitSlop={8}>
+                <Text className={cn("text-button text-ink underline", isFetching && "opacity-50")}>
+                  Reintentar
+                </Text>
+              </Pressable>
+            </View>
+          ) : groups.length === 0 ? (
+            <View className="gap-1 rounded-lg border border-border bg-bg p-4">
+              <Text className="text-body text-ink">Todavía no hay nada acá</Text>
+              <Text className="text-body-sm text-ink-soft">
+                A medida que charlen, Ynara va a ir recordando lo importante. Esto se llena solo.
+              </Text>
+            </View>
+          ) : (
+            <View className="gap-8">
+              {groups.map((group) => (
+                <View key={group.bucket} className="gap-3">
+                  <Text className="text-caption text-ink-soft">{group.bucket}</Text>
+                  <View>
+                    {group.entries.map((entry, index) => (
+                      <TimelineEntryRow
+                        key={`${entry.layer}:${entry.ref}`}
+                        entry={entry}
+                        now={now}
+                        first={index === 0}
+                      />
+                    ))}
+                  </View>
                 </View>
-              </View>
-            ))}
-          </View>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
