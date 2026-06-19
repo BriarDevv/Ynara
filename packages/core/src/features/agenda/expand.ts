@@ -53,8 +53,9 @@ function formatDtstart(zdt: Temporal.ZonedDateTime): string {
  *   las líneas `recurrence` (RRULE/RDATE/EXDATE) y expande con `rrule-temporal`,
  *   filtrando las instancias que realmente solapan el rango.
  *
- * (Los eventos `all_day` se expanden por ahora como timed a medianoche; el
- * `VALUE=DATE` fino queda como refinamiento.)
+ * TODO(all_day): hoy se expanden como timed a medianoche y `duration_min` cuenta
+ * minutos, no días — el `VALUE=DATE` + duración-en-días queda como refinamiento
+ * (CALENDAR-PLAN.md, Fases 4/5). No hay consumidor de `all_day` recurrente aún.
  */
 export function expand(event: AgendaEvent, range: DateRange): CalendarInstance[] {
   const from = new Date(range.from).getTime();
@@ -76,10 +77,12 @@ export function expand(event: AgendaEvent, range: DateRange): CalendarInstance[]
   const rule = new RRuleTemporal({ rruleString });
 
   // Ampliamos el `after` por la duración para no perder ocurrencias que
-  // empezaron antes de `from` pero siguen activas dentro del rango.
+  // empezaron antes de `from` pero siguen activas dentro del rango. El borde
+  // derecho lo decide `overlaps` (half-open `start < to`), no el `inc` de
+  // `between` → lo dejamos en `false` para no contradecir esa semántica.
   const after = new Date(from - event.duration_min * MS_PER_MIN);
   return rule
-    .between(after, new Date(to), true)
+    .between(after, new Date(to), false)
     .map(
       (zdt): CalendarInstance => ({
         master: event,

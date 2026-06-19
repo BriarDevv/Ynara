@@ -2,6 +2,7 @@
   "name": "@ynara/core",
   "version": "0.1.0",
   "private": true,
+  "sideEffects": false,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -9,6 +10,7 @@
     "./api": "./src/api/index.ts",
     "./query-keys": "./src/query-keys.ts",
     "./stores": "./src/stores/index.ts",
+    "./features/agenda/expand": "./src/features/agenda/expand.ts",
     "./features/*": "./src/features/*/index.ts"
   },
   "scripts": {
