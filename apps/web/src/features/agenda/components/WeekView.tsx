@@ -25,6 +25,8 @@ type Props = {
   anchor: Date;
   /** Referencia de "ahora" para marcar el día de hoy. */
   now: Date;
+  /** Tocar un evento abre el sheet de edición. */
+  onEventClick: (event: AgendaEvent) => void;
 };
 
 const hhmm = (d: Date) =>
@@ -35,12 +37,13 @@ type ColEventProps = {
   minH: number;
   /** Columna asignada por el algoritmo de solapamiento (lado-a-lado). */
   placement: ColumnPlacement;
+  onEventClick: (event: AgendaEvent) => void;
 };
 
-/** Barra de evento posicionada absolute dentro de su columna, con título y
- *  hora adentro (no solo una barra teñida). Decorativa: el grid es aria-hidden
- *  y el resumen sr-only expone los mismos eventos a lectores de pantalla. */
-function ColEvent({ event, minH, placement }: ColEventProps) {
+/** Barra de evento (botón) posicionada absolute dentro de su columna. Clickeable
+ *  con mouse/touch pero `tabIndex={-1}` y `aria-hidden`: la edición por teclado/
+ *  lector va por la vista Lista; este grid es una representación espacial. */
+function ColEvent({ event, minH, placement, onEventClick }: ColEventProps) {
   const tintVar = event.mode ? MODE_BY_ID[event.mode].tintVar : "var(--color-border-strong)";
   const cancelled = event.status === "cancelled";
   const tentative = event.status === "tentative";
@@ -53,11 +56,14 @@ function ColEvent({ event, minH, placement }: ColEventProps) {
   const leftPct = placement.col * widthPct;
 
   return (
-    <article
+    <button
+      type="button"
       aria-hidden
+      tabIndex={-1}
+      onClick={() => onEventClick(event)}
       title={event.title}
       className={cn(
-        "absolute flex flex-col gap-px overflow-hidden rounded-[var(--radius-sm)] px-1.5 py-1",
+        "absolute flex flex-col gap-px overflow-hidden rounded-[var(--radius-sm)] px-1.5 py-1 text-left",
         tentative && "border border-dashed border-[var(--color-border-strong)]",
         cancelled && "opacity-50",
       )}
@@ -83,7 +89,7 @@ function ColEvent({ event, minH, placement }: ColEventProps) {
           {hhmm(new Date(event.start_at))}
         </span>
       ) : null}
-    </article>
+    </button>
   );
 }
 
@@ -91,9 +97,10 @@ type WeekGridProps = {
   days: Date[];
   events: AgendaEvent[];
   now: Date;
+  onEventClick: (event: AgendaEvent) => void;
 };
 
-function WeekGrid({ days, events, now }: WeekGridProps) {
+function WeekGrid({ days, events, now, onEventClick }: WeekGridProps) {
   const { minH, maxH } = hourBounds(events, days);
   const totalHeight = (maxH - minH) * PXH;
   const hours = Array.from({ length: maxH - minH + 1 }, (_, i) => minH + i);
@@ -176,6 +183,7 @@ function WeekGrid({ days, events, now }: WeekGridProps) {
                   event={event}
                   minH={minH}
                   placement={placements.get(event.id) ?? { col: 0, cols: 1 }}
+                  onEventClick={onEventClick}
                 />
               ))}
             </div>
@@ -232,7 +240,7 @@ function WeekGrid({ days, events, now }: WeekGridProps) {
  * vista en pantalla angosta): la grilla de 7 columnas no es legible bajo
  * ~360px y ninguna app de calendario líder la muestra en vertical.
  */
-export function WeekView({ events, anchor, now }: Props) {
+export function WeekView({ events, anchor, now, onEventClick }: Props) {
   const days = weekDays(anchor);
 
   return (
@@ -265,7 +273,7 @@ export function WeekView({ events, anchor, now }: Props) {
         })}
       </ul>
 
-      <WeekGrid days={days} events={events} now={now} />
+      <WeekGrid days={days} events={events} now={now} onEventClick={onEventClick} />
     </>
   );
 }

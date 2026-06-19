@@ -9,6 +9,8 @@ type Props = {
   events: AgendaEvent[];
   /** Referencia de "ahora" para agrupar Hoy / Mañana / Esta semana. */
   now: Date;
+  /** Tocar una fila abre el sheet de edición de ese evento. */
+  onEventClick: (event: AgendaEvent) => void;
 };
 
 type Grupo = {
@@ -53,10 +55,12 @@ function SectionLabel({ children }: { children: string }) {
 type RowProps = {
   event: AgendaEvent;
   now: Date;
+  onEventClick: (event: AgendaEvent) => void;
 };
 
-/** Fila de evento aireada: sin caja, separada por hairline. */
-function EventRow({ event, now: _now }: RowProps) {
+/** Fila de evento aireada (botón): sin caja, separada por hairline. Tocarla
+ *  abre el sheet de edición. Es la vía accesible por teclado de la Agenda. */
+function EventRow({ event, now: _now, onEventClick }: RowProps) {
   const start = new Date(event.start_at);
   const end = new Date(start.getTime() + event.duration_min * 60_000);
   const hhmm = (d: Date) =>
@@ -74,37 +78,44 @@ function EventRow({ event, now: _now }: RowProps) {
   return (
     <li
       className={cn(
-        "flex items-start gap-3 border-b border-[var(--color-border)] py-3.5 last:border-b-0",
+        "border-b border-[var(--color-border)] last:border-b-0",
         cancelled && "opacity-50",
       )}
-      title={longLabel}
     >
-      {/* Dot de modo */}
-      <span
-        aria-hidden
-        className="mt-[5px] h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: tintVar }}
-      />
+      <button
+        type="button"
+        onClick={() => onEventClick(event)}
+        title={longLabel}
+        aria-label={`Editar ${event.title}`}
+        className="flex w-full items-start gap-3 rounded-[var(--radius-sm)] py-3.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-selected-ring)]"
+      >
+        {/* Dot de modo */}
+        <span
+          aria-hidden
+          className="mt-[5px] h-2 w-2 shrink-0 rounded-full"
+          style={{ backgroundColor: tintVar }}
+        />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        {/* Día breve (lunes 7) */}
-        <span className="text-caption text-[var(--color-ink-soft)]">
-          {dayLabel} {dayNum}
-        </span>
-        {/* Título */}
-        <span className={cn("text-body text-[var(--color-ink)]", cancelled && "line-through")}>
-          {event.title}
-        </span>
-        {/* Lugar */}
-        {event.location ? (
-          <span className="text-body-sm text-[var(--color-ink-soft)]">{event.location}</span>
-        ) : null}
-      </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          {/* Día breve (lunes 7) */}
+          <span className="text-caption text-[var(--color-ink-soft)]">
+            {dayLabel} {dayNum}
+          </span>
+          {/* Título */}
+          <span className={cn("text-body text-[var(--color-ink)]", cancelled && "line-through")}>
+            {event.title}
+          </span>
+          {/* Lugar */}
+          {event.location ? (
+            <span className="text-body-sm text-[var(--color-ink-soft)]">{event.location}</span>
+          ) : null}
+        </div>
 
-      {/* Rango horario al borde derecho */}
-      <span className="shrink-0 text-body-sm tabular-nums text-[var(--color-ink-soft)]">
-        {range}
-      </span>
+        {/* Rango horario al borde derecho */}
+        <span className="shrink-0 text-body-sm tabular-nums text-[var(--color-ink-soft)]">
+          {range}
+        </span>
+      </button>
     </li>
   );
 }
@@ -113,7 +124,7 @@ function EventRow({ event, now: _now }: RowProps) {
  * Vista **lista** de la Agenda: eventos agrupados por día relativo
  * (Hoy / Mañana / Esta semana), filas aireadas sin caja.
  */
-export function ListView({ events, now }: Props) {
+export function ListView({ events, now, onEventClick }: Props) {
   const groups = buildGroups(events, now);
 
   if (groups.length === 0) {
@@ -127,7 +138,7 @@ export function ListView({ events, now }: Props) {
           <SectionLabel>{g.label}</SectionLabel>
           <ul aria-label={g.label}>
             {g.events.map((e) => (
-              <EventRow key={e.id} event={e} now={now} />
+              <EventRow key={e.id} event={e} now={now} onEventClick={onEventClick} />
             ))}
           </ul>
         </section>
