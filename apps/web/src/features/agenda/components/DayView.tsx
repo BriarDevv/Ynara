@@ -184,7 +184,10 @@ export function DayView({ events, day, now }: Props) {
     <>
       {/* Alternativa accesible: la grilla visual es aria-hidden (representación
           espacial que no linealiza); este resumen sr-only expone los mismos
-          eventos del día a lectores de pantalla, uno por ítem de lista. */}
+          eventos del día a lectores de pantalla, uno por ítem de lista. Itera
+          `dayEvents` (TODOS los del día, sin el recorte horario de la ventana
+          08–20h que aplica el grid sobre `visibleEvents`): cero pérdida para
+          lectores de pantalla. Mismo patrón que WeekView. */}
       <ul className="sr-only" aria-label={`Eventos de ${formatDayLong(day)}`}>
         {dayEvents.length === 0 ? (
           <li>Sin eventos</li>

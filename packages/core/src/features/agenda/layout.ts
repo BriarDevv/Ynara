@@ -31,6 +31,10 @@ export type ColumnPlacement = {
  * lado-a-lado. Los que no se solapan con nadie quedan en `{col: 0, cols: 1}`
  * (ancho completo). Eventos que apenas se tocan (`end === start`) NO se
  * consideran solapados → comparten columna.
+ *
+ * **Precondición:** intervalos válidos con `end > start` (lo garantiza
+ * `AgendaEventSchema`: `duration_min` es `int().positive()`). Con `end <= start`
+ * el clustering quedaría indefinido — normalizá upstream antes de llamar.
  */
 export function layoutColumns(intervals: LayoutInterval[]): Map<string, ColumnPlacement> {
   const result = new Map<string, ColumnPlacement>();
