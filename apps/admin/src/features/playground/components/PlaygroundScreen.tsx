@@ -13,6 +13,7 @@ import {
   PlaygroundControls,
   type ThinkingChoice,
 } from "./PlaygroundControls";
+import { PlaygroundInspector } from "./PlaygroundInspector";
 import { PlaygroundTranscript } from "./PlaygroundTranscript";
 import { ServingInventory } from "./ServingInventory";
 
@@ -23,10 +24,12 @@ import { ServingInventory } from "./ServingInventory";
  * client: consume `useServing` (catálogo) + `usePlayground` (mutation sync). NO
  * lleva `range` (runtime/config, foto única). Grilla por bandas con reveal
  * `anim-stagger-up`:
- *  0. `ServingInventory` — estado read-only del serving.
- *  1. `PlaygroundControls` — modelo + bajo rendimiento + params.
- *  2. `PlaygroundTranscript` — turno (user + respuesta/pending/error).
- *  3. `PlaygroundComposer` — textarea + enviar/limpiar.
+ *  0. `ServingInventory` — estado read-only del serving (full-width).
+ *  1. `PlaygroundControls` — modelo + bajo rendimiento + params (full-width).
+ *  2. Split chat | inspector (blueprint §4, misma proporción que `MoatScreen`):
+ *     - `lg:col-span-8` chat: `PlaygroundTranscript` + `PlaygroundComposer`.
+ *     - `lg:col-span-4` `PlaygroundInspector` (timeline + thinking), sticky al
+ *       scrollear respuestas largas; colapsa a stack debajo de `lg`.
  *
  * El estado del turno es LOCAL (`useState`): un playground efímero no persiste
  * conversaciones de prueba (sin store, sin semántica de `Mode`).
@@ -129,26 +132,36 @@ function PlaygroundBody({ serving }: { serving: ServingOutT }) {
           <PlaygroundControls models={serving.models} config={config} onChange={setConfig} />
         </Band>
 
+        {/* Banda 2 — split chat | inspector (misma proporción que MoatScreen). */}
         <Band span={12} index={2}>
-          <PlaygroundTranscript
-            isReal={serving.is_real}
-            userMessage={sentMessage}
-            result={result}
-            isPending={mutation.isPending}
-            error={mutation.error}
-            onRetry={handleRetry}
-          />
-        </Band>
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+            <div className="flex flex-col gap-8 lg:col-span-8">
+              <PlaygroundTranscript
+                isReal={serving.is_real}
+                userMessage={sentMessage}
+                result={result}
+                isPending={mutation.isPending}
+                error={mutation.error}
+                onRetry={handleRetry}
+              />
+              <PlaygroundComposer
+                value={draft}
+                onChange={setDraft}
+                onSend={handleSend}
+                onClear={handleClear}
+                canSend={canSend}
+                isPending={mutation.isPending}
+              />
+            </div>
 
-        <Band span={12} index={3}>
-          <PlaygroundComposer
-            value={draft}
-            onChange={setDraft}
-            onSend={handleSend}
-            onClear={handleClear}
-            canSend={canSend}
-            isPending={mutation.isPending}
-          />
+            <PlaygroundInspector
+              config={config}
+              result={result}
+              isPending={mutation.isPending}
+              hasTurn={sentMessage !== null}
+              className="lg:sticky lg:top-[88px] lg:col-span-4 lg:self-start"
+            />
+          </div>
         </Band>
       </div>
 
@@ -212,7 +225,10 @@ function PlaygroundSkeleton() {
     <div className="grid grid-cols-12 gap-8" aria-hidden>
       <div className="anim-fade-in col-span-12 h-48 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)]" />
       <div className="anim-fade-in col-span-12 h-64 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)]" />
-      <div className="anim-fade-in col-span-12 h-72 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)]" />
+      <div className="anim-fade-in col-span-12 grid grid-cols-1 gap-8 lg:grid-cols-12">
+        <div className="h-72 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] lg:col-span-8" />
+        <div className="h-72 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] lg:col-span-4" />
+      </div>
     </div>
   );
 }
