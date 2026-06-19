@@ -34,8 +34,9 @@ Acá vive el "porqué" detrás de las decisiones técnicas del proyecto.
 | 015 | Librería JWT = PyJWT (sale python-jose); bcrypt directo (sale passlib) | Aceptado |
 | 016 | Código compartido web/mobile vía packages/core (ex-ADR-012) | Aceptado |
 | 017 | App de administración interna (apps/admin): observabilidad y control plane | Aceptado |
+| 018 | Playground de modelos en el panel admin (control plane, fase 1) | Aceptado |
 
-> Hay 17 ADRs lógicos (ADR-001..017, sin huecos): el ADR-016 era un
+> Hay 18 ADRs lógicos (ADR-001..018, sin huecos): el ADR-016 era un
 > segundo ADR-012 duplicado y se renumeró para garantizar números únicos.
 
 ## Cómo crear un ADR nuevo
