@@ -16,6 +16,12 @@ type Props = {
    * Lo usa el chat para arrancar una conversación nueva en el modo elegido.
    */
   onAfterPick?: (mode: ModeId) => void;
+  /**
+   * Aviso opcional sobre la consecuencia de elegir un modo, mostrado arriba de
+   * la lista. Lo usa el chat para avisar que cambiar de modo arranca una
+   * conversación nueva (sienta la expectativa antes de elegir, no después).
+   */
+  note?: string;
 };
 
 /**
@@ -25,7 +31,7 @@ type Props = {
  * `useActiveMode` → `LivingField`/orbe/acentos. No crea sesiones por sí solo:
  * ese comportamiento extra lo inyecta el caller con `onAfterPick`.
  */
-export function ModeSheet({ open, onClose, current, onAfterPick }: Props) {
+export function ModeSheet({ open, onClose, current, onAfterPick, note }: Props) {
   const setMode = useActiveModeStore((s) => s.setMode);
 
   const pick = (mode: ModeId) => {
@@ -41,6 +47,11 @@ export function ModeSheet({ open, onClose, current, onAfterPick }: Props) {
       title="Elegí cómo te acompaño"
       description="Ynara ajusta el tono, el foco y qué recuerda en cada modo."
     >
+      {note ? (
+        <p className="text-body-sm mb-2 rounded-[var(--radius-md)] bg-[var(--color-bg-soft)] px-3 py-2 text-[var(--color-ink-soft)]">
+          {note}
+        </p>
+      ) : null}
       <ul className="flex flex-col">
         {MODES.map((mode, i) => {
           const on = mode.id === current;
