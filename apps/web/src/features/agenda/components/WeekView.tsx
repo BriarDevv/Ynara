@@ -2,26 +2,23 @@ import { MODE_BY_ID } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
 import type { AgendaEvent } from "../api";
 import {
+  eventStartHour,
   eventsForDay,
   formatEventRange,
   gridHeight,
   gridTop,
-  isInRange,
+  nowHour,
   weekDays,
 } from "../format";
 import { formatDayLong, formatDayNum, formatWeekdayShort, isSameDay } from "../labels";
 
 // ── Constantes de la grilla ─────────────────────────────────────────────────
-const H0 = 8;
-const H1 = 20;
-// Marcas de hora para el eje vertical (cada 2h para no saturar)
-const HOUR_MARKS = [8, 10, 12, 14, 16, 18, 20];
-
-// px por hora según breakpoint
-const PXH_DESKTOP = 20;
-const PXH_MOBILE = 14; // más compacto en mobile
-
-const LEFT_GUTTER = 22; // ancho de la columna de horas (px)
+// Ventana base lun→dom 8–20h; se EXPANDE para incluir cualquier evento fuera
+// de ese rango (auto-fit) en vez de descartarlo en silencio.
+const BASE_H0 = 8;
+const BASE_H1 = 20;
+const PXH = 44; // px por hora (la grilla es desktop-only)
+const LEFT_GUTTER = 30; // ancho de la columna de horas (px)
 
 type Props = {
   events: AgendaEvent[];
@@ -31,30 +28,70 @@ type Props = {
   now: Date;
 };
 
+/** Rango horario [min, max] que cubre la base 8–20h y además todos los eventos
+ *  de la semana (con `floor`/`ceil` a la hora), clamp a [0, 24]. Cero pérdida. */
+function hourBounds(events: AgendaEvent[], days: Date[]): { minH: number; maxH: number } {
+  let minH = BASE_H0;
+  let maxH = BASE_H1;
+  for (const day of days) {
+    for (const event of eventsForDay(events, day)) {
+      const start = eventStartHour(event);
+      const end = start + event.duration_min / 60;
+      minH = Math.min(minH, Math.floor(start));
+      maxH = Math.max(maxH, Math.ceil(end));
+    }
+  }
+  return { minH: Math.max(0, minH), maxH: Math.min(24, maxH) };
+}
+
+const hhmm = (d: Date) =>
+  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
 type ColEventProps = {
   event: AgendaEvent;
-  pxh: number;
+  minH: number;
 };
 
-/** Barra de evento posicionada absolute dentro de su columna. */
-function ColEvent({ event, pxh }: ColEventProps) {
+/** Barra de evento posicionada absolute dentro de su columna, con título y
+ *  hora adentro (no solo una barra teñida). Decorativa: el grid es aria-hidden
+ *  y el resumen sr-only expone los mismos eventos a lectores de pantalla. */
+function ColEvent({ event, minH }: ColEventProps) {
   const tintVar = event.mode ? MODE_BY_ID[event.mode].tintVar : "var(--color-border-strong)";
   const cancelled = event.status === "cancelled";
-  const top = gridTop(event, H0, pxh);
-  const height = gridHeight(event, pxh, 4);
+  const tentative = event.status === "tentative";
+  const top = gridTop(event, minH, PXH);
+  const height = gridHeight(event, PXH, 24);
 
   return (
-    <div
-      title={event.title}
+    <article
       aria-hidden
-      className={cn("absolute inset-x-[2px] rounded-[var(--radius-sm)]", cancelled && "opacity-40")}
+      title={event.title}
+      className={cn(
+        "absolute inset-x-[3px] flex flex-col gap-px overflow-hidden rounded-[var(--radius-sm)] px-1.5 py-1",
+        tentative && "border border-dashed border-[var(--color-border-strong)]",
+        cancelled && "opacity-50",
+      )}
       style={{
         top,
         height,
-        backgroundColor: `color-mix(in srgb, ${tintVar} 40%, var(--color-bg))`,
+        backgroundColor: `color-mix(in srgb, ${tintVar} 16%, var(--color-bg))`,
         borderLeft: `2px solid ${tintVar}`,
       }}
-    />
+    >
+      <span
+        className={cn(
+          "truncate text-[12px] font-medium leading-tight text-[var(--color-ink)]",
+          cancelled && "line-through",
+        )}
+      >
+        {event.title}
+      </span>
+      {height >= PXH ? (
+        <span className="truncate text-[11px] leading-none tabular-nums text-[var(--color-ink-soft)]">
+          {hhmm(new Date(event.start_at))}
+        </span>
+      ) : null}
+    </article>
   );
 }
 
@@ -62,11 +99,19 @@ type WeekGridProps = {
   days: Date[];
   events: AgendaEvent[];
   now: Date;
-  pxh: number;
 };
 
-function WeekGrid({ days, events, now, pxh }: WeekGridProps) {
-  const totalHeight = (H1 - H0) * pxh;
+function WeekGrid({ days, events, now }: WeekGridProps) {
+  const { minH, maxH } = hourBounds(events, days);
+  const totalHeight = (maxH - minH) * PXH;
+  const hours = Array.from({ length: maxH - minH + 1 }, (_, i) => minH + i);
+
+  // Línea "ahora": solo si hoy cae en la semana mostrada y la hora está a la
+  // vista. El dot va sobre la columna de hoy; la línea cruza las 7 columnas.
+  const nh = nowHour();
+  const todayIdx = days.findIndex((d) => isSameDay(d, now));
+  const showNow = todayIdx >= 0 && nh >= minH && nh <= maxH;
+  const nowTop = (nh - minH) * PXH;
 
   return (
     <div className="flex flex-col gap-2">
@@ -96,20 +141,22 @@ function WeekGrid({ days, events, now, pxh }: WeekGridProps) {
 
       {/* Grilla horaria */}
       <div className="relative flex" style={{ paddingLeft: LEFT_GUTTER, height: totalHeight }}>
-        {/* Etiquetas de hora + líneas horizontales */}
-        {HOUR_MARKS.map((h) => (
+        {/* Líneas horizontales + etiquetas de hora (label cada 2h, línea cada hora) */}
+        {hours.map((h) => (
           <div
             key={h}
             aria-hidden
             className="pointer-events-none absolute inset-x-0"
-            style={{ top: (h - H0) * pxh }}
+            style={{ top: (h - minH) * PXH }}
           >
-            <span
-              className="absolute right-full pr-1 text-[12px] font-semibold leading-none tabular-nums text-[var(--color-ink-soft)]"
-              style={{ top: -6, width: LEFT_GUTTER }}
-            >
-              {h}
-            </span>
+            {h % 2 === 0 ? (
+              <span
+                className="absolute right-full pr-1.5 text-[12px] font-semibold leading-none tabular-nums text-[var(--color-ink-soft)]"
+                style={{ top: -6, width: LEFT_GUTTER }}
+              >
+                {h}
+              </span>
+            ) : null}
             <div
               className="absolute h-px"
               style={{ left: 0, right: 0, background: "var(--color-border)" }}
@@ -119,7 +166,7 @@ function WeekGrid({ days, events, now, pxh }: WeekGridProps) {
 
         {/* Columnas de días */}
         {days.map((day, colIdx) => {
-          const dayEvents = eventsForDay(events, day).filter((e) => isInRange(e, H0, H1));
+          const dayEvents = eventsForDay(events, day);
           return (
             <div
               key={day.toISOString()}
@@ -130,11 +177,26 @@ function WeekGrid({ days, events, now, pxh }: WeekGridProps) {
               )}
             >
               {dayEvents.map((event) => (
-                <ColEvent key={event.id} event={event} pxh={pxh} />
+                <ColEvent key={event.id} event={event} minH={minH} />
               ))}
             </div>
           );
         })}
+
+        {/* Línea "ahora" */}
+        {showNow ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute z-10"
+            style={{ top: nowTop, left: LEFT_GUTTER, right: 0 }}
+          >
+            <span
+              className="absolute -left-1 -top-[3px] h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: "var(--color-accent)" }}
+            />
+            <div className="h-0.5 w-full" style={{ backgroundColor: "var(--color-accent)" }} />
+          </div>
+        ) : null}
       </div>
 
       {/* Leyenda */}
@@ -150,7 +212,7 @@ function WeekGrid({ days, events, now, pxh }: WeekGridProps) {
                 aria-hidden
                 className="inline-block h-2 w-3 rounded-[2px]"
                 style={{
-                  backgroundColor: `color-mix(in srgb, ${mode.tintVar} 40%, var(--color-bg))`,
+                  backgroundColor: `color-mix(in srgb, ${mode.tintVar} 16%, var(--color-bg))`,
                   borderLeft: `2px solid ${mode.tintVar}`,
                 }}
               />
@@ -164,10 +226,12 @@ function WeekGrid({ days, events, now, pxh }: WeekGridProps) {
 }
 
 /**
- * Vista **semana** — 7 columnas lun→dom, cabecera con día resaltado (hoy
- * lleva círculo del acento), grilla horaria de fondo, eventos como barras
- * teñidas por modo. Responsive: más compacta en mobile (14 px/h vs 20 px/h),
- * scroll horizontal habilitado para que no se rompa en pantalla angosta.
+ * Vista **semana** (desktop-only) — 7 columnas lun→dom, cabecera con el día de
+ * hoy resaltado, grilla horaria con auto-fit del rango (incluye eventos fuera
+ * de 8–20h en vez de descartarlos), bloques con título + hora, y línea de
+ * "ahora". En mobile la Agenda usa Lista/Día (`AgendaView` no renderiza esta
+ * vista en pantalla angosta): la grilla de 7 columnas no es legible bajo
+ * ~360px y ninguna app de calendario líder la muestra en vertical.
  */
 export function WeekView({ events, anchor, now }: Props) {
   const days = weekDays(anchor);
@@ -176,11 +240,11 @@ export function WeekView({ events, anchor, now }: Props) {
     <>
       {/* Alternativa accesible (C1): el grid visual es aria-hidden por ser una
           representación espacial que no linealiza; este resumen sr-only expone
-          los mismos eventos (mismo recorte 8–20h que la grilla) para lectores
-          de pantalla, un ítem de lista por día. */}
+          los mismos eventos (TODOS los del día, sin recorte horario) para
+          lectores de pantalla, un ítem de lista por día. */}
       <ul className="sr-only" aria-label="Resumen de eventos de la semana">
         {days.map((day) => {
-          const dayEvents = eventsForDay(events, day).filter((e) => isInRange(e, H0, H1));
+          const dayEvents = eventsForDay(events, day);
           return (
             <li key={day.toISOString()}>
               {formatDayLong(day)}
@@ -202,16 +266,7 @@ export function WeekView({ events, anchor, now }: Props) {
         })}
       </ul>
 
-      {/* Mobile: PXH menor, scroll horizontal si hace falta */}
-      <div className="overflow-x-auto md:hidden">
-        <div className="min-w-[320px]">
-          <WeekGrid days={days} events={events} now={now} pxh={PXH_MOBILE} />
-        </div>
-      </div>
-      {/* Desktop */}
-      <div className="hidden md:block">
-        <WeekGrid days={days} events={events} now={now} pxh={PXH_DESKTOP} />
-      </div>
+      <WeekGrid days={days} events={events} now={now} />
     </>
   );
 }
