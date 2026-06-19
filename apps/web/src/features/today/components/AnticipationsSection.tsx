@@ -7,22 +7,21 @@ import { AnticipationCard } from "./AnticipationCard";
 
 /**
  * Sección **Anticipación** de la vista Hoy: renderiza las anticipaciones
- * canned de Ynara entre el header y las Prioridades. Cuando todas se
- * descartan (o no hay ninguna), la sección desaparece sin dejar hueco.
+ * canned de Ynara entre el header y las Prioridades.
  *
  * `aria-live="polite"` anuncia el cambio al stack de accesibilidad cuando
  * las cards aparecen o desaparecen dinámicamente.
  *
- * Incluye un link discreto "Ver todos los avisos" → `/avisos` para acceso
- * desde mobile (que no tiene el peek del sidebar).
+ * El link discreto "Ver todos los avisos" → `/avisos` **persiste aunque no
+ * haya cards**: en mobile no hay sidebar ni tab para /avisos, así que es el
+ * único acceso a esa pantalla (antes la sección entera se ocultaba al
+ * descartar todo y /avisos quedaba inalcanzable).
  */
 export function AnticipationsSection() {
   const initial = useMemo(() => buildAnticipations(), []);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   const visible = initial.filter((a) => !dismissed.has(a.id));
-
-  if (visible.length === 0) return null;
 
   return (
     <section aria-live="polite" className="flex flex-col gap-3">
