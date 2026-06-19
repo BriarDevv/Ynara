@@ -33,8 +33,9 @@ Acá vive el "porqué" detrás de las decisiones técnicas del proyecto.
 | 014 | Motor de serving local = Ollama/GGUF en 16 GB (vLLM reservado para 24 GB+) | Aceptado |
 | 015 | Librería JWT = PyJWT (sale python-jose); bcrypt directo (sale passlib) | Aceptado |
 | 016 | Código compartido web/mobile vía packages/core (ex-ADR-012) | Aceptado |
+| 017 | App de administración interna (apps/admin): observabilidad y control plane | Propuesto |
 
-> Hay 16 ADRs lógicos (ADR-001..016, sin huecos): el ADR-016 era un
+> Hay 17 ADRs lógicos (ADR-001..017, sin huecos): el ADR-016 era un
 > segundo ADR-012 duplicado y se renumeró para garantizar números únicos.
 
 ## Cómo crear un ADR nuevo
