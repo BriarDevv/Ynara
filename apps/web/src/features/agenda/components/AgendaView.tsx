@@ -69,7 +69,7 @@ export function AgendaView() {
       {/* Fondo calmo, sin cursor — especificado en el mockup para Agenda */}
       <LivingField variant="paper" modeId={activeMode} />
 
-      <HeroReveal className="mx-auto flex w-full max-w-[720px] flex-1 flex-col gap-6 px-5 pb-24 pt-10 md:px-8">
+      <HeroReveal className="mx-auto flex w-full max-w-[720px] flex-1 flex-col gap-6 px-6 pb-24 pt-10 md:px-8">
         <header data-hero-reveal className="flex flex-col gap-4">
           {/* Título grande + período */}
           <div className="flex items-end justify-between gap-3">
