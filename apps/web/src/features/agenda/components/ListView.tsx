@@ -59,7 +59,9 @@ type RowProps = {
 };
 
 /** Fila de evento aireada (botón): sin caja, separada por hairline. Tocarla
- *  abre el sheet de edición. Es la vía accesible por teclado de la Agenda. */
+ *  abre el sheet de edición. Es la vía accesible por teclado/lector para los
+ *  eventos de la semana actual (la Lista se ancla a `now`); los de otras semanas
+ *  se editan con mouse desde Día/Semana — deuda de a11y a cerrar. */
 function EventRow({ event, now: _now, onEventClick }: RowProps) {
   const start = new Date(event.start_at);
   const end = new Date(start.getTime() + event.duration_min * 60_000);

@@ -46,8 +46,8 @@ type EventBlockProps = {
 /**
  * Bloque de evento posicionado absolute dentro de la grilla. Es un `<button>`
  * clickeable (mouse/touch) — pero `tabIndex={-1}` y el grid es `aria-hidden`: la
- * edición por teclado/lector va por la vista Lista, no por esta representación
- * espacial.
+ * edición por teclado/lector va por la vista Lista (que cubre la semana actual;
+ * los eventos de otras semanas quedan solo con mouse acá — deuda de a11y).
  */
 function GridEventBlock({ event, rowPx, minH, placement, onEventClick }: EventBlockProps) {
   const tintVar = event.mode ? MODE_BY_ID[event.mode].tintVar : "var(--color-border-strong)";

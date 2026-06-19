@@ -41,8 +41,9 @@ type ColEventProps = {
 };
 
 /** Barra de evento (botón) posicionada absolute dentro de su columna. Clickeable
- *  con mouse/touch pero `tabIndex={-1}` y `aria-hidden`: la edición por teclado/
- *  lector va por la vista Lista; este grid es una representación espacial. */
+ *  con mouse/touch pero `tabIndex={-1}`, y la columna del día es `aria-hidden`
+ *  (queda fuera del árbol accesible, igual que en DayView). La edición por
+ *  teclado/lector va por la vista Lista (semana actual; ver deuda de a11y). */
 function ColEvent({ event, minH, placement, onEventClick }: ColEventProps) {
   const tintVar = event.mode ? MODE_BY_ID[event.mode].tintVar : "var(--color-border-strong)";
   const cancelled = event.status === "cancelled";
@@ -58,7 +59,6 @@ function ColEvent({ event, minH, placement, onEventClick }: ColEventProps) {
   return (
     <button
       type="button"
-      aria-hidden
       tabIndex={-1}
       onClick={() => onEventClick(event)}
       title={event.title}
