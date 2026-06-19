@@ -76,6 +76,19 @@ describe("AgendaEventSchema", () => {
   it("rechaza all_day no booleano", () => {
     expect(() => AgendaEventSchema.parse({ ...event, all_day: "si" })).toThrow();
   });
+
+  it("rechaza recurrence sin time_zone (invariante DST del ADR-018)", () => {
+    expect(() => AgendaEventSchema.parse({ ...event, recurrence: ["RRULE:FREQ=DAILY"] })).toThrow();
+  });
+
+  it("acepta recurrence cuando trae time_zone", () => {
+    const parsed = AgendaEventSchema.parse({
+      ...event,
+      time_zone: "America/Argentina/Buenos_Aires",
+      recurrence: ["RRULE:FREQ=DAILY"],
+    });
+    expect(parsed.recurrence).toHaveLength(1);
+  });
 });
 
 describe("EventsResponseSchema", () => {
