@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AdminShell } from "@/components/shell/AdminShell";
+import { AuthGuard } from "@/components/shell/AuthGuard";
 
 /**
  * Layout del route group `(panel)`: envuelve las 6 pantallas del panel con el
@@ -7,9 +8,15 @@ import { AdminShell } from "@/components/shell/AdminShell";
  * segmento de ruta, así que `(panel)/page.tsx` sirve "/" (Overview) y los
  * subsegmentos (`/usuarios`, `/modos`, …) cuelgan del mismo shell.
  *
- * Sin guard de auth en F0: el gate `require_admin` real se cablea en la fase
- * WIRE (token admin en el store + 401 del backend). Acá sólo se monta el chrome.
+ * Guard de sesión (fase WIRE): `AuthGuard` rebota a `/login` si no hay token
+ * admin (SSR-safe, post-mount). El gate `require_admin` del backend (401 en
+ * `/v1/admin/*`) lo maneja el `QueryCache` de `providers.tsx`, que resetea el
+ * store y deja que este guard redirija.
  */
 export default function PanelLayout({ children }: { children: ReactNode }) {
-  return <AdminShell>{children}</AdminShell>;
+  return (
+    <AuthGuard>
+      <AdminShell>{children}</AdminShell>
+    </AuthGuard>
+  );
 }

@@ -6,7 +6,10 @@ del backend FastAPI y valida la respuesta con un Zod schema antes de renderizar.
 ## Convenciones
 
 - **Auth**: todos requieren `Authorization: Bearer <jwt admin>` + gate
-  `require_admin` en el backend (carga `User`, chequea `is_admin`).
+  `require_admin` en el backend (carga `User`, chequea `is_admin`). El wire de
+  obtención/baja del token (`/v1/auth/*`) vive en [`AUTH.md`](./AUTH.md). El
+  contrato de auth es el **real** (`features/auth/schemas.ts`, snake_case);
+  `@ynara/shared-schemas/auth` es **provisional y NO se usa acá**.
 - **Range**: query `range ∈ {24h,7d,30d,90d}` (default `7d`) en todas salvo
   `/system`.
 - **Validación cliente**: `Schema.parse(await api.get<unknown>(...))` en el hook

@@ -10,6 +10,8 @@ correspondiente (misma regla que `apps/backend/docs/`).
   charts, features).
 - [`DATA-CONTRACTS.md`](./DATA-CONTRACTS.md) — endpoints `/v1/admin/*` + Zod +
   nota de privacidad.
+- [`AUTH.md`](./AUTH.md) — flujo de autenticación (`/v1/auth/*`): login, logout,
+  guard de ruta, 401 global y mocks de dev.
 
 ## Arquitectura
 

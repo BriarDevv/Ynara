@@ -68,12 +68,13 @@ src/
 │   ├── providers.tsx           # QueryClientProvider + ThemeApplier + A11yApplier (+ MSW gate en dev)
 │   ├── globals.css             # tokens de marca (clon web) + z-index/heatmap admin-específicos
 │   ├── fonts.ts / a11y-init.ts # clones de web (Space Grotesk + DM Sans; anti-FOUC)
-│   └── (panel)/                # shell + las 6 pantallas (Overview, Usuarios, Modos, Moat, Audit, Sistema)
+│   ├── login/                  # pantalla PÚBLICA de login (fuera de (panel), sin shell ni guard)
+│   └── (panel)/                # shell + guard + las 6 pantallas (Overview, Usuarios, Modos, Moat, Audit, Sistema)
 ├── components/
-│   ├── shell/                  # AdminShell, Sidebar, Topbar, RangeSelector, ThemeToggle, PerimeterBadge, ApiStatusFooter
+│   ├── shell/                  # AdminShell, AuthGuard, Sidebar, Topbar, AdminMenu, RangeSelector, ThemeToggle, PerimeterBadge, ApiStatusFooter
 │   ├── ui/                     # primitivos PORTADOS de apps/web/src/components/ui (copia 1:1, color plano por token)
 │   └── charts/                 # data-viz por token, CERO gradiente (Sparkline, AreaTimeSeries, ModeDonut, UsageHeatmap, …)
-├── features/                   # un dir por pantalla: overview/ users/ modes/ moat/ audit/ system/
+├── features/                   # un dir por pantalla: overview/ users/ modes/ moat/ audit/ system/ + auth/ (login/logout wire)
 │   └── <feature>/              # components/ + hooks/use<Feature>.ts + schemas.ts (Zod del endpoint)
 ├── lib/
 │   ├── api.ts                  # configureApi(@ynara/core) con baseUrl + token admin
@@ -153,6 +154,10 @@ los fixtures, el wire al backend real no cambia el front. Endpoints en
   (token admin, theme, a11y, range). Sin `useEffect + fetch`.
 - **Naming.** Rutas kebab-case; componentes `PascalCase.tsx`; hooks
   `useNombre.ts`.
+- **Auth.** El wire usa el contrato **real** `/v1/auth/*` (snake_case,
+  `features/auth/schemas.ts`); `@ynara/shared-schemas/auth` es **provisional y
+  NO se usa acá** (no importarlo). Token solo en `stores/admin.ts`. Flujo
+  completo (login/logout/guard/401/mocks) en [`docs/AUTH.md`](./docs/AUTH.md).
 - **Commits.** Conventional Commits en español, scope `admin`
   (`feat(admin): …`), imperativo o noun-phrase, atómicos (reglas #6/#7/#8).
 
@@ -179,6 +184,7 @@ los fixtures, el wire al backend real no cambia el front. Endpoints en
 | [`docs/SCREENS.md`](./docs/SCREENS.md) | Las 6 pantallas + qué datos muestra cada una. |
 | [`docs/COMPONENTS.md`](./docs/COMPONENTS.md) | Inventario de componentes (shell, ui, charts, features). |
 | [`docs/DATA-CONTRACTS.md`](./docs/DATA-CONTRACTS.md) | Endpoints `/v1/admin/*` + Zod + nota de privacidad. |
+| [`docs/AUTH.md`](./docs/AUTH.md) | Flujo de auth (`/v1/auth/*`): login, logout, guard, 401 global, mocks. |
 | [`README.md`](./README.md) | Quickstart humano (qué es, dev con mocks, scripts). |
 
 **Regla de los catálogos** (igual que el backend): si agregás una pantalla,
