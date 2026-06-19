@@ -129,9 +129,7 @@ def _delta(current: int, previous: int) -> Delta:
             return Delta(pct=0.0, direction="flat")
         return Delta(pct=100.0, direction="up")
     pct = round((current - previous) / previous * 100, 1)
-    direction: Literal["up", "down", "flat"] = (
-        "up" if pct > 0 else "down" if pct < 0 else "flat"
-    )
+    direction: Literal["up", "down", "flat"] = "up" if pct > 0 else "down" if pct < 0 else "flat"
     return Delta(pct=pct, direction=direction)
 
 
@@ -195,9 +193,7 @@ async def admin_overview(
     users_prev = await _count(
         session, select(func.count()).select_from(User).where(User.created_at < start)
     )
-    users_total_kpi = KpiValueDelta(
-        value=users_total, delta=_delta(users_total, users_prev)
-    )
+    users_total_kpi = KpiValueDelta(value=users_total, delta=_delta(users_total, users_prev))
 
     sessions_cur = await _count(
         session,
@@ -381,9 +377,7 @@ async def admin_users(
     conversion_pct = round(registered / total_users * 100, 1) if total_users else 0.0
 
     # Signups por día (users.created_at) en la ventana del rango -----------
-    signup_points = await _daily_series(
-        session, date_column=User.created_at, start=start, now=now
-    )
+    signup_points = await _daily_series(session, date_column=User.created_at, start=start, now=now)
     signups = [SignupPoint(date=p.date, count=p.value) for p in signup_points]
 
     return AdminUsersOut(
@@ -433,9 +427,7 @@ async def admin_modes(
 
     # Duración media por modo: AVG(ended_at - started_at) en segundos -> minutos,
     # solo sesiones cerradas; las abiertas se cuentan aparte. NUNCA descifra nada.
-    closed_secs = func.avg(
-        func.extract("epoch", ChatSession.ended_at - ChatSession.started_at)
-    )
+    closed_secs = func.avg(func.extract("epoch", ChatSession.ended_at - ChatSession.started_at))
     duration_rows = (
         await session.execute(
             select(
@@ -616,9 +608,7 @@ async def admin_audit(
     if sensitive is not None:
         filters.append(AuditLog.sensitive.is_(sensitive))
 
-    total = await _count(
-        session, select(func.count()).select_from(AuditLog).where(*filters)
-    )
+    total = await _count(session, select(func.count()).select_from(AuditLog).where(*filters))
     sensitive_total = await _count(
         session,
         select(func.count()).select_from(AuditLog).where(*filters, AuditLog.sensitive.is_(True)),
