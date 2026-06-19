@@ -1,7 +1,5 @@
-import type { Mode } from "@ynara/shared-schemas";
 import type { ReactNode } from "react";
 import { Pressable, type PressableProps } from "react-native";
-import { MODE_FILL_CLASS } from "@/components/ui/modes";
 import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 
@@ -10,9 +8,6 @@ type Variant = "primary" | "secondary" | "ghost" | "subtle";
 type Props = Omit<PressableProps, "children"> & {
   variant?: Variant;
   fullWidth?: boolean;
-  /** Tiñe la CTA por modo (solo aplica a variant="primary"): el fondo usa el
-   * color fill del modo (Memoria → mode-memoria-deep), texto blanco AA. */
-  mode?: Mode;
   /** Texto del botón (string). Para contenido custom, usar children. */
   children: ReactNode;
   className?: string;
@@ -43,25 +38,18 @@ const LABEL: Record<Variant, string> = {
 export function Button({
   variant = "primary",
   fullWidth = false,
-  mode,
   children,
   className,
   disabled,
   ...rest
 }: Props) {
-  // CTA teñida por modo: solo en primary, el fill del modo reemplaza el azul
-  // fijo (el feedback de press lo da el active:opacity-90 del base className).
-  const container =
-    variant === "primary" && mode
-      ? cn("px-6 py-3 rounded-md", MODE_FILL_CLASS[mode])
-      : CONTAINER[variant];
   return (
     <Pressable
       accessibilityRole="button"
       disabled={disabled}
       className={cn(
         "flex-row items-center justify-center gap-2 active:opacity-90",
-        container,
+        CONTAINER[variant],
         fullWidth && "w-full",
         disabled && "opacity-50",
         className,
