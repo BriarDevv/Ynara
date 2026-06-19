@@ -1,0 +1,73 @@
+name: Admin CI
+
+# CI SCOPEADA AL PANEL INTERNO (apps/admin): se dispara SOLO con cambios en
+# apps/admin (o en este workflow). Espejo del patrón de ci-web.yml (Web CI) y
+# ci.yml (Backend CI): cada superficie tiene su CI scopeada, así una PR que toca
+# solo el dashboard corre su propio gate sin arrastrar al resto del monorepo.
+#
+# Nota de cobertura: una PR que solo toca apps/admin/** NO dispara ci-web.yml
+# (sus paths son apps/web/** + packages/** + toolchain), así que sin este
+# workflow el dashboard quedaba sin CI. El caso inverso (cambios en packages/**
+# compartidos) lo cubre ci-web.yml, cuyo typecheck/test corren con
+# --filter='!@ynara/mobile' e incluyen a @ynara/admin.
+#
+# Gates (mismo orden que la cadena de calidad local, AGENTS.md): biome · tsc ·
+# vitest · next build. apps/admin es mock-first (MSW); el build no necesita el
+# worker (predev solo corre antes de `dev`).
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/admin/**'
+      - '.github/workflows/ci-admin.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/admin/**'
+      - '.github/workflows/ci-admin.yml'
+
+concurrency:
+  group: ci-admin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-typecheck-test-build:
+    name: Lint + Typecheck + Test + Build (admin)
+    runs-on: ubuntu-latest
+    env:
+      # Valores DUMMY de CI (NUNCA secretos reales, regla #2). src/lib/env.ts
+      # valida NEXT_PUBLIC_API_URL con Zod en import time: sin una URL válida el
+      # next build falla fail-fast. NEXT_PUBLIC_ENABLE_MOCKS=false deja MSW
+      # apagado en builds que no son development (en production siempre off).
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_ENABLE_MOCKS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm/action-setup lee la versión del campo packageManager del
+      # package.json root (pnpm@10) — no duplicar la versión acá.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Biome scopeado a apps/admin (coherente con "solo esa carpeta").
+      - name: Lint (biome)
+        run: pnpm biome check apps/admin
+
+      # --filter scopea cada gate a @ynara/admin (+ sus deps del workspace
+      # via ^build en el build).
+      - name: Typecheck (tsc)
+        run: pnpm turbo run typecheck --filter=@ynara/admin
+
+      - name: Test (vitest)
+        run: pnpm turbo run test --filter=@ynara/admin
+
+      - name: Build (next build)
+        run: pnpm turbo run build --filter=@ynara/admin
