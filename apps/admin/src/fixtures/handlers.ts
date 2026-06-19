@@ -7,6 +7,7 @@ import {
   AuditTargetLayer,
   EMPTY_AUDIT_FILTERS,
 } from "@/features/audit/schemas";
+import { MeOut, type MeOutT, TokenOut, type TokenOutT } from "@/features/auth/schemas";
 import { env } from "@/lib/env";
 import type { RangeId as RangeIdStore } from "@/stores/range";
 import { auditPage } from "./audit";
@@ -27,9 +28,31 @@ import { usersFixture } from "./users";
  * El panel desarrolla 100% sobre estos handlers hasta que existan los endpoints
  * reales; el gate de activación (solo dev + `NEXT_PUBLIC_ENABLE_MOCKS`) está en
  * `lib/env.ts#shouldEnableMocks` y se respeta en `app/providers.tsx`.
+ *
+ * Auth (`/v1/auth/*`) también se mockea acá para que el flujo login → dashboard
+ * ande 100% en dev sin backend: el contrato es el REAL (`features/auth/schemas`),
+ * así que cuando se baje MSW el front no cambia.
  */
 
 const apiUrl = (path: string) => `${env.NEXT_PUBLIC_API_URL}${path}`;
+
+/** `TokenOut` fake del dev (parseado por su Zod, igual que el resto de fixtures). */
+const DEV_TOKEN: TokenOutT = TokenOut.parse({
+  access_token: "dev-admin-token",
+  token_type: "bearer",
+  refresh_token: null,
+});
+
+/** `UserOut` fake del operador en dev. `display_name` "Admin Dev". */
+const DEV_ME: MeOutT = MeOut.parse({
+  id: "00000000-0000-0000-0000-000000000001",
+  email: "admin@ynara.app",
+  display_name: "Admin Dev",
+  onboarding_completed: true,
+  retention_sensitive_days: 30,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+});
 
 /** Lee `range` de la URL; cae a `7d` (default del panel) si falta o es inválido. */
 function readRange(url: URL): RangeIdStore {
@@ -66,6 +89,17 @@ function readAuditFilters(url: URL): AuditFilterState {
 }
 
 export const adminHandlers = [
+  // ── Auth (`/v1/auth/*`) ─────────────────────────────────────────────────
+  // POST /v1/auth/token  → TokenOut fake (login acepta cualquier credencial en dev).
+  http.post(apiUrl("/v1/auth/token"), () => HttpResponse.json(DEV_TOKEN)),
+
+  // GET /v1/auth/me  → UserOut fake (identidad del operador en dev).
+  http.get(apiUrl("/v1/auth/me"), () => HttpResponse.json(DEV_ME)),
+
+  // POST /v1/auth/logout  → 204 (best-effort, sin body).
+  http.post(apiUrl("/v1/auth/logout"), () => new HttpResponse(null, { status: 204 })),
+
+  // ── Panel (`/v1/admin/*`) ───────────────────────────────────────────────
   // GET /v1/admin/overview?range=
   http.get(apiUrl("/v1/admin/overview"), ({ request }) => {
     const url = new URL(request.url);
