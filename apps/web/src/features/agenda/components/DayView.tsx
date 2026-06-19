@@ -125,8 +125,8 @@ function DayGrid({ events, day, now, rowPx }: GridProps) {
   // Scroll-to-now: deja la hora actual ~1/3 desde arriba si es hoy; si no, el
   // inicio laboral (8h). No roba foco (scrollTop programático). `focusHour`
   // deriva de `now` (fijada en montaje) → estable, así re-scrollea solo al
-  // navegar de día o cambiar de breakpoint, no en cada render; `nowHour()`
-  // (live) queda para la línea "ahora".
+  // navegar de día (o un refetch que cambie el rango), no en cada render;
+  // `nowHour()` (live) queda para la línea "ahora".
   const scrollRef = useRef<HTMLDivElement>(null);
   const focusHour = isToday ? now.getHours() + now.getMinutes() / 60 : Math.max(minH, 8);
   useEffect(() => {
