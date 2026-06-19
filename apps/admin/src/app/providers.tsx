@@ -1,13 +1,38 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { ApiError } from "@/lib/api";
 import { shouldEnableMocks } from "@/lib/env";
 import { applyA11yClasses, useA11yStore } from "@/stores/a11y";
+import { useAdminStore } from "@/stores/admin";
 import { applyThemeClass, useThemeStore } from "@/stores/theme";
+
+/**
+ * Maneja el 401 global del wire de auth (fase WIRE). Cualquier query del panel
+ * que reciba `401` —token vencido/inválido, o un user logueado que NO es admin
+ * (los `/v1/admin/*` devuelven 401 con detail "credenciales invalidas")—
+ * resetea la sesión admin. El `AuthGuard` del `(panel)/layout.tsx` reacciona al
+ * `token === null` y rebota a `/login`; acá agregamos `?reason=forbidden` para
+ * que el login muestre "Necesitás permisos de admin" (el caso "logueado pero
+ * sin permisos" es distinto del "no logueado").
+ *
+ * Corre solo en el browser (las queries no se ejecutan en el server). El
+ * redirect usa `window.location` porque el `QueryCache` no tiene acceso al
+ * router de Next; es un evento de borde (sesión inválida), no un nav normal.
+ */
+function handleQueryError(error: unknown): void {
+  if (!(error instanceof ApiError) || error.status !== 401) return;
+  if (useAdminStore.getState().token === null) return;
+  useAdminStore.getState().reset();
+  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+    window.location.assign("/login?reason=forbidden");
+  }
+}
 
 function makeQueryClient() {
   return new QueryClient({
+    queryCache: new QueryCache({ onError: handleQueryError }),
     defaultOptions: {
       queries: {
         staleTime: 30 * 1000,

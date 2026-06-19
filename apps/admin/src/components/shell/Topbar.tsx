@@ -2,10 +2,9 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Diamond } from "@/components/ui/Diamond";
 import { YnaraWordmark } from "@/components/ui/YnaraWordmark";
-import { useAdminStore } from "@/stores/admin";
 import { useThemeStore } from "@/stores/theme";
+import { AdminMenu } from "./AdminMenu";
 import { NAV_ITEMS } from "./nav-items";
 import { PerimeterBadge } from "./PerimeterBadge";
 import { RangeSelector } from "./RangeSelector";
@@ -20,6 +19,9 @@ import { ThemeToggle } from "./ThemeToggle";
  *
  * El estado del perímetro es `intact` por default mientras no haya endpoint
  * `/overview` cableado (no se inventa un estado distinto al real verificable).
+ *
+ * La identidad admin es ahora el `AdminMenu` (Diamond + display_name como
+ * disclosure con "Cerrar sesión"); el displayName lo provee el admin store.
  */
 
 /** Deriva el label del breadcrumb desde el pathname y la IA de navegación. */
@@ -45,9 +47,6 @@ export function Topbar() {
   useEffect(() => setMounted(true), []);
   const wordmarkVariant = mounted && dark ? "mono-light" : "color";
 
-  const displayName = useAdminStore((s) => s.displayName);
-  const adminLabel = displayName.trim() || "Admin";
-
   return (
     <header className="sticky top-0 z-[var(--z-topbar)] flex h-16 items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-glass)] px-6 backdrop-blur-md">
       {/* Izquierda: lockup + divider + breadcrumb. */}
@@ -66,11 +65,7 @@ export function Topbar() {
         </span>
         <RangeSelector />
         <ThemeToggle />
-        <span className="flex items-center gap-2 rounded-[var(--radius-pill)] border border-[var(--color-border)] py-1 pl-2 pr-3">
-          <Diamond size={10} color="var(--color-ink-soft)" variant="outline" />
-          <span className="sr-only">Sesión admin: </span>
-          <span className="text-caption text-[var(--color-ink-soft)]">{adminLabel}</span>
-        </span>
+        <AdminMenu />
       </div>
     </header>
   );
