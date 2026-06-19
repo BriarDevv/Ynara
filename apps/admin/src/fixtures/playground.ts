@@ -102,21 +102,57 @@ function approxTokens(text: string): number {
 }
 
 /**
+ * `<think>…</think>` de ejemplo cuando el thinking efectivo está encendido (el
+ * server lo separa del `text` en Fase A). Con thinking apagado el modelo no
+ * expone pensamiento → `null`, y el inspector no pinta el bloque colapsable.
+ */
+function thinkingTextFor(body: PlaygroundInT, thinkingUsed: boolean): string | null {
+  if (!thinkingUsed) return null;
+  return `<think>\nDesglozo el pedido del operador (${body.model}).\nReúno contexto y decido la respuesta más útil sin tools ni memoria (probe crudo).\n</think>`;
+}
+
+/**
  * `POST /v1/admin/playground` — eco determinista: el texto refleja modelo +
  * low_perf, y las métricas (tokens/latencia/thinking) se derivan del body. El
  * delay de "generación" lo agrega el handler MSW, no este fixture.
+ *
+ * Fase A (blueprint §2): además devuelve el `trace` (3 steps coherentes —
+ * request → thinking → completion) y el `thinking` separado (un `<think>` de
+ * ejemplo con thinking on; `null` con thinking off), para que el inspector se
+ * vea en dev sobre los mocks.
  */
 export function playgroundEcho(body: PlaygroundInT): PlaygroundOutT {
   const thinkingUsed = effectiveThinking(body);
   const text = `Echo [${body.model}, low_perf=${body.params.low_perf}, thinking=${thinkingUsed}]: ${body.message}`;
+  const promptTokens = approxTokens(body.message);
+  const completionTokens = approxTokens(text);
+  const latencyMs = 800;
+
   const data: PlaygroundOutT = {
     text,
     finish_reason: "stop",
     model_name: body.model,
-    prompt_tokens: approxTokens(body.message),
-    completion_tokens: approxTokens(text),
-    latency_ms: 800,
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    latency_ms: latencyMs,
     thinking_used: thinkingUsed,
+    thinking: thinkingTextFor(body, thinkingUsed),
+    // Mismo orden y semántica que el server (blueprint §2): metadata pública,
+    // sin secretos (regla #4). El step `request` refleja el preset low_perf.
+    trace: [
+      {
+        name: "request",
+        detail:
+          `${body.model} · max_tokens=${body.params.max_tokens} · temp=${body.params.temperature}` +
+          (body.params.low_perf ? " · preset low_perf" : ""),
+      },
+      { name: "thinking", detail: thinkingUsed ? "on" : "off" },
+      {
+        name: "completion",
+        detail: `stop · ${promptTokens + completionTokens} tok`,
+        duration_ms: latencyMs,
+      },
+    ],
   };
   return PlaygroundOut.parse(data);
 }

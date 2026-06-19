@@ -125,8 +125,28 @@ class PlaygroundIn(YnaraBaseModel):
     thinking: bool | None = None
 
 
+class TraceStep(YnaraBaseModel):
+    """Un paso observable del lifecycle de la completion (Fase A, trace del playground).
+
+    NO lleva payloads sensibles: ni el body crudo del request al serving, ni
+    ``base_url``/connection strings, ni el system prompt, ni ``str(exc)`` (regla #4).
+    Solo metadata derivada de params públicos + el ``CompletionResult``.
+    """
+
+    name: str  # "request" | "thinking" | "completion"
+    detail: str  # texto humano: "qwen · max_tokens=256 · temp=0.2"
+    duration_ms: float | None = None  # hoy solo el step "completion" lo trae
+
+
 class PlaygroundOut(YnaraBaseModel):
-    """Respuesta del playground: el ``CompletionResult`` crudo + el thinking efectivo."""
+    """Respuesta del playground: el ``CompletionResult`` crudo + el thinking efectivo.
+
+    Fase A (trace del playground, aditivo, ADR-018): ``text`` viaja **limpio** (sin el
+    bloque ``<think>...</think>``), el razonamiento crudo va aparte en ``thinking``
+    (``None`` si el modelo no emitió uno) y ``trace`` lleva los pasos observables del
+    lifecycle (request/thinking/completion). Sigue siendo un ``complete()`` directo
+    (sin tool-loop): el thinking es el del mismo probe crudo.
+    """
 
     text: str
     finish_reason: str
@@ -135,3 +155,6 @@ class PlaygroundOut(YnaraBaseModel):
     completion_tokens: int
     latency_ms: float
     thinking_used: bool  # el thinking efectivo aplicado (para mostrar en UI)
+    # --- Fase A: trace + thinking separado ---
+    thinking: str | None = None  # el <think>...</think> separado de text, o None
+    trace: list[TraceStep] = Field(default_factory=list)

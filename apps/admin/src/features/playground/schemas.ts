@@ -75,6 +75,23 @@ export const PlaygroundIn = z.object({
 });
 export type PlaygroundInT = z.infer<typeof PlaygroundIn>;
 
+/**
+ * Un paso observable del lifecycle de la completion (Fase A del inspector,
+ * blueprint §2). Espejo del `TraceStep` Pydantic: solo metadata derivada del
+ * `CompletionResult`, NUNCA payloads sensibles (`base_url`, system prompt
+ * completo ni `str(exc)`), regla #4.
+ *
+ *  - `name`: id del nodo (`"request" | "thinking" | "completion"`).
+ *  - `detail`: texto humano ya armado en el server (`"qwen · max_tokens=256"`).
+ *  - `duration_ms`: solo el step `completion` lo trae hoy; el resto es `null`.
+ */
+export const TraceStep = z.object({
+  name: z.string(),
+  detail: z.string(),
+  duration_ms: z.number().nullable().optional(),
+});
+export type TraceStepT = z.infer<typeof TraceStep>;
+
 /** Respuesta del turno (sync). Métricas con `tabular-nums` en la UI. */
 export const PlaygroundOut = z.object({
   text: z.string(),
@@ -85,5 +102,17 @@ export const PlaygroundOut = z.object({
   latency_ms: z.number(),
   /** El thinking efectivo aplicado (para mostrar en UI). */
   thinking_used: z.boolean(),
+  /**
+   * El `<think>…</think>` separado del `text` (Fase A). `null`/ausente cuando el
+   * modelo no expuso pensamiento o el thinking estuvo apagado. Si `thinking_used`
+   * es `true` pero esto viene `null`, el inspector muestra "aplicado, no expuesto".
+   */
+  thinking: z.string().nullable().optional(),
+  /**
+   * Timeline de pasos del request (Fase A). Vacío en respuestas legacy sin
+   * inspector; el `.default([])` lo normaliza para que el front nunca lea
+   * `undefined`.
+   */
+  trace: z.array(TraceStep).default([]),
 });
 export type PlaygroundOutT = z.infer<typeof PlaygroundOut>;
