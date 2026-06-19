@@ -59,6 +59,7 @@ export function ChatHeader({ mode }: { mode: ModeId }) {
         onClose={() => setSwitcherOpen(false)}
         current={mode}
         onAfterPick={onAfterPick}
+        note="Cambiar de modo arranca una conversación nueva. Esta queda guardada."
       />
     </header>
   );
