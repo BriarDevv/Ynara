@@ -30,9 +30,10 @@ type Props<T extends string> = {
  * contenido pero nunca excede al padre; cuando los chips no entran (mobile)
  * scrollea en X en vez de clippear. Los chips son `shrink-0` y el wrapper
  * externo `min-w-0` para achicarse en filas flex. La affordance es el peek del
- * chip cortado + el scrollbar nativo (no hay utility `scrollbar-none` en el
- * repo); el `focus()` de la navegación por flechas auto-scrollea el chip a la
- * vista. El overflow clippea el `box-shadow` del chip seleccionado en los
+ * chip cortado + el scrollbar nativo: a propósito NO usamos `scrollbar-none`
+ * acá (existe en globals, la usa EmptyConversation) para conservar la pista
+ * visual del scroll. El `focus()` de la navegación por flechas auto-scrollea el
+ * chip a la vista. El overflow clippea el `box-shadow` del chip seleccionado en los
  * lados, pero es imperceptible por el alpha bajo de `--shadow-soft` + el `p-1`.
  *
  * Referencia: https://www.w3.org/WAI/ARIA/apd/patterns/radio/
