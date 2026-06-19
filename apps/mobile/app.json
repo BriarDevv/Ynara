@@ -45,7 +45,11 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {},
+      "eas": {
+        "projectId": "c2172aac-b98c-4fa7-bf6d-4abb3bf9365c"
+      }
+    },
+    "owner": "querques20"
   }
 }
