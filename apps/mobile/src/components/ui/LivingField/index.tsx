@@ -8,18 +8,16 @@ import {
   seedField,
   VARIANTS,
 } from "@ynara/core/features/field";
-import type { Mode } from "@ynara/shared-schemas";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useWindowDimensions, View } from "react-native";
 import { useDerivedValue, useFrameCallback, useSharedValue } from "react-native-reanimated";
 import { useActiveMode } from "@/hooks/useActiveMode";
+import { useFieldActive } from "@/hooks/useFieldActive";
 
 type Variant = "network" | "aurora" | "constellation" | "paper" | "depth";
 
 type Props = {
   variant: Variant;
-  /** Modo que tiñe el clima; default = modo activo global. */
-  modeId?: Mode;
 };
 
 const LINK2 = FIELD.LINK * FIELD.LINK;
@@ -47,14 +45,13 @@ function mulberry32(seed: number): () => number {
  * (Memoria) está implementada; el resto devuelve null hasta extender.
  *
  * La animación corre en el hilo de UI: `useFrameCallback` avanza el reloj `t` y
- * `useDelivedValue` redibuja el `SkPicture` por frame. Las fórmulas de evolución
+ * `useDerivedValue` redibuja el `SkPicture` por frame. Las fórmulas de evolución
  * (deriva, titileo, respiración, blooms, hilos) van inline en el worklet — son
  * espejo EXACTO de `model.ts`; no se importan porque las funciones de core no
  * están marcadas `"worklet"` y reanimated no puede llamarlas en el UI thread.
  */
-export function LivingField({ variant, modeId }: Props) {
-  const activeMode = useActiveMode();
-  const mode = modeId ?? activeMode;
+export function LivingField({ variant }: Props) {
+  const mode = useActiveMode();
   const { width: w, height: h } = useWindowDimensions();
   const cfg = VARIANTS[variant];
   const climate = MODE_CLIMATE[mode];
@@ -81,12 +78,19 @@ export function LivingField({ variant, modeId }: Props) {
   }, []);
   const recorder = useMemo(() => Skia.PictureRecorder(), []);
 
+  const animate = useFieldActive();
   const t = useSharedValue(0);
-  useFrameCallback((info) => {
+  // El callback corre en el hilo de UI; se prende/apaga con setActive (el worklet
+  // captura `animate` por copia, así que un closure no reaccionaría a los cambios
+  // de reduce-motion / foco). Al frenar, el reloj deja de avanzar → frame estático.
+  const frame = useFrameCallback((info) => {
     "worklet";
     const dt = Math.min(3, (info.timeSincePreviousFrame ?? 16.67) / 16.67);
     t.value += T_STEP * dt;
-  }, true);
+  }, false);
+  useEffect(() => {
+    frame.setActive(animate);
+  }, [animate, frame]);
 
   const picture = useDerivedValue<SkPicture>(() => {
     "worklet";
