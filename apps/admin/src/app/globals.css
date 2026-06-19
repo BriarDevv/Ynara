@@ -1,0 +1,271 @@
+@import "tailwindcss";
+@import "../styles/motion.css";
+
+/* Escanear los componentes compartidos del monorepo */
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";
+
+:root {
+  /* ---- Superficies (tema claro / marfil, DEFAULT) ---- */
+  --color-bg-canvas: #faf9f5;
+  --color-bg: #ffffff;
+  --color-bg-soft: #f3f0ea;
+  --color-glass: color-mix(in srgb, var(--color-bg) 88%, transparent);
+
+  /* ---- Texto (ink) ---- */
+  --color-ink-deep: #1b2233;
+  --color-ink: #242c3f;
+  --color-ink-soft: rgb(36 44 63 / 0.70);
+  --color-ink-muted: rgb(36 44 63 / 0.45);  /* SOLO iconos aria-hidden */
+  --color-ink-faint: rgb(36 44 63 / 0.18);
+  --color-on-dark: #ffffff;
+
+  /* ---- Bordes ---- */
+  --color-border: rgb(36 44 63 / 0.12);
+  --color-border-strong: rgb(36 44 63 / 0.22);
+
+  /* ---- Azul de marca / CTA / acento ---- */
+  --color-blue-flat: #2f5aa6;
+  --color-blue-flat-hover: #26498a;
+  --color-blue-flat-active: #1f3c75;
+  --color-accent: var(--color-blue-flat);
+  --color-selected-ring: var(--color-blue-flat);
+  --color-violet-glow: rgb(129 101 163 / 0.18);
+
+  /* ---- Paleta oficial 2026 (9 stops + lavanda-deep) ---- */
+  --color-azul: #2f5aa6;
+  --color-indigo: #434a82;
+  --color-violaceo: #5c6fb3;
+  --color-violeta: #8165a3;
+  --color-celeste: #6e92cc;
+  --color-lavanda: #8b9ad0;
+  --color-lavanda-deep: #565f81;
+  --color-noche: #242c3f;
+  --color-marfil: #f3f0ea;
+
+  /* ---- Tints por modo (ambiente, plano baja opacidad) ---- */
+  --mode-productividad: var(--color-azul);
+  --mode-estudio: var(--color-indigo);
+  --mode-bienestar: var(--color-violeta);
+  --mode-vida: var(--color-violaceo);
+  --mode-memoria: var(--color-lavanda);
+  /* ---- Fills por modo (texto blanco encima, AA >= 4.5:1) ---- */
+  --mode-productividad-fill: var(--color-azul);
+  --mode-estudio-fill: var(--color-indigo);
+  --mode-bienestar-fill: var(--color-violeta);
+  --mode-vida-fill: var(--color-violaceo);
+  --mode-memoria-fill: var(--color-lavanda-deep);
+  /* Derivado: color de "modo memoria" theme-aware (texto) */
+  --color-memory: var(--color-lavanda-deep);
+
+  /* ---- Capas del moat (alias semánticos sobre tints, para charts de capa) ---- */
+  --layer-semantic: var(--color-azul);
+  --layer-episodic: var(--color-violaceo);
+  --layer-procedural: var(--color-lavanda-deep);
+
+  /* ---- Semánticos ---- */
+  --color-error: #c0392b;
+  --color-error-soft: rgb(192 57 43 / 0.12);
+  --color-overlay: rgb(36 44 63 / 0.40);
+  /* NO hay success/warn/info token. OK = azul plano (decisión de marca). */
+
+  /* ---- Escala de intensidad heatmap (opacidad plana de azul) ---- */
+  --heat-0: var(--color-bg-soft);
+  --heat-1: color-mix(in srgb, var(--color-azul) 18%, transparent);
+  --heat-2: color-mix(in srgb, var(--color-azul) 38%, transparent);
+  --heat-3: color-mix(in srgb, var(--color-azul) 62%, transparent);
+  --heat-4: color-mix(in srgb, var(--color-azul) 85%, transparent);
+  --heat-5: var(--color-azul);
+
+  /* ---- Gradientes utilitarios (uso restringido por gradient-guard) ---- */
+  --gradient-blue-base: linear-gradient(135deg, var(--color-azul), var(--color-celeste));
+  --gradient-blue-relief: linear-gradient(135deg, var(--color-celeste), var(--color-lavanda));
+
+  /* ---- Radius ---- */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-pill: 9999px;
+
+  /* ---- Z-index (admin SÍ tokeniza; web solo tenía literales) ---- */
+  --z-field: -10;     /* LivingField */
+  --z-base: 0;
+  --z-sticky: 30;     /* filtros sticky bajo topbar */
+  --z-sidebar: 40;
+  --z-topbar: 50;
+  --z-toast: 60;
+
+  /* ---- Motion ---- */
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 300ms;
+  --duration-screen: 350ms;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --orb-beat: 4200ms;
+
+  /* ---- Medida ---- */
+  --measure-prose: 60ch;
+  --admin-col: 1100px;     /* columna editorial B */
+  --admin-main: 1440px;    /* max-w del MAIN A */
+}
+
+/* ---- Fuentes (fallback chain; vars inyectadas por next/font en <html>) ---- */
+@theme inline {
+  --font-display: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  --font-body: var(--font-body), "DM Sans", system-ui, sans-serif;
+
+  /* Re-exponer tokens como utilities (bg-bg, text-ink, etc.) */
+  --color-bg-canvas: var(--color-bg-canvas);
+  --color-bg: var(--color-bg);
+  --color-bg-soft: var(--color-bg-soft);
+  --color-glass: var(--color-glass);
+  --color-ink-deep: var(--color-ink-deep);
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-ink-faint: var(--color-ink-faint);
+  --color-on-dark: var(--color-on-dark);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --color-blue-flat: var(--color-blue-flat);
+  --color-accent: var(--color-accent);
+  --color-selected-ring: var(--color-selected-ring);
+  --color-azul: var(--color-azul);
+  --color-indigo: var(--color-indigo);
+  --color-violaceo: var(--color-violaceo);
+  --color-violeta: var(--color-violeta);
+  --color-celeste: var(--color-celeste);
+  --color-lavanda: var(--color-lavanda);
+  --color-lavanda-deep: var(--color-lavanda-deep);
+  --color-noche: var(--color-noche);
+  --color-marfil: var(--color-marfil);
+  --color-memory: var(--color-memory);
+  --color-error: var(--color-error);
+  --color-error-soft: var(--color-error-soft);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-pill: var(--radius-pill);
+}
+
+/* ---- Tema Noche (re-declara SOLO color/shadow afectados; NO segundo @theme) ---- */
+html.theme-dark {
+  --color-bg-canvas: #242c3f;
+  --color-bg: #2b3346;
+  --color-bg-soft: #313a52;
+  --color-ink-deep: #ffffff;
+  --color-ink: #f3f0ea;
+  --color-ink-soft: rgb(243 240 234 / 0.65);
+  --color-ink-muted: rgb(243 240 234 / 0.45);
+  --color-ink-faint: rgb(243 240 234 / 0.18);
+  --color-border: rgb(243 240 234 / 0.10);
+  --color-border-strong: rgb(243 240 234 / 0.18);
+  --color-selected-ring: var(--color-celeste);
+  --color-memory: var(--color-lavanda); /* texto de modo claro sobre oscuro */
+  --layer-procedural: var(--color-lavanda);
+  --heat-0: var(--color-bg-soft);
+}
+
+/* ---- Alto contraste ---- */
+html.theme-high-contrast {
+  --color-ink-soft: rgb(36 44 63 / 0.85);
+  --color-ink-muted: rgb(36 44 63 / 0.65);
+  --color-border: rgb(36 44 63 / 0.25);
+  --color-border-strong: rgb(36 44 63 / 0.45);
+}
+html.theme-dark.theme-high-contrast {
+  --color-ink-soft: rgb(243 240 234 / 0.85);
+  --color-ink-muted: rgb(243 240 234 / 0.65);
+  --color-border: rgb(243 240 234 / 0.25);
+  --color-border-strong: rgb(243 240 234 / 0.45);
+}
+
+/* ---- Escala de tamaño de texto (a11y) ---- */
+html { font-size: 16px; }
+html.text-size-sm { font-size: 15px; }
+html.text-size-lg { font-size: 18px; }
+
+@layer utilities {
+  /* Tipografía editorial */
+  .text-display { font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(2.625rem, 2rem + 3.125vw, 3.5rem); line-height: 1.04; letter-spacing: -0.04em; }
+  .text-hero { font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(2.25rem, 1.5rem + 3.75vw, 3rem); line-height: 1.08; letter-spacing: -0.04em; }
+  .text-title { font-family: var(--font-display); font-weight: 600;
+    font-size: clamp(2rem, 1.6rem + 2vw, 2.5rem); line-height: 1.04; letter-spacing: -0.025em; }
+  .text-subtitle { font-family: var(--font-display); font-weight: 500;
+    font-size: 1.375rem; line-height: 1.75rem; letter-spacing: -0.018em; }
+  .text-body { font-family: var(--font-body); font-weight: 400;
+    font-size: 1rem; line-height: 1.5rem; letter-spacing: -0.006em; }
+  .text-body-sm { font-family: var(--font-body); font-weight: 400;
+    font-size: 0.875rem; line-height: 1.25rem; letter-spacing: -0.003em; }
+  .text-caption { font-family: var(--font-body); font-weight: 500;
+    font-size: 0.75rem; line-height: 1rem; letter-spacing: 0.06em; text-transform: uppercase; }
+  .text-button { font-family: var(--font-body); font-weight: 500;
+    font-size: 1rem; line-height: 1.25rem; letter-spacing: -0.006em; }
+
+  /* Sombras */
+  .shadow-soft { box-shadow: 0 1px 2px rgb(36 44 63 / 0.06), 0 4px 12px rgb(36 44 63 / 0.04); }
+  .shadow-lifted { box-shadow: 0 8px 24px rgb(36 44 63 / 0.08), 0 24px 48px rgb(36 44 63 / 0.06); }
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+
+  /* Grano del fondo vivo (DESIGN.md §3.6): ruido fractal monocromo en
+     soft-light. Capa estática (la deriva la pone el canvas de LivingField);
+     la opacidad la fija cada variante del campo inline. */
+  .field-grain {
+    pointer-events: none;
+    mix-blend-mode: soft-light;
+    background-size: 170px 170px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  }
+}
+html.theme-dark .shadow-soft { box-shadow: 0 1px 2px rgb(0 0 0 / 0.2), 0 4px 12px rgb(0 0 0 / 0.16); }
+html.theme-dark .shadow-lifted { box-shadow: 0 8px 24px rgb(0 0 0 / 0.28), 0 24px 48px rgb(0 0 0 / 0.2); }
+
+/* ---- Focus ring global ---- */
+:focus-visible {
+  outline: 2px solid transparent; outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Reduced transparency ---- */
+@media (prefers-reduced-transparency: reduce) {
+  :root { --color-glass: var(--color-bg); }
+  .field-atmosphere { opacity: 0.08 !important; }
+}
+
+/* ---- Reduced motion (OS-pref con override del store de a11y) ---- */
+@media (prefers-reduced-motion: reduce) {
+  html:not(.motion-on) *,
+  html:not(.motion-on) *::before,
+  html:not(.motion-on) *::after {
+    animation-duration: 0.001ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.001ms;
+    scroll-behavior: auto;
+  }
+}
+
+html.motion-off *,
+html.motion-off *::before,
+html.motion-off *::after {
+  animation-duration: 0.001ms;
+  animation-iteration-count: 1;
+  transition-duration: 0.001ms;
+  scroll-behavior: auto;
+}
+
+/* ---- View Transitions (crossfade de pantalla) ---- */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--duration-screen, 350ms);
+  animation-timing-function: var(--ease-out-soft, ease-out);
+}
+
+body { background: var(--color-bg-canvas); color: var(--color-ink);
+  font-family: var(--font-body); }
