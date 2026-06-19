@@ -35,8 +35,9 @@ Acá vive el "porqué" detrás de las decisiones técnicas del proyecto.
 | 016 | Código compartido web/mobile vía packages/core (ex-ADR-012) | Aceptado |
 | 017 | App de administración interna (apps/admin): observabilidad y control plane | Aceptado |
 | 018 | Playground de modelos en el panel admin (control plane, fase 1) | Aceptado |
+| 019 | Playground agente observado (tool-loop sin efectos) — refina ADR-018 | Aceptado |
 
-> Hay 18 ADRs lógicos (ADR-001..018, sin huecos): el ADR-016 era un
+> Hay 19 ADRs lógicos (ADR-001..019, sin huecos): el ADR-016 era un
 > segundo ADR-012 duplicado y se renumeró para garantizar números únicos.
 
 ## Cómo crear un ADR nuevo
