@@ -44,6 +44,24 @@ export const AgendaEventSchema = z.object({
   status: EventStatusSchema,
   /** Nota o lugar opcional (subtítulo del bloque). `null` si no tiene. */
   location: z.string().nullable(),
+  // ── Calendario v2 (ADR-018) — campos opcionales, back-compat con el mock ────
+  /**
+   * Huso IANA del wall-clock del evento (ej. `"America/Argentina/Buenos_Aires"`).
+   * `null`/ausente = hora local del cliente. **Requerido** en eventos con
+   * `recurrence` para que un recurrente no se corra en los cambios de DST.
+   */
+  time_zone: z.string().nullable().optional(),
+  /** Día completo (fecha sin hora): `start_at` se interpreta como fecha. Ausente/`false` = evento con hora. */
+  all_day: z.boolean().optional(),
+  /**
+   * Recurrencia: líneas RFC 5545 (`RRULE`/`RDATE`/`EXDATE`). `null`/ausente =
+   * evento único. La expansión a instancias vive en `@ynara/core` (engine
+   * `rrule-temporal`, pendiente de aprobación de dep — ADR-018).
+   */
+  recurrence: z.array(z.string()).nullable().optional(),
+  // Overrides de instancias ("solo este" de una serie: `recurrence_id` +
+  // `original_start`) se agregan cuando se construya la edición de recurrentes;
+  // hoy no tienen consumidor (ADR-018).
 });
 export type AgendaEvent = z.infer<typeof AgendaEventSchema>;
 
@@ -65,6 +83,9 @@ export const EventCreateSchema = z.object({
   duration_min: z.number().int().positive(),
   mode: ModeSchema.nullable().optional(),
   location: z.string().nullable().optional(),
+  time_zone: z.string().nullable().optional(),
+  all_day: z.boolean().optional(),
+  recurrence: z.array(z.string()).nullable().optional(),
 });
 export type EventCreate = z.infer<typeof EventCreateSchema>;
 
@@ -79,5 +100,8 @@ export const EventPatchSchema = z.object({
   mode: ModeSchema.nullable().optional(),
   status: EventStatusSchema.optional(),
   location: z.string().nullable().optional(),
+  time_zone: z.string().nullable().optional(),
+  all_day: z.boolean().optional(),
+  recurrence: z.array(z.string()).nullable().optional(),
 });
 export type EventPatch = z.infer<typeof EventPatchSchema>;
