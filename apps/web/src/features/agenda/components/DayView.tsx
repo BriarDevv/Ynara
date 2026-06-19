@@ -1,9 +1,18 @@
+import { type ColumnPlacement, layoutColumns } from "@ynara/core/features/agenda";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { MODE_BY_ID } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
 import type { AgendaEvent } from "../api";
-import { eventsForDay, gridHeight, gridTop, isInRange, nowHour } from "../format";
-import { isSameDay } from "../labels";
+import {
+  eventsForDay,
+  formatEventRange,
+  gridHeight,
+  gridTop,
+  isInRange,
+  nowHour,
+  toLayoutInterval,
+} from "../format";
+import { formatDayLong, isSameDay } from "../labels";
 
 // ── Constantes de la grilla ─────────────────────────────────────────────────
 const H0 = 8; // primera hora visible
@@ -24,16 +33,23 @@ type Props = {
 type EventBlockProps = {
   event: AgendaEvent;
   rowPx: number;
+  /** Columna asignada por el algoritmo de solapamiento (lado-a-lado). */
+  placement: ColumnPlacement;
 };
 
 /** Bloque de evento posicionado absolute dentro de la grilla. */
-function GridEventBlock({ event, rowPx }: EventBlockProps) {
+function GridEventBlock({ event, rowPx, placement }: EventBlockProps) {
   const tintVar = event.mode ? MODE_BY_ID[event.mode].tintVar : "var(--color-border-strong)";
   const cancelled = event.status === "cancelled";
   const tentative = event.status === "tentative";
 
   const top = gridTop(event, H0, rowPx);
   const height = gridHeight(event, rowPx, rowPx * 0.4);
+
+  // Ancho/posición horizontal según la columna del cluster (2px de gap a cada
+  // lado). Un evento sin solapes ocupa el ancho completo (cols = 1).
+  const widthPct = 100 / placement.cols;
+  const leftPct = placement.col * widthPct;
 
   const start = new Date(event.start_at);
   const end = new Date(start.getTime() + event.duration_min * 60_000);
@@ -43,13 +59,15 @@ function GridEventBlock({ event, rowPx }: EventBlockProps) {
   return (
     <article
       className={cn(
-        "absolute inset-x-1 flex gap-2 overflow-hidden rounded-[var(--radius-md)] px-2 py-1",
+        "absolute flex gap-2 overflow-hidden rounded-[var(--radius-md)] px-2 py-1",
         tentative ? "border border-dashed border-[var(--color-border-strong)]" : "",
         cancelled && "opacity-50",
       )}
       style={{
         top,
         height,
+        left: `calc(${leftPct}% + 2px)`,
+        width: `calc(${widthPct}% - 4px)`,
         backgroundColor: `color-mix(in srgb, ${tintVar} 15%, var(--color-bg))`,
       }}
     >
@@ -93,6 +111,8 @@ function DayGrid({ events, day, now, rowPx }: GridProps) {
 
   const totalHeight = (H1 - H0) * rowPx;
   const visibleEvents = events.filter((e) => isInRange(e, H0, H1));
+  // Columnas para los solapados: el algoritmo puro de core devuelve {col, cols}.
+  const placements = layoutColumns(visibleEvents.map(toLayoutInterval));
 
   return (
     <div className="relative" style={{ paddingLeft: LEFT_GUTTER, height: totalHeight }}>
@@ -116,7 +136,12 @@ function DayGrid({ events, day, now, rowPx }: GridProps) {
       {/* Columna de eventos (relative para los bloques absolute) */}
       <div className="absolute inset-0" style={{ left: LEFT_GUTTER }}>
         {visibleEvents.map((event) => (
-          <GridEventBlock key={event.id} event={event} rowPx={rowPx} />
+          <GridEventBlock
+            key={event.id}
+            event={event}
+            rowPx={rowPx}
+            placement={placements.get(event.id) ?? { col: 0, cols: 1 }}
+          />
         ))}
 
         {/* Línea "ahora" */}
@@ -156,15 +181,38 @@ export function DayView({ events, day, now }: Props) {
   }
 
   return (
-    <div className="relative overflow-x-hidden">
-      {/* Mobile */}
-      <div className="md:hidden">
-        <DayGrid events={dayEvents} day={day} now={now} rowPx={ROW_MOBILE} />
+    <>
+      {/* Alternativa accesible: la grilla visual es aria-hidden (representación
+          espacial que no linealiza); este resumen sr-only expone los mismos
+          eventos del día a lectores de pantalla, uno por ítem de lista. Itera
+          `dayEvents` (TODOS los del día, sin el recorte horario de la ventana
+          08–20h que aplica el grid sobre `visibleEvents`): cero pérdida para
+          lectores de pantalla. Mismo patrón que WeekView. */}
+      <ul className="sr-only" aria-label={`Eventos de ${formatDayLong(day)}`}>
+        {dayEvents.length === 0 ? (
+          <li>Sin eventos</li>
+        ) : (
+          dayEvents.map((event) => (
+            <li key={event.id}>
+              {event.title}, {formatEventRange(event)}
+              {event.mode ? `, modo ${MODE_BY_ID[event.mode].label}` : ""}
+              {event.location ? `, en ${event.location}` : ""}
+              {event.status === "cancelled" ? ", cancelado" : ""}
+            </li>
+          ))
+        )}
+      </ul>
+
+      <div className="relative overflow-x-hidden" aria-hidden>
+        {/* Mobile */}
+        <div className="md:hidden">
+          <DayGrid events={dayEvents} day={day} now={now} rowPx={ROW_MOBILE} />
+        </div>
+        {/* Desktop */}
+        <div className="hidden md:block">
+          <DayGrid events={dayEvents} day={day} now={now} rowPx={ROW_DESKTOP} />
+        </div>
       </div>
-      {/* Desktop */}
-      <div className="hidden md:block">
-        <DayGrid events={dayEvents} day={day} now={now} rowPx={ROW_DESKTOP} />
-      </div>
-    </div>
+    </>
   );
 }
