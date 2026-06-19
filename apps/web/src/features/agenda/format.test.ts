@@ -7,6 +7,7 @@ import {
   formatTime,
   gridHeight,
   gridTop,
+  hourBounds,
   isInRange,
   isOnDay,
   nowHour,
@@ -146,5 +147,53 @@ describe("nowHour", () => {
     const h = nowHour();
     expect(h).toBeGreaterThanOrEqual(0);
     expect(h).toBeLessThan(24);
+  });
+});
+
+describe("hourBounds", () => {
+  const day = new Date(2026, 4, 7, 0, 0);
+
+  it("sin eventos devuelve la ventana base 8–20h", () => {
+    expect(hourBounds([], [day])).toEqual({ minH: 8, maxH: 20 });
+  });
+
+  it("eventos dentro de 8–20h no cambian la ventana", () => {
+    const ev = makeEvent({ start_at: localISO(2026, 4, 7, 9, 0), duration_min: 60 });
+    expect(hourBounds([ev], [day])).toEqual({ minH: 8, maxH: 20 });
+  });
+
+  it("un evento de madrugada baja minH (floor)", () => {
+    const ev = makeEvent({ start_at: localISO(2026, 4, 7, 6, 30), duration_min: 30 });
+    expect(hourBounds([ev], [day])).toEqual({ minH: 6, maxH: 20 });
+  });
+
+  it("un evento de noche sube maxH (ceil)", () => {
+    const ev = makeEvent({ start_at: localISO(2026, 4, 7, 21, 0), duration_min: 90 });
+    expect(hourBounds([ev], [day])).toEqual({ minH: 8, maxH: 23 });
+  });
+
+  it("clampea a [0, 24]", () => {
+    const madrugada = makeEvent({ start_at: localISO(2026, 4, 7, 0, 0), duration_min: 30 });
+    const trasnoche = makeEvent({
+      id: "0193d001-0000-4000-8000-0000000000a2",
+      start_at: localISO(2026, 4, 7, 23, 30),
+      duration_min: 30,
+    });
+    expect(hourBounds([madrugada, trasnoche], [day])).toEqual({ minH: 0, maxH: 24 });
+  });
+
+  it("sobre varios días toma la unión (caso semana)", () => {
+    const lunesTemprano = makeEvent({ start_at: localISO(2026, 4, 4, 7, 0), duration_min: 30 });
+    const martesTarde = makeEvent({
+      id: "0193d001-0000-4000-8000-0000000000a3",
+      start_at: localISO(2026, 4, 5, 21, 0),
+      duration_min: 60,
+    });
+    const days = [new Date(2026, 4, 4), new Date(2026, 4, 5)];
+    expect(hourBounds([lunesTemprano, martesTarde], days)).toEqual({ minH: 7, maxH: 22 });
+  });
+
+  it("respeta una ventana base custom", () => {
+    expect(hourBounds([], [day], 0, 24)).toEqual({ minH: 0, maxH: 24 });
   });
 });

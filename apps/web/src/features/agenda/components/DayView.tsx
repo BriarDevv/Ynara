@@ -8,19 +8,17 @@ import {
   formatEventRange,
   gridHeight,
   gridTop,
-  isInRange,
+  hourBounds,
   nowHour,
   toLayoutInterval,
 } from "../format";
 import { formatDayLong, isSameDay } from "../labels";
 
 // ── Constantes de la grilla ─────────────────────────────────────────────────
-const H0 = 8; // primera hora visible
-const H1 = 20; // última hora visible
+// La ventana horaria sale de `hourBounds` (base 8–20h, auto-fit a los eventos).
 const ROW_DESKTOP = 52; // px por hora en desktop
 const ROW_MOBILE = 36; // px por hora en mobile (< md)
 const LEFT_GUTTER = 40; // ancho de la columna de horas (px)
-const HOURS = Array.from({ length: H1 - H0 + 1 }, (_, i) => H0 + i);
 
 type Props = {
   events: AgendaEvent[];
@@ -33,17 +31,19 @@ type Props = {
 type EventBlockProps = {
   event: AgendaEvent;
   rowPx: number;
+  /** Primera hora visible de la grilla (origen del posicionado). */
+  minH: number;
   /** Columna asignada por el algoritmo de solapamiento (lado-a-lado). */
   placement: ColumnPlacement;
 };
 
 /** Bloque de evento posicionado absolute dentro de la grilla. */
-function GridEventBlock({ event, rowPx, placement }: EventBlockProps) {
+function GridEventBlock({ event, rowPx, minH, placement }: EventBlockProps) {
   const tintVar = event.mode ? MODE_BY_ID[event.mode].tintVar : "var(--color-border-strong)";
   const cancelled = event.status === "cancelled";
   const tentative = event.status === "tentative";
 
-  const top = gridTop(event, H0, rowPx);
+  const top = gridTop(event, minH, rowPx);
   const height = gridHeight(event, rowPx, rowPx * 0.4);
 
   // Ancho/posición horizontal según la columna del cluster (2px de gap a cada
@@ -97,6 +97,7 @@ function GridEventBlock({ event, rowPx, placement }: EventBlockProps) {
 }
 
 type GridProps = {
+  /** Eventos YA filtrados al día (vienen de `eventsForDay` en `DayView`). */
   events: AgendaEvent[];
   day: Date;
   now: Date;
@@ -104,25 +105,29 @@ type GridProps = {
 };
 
 function DayGrid({ events, day, now, rowPx }: GridProps) {
+  // Ventana horaria auto-fit: base 8–20h expandida a los eventos del día (cero
+  // recorte). Antes era fija 8–20h y clipeaba los de madrugada/noche.
+  const { minH, maxH } = hourBounds(events, [day]);
+  const hours = Array.from({ length: maxH - minH + 1 }, (_, i) => minH + i);
+
   const nh = nowHour();
   const isToday = isSameDay(day, now);
-  const showNowLine = isToday && nh >= H0 && nh <= H1;
-  const nowTop = (nh - H0) * rowPx;
+  const showNowLine = isToday && nh >= minH && nh <= maxH;
+  const nowTop = (nh - minH) * rowPx;
 
-  const totalHeight = (H1 - H0) * rowPx;
-  const visibleEvents = events.filter((e) => isInRange(e, H0, H1));
+  const totalHeight = (maxH - minH) * rowPx;
   // Columnas para los solapados: el algoritmo puro de core devuelve {col, cols}.
-  const placements = layoutColumns(visibleEvents.map(toLayoutInterval));
+  const placements = layoutColumns(events.map(toLayoutInterval));
 
   return (
     <div className="relative" style={{ paddingLeft: LEFT_GUTTER, height: totalHeight }}>
       {/* Líneas horizontales + etiquetas de hora */}
-      {HOURS.map((h) => (
+      {hours.map((h) => (
         <div
           key={h}
           aria-hidden
           className="pointer-events-none absolute inset-x-0"
-          style={{ top: (h - H0) * rowPx }}
+          style={{ top: (h - minH) * rowPx }}
         >
           {/* Etiqueta de hora */}
           <span className="absolute right-full top-[-7px] w-8 pr-2 text-right text-[12px] font-semibold leading-none tabular-nums text-[var(--color-ink-soft)]">
@@ -135,11 +140,12 @@ function DayGrid({ events, day, now, rowPx }: GridProps) {
 
       {/* Columna de eventos (relative para los bloques absolute) */}
       <div className="absolute inset-0" style={{ left: LEFT_GUTTER }}>
-        {visibleEvents.map((event) => (
+        {events.map((event) => (
           <GridEventBlock
             key={event.id}
             event={event}
             rowPx={rowPx}
+            minH={minH}
             placement={placements.get(event.id) ?? { col: 0, cols: 1 }}
           />
         ))}
@@ -169,9 +175,10 @@ function DayGrid({ events, day, now, rowPx }: GridProps) {
 }
 
 /**
- * Vista **día** — grilla horaria 08–20h con eventos posicionados `absolute`,
- * teñidos por modo, y línea "ahora" si el día es hoy. Responsive: 52 px/hora
- * en desktop, 36 px/hora en mobile.
+ * Vista **día** — grilla horaria con eventos posicionados `absolute`, teñidos
+ * por modo, y línea "ahora" si el día es hoy. La ventana horaria es auto-fit
+ * (base 8–20h, se expande para incluir eventos fuera de ese rango — cero
+ * recorte). Responsive: 52 px/hora en desktop, 36 px/hora en mobile.
  */
 export function DayView({ events, day, now }: Props) {
   const dayEvents = eventsForDay(events, day);
@@ -184,10 +191,8 @@ export function DayView({ events, day, now }: Props) {
     <>
       {/* Alternativa accesible: la grilla visual es aria-hidden (representación
           espacial que no linealiza); este resumen sr-only expone los mismos
-          eventos del día a lectores de pantalla, uno por ítem de lista. Itera
-          `dayEvents` (TODOS los del día, sin el recorte horario de la ventana
-          08–20h que aplica el grid sobre `visibleEvents`): cero pérdida para
-          lectores de pantalla. Mismo patrón que WeekView. */}
+          eventos del día a lectores de pantalla, uno por ítem de lista. Mismo
+          patrón que WeekView. */}
       <ul className="sr-only" aria-label={`Eventos de ${formatDayLong(day)}`}>
         {dayEvents.length === 0 ? (
           <li>Sin eventos</li>

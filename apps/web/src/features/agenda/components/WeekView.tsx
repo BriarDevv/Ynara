@@ -3,11 +3,11 @@ import { MODE_BY_ID } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
 import type { AgendaEvent } from "../api";
 import {
-  eventStartHour,
   eventsForDay,
   formatEventRange,
   gridHeight,
   gridTop,
+  hourBounds,
   nowHour,
   toLayoutInterval,
   weekDays,
@@ -15,10 +15,7 @@ import {
 import { formatDayLong, formatDayNum, formatWeekdayShort, isSameDay } from "../labels";
 
 // ── Constantes de la grilla ─────────────────────────────────────────────────
-// Ventana base lun→dom 8–20h; se EXPANDE para incluir cualquier evento fuera
-// de ese rango (auto-fit) en vez de descartarlo en silencio.
-const BASE_H0 = 8;
-const BASE_H1 = 20;
+// La ventana horaria sale de `hourBounds` (base 8–20h, auto-fit a los eventos).
 const PXH = 44; // px por hora (la grilla es desktop-only)
 const LEFT_GUTTER = 30; // ancho de la columna de horas (px)
 
@@ -29,22 +26,6 @@ type Props = {
   /** Referencia de "ahora" para marcar el día de hoy. */
   now: Date;
 };
-
-/** Rango horario [min, max] que cubre la base 8–20h y además todos los eventos
- *  de la semana (con `floor`/`ceil` a la hora), clamp a [0, 24]. Cero pérdida. */
-function hourBounds(events: AgendaEvent[], days: Date[]): { minH: number; maxH: number } {
-  let minH = BASE_H0;
-  let maxH = BASE_H1;
-  for (const day of days) {
-    for (const event of eventsForDay(events, day)) {
-      const start = eventStartHour(event);
-      const end = start + event.duration_min / 60;
-      minH = Math.min(minH, Math.floor(start));
-      maxH = Math.max(maxH, Math.ceil(end));
-    }
-  }
-  return { minH: Math.max(0, minH), maxH: Math.min(24, maxH) };
-}
 
 const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;

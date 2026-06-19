@@ -100,6 +100,34 @@ export function isInRange(event: AgendaEvent, H0: number, H1: number): boolean {
 }
 
 /**
+ * Rango horario `[minH, maxH]` de una grilla: cubre la ventana base
+ * `[baseH0, baseH1]` (por defecto 8–20h) y la **expande** para incluir todos
+ * los eventos de `days` que caigan fuera (con `floor`/`ceil` a la hora), clamp
+ * a `[0, 24]`. Cero recorte por la ventana base: ningún evento desaparece por
+ * caer antes de `baseH0` o después de `baseH1`. (No resuelve el wrap de
+ * medianoche: la cola post-00:00 de un evento pertenece al día siguiente.)
+ * Compartido por DayView (`days = [day]`) y WeekView (`days` = los 7 de la semana).
+ */
+export function hourBounds(
+  events: AgendaEvent[],
+  days: Date[],
+  baseH0 = 8,
+  baseH1 = 20,
+): { minH: number; maxH: number } {
+  let minH = baseH0;
+  let maxH = baseH1;
+  for (const day of days) {
+    for (const event of eventsForDay(events, day)) {
+      const start = eventStartHour(event);
+      const end = start + event.duration_min / 60;
+      minH = Math.min(minH, Math.floor(start));
+      maxH = Math.max(maxH, Math.ceil(end));
+    }
+  }
+  return { minH: Math.max(0, minH), maxH: Math.min(24, maxH) };
+}
+
+/**
  * Intervalo (en minutos del día local) para el algoritmo de columnas de
  * `@ynara/core`. Permite acomodar lado-a-lado los eventos concurrentes.
  */
