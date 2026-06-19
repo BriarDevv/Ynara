@@ -11,12 +11,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, CheckConstraint, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
 
 if TYPE_CHECKING:
+    from app.models.admin_audit import AdminAudit
     from app.models.audit import AuditLog
     from app.models.memory import EpisodicMemory, ProceduralMemory, SemanticMemory
     from app.models.session import ChatSession
@@ -43,6 +44,13 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     display_name: Mapped[str | None] = mapped_column(String(40), nullable=True)
     is_ephemeral: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Flag de admin del panel interno (/v1/admin/*). ``server_default=false`` para no
+    # romper filas existentes en la migración (tabla SAGRADA, gate humano). El bootstrap
+    # inicial (antes de poblar esta columna) se cubre con ``ADMIN_BOOTSTRAP_IDS`` en
+    # ``get_current_admin``; esta flag es la fuente de verdad persistente.
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     retention_sensitive_days: Mapped[int] = mapped_column(Integer, nullable=False, default=180)
 
     sessions: Mapped[list[ChatSession]] = relationship(
@@ -59,4 +67,7 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     )
     audit_logs: Mapped[list[AuditLog]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    admin_audits: Mapped[list[AdminAudit]] = relationship(
+        back_populates="admin", cascade="all, delete-orphan"
     )

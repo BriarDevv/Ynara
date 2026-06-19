@@ -5,6 +5,7 @@ Tablas sagradas (memoria) tienen reglas especiales: ver
 ``apps/backend/AGENTS.md`` y regla #3 de ``AGENTS.md`` raíz.
 """
 
+from app.models.admin_audit import AdminAudit
 from app.models.audit import AuditLog
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
 from app.models.conversation_turn import ConversationTurn
@@ -19,6 +20,7 @@ from app.models.user import User
 
 __all__ = [
     "EMBEDDING_DIM",
+    "AdminAudit",
     "AuditLog",
     "Base",
     "ChatSession",
