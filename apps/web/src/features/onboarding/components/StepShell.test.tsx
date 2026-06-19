@@ -21,6 +21,20 @@ describe("StepShell", () => {
     expect(heading.className).toContain("text-title");
   });
 
+  it("usa text-display en el title cuando hero (primera impresión del auth)", () => {
+    render(
+      <StepShell title="Antes que nada" hero>
+        <p>Body</p>
+      </StepShell>,
+    );
+
+    const heading = screen.getByRole("heading", { level: 1, name: "Antes que nada" });
+    // hero → poster editorial (text-display), NO la escala normal de step.
+    expect(heading.className).toContain("text-display");
+    expect(heading.className).not.toContain("text-title");
+    expect(heading.className).toContain("text-[var(--color-ink-deep)]");
+  });
+
   it("renderiza el subtitle con ink-soft cuando se pasa", () => {
     render(
       <StepShell title="Título" subtitle="Subtítulo del step">

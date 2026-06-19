@@ -39,7 +39,7 @@ export function CelebrationOutro({ onComplete }: Props) {
     <div className="mx-auto flex min-h-[80vh] w-full max-w-[480px] flex-1 flex-col items-center justify-center gap-10 px-6 py-12 text-center">
       <YnaraMark size={112} className={reduceMotion ? undefined : "anim-pulse-soft"} />
       <div className="flex flex-col items-center gap-2">
-        <p className="text-title text-[var(--color-ink-deep)]">Listo, te estoy esperando.</p>
+        <p className="text-display text-[var(--color-ink-deep)]">Listo, te estoy esperando.</p>
         <p className="text-body text-[var(--color-ink-soft)]">
           Tu perfil queda guardado. Volvé cuando quieras.
         </p>

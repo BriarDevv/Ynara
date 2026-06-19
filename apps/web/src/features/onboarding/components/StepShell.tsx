@@ -9,6 +9,12 @@ type Props = {
   children: ReactNode;
   /** Slot opcional al pie (StepFooter). */
   footer?: ReactNode;
+  /**
+   * Step "hero" (primera impresión): el title usa `text-display` (poster
+   * editorial 42→56px) en vez de `text-title`. Reservado para el step `auth`
+   * — DESIGN.md §4 / comentario de `.text-display` en globals.
+   */
+  hero?: boolean;
   className?: string;
 };
 
@@ -24,7 +30,15 @@ type Props = {
  *  - Animación de entrada `anim-fade-up` (respeta prefers-reduced-motion
  *    + override del a11y store).
  */
-export function StepShell({ eyebrow, title, subtitle, children, footer, className }: Props) {
+export function StepShell({
+  eyebrow,
+  title,
+  subtitle,
+  children,
+  footer,
+  hero = false,
+  className,
+}: Props) {
   return (
     <div
       /*
@@ -42,7 +56,12 @@ export function StepShell({ eyebrow, title, subtitle, children, footer, classNam
     >
       <header className="flex flex-col gap-3">
         {eyebrow ? <p className="text-caption text-[var(--color-ink-soft)]">{eyebrow}</p> : null}
-        <h1 className="text-title text-[var(--color-ink-deep)]">{title}</h1>
+        {/* Template literal (no cn): tailwind-merge trataría `text-display`/
+            `text-title` y `text-[var(--color-ink-deep)]` como `text-*` en
+            conflicto y descartaría el de tamaño. */}
+        <h1 className={`${hero ? "text-display" : "text-title"} text-[var(--color-ink-deep)]`}>
+          {title}
+        </h1>
         {subtitle ? <p className="text-body text-[var(--color-ink-soft)]">{subtitle}</p> : null}
       </header>
       <div className="flex flex-1 flex-col gap-6">{children}</div>
