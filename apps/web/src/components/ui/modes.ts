@@ -63,26 +63,11 @@ export const MODE_BY_ID: Record<ModeId, ModeDescriptor> = MODES.reduce(
 );
 
 /**
- * Clima de dos tonos por modo — el gradiente ambiental del fondo vivo
- * (DESIGN.md §3.5, columna "Gradiente (clima del canvas)"). Vive SOLO en el
- * canvas de `LivingField` (§2); jamás como fill de UI (§3.4).
- *
- * Los valores van en hex literal (no `var(--color-*)`) porque el canvas 2D
- * necesita aritmética rgba por canal y no resuelve custom properties. La
- * fuente única sigue siendo la paleta de `globals.css`: el guard de
- * `globals.theme.test.ts` falla si estos pares se desincronizan de ella.
+ * Clima de dos tonos por modo (gradiente ambiental del campo vivo, DESIGN.md
+ * §3.5). **Fuente única en `@ynara/core/features/field`** — compartida con el
+ * render de mobile (Skia) para que el fondo quede idéntico en las dos
+ * plataformas. Se re-exporta acá para no romper los imports existentes desde
+ * `@/components/ui/modes`. El guard de `globals.theme.test.ts` sigue validando
+ * que estos pares estén en sync con la paleta de `globals.css`.
  */
-export type ModeClimate = {
-  /** Tono dominante (el acento del modo en el canvas). */
-  readonly a: string;
-  /** Tono acompañante del gradiente ambiental. */
-  readonly b: string;
-};
-
-export const MODE_CLIMATE: Record<ModeId, ModeClimate> = {
-  productividad: { a: "#2f5aa6", b: "#6e92cc" }, // azul → celeste
-  estudio: { a: "#434a82", b: "#6e92cc" }, // índigo → celeste
-  bienestar: { a: "#8165a3", b: "#8b9ad0" }, // violeta → lavanda
-  vida: { a: "#5c6fb3", b: "#8165a3" }, // violáceo → violeta
-  memoria: { a: "#6e92cc", b: "#8b9ad0" }, // celeste → lavanda
-};
+export { MODE_CLIMATE, type ModeClimate } from "@ynara/core/features/field";
