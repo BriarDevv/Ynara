@@ -584,7 +584,16 @@ async def test_playground_agent_captures_tool_calls(db_session: AsyncSession) ->
     # Iteración 1: el modelo pide una tool. Iteración 2: cierra (finish_reason terminal).
     fake.queue_result(
         _completion_with_tools(
-            [_tool_call("calendar.create_event", {"title": "Reunión", "start": "2026-07-01T10:00"})]
+            [
+                _tool_call(
+                    "calendar.create_event",
+                    {
+                        "title": "Reunión",
+                        "start": "2026-07-01T10:00:00+00:00",
+                        "end": "2026-07-01T11:00:00+00:00",
+                    },
+                )
+            ]
         )
     )
     fake.queue_result(
@@ -659,7 +668,7 @@ async def test_playground_agent_never_builds_memory_registry(db_session: AsyncSe
     try:
         with (
             _patch_settings(_real_settings()),
-            patch("app.llm.tools.registry.memory_registry") as mem_reg,
+            patch("app.llm.tools.memory.memory_registry") as mem_reg,
         ):
             async with client:
                 resp = await client.post(
