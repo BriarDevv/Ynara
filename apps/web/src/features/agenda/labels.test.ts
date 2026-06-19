@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   formatDayLong,
   formatDayNum,
+  formatMonthYear,
   formatWeekdayShort,
   formatWeekRange,
   isSameDay,
+  isSameMonth,
 } from "./labels";
 
 /**
@@ -53,6 +55,15 @@ describe("formatWeekRange", () => {
   });
 });
 
+describe("formatMonthYear", () => {
+  it("capitaliza el mes e incluye el año", () => {
+    const s = formatMonthYear(new Date(2026, 4, 7)); // mayo 2026
+    expect(s.charAt(0)).toBe(s.charAt(0).toUpperCase());
+    expect(s).toContain("2026");
+    expect(s.toLowerCase()).toContain("mayo");
+  });
+});
+
 describe("isSameDay", () => {
   it("true para el mismo día con distinta hora", () => {
     expect(isSameDay(new Date(2026, 4, 7, 8, 0), new Date(2026, 4, 7, 23, 0))).toBe(true);
@@ -60,5 +71,19 @@ describe("isSameDay", () => {
 
   it("false para días distintos", () => {
     expect(isSameDay(new Date(2026, 4, 7), new Date(2026, 4, 8))).toBe(false);
+  });
+});
+
+describe("isSameMonth", () => {
+  it("true para fechas del mismo mes y año", () => {
+    expect(isSameMonth(new Date(2026, 4, 1), new Date(2026, 4, 31))).toBe(true);
+  });
+
+  it("false para distinto mes", () => {
+    expect(isSameMonth(new Date(2026, 4, 31), new Date(2026, 5, 1))).toBe(false);
+  });
+
+  it("false para mismo mes pero distinto año", () => {
+    expect(isSameMonth(new Date(2025, 4, 7), new Date(2026, 4, 7))).toBe(false);
   });
 });

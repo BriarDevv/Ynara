@@ -15,6 +15,7 @@ const DAY_LONG_FMT = new Intl.DateTimeFormat(LOCALE, {
 const WEEKDAY_SHORT_FMT = new Intl.DateTimeFormat(LOCALE, { weekday: "short" });
 const DAY_NUM_FMT = new Intl.DateTimeFormat(LOCALE, { day: "numeric" });
 const DAY_MONTH_FMT = new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "long" });
+const MONTH_YEAR_FMT = new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric" });
 
 /** Primera letra a mayúscula (Intl devuelve "martes, 7 de mayo"). */
 function capitalize(text: string): string {
@@ -49,6 +50,11 @@ export function formatWeekRange(monday: Date): string {
   return `${DAY_MONTH_FMT.format(monday)} – ${DAY_MONTH_FMT.format(sunday)}`;
 }
 
+/** Mes y año de la vista mes: "Mayo 2026". */
+export function formatMonthYear(date: Date): string {
+  return capitalize(MONTH_YEAR_FMT.format(date));
+}
+
 /** ¿`a` y `b` son el mismo día local? (para marcar "hoy"). */
 export function isSameDay(a: Date, b: Date): boolean {
   return (
@@ -56,4 +62,9 @@ export function isSameDay(a: Date, b: Date): boolean {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
+}
+
+/** ¿`a` y `b` caen en el mismo mes del mismo año? (para resaltar el mes actual). */
+export function isSameMonth(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 }

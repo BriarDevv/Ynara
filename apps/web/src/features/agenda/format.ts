@@ -47,6 +47,29 @@ export function weekDays(date: Date): Date[] {
   });
 }
 
+/** Primer día (00:00 local) del mes que contiene `date`. */
+export function startOfMonth(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(1);
+  return d;
+}
+
+/**
+ * Los 42 días (6 semanas lunes→domingo) de la grilla del mes que contiene
+ * `date`: arranca en el lunes de la semana del día 1 y cubre **6 filas fijas**
+ * (evita layout-shift al cambiar de mes). Incluye días del mes anterior/siguiente
+ * para completar las semanas.
+ */
+export function monthGridDays(date: Date): Date[] {
+  const first = startOfWeek(startOfMonth(date));
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(first);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
 /** ¿El evento ocurre el día local `day`? (compara año/mes/día local). */
 export function isOnDay(event: AgendaEvent, day: Date): boolean {
   const start = new Date(event.start_at);

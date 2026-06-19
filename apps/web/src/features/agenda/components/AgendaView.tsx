@@ -11,19 +11,21 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/cn";
 import { useEvents } from "../api";
 import { startOfWeek } from "../format";
-import { formatDayLong, formatWeekRange, isSameDay } from "../labels";
+import { formatDayLong, formatMonthYear, formatWeekRange, isSameDay, isSameMonth } from "../labels";
 import { AgendaSkeleton } from "./AgendaSkeleton";
 import { DayView } from "./DayView";
 import { EventFab } from "./EventFab";
 import { ListView } from "./ListView";
+import { MonthView } from "./MonthView";
 import { WeekView } from "./WeekView";
 
-type ViewMode = "lista" | "dia" | "semana";
+type ViewMode = "lista" | "dia" | "semana" | "mes";
 
 const VIEW_OPTIONS = [
   { value: "lista", label: "Lista" },
   { value: "dia", label: "Día" },
   { value: "semana", label: "Semana" },
+  { value: "mes", label: "Mes" },
 ] as const satisfies readonly { value: ViewMode; label: string }[];
 
 // La grilla de 7 columnas es el patrón equivocado en un teléfono (celdas
@@ -57,22 +59,34 @@ export function AgendaView() {
     : VIEW_OPTIONS.filter((opt) => opt.value !== "semana");
   const effectiveView: ViewMode = !isDesktop && view === "semana" ? "lista" : view;
 
-  const stepDays = effectiveView === "dia" ? 1 : 7;
   const shift = (direction: -1 | 1) => {
     setAnchor((prev) => {
       const next = new Date(prev);
-      next.setDate(next.getDate() + direction * stepDays);
+      if (effectiveView === "mes") {
+        next.setMonth(next.getMonth() + direction);
+      } else {
+        next.setDate(next.getDate() + direction * (effectiveView === "dia" ? 1 : 7));
+      }
       return next;
     });
   };
 
+  // Etiqueta de la unidad navegable (para los aria-label de prev/next).
+  const unitLabel = effectiveView === "dia" ? "Día" : effectiveView === "mes" ? "Mes" : "Semana";
+
   const periodLabel =
-    effectiveView === "dia" ? formatDayLong(anchor) : formatWeekRange(startOfWeek(anchor));
+    effectiveView === "dia"
+      ? formatDayLong(anchor)
+      : effectiveView === "mes"
+        ? formatMonthYear(anchor)
+        : formatWeekRange(startOfWeek(anchor));
 
   const onNow =
     effectiveView === "dia"
       ? isSameDay(anchor, now)
-      : isSameDay(startOfWeek(anchor), startOfWeek(now));
+      : effectiveView === "mes"
+        ? isSameMonth(anchor, now)
+        : isSameDay(startOfWeek(anchor), startOfWeek(now));
 
   // Fill (AA-safe) del modo activo para el FAB con el "+" blanco.
   const fabFill = MODE_BY_ID[activeMode].fillVar;
@@ -109,7 +123,7 @@ export function AgendaView() {
               <button
                 type="button"
                 onClick={() => shift(-1)}
-                aria-label={effectiveView === "dia" ? "Día anterior" : "Semana anterior"}
+                aria-label={`${unitLabel} anterior`}
                 className={NAV_BUTTON}
               >
                 <span aria-hidden>‹</span>
@@ -128,7 +142,7 @@ export function AgendaView() {
               <button
                 type="button"
                 onClick={() => shift(1)}
-                aria-label={effectiveView === "dia" ? "Día siguiente" : "Semana siguiente"}
+                aria-label={`${unitLabel} siguiente`}
                 className={NAV_BUTTON}
               >
                 <span aria-hidden>›</span>
@@ -160,6 +174,16 @@ export function AgendaView() {
             <ListView events={data} now={now} />
           ) : effectiveView === "dia" ? (
             <DayView events={data} day={anchor} now={now} />
+          ) : effectiveView === "mes" ? (
+            <MonthView
+              events={data}
+              anchor={anchor}
+              now={now}
+              onSelectDay={(day) => {
+                setAnchor(day);
+                setView("dia");
+              }}
+            />
           ) : (
             <WeekView events={data} anchor={anchor} now={now} />
           )}
