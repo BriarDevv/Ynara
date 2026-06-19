@@ -103,8 +103,10 @@ export function isInRange(event: AgendaEvent, H0: number, H1: number): boolean {
  * Rango horario `[minH, maxH]` de una grilla: cubre la ventana base
  * `[baseH0, baseH1]` (por defecto 8–20h) y la **expande** para incluir todos
  * los eventos de `days` que caigan fuera (con `floor`/`ceil` a la hora), clamp
- * a `[0, 24]`. Cero pérdida: ningún evento queda recortado. Compartido por
- * DayView (`days = [day]`) y WeekView (`days` = los 7 de la semana).
+ * a `[0, 24]`. Cero recorte por la ventana base: ningún evento desaparece por
+ * caer antes de `baseH0` o después de `baseH1`. (No resuelve el wrap de
+ * medianoche: la cola post-00:00 de un evento pertenece al día siguiente.)
+ * Compartido por DayView (`days = [day]`) y WeekView (`days` = los 7 de la semana).
  */
 export function hourBounds(
   events: AgendaEvent[],

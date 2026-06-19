@@ -97,6 +97,7 @@ function GridEventBlock({ event, rowPx, minH, placement }: EventBlockProps) {
 }
 
 type GridProps = {
+  /** Eventos YA filtrados al día (vienen de `eventsForDay` en `DayView`). */
   events: AgendaEvent[];
   day: Date;
   now: Date;
