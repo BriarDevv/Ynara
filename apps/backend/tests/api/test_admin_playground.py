@@ -42,7 +42,7 @@ from app.llm.errors import (
     LlmUnavailableError,
     ModelNotServedError,
 )
-from app.llm.schemas import CompletionResult
+from app.llm.schemas import CompletionResult, ToolCall
 from app.main import app
 from app.models.user import User
 
@@ -548,5 +548,172 @@ async def test_playground_error_detail_never_echoes_payload(db_session: AsyncSes
         assert resp.json()["detail"] == "LlmTimeoutError"
         # El payload sensible no aparece en NINGÚN lado de la respuesta.
         assert secret not in resp.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/admin/playground/agent — tool-loop OBSERVADO (Fase B, ADR-019)
+# ---------------------------------------------------------------------------
+
+
+def _tool_call(name: str, arguments: dict[str, object], *, call_id: str = "call-1") -> ToolCall:
+    """Una ToolCall normalizada para programar el ``FakeLlmClient`` (arguments ya dict)."""
+    return ToolCall(id=call_id, name=name, arguments=arguments)
+
+
+def _completion_with_tools(
+    tool_calls: list[ToolCall], *, model_name: str = "qwen"
+) -> CompletionResult:
+    """CompletionResult con tool_calls + finish_reason NO terminal: el loop ejecuta las tools."""
+    return CompletionResult(
+        text="",
+        finish_reason="tool_calls",
+        tool_calls=tool_calls,
+        prompt_tokens=20,
+        completion_tokens=10,
+        model_name=model_name,
+        latency_ms=40.0,
+    )
+
+
+async def test_playground_agent_captures_tool_calls(db_session: AsyncSession) -> None:
+    """200 + ``actions`` captura cada tool call observada; calendar es stub -> not_wired."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    # Iteración 1: el modelo pide una tool. Iteración 2: cierra (finish_reason terminal).
+    fake.queue_result(
+        _completion_with_tools(
+            [_tool_call("calendar.create_event", {"title": "Reunión", "start": "2026-07-01T10:00"})]
+        )
+    )
+    fake.queue_result(
+        _completion(text="Listo, lo agendé.", finish_reason="stop", model_name="qwen")
+    )
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/agent",
+                    json={"model": "qwen", "message": "agendá una reunión el martes"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["finish_reason"] == "stop"
+        assert body["model_name"] == "qwen"
+        actions = body["actions"]
+        assert len(actions) == 1
+        assert actions[0]["name"] == "calendar.create_event"
+        assert actions[0]["arguments"]["title"] == "Reunión"
+        # calendar es stub no-op -> el result observado dice not_wired (cero efecto).
+        assert "not_wired" in actions[0]["result"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_agent_memory_tool_unreachable(db_session: AsyncSession) -> None:
+    """memory.* es INALCANZABLE (sin memory_registry) -> unknown_tool, observable y sin efecto."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_result(
+        _completion_with_tools([_tool_call("memory.update", {"id": "x", "content": "nuevo"})])
+    )
+    fake.queue_result(_completion(text="ok", finish_reason="stop", model_name="qwen"))
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/agent",
+                    json={"model": "qwen", "message": "actualizá mi memoria"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        actions = resp.json()["actions"]
+        assert actions[0]["name"] == "memory.update"
+        # Sin memory_registry -> la tool con write real cae en unknown_tool (sin tocar DB).
+        assert "unknown_tool" in actions[0]["result"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_agent_never_builds_memory_registry(db_session: AsyncSession) -> None:
+    """INVARIANTE DE NO-EFECTO (ADR-019 D2): el path agente NUNCA construye memory_registry.
+
+    Aunque el modelo pida una memory tool con write real, el endpoint pasa
+    ``(default_registry(), None)``: el store de memoria no se instancia jamás. Lo
+    blindamos espiando el factory -> ``call_count == 0`` es la barrera por construcción.
+    """
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_result(_completion_with_tools([_tool_call("memory.delete", {"id": "x"})]))
+    fake.queue_result(_completion(text="ok", finish_reason="stop", model_name="qwen"))
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with (
+            _patch_settings(_real_settings()),
+            patch("app.llm.tools.registry.memory_registry") as mem_reg,
+        ):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/agent",
+                    json={"model": "qwen", "message": "borrá una memoria"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        # La barrera real (más fuerte que el ADR): el memory_registry NUNCA se construye.
+        assert mem_reg.call_count == 0
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_agent_invalid_model_422(db_session: AsyncSession) -> None:
+    """Modelo fuera del catálogo -> 422 antes de correr el loop (no se llama al cliente)."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/agent",
+                    json={"model": "no-existe", "message": "hola"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "modelo no servido"
+        assert fake.complete_calls == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_agent_fake_backend_409(db_session: AsyncSession) -> None:
+    """Backend fake -> 409 antes de correr el loop (mismo guard que /playground)."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_fake_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/agent",
+                    json={"model": "qwen", "message": "hola"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 409
+        assert resp.json()["detail"] == "serving real no disponible"
+        assert fake.complete_calls == []
     finally:
         app.dependency_overrides.clear()
