@@ -46,6 +46,49 @@ describe("AgendaEventSchema", () => {
   it("rechaza start_at sin offset", () => {
     expect(() => AgendaEventSchema.parse({ ...event, start_at: "2026-05-07T14:00:00" })).toThrow();
   });
+
+  it("acepta los campos de calendario v2 (time_zone, all_day, recurrence)", () => {
+    const parsed = AgendaEventSchema.parse({
+      ...event,
+      time_zone: "America/Argentina/Buenos_Aires",
+      all_day: false,
+      recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=MO"],
+    });
+    expect(parsed.time_zone).toBe("America/Argentina/Buenos_Aires");
+    expect(parsed.all_day).toBe(false);
+    expect(parsed.recurrence).toEqual(["RRULE:FREQ=WEEKLY;BYDAY=MO"]);
+  });
+
+  it("los campos v2 son opcionales (back-compat con el mock)", () => {
+    const parsed = AgendaEventSchema.parse(event);
+    expect(parsed).not.toHaveProperty("recurrence");
+    expect(parsed.time_zone).toBeUndefined();
+  });
+
+  it("acepta recurrence null (evento único explícito)", () => {
+    expect(AgendaEventSchema.parse({ ...event, recurrence: null }).recurrence).toBeNull();
+  });
+
+  it("rechaza recurrence que no sea array de strings", () => {
+    expect(() => AgendaEventSchema.parse({ ...event, recurrence: "RRULE:FREQ=DAILY" })).toThrow();
+  });
+
+  it("rechaza all_day no booleano", () => {
+    expect(() => AgendaEventSchema.parse({ ...event, all_day: "si" })).toThrow();
+  });
+
+  it("rechaza recurrence sin time_zone (invariante DST del ADR-018)", () => {
+    expect(() => AgendaEventSchema.parse({ ...event, recurrence: ["RRULE:FREQ=DAILY"] })).toThrow();
+  });
+
+  it("acepta recurrence cuando trae time_zone", () => {
+    const parsed = AgendaEventSchema.parse({
+      ...event,
+      time_zone: "America/Argentina/Buenos_Aires",
+      recurrence: ["RRULE:FREQ=DAILY"],
+    });
+    expect(parsed.recurrence).toHaveLength(1);
+  });
 });
 
 describe("EventsResponseSchema", () => {
@@ -88,6 +131,18 @@ describe("EventCreateSchema", () => {
 
   it("rechaza un create sin título", () => {
     expect(() => EventCreateSchema.parse({ start_at: ISO, duration_min: 30 })).toThrow();
+  });
+
+  it("acepta los campos de calendario v2 (time_zone, recurrence)", () => {
+    const parsed = EventCreateSchema.parse({
+      title: "Clase semanal",
+      start_at: ISO,
+      duration_min: 60,
+      time_zone: "America/Argentina/Buenos_Aires",
+      recurrence: ["RRULE:FREQ=WEEKLY;COUNT=10"],
+    });
+    expect(parsed.recurrence).toHaveLength(1);
+    expect(parsed.time_zone).toBe("America/Argentina/Buenos_Aires");
   });
 });
 

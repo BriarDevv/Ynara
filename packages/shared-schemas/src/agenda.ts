@@ -27,24 +27,63 @@ export const EventStatusSchema = z.enum(["confirmed", "tentative", "cancelled"])
 export type EventStatus = z.infer<typeof EventStatusSchema>;
 
 /**
+ * Invariante ADR-018: un evento con `recurrence` DEBE traer `time_zone`, si no
+ * el recurrente se corre en los cambios de DST (la alternativa "solo UTC" quedó
+ * descartada en el ADR). Se aplica al evento completo y al create, NO al patch
+ * parcial (que puede tocar `recurrence` dejando el `time_zone` ya guardado).
+ */
+function recurrenceNeedsTimeZone(
+  ev: { recurrence?: readonly string[] | null; time_zone?: string | null },
+  ctx: z.RefinementCtx,
+): void {
+  if (ev.recurrence && ev.recurrence.length > 0 && !ev.time_zone) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["time_zone"],
+      message: "time_zone es obligatorio en eventos con recurrence.",
+    });
+  }
+}
+
+/**
  * Un evento de la agenda. `start_at` + `duration_min` arman el bloque ("14:00 ·
  * 45 min"); el fin se deriva. `mode` lo tinta y lo asocia a un modo (`null` si es
  * transversal). `location` es la nota/lugar opcional (subtítulo del bloque).
  */
-export const AgendaEventSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().min(1),
-  /** Inicio del bloque (ISO con offset). */
-  start_at: z.string().datetime({ offset: true }),
-  /** Duración en minutos (> 0). El fin es `start_at + duration_min` (derivado). */
-  duration_min: z.number().int().positive(),
-  /** Modo al que pertenece (para el tint), o `null` si es transversal. */
-  mode: ModeSchema.nullable(),
-  /** Estado del evento. */
-  status: EventStatusSchema,
-  /** Nota o lugar opcional (subtítulo del bloque). `null` si no tiene. */
-  location: z.string().nullable(),
-});
+export const AgendaEventSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: z.string().min(1),
+    /** Inicio del bloque (ISO con offset). */
+    start_at: z.string().datetime({ offset: true }),
+    /** Duración en minutos (> 0). El fin es `start_at + duration_min` (derivado). */
+    duration_min: z.number().int().positive(),
+    /** Modo al que pertenece (para el tint), o `null` si es transversal. */
+    mode: ModeSchema.nullable(),
+    /** Estado del evento. */
+    status: EventStatusSchema,
+    /** Nota o lugar opcional (subtítulo del bloque). `null` si no tiene. */
+    location: z.string().nullable(),
+    // ── Calendario v2 (ADR-018) — campos opcionales, back-compat con el mock ────
+    /**
+     * Huso IANA del wall-clock del evento (ej. `"America/Argentina/Buenos_Aires"`).
+     * `null`/ausente = hora local del cliente. **Requerido** en eventos con
+     * `recurrence` para que un recurrente no se corra en los cambios de DST.
+     */
+    time_zone: z.string().nullable().optional(),
+    /** Día completo (fecha sin hora): `start_at` se interpreta como fecha. Ausente/`false` = evento con hora. */
+    all_day: z.boolean().optional(),
+    /**
+     * Recurrencia: líneas RFC 5545 (`RRULE`/`RDATE`/`EXDATE`). `null`/ausente =
+     * evento único. La expansión a instancias vive en `@ynara/core` (engine
+     * `rrule-temporal`, pendiente de aprobación de dep — ADR-018).
+     */
+    recurrence: z.array(z.string()).nullable().optional(),
+    // Overrides de instancias ("solo este" de una serie: `recurrence_id` +
+    // `original_start`) se agregan cuando se construya la edición de recurrentes;
+    // hoy no tienen consumidor (ADR-018).
+  })
+  .superRefine(recurrenceNeedsTimeZone);
 export type AgendaEvent = z.infer<typeof AgendaEventSchema>;
 
 /** Respuesta de `GET /v1/events`: los eventos (del día/rango pedido) + el total. */
@@ -59,13 +98,18 @@ export type EventsResponse = z.infer<typeof EventsResponseSchema>;
  * `mode` y la `location` son opcionales (el server/mock completa `null` por
  * default), y el `status` arranca `confirmed`.
  */
-export const EventCreateSchema = z.object({
-  title: z.string().min(1),
-  start_at: z.string().datetime({ offset: true }),
-  duration_min: z.number().int().positive(),
-  mode: ModeSchema.nullable().optional(),
-  location: z.string().nullable().optional(),
-});
+export const EventCreateSchema = z
+  .object({
+    title: z.string().min(1),
+    start_at: z.string().datetime({ offset: true }),
+    duration_min: z.number().int().positive(),
+    mode: ModeSchema.nullable().optional(),
+    location: z.string().nullable().optional(),
+    time_zone: z.string().nullable().optional(),
+    all_day: z.boolean().optional(),
+    recurrence: z.array(z.string()).nullable().optional(),
+  })
+  .superRefine(recurrenceNeedsTimeZone);
 export type EventCreate = z.infer<typeof EventCreateSchema>;
 
 /**
@@ -79,5 +123,8 @@ export const EventPatchSchema = z.object({
   mode: ModeSchema.nullable().optional(),
   status: EventStatusSchema.optional(),
   location: z.string().nullable().optional(),
+  time_zone: z.string().nullable().optional(),
+  all_day: z.boolean().optional(),
+  recurrence: z.array(z.string()).nullable().optional(),
 });
 export type EventPatch = z.infer<typeof EventPatchSchema>;
