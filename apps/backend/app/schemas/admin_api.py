@@ -158,3 +158,47 @@ class PlaygroundOut(YnaraBaseModel):
     # --- Fase A: trace + thinking separado ---
     thinking: str | None = None  # el <think>...</think> separado de text, o None
     trace: list[TraceStep] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Playground agente observado (Fase B ADR-019): tool-loop real, cero efecto
+# ---------------------------------------------------------------------------
+#
+# Privacidad (regla #4): igual que el probe crudo, este path NUNCA expone
+# ``base_url``/connection strings ni ecoa el payload de un ``LlmError``. El
+# ``result`` de cada tool es el dict que devuelve el stub (``not_wired``) o el
+# error estructurado de la tool (``{"error": {"code", "message"}}``) — metadata
+# observable de tools sin efecto, nunca contenido descifrado ni datos de usuario.
+
+
+class ToolCallOut(YnaraBaseModel):
+    """Una tool call OBSERVADA del tool-loop (Fase B ADR-019).
+
+    Espeja un elemento de ``actions`` de ``run_tool_loop``: la tool que el modelo
+    decidió llamar (``name``), con qué argumentos (``arguments``, ya parseados a
+    dict) y qué devolvió (``result``, serializado a JSON string para que el wire
+    sea estable sin importar el shape del dict de la tool). En este endpoint todas
+    las tools son stubs ``not_wired`` (cero efecto) o caen en ``unknown_tool``.
+    """
+
+    id: str  # id de la tool call (correlación con el turno assistant)
+    name: str  # ``namespace.action`` (ej. "calendar.create_event")
+    arguments: dict[str, object]  # args de la call, ya parseados de JSON a dict
+    result: str  # el dict de resultado de la tool, serializado a JSON
+
+
+class PlaygroundAgentOut(YnaraBaseModel):
+    """Respuesta del playground agente observado (Fase B ADR-019).
+
+    Corre el tool-loop real del modelo elegido pero con ``registries=(default_
+    registry(), None)`` (sin ``memory_registry`` → imposible tocar la DB): las 4
+    tools default son stubs ``not_wired`` y cualquier ``memory.*`` cae en
+    ``unknown_tool``. ``actions`` es la traza de tool calls observadas, en orden
+    de ejecución. ``text`` es la respuesta final del modelo; ``finish_reason`` el
+    del último ``CompletionResult`` (o ``"max_iterations"`` si se agotó el guard).
+    """
+
+    text: str
+    finish_reason: str
+    model_name: str
+    actions: list[ToolCallOut] = Field(default_factory=list)

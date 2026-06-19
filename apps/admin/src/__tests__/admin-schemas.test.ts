@@ -3,12 +3,14 @@ import { AdminAuditPage, EMPTY_AUDIT_FILTERS } from "@/features/audit/schemas";
 import { AdminMoatOut } from "@/features/moat/schemas";
 import { AdminModesOut } from "@/features/modes/schemas";
 import { AdminOverviewOut } from "@/features/overview/schemas";
+import { PlaygroundAgentOut, PlaygroundOut } from "@/features/playground/schemas";
 import { AdminSystemOut } from "@/features/system/schemas";
 import { AdminUsersOut } from "@/features/users/schemas";
 import { auditPage } from "@/fixtures/audit";
 import { moatFixture } from "@/fixtures/moat";
 import { modesFixture } from "@/fixtures/modes";
 import { overviewFixture } from "@/fixtures/overview";
+import { playgroundAgentEcho, playgroundEcho } from "@/fixtures/playground";
 import { systemFixture } from "@/fixtures/system";
 import { usersFixture } from "@/fixtures/users";
 import { RANGE_IDS, type RangeId } from "@/stores/range";
@@ -90,5 +92,45 @@ describe("contrato fixtures ↔ Zod (blueprint §4)", () => {
       expect(row).not.toHaveProperty("record_hash");
       expect(row).not.toHaveProperty("target_id");
     }
+  });
+
+  // ── Playground (Fase A probe + Fase B agente) ───────────────────────────
+
+  it("playground probe echo parsea contra PlaygroundOut", () => {
+    const body = {
+      model: "qwen",
+      message: "Hola test",
+      params: { max_tokens: 256, temperature: 0.7, low_perf: false },
+      thinking: null,
+    };
+    expect(() => PlaygroundOut.parse(playgroundEcho(body))).not.toThrow();
+  });
+
+  it("playground probe echo con low_perf y thinking off parsea contra PlaygroundOut", () => {
+    const body = {
+      model: "gemma4",
+      message: "Test low perf",
+      params: { max_tokens: 256, temperature: 0.2, low_perf: true },
+      thinking: false,
+    };
+    expect(() => PlaygroundOut.parse(playgroundEcho(body))).not.toThrow();
+  });
+
+  it("playground agent echo parsea contra PlaygroundAgentOut", () => {
+    const body = {
+      model: "qwen",
+      message: "Creá un evento para mañana",
+      params: { max_tokens: 512, temperature: 0.7, low_perf: false },
+      thinking: null,
+    };
+    const result = playgroundAgentEcho(body);
+    expect(() => PlaygroundAgentOut.parse(result)).not.toThrow();
+    // Debe tener las 2 tool-calls de ejemplo (calendar + reminder).
+    expect(result.actions).toHaveLength(2);
+    expect(result.actions[0]?.name).toBe("calendar.create_event");
+    expect(result.actions[1]?.name).toBe("reminder.set");
+    // Ambas devuelven not_wired (stub, cero efecto real).
+    expect(result.actions[0]?.result).toBe("not_wired");
+    expect(result.actions[1]?.result).toBe("not_wired");
   });
 });

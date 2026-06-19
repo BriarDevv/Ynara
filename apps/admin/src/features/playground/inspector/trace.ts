@@ -1,5 +1,5 @@
 import type { PlaygroundConfig } from "../components/PlaygroundControls";
-import type { PlaygroundOutT, TraceStepT } from "../schemas";
+import type { PlaygroundAgentOutT, PlaygroundOutT, ToolCallOutT, TraceStepT } from "../schemas";
 
 /**
  * Modelo de vista del inspector (Fase A del trace, blueprint §4).
@@ -108,5 +108,76 @@ export function buildTrace(
     steps,
     thinkingText: result.thinking ?? undefined,
     thinkingUsed: result.thinking_used,
+  };
+}
+
+/**
+ * Heurística de error para una tool-call observada (blueprint §4): el result se
+ * pinta como error cuando la tool no está cableada (`unknown_tool`, p. ej.
+ * `memory.*` inalcanzable por construcción) o cuando el stub devolvió un fallo.
+ * Los stubs sanos responden `not_wired`, que NO es error (es lo esperado en el
+ * loop observado). La comparación es case-insensitive y por substring para no
+ * acoplarnos al wording exacto del backend.
+ */
+function toolResultIsError(result: string): boolean {
+  const normalized = result.toLowerCase();
+  return normalized.includes("unknown_tool") || normalized.includes("error");
+}
+
+/** Mapea una `ToolCallOut` del wire al modelo de vista del inspector. */
+function toToolCallTrace(action: ToolCallOutT): ToolCallTrace {
+  return {
+    id: action.id,
+    name: action.name,
+    arguments: action.arguments,
+    result: action.result,
+    isError: toolResultIsError(action.result),
+  };
+}
+
+/**
+ * Función PURA que mapea el resultado de un turno en **modo agente**
+ * (`PlaygroundAgentOut`) al modelo de vista del inspector (blueprint §4).
+ *
+ * En modo agente el render se centra en las tool-call cards (`tools`), derivadas
+ * de `actions`. El timeline queda vacío (el loop no expone los `TraceStep` por
+ * iteración, limitación conocida del ADR) salvo que el backend mande `trace`, y
+ * el thinking se respeta si viene expuesto. Mantiene la misma forma estable
+ * (`InspectorTrace`) que `buildTrace` para que el inspector no ramifique.
+ *
+ * - `result === null` + `isPending` → un único nodo "agent" en curso (el loop
+ *   todavía corre), con el thinking elegido en la config.
+ * - `result === null` + `!isPending` → trace vacío (sin turno todavía).
+ * - con resultado → las `actions` resueltas a tool-call cards (+ `trace`/
+ *   `thinking` si el backend los expone).
+ */
+export function buildAgentTrace(
+  config: PlaygroundConfig,
+  result: PlaygroundAgentOutT | null,
+  { isPending }: BuildTraceOptions,
+): InspectorTrace {
+  if (result === null) {
+    if (!isPending) {
+      return { steps: [], thinkingUsed: config.thinking === "on" };
+    }
+    // El loop está corriendo: un nodo "agent" pulsante hasta que llegue la traza.
+    return {
+      steps: [{ name: "agent", detail: config.model, status: "pending" }],
+      thinkingUsed: config.thinking === "on",
+    };
+  }
+
+  const steps: InspectorStep[] = result.trace.map((step) => ({
+    name: step.name,
+    detail: step.detail,
+    durationMs: step.duration_ms ?? undefined,
+    status: stepStatus(step, result.finish_reason),
+  }));
+
+  return {
+    steps,
+    thinkingText: result.thinking ?? undefined,
+    thinkingUsed: result.thinking != null,
+    tools: result.actions.map(toToolCallTrace),
   };
 }

@@ -27,6 +27,7 @@ pagina con ``limit``/``offset``.
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
@@ -95,10 +96,12 @@ from app.schemas.admin import (
 from app.schemas.admin_api import (
     AdminAuditPage,
     AdminAuditRow,
+    PlaygroundAgentOut,
     PlaygroundIn,
     PlaygroundOut,
     ServingModelOut,
     ServingOut,
+    ToolCallOut,
     TraceStep,
 )
 
@@ -966,4 +969,122 @@ async def admin_playground(
         thinking_used=thinking,
         thinking=thinking_text,
         trace=trace,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Playground agente OBSERVADO (Fase B ADR-019): tool-loop real, cero efecto
+# ---------------------------------------------------------------------------
+#
+# Refina ADR-018: superficie SEPARADA del probe crudo de /playground (que sigue
+# vigente). Corre ``run_tool_loop`` real del modelo elegido pero con registries
+# que hacen IMPOSIBLE tocar datos reales.
+#
+# INVARIANTE DE NO-EFECTO (ADR-019 D2, NO negociable): ``registries=(default_
+# registry(), None)``. El ``None`` = SIN ``memory_registry`` → ni se construye el
+# store → las dos tools con write real (``memory.update``/``memory.delete``) son
+# INALCANZABLES por construcción, y cualquier ``memory.*`` cae en ``unknown_tool``
+# (observable, cero efecto). Las 4 tools del default (calendar/reminder) son stubs
+# ``not_wired``. SIN ``DbSession`` en la firma → cero sesión/memoria/consolidación.
+
+
+@router.post("/admin/playground/agent", response_model=PlaygroundAgentOut, status_code=200)
+async def admin_playground_agent(
+    body: PlaygroundIn,
+    admin_id: CurrentAdmin,
+    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+) -> PlaygroundAgentOut:
+    """Tool-loop OBSERVADO contra un modelo elegido, a cero efecto (Fase B ADR-019).
+
+    Corre ``run_tool_loop`` real (el modelo decide qué tools llamar, paso a paso)
+    pero con ``registries=(default_registry(), None)``: sin ``memory_registry``, las
+    tools con write son inalcanzables por construcción (invariante de no-efecto,
+    ADR-019 D2). Las specs son solo ``calendar`` + ``reminder`` (los 4 stubs
+    ``not_wired``). MISMAS validaciones que ``/playground`` (422 modelo no servido,
+    409 backend fake) y MISMO mapeo ``LlmError``→status sin ecoar el payload
+    (regla #4). SIN ``DbSession``: cero sesión/memoria/consolidación.
+    """
+    # Importes locales (lazy): la capa tool-loop solo se carga en este path, no
+    # en el import del módulo admin (que es mayormente métricas read-only).
+    from app.llm.tool_loop import run_tool_loop
+    from app.llm.tools.registry import default_registry
+
+    settings = get_settings()
+    cfg = load_llm_config()
+
+    # 1) Validar el modelo elegido contra el catálogo de served_names (igual que
+    #    /playground): served_name fuera del catálogo -> 422 neutro.
+    models_by_served = {m.served_name: m for m in cfg.models.values()}
+    model_cfg = models_by_served.get(body.model)
+    if model_cfg is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modelo no servido"
+        )
+
+    # 2) Sin serving real (backend fake) no hay generación: 409 ANTES de tocar el
+    #    loop (el Fake del lifespan no tiene respuestas encoladas -> AssertionError/500).
+    if not _wants_real_llm(settings):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="serving real no disponible"
+        )
+
+    # 3) Thinking efectivo: override del body > default por role; low_perf lo fuerza
+    #    OFF (igual que /playground). El loop no toma max_tokens/temp/timeout per-request.
+    thinking = body.thinking if body.thinking is not None else model_cfg.role == "agent"
+    if body.params.low_perf:
+        thinking = False
+
+    # 4) System prompt: override crudo > load_prompt(mode) > default neutro.
+    system_content = body.system_prompt or _PLAYGROUND_DEFAULT_SYSTEM
+    if body.system_prompt is None and body.mode is not None:
+        try:
+            system_content = load_prompt(Mode(body.mode))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modo desconocido"
+            ) from exc
+
+    messages = [
+        ChatMessage(role="system", content=system_content),
+        ChatMessage(role="user", content=body.message),
+    ]
+
+    # 5) INVARIANTE DE NO-EFECTO (ADR-019 D2): default_registry() (4 stubs no-op) +
+    #    None (SIN memory_registry -> ni se construye el store -> memory.* es
+    #    inalcanzable). Specs = solo calendar + reminder (los stubs observables).
+    default_reg = default_registry()
+    specs = default_reg.specs_for(["calendar", "reminder"])
+
+    # 6) Correr el tool-loop real; 7) mapear LlmError a status sin ecoar payload.
+    try:
+        text, actions, finish_reason = await run_tool_loop(
+            llm_client=llm_client,
+            served_name=model_cfg.served_name,
+            messages=messages,
+            specs=specs,
+            registries=(default_reg, None),  # None = SIN memory_registry = imposible escribir DB
+            thinking=thinking,
+            fallback_text="(sin respuesta)",
+        )
+    except LlmError as exc:
+        raise _map_llm_error(exc) from exc
+
+    # 8) Mapear las actions observadas a ToolCallOut. ``result`` se serializa a JSON
+    #    string (wire estable). PRIVACIDAD (regla #4): son dicts de tools sin efecto
+    #    (``not_wired`` / ``unknown_tool``), nunca contenido descifrado ni PII.
+    observed = [
+        ToolCallOut(
+            id=str(action["id"]),
+            name=str(action["name"]),
+            arguments=action["arguments"],  # type: ignore[arg-type]
+            result=json.dumps(action["result"], ensure_ascii=False),
+        )
+        for action in actions
+    ]
+
+    return PlaygroundAgentOut(
+        text=text,
+        finish_reason=finish_reason,
+        model_name=model_cfg.served_name,
+        actions=observed,
     )
