@@ -1,4 +1,7 @@
+"use client";
+
 import { type ColumnPlacement, layoutColumns } from "@ynara/core/features/agenda";
+import { useEffect, useRef } from "react";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { MODE_BY_ID } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
@@ -119,56 +122,75 @@ function DayGrid({ events, day, now, rowPx }: GridProps) {
   // Columnas para los solapados: el algoritmo puro de core devuelve {col, cols}.
   const placements = layoutColumns(events.map(toLayoutInterval));
 
-  return (
-    <div className="relative" style={{ paddingLeft: LEFT_GUTTER, height: totalHeight }}>
-      {/* Líneas horizontales + etiquetas de hora */}
-      {hours.map((h) => (
-        <div
-          key={h}
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0"
-          style={{ top: (h - minH) * rowPx }}
-        >
-          {/* Etiqueta de hora */}
-          <span className="absolute right-full top-[-7px] w-8 pr-2 text-right text-[12px] font-semibold leading-none tabular-nums text-[var(--color-ink-soft)]">
-            {String(h).padStart(2, "0")}
-          </span>
-          {/* Línea fina */}
-          <div className="h-px w-full bg-[var(--color-border)]" />
-        </div>
-      ))}
+  // Scroll-to-now: deja la hora actual ~1/3 desde arriba si es hoy; si no, el
+  // inicio laboral (8h). No roba foco (scrollTop programático). `focusHour`
+  // deriva de `now` (fijada en montaje) → estable, así re-scrollea solo al
+  // navegar de día o cambiar de breakpoint, no en cada render; `nowHour()`
+  // (live) queda para la línea "ahora".
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const focusHour = isToday ? now.getHours() + now.getMinutes() / 60 : Math.max(minH, 8);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || el.clientHeight === 0) return; // copia oculta (display:none) → no-op
+    const target = (focusHour - minH) * rowPx;
+    el.scrollTop = Math.max(0, target - el.clientHeight / 3);
+  }, [focusHour, minH, rowPx]);
 
-      {/* Columna de eventos (relative para los bloques absolute) */}
-      <div className="absolute inset-0" style={{ left: LEFT_GUTTER }}>
-        {events.map((event) => (
-          <GridEventBlock
-            key={event.id}
-            event={event}
-            rowPx={rowPx}
-            minH={minH}
-            placement={placements.get(event.id) ?? { col: 0, cols: 1 }}
-          />
+  return (
+    <div
+      ref={scrollRef}
+      className="max-h-[60vh] overflow-y-auto overflow-x-hidden overscroll-contain"
+    >
+      <div className="relative" style={{ paddingLeft: LEFT_GUTTER, height: totalHeight }}>
+        {/* Líneas horizontales + etiquetas de hora */}
+        {hours.map((h) => (
+          <div
+            key={h}
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0"
+            style={{ top: (h - minH) * rowPx }}
+          >
+            {/* Etiqueta de hora */}
+            <span className="absolute right-full top-[-7px] w-8 pr-2 text-right text-[12px] font-semibold leading-none tabular-nums text-[var(--color-ink-soft)]">
+              {String(h).padStart(2, "0")}
+            </span>
+            {/* Línea fina */}
+            <div className="h-px w-full bg-[var(--color-border)]" />
+          </div>
         ))}
 
-        {/* Línea "ahora" */}
-        {showNowLine && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 z-10"
-            style={{ top: nowTop }}
-          >
-            {/* Dot */}
-            <span
-              className="absolute -left-1.5 -top-1.5 h-3 w-3 rounded-full"
-              style={{ backgroundColor: "var(--color-accent)" }}
+        {/* Columna de eventos (relative para los bloques absolute) */}
+        <div className="absolute inset-0" style={{ left: LEFT_GUTTER }}>
+          {events.map((event) => (
+            <GridEventBlock
+              key={event.id}
+              event={event}
+              rowPx={rowPx}
+              minH={minH}
+              placement={placements.get(event.id) ?? { col: 0, cols: 1 }}
             />
-            {/* Línea */}
+          ))}
+
+          {/* Línea "ahora" */}
+          {showNowLine && (
             <div
-              className="absolute inset-x-0 h-0.5"
-              style={{ backgroundColor: "var(--color-accent)" }}
-            />
-          </div>
-        )}
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 z-10"
+              style={{ top: nowTop }}
+            >
+              {/* Dot */}
+              <span
+                className="absolute -left-1.5 -top-1.5 h-3 w-3 rounded-full"
+                style={{ backgroundColor: "var(--color-accent)" }}
+              />
+              {/* Línea */}
+              <div
+                className="absolute inset-x-0 h-0.5"
+                style={{ backgroundColor: "var(--color-accent)" }}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -178,7 +200,9 @@ function DayGrid({ events, day, now, rowPx }: GridProps) {
  * Vista **día** — grilla horaria con eventos posicionados `absolute`, teñidos
  * por modo, y línea "ahora" si el día es hoy. La ventana horaria es auto-fit
  * (base 8–20h, se expande para incluir eventos fuera de ese rango — cero
- * recorte). Responsive: 52 px/hora en desktop, 36 px/hora en mobile.
+ * recorte). La grilla vive en un contenedor de alto fijo (`max-h-[60vh]`) con
+ * scroll propio, que al montar arranca en la hora actual (scroll-to-now) o en
+ * el inicio laboral. Responsive: 52 px/hora en desktop, 36 px/hora en mobile.
  */
 export function DayView({ events, day, now }: Props) {
   const dayEvents = eventsForDay(events, day);
