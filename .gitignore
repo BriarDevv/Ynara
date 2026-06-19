@@ -9,6 +9,7 @@ __pycache__/
 # MSW worker — generado por `pnpm msw:init` o predev hook.
 # Nunca commitearlo: evita que se sirva en prod y mantiene devDep status.
 apps/web/public/mockServiceWorker.js
+apps/admin/public/mockServiceWorker.js
 
 # Builds
 .next/
@@ -97,3 +98,4 @@ test-results/
 
 # Next.js generated — NO se commitea (regenerado por `next dev`/`next build`).
 apps/web/next-env.d.ts
+apps/admin/next-env.d.ts

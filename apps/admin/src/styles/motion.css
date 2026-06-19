@@ -1,0 +1,187 @@
+/* Keyframes reutilizables. Documentado en DESIGN.md §7. */
+
+@keyframes ynara-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ynara-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ynara-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes ynara-slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes ynara-pulse-soft {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.92;
+  }
+}
+
+@keyframes ynara-gradient-sweep {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Orbe de presencia (YnaraOrb, DESIGN.md §2/§8): un único latido lento, el
+   del diamante central. La duración viene de la var `--orb-beat` (4.2s calmo,
+   1.5s "pensando") para que el modo thinking no necesite un selector
+   descendente que le gane a la cascada de reduced-motion. El diamante
+   mantiene rotate(45deg) en todos los frames: la rotación es identidad de
+   marca, el scale es el latido. Glow y anillos quedaron estáticos a propósito
+   (antes latían en paralelo — movimiento ambiental que no mapeaba a ningún
+   estado). */
+@keyframes ynara-orb-core {
+  0%,
+  100% {
+    transform: rotate(45deg) scale(1);
+  }
+  50% {
+    transform: rotate(45deg) scale(1.18);
+  }
+}
+
+/* Typing indicator: cada punto sube y baja con un fade staggered (DESIGN.md §8). */
+@keyframes ynara-typing-dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* Toast: entrada 300ms / salida 200ms (DESIGN.md §8.2). */
+@keyframes ynara-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ynara-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@layer utilities {
+  .anim-fade-up {
+    animation: ynara-fade-up var(--duration-screen, 350ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  .anim-fade-in {
+    animation: ynara-fade-in var(--duration-base, 250ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  /* Entrada de pantalla (template del grupo (panel), §8.3 "cambio de pantalla").
+     Opacidad PURA a propósito: un `transform` residual (el `both` deja el frame
+     final aplicado) convertiría al template en containing block / stacking
+     context de los overlays `position: fixed` que cuelgan adentro (ej. el Toast),
+     desanclándolos del viewport. `opacity: 1` es inerte. Duración de pantalla
+     (350ms) para diferenciarla de los micro-fades (250ms). */
+  .anim-screen-in {
+    animation: ynara-fade-in var(--duration-screen, 350ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  .anim-slide-in-right {
+    animation: ynara-slide-in-right var(--duration-screen, 350ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  .anim-slide-in-left {
+    animation: ynara-slide-in-left var(--duration-screen, 350ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  .anim-pulse-soft {
+    animation: ynara-pulse-soft 1500ms ease-in-out infinite;
+  }
+
+  /* Entrada con stagger para listas (§8.2): fade-up + delay por índice.
+     El índice llega por la CSS var `--stagger-index` (un número, no un
+     tiempo) → es determinista server/cliente (sin hydration mismatch) y la
+     cascada global de reduced-motion puede neutralizar `animation-delay`
+     porque vive en una clase, no inline. */
+  .anim-stagger-up {
+    animation: ynara-fade-up var(--duration-screen, 350ms)
+      var(--ease-out-soft, ease-out) both;
+    animation-delay: calc(var(--stagger-index, 0) * 40ms);
+  }
+
+  .anim-orb-core {
+    animation: ynara-orb-core var(--orb-beat, 4200ms) ease-in-out infinite;
+  }
+
+  .anim-toast-in {
+    animation: ynara-toast-in var(--duration-slow, 300ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  .anim-toast-out {
+    animation: ynara-toast-out var(--duration-base, 200ms)
+      var(--ease-out-soft, ease-out) both;
+  }
+
+  /* Puntos del typing indicator: stagger via --dot-index (0, 1, 2). */
+  .anim-typing-dot {
+    animation: ynara-typing-dot 1200ms ease-in-out infinite;
+    animation-delay: calc(var(--dot-index, 0) * 160ms);
+  }
+}
