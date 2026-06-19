@@ -6,13 +6,13 @@ import type { MemoryLayer } from "@ynara/shared-schemas";
  * mobile no tiene): acá la capa se distingue por un dot de color de marca.
  * Etiquetas cálidas en rioplatense, no la jerga técnica del backend.
  */
-export type LayerDescriptor = {
+type LayerDescriptor = {
   id: MemoryLayer;
   label: string;
   blurb: string;
 };
 
-export const MEMORY_LAYERS: readonly LayerDescriptor[] = [
+const MEMORY_LAYERS: readonly LayerDescriptor[] = [
   { id: "semantic", label: "Hechos", blurb: "Lo que Ynara sabe de vos" },
   { id: "episodic", label: "Momentos", blurb: "Lo que fue pasando" },
   { id: "procedural", label: "Costumbres", blurb: "Cómo te gusta trabajar" },
