@@ -31,7 +31,7 @@ export function ChatHome() {
   return (
     <div className="mx-auto flex w-full max-w-[640px] flex-col gap-8 px-6 py-8">
       <header className="flex flex-col gap-2">
-        <h1 className="text-title text-[var(--color-ink-deep)]">¿De qué hablamos?</h1>
+        <h1 className="text-display text-[var(--color-ink-deep)]">¿De qué hablamos?</h1>
         <p className="text-body text-[var(--color-ink-soft)]">
           Retomá una conversación o empezá una nueva.
         </p>

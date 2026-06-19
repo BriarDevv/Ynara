@@ -73,6 +73,7 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
 
   return (
     <StepShell
+      hero
       eyebrow="Paso 1 — Cuenta"
       title={AUTH_STEP_COPY.signup.title}
       subtitle={AUTH_STEP_COPY.signup.subtitle}
@@ -176,6 +177,7 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
 
   return (
     <StepShell
+      hero
       eyebrow="Paso 1 — Cuenta"
       title={AUTH_STEP_COPY.login.title}
       subtitle={AUTH_STEP_COPY.login.subtitle}
