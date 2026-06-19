@@ -1,0 +1,461 @@
+"""Tests de INTEGRACIÓN del playground admin (F1 ADR-018).
+
+Cubre los dos endpoints aditivos del control plane:
+
+- ``GET /v1/admin/serving`` — inventario read-only del serving (config estática +
+  salud runtime). Invariante de privacidad (regla #4): NUNCA expone ``base_url`` ni
+  connection strings; con backend fake reporta ``is_real=False`` /
+  ``low_perf_available=False``.
+- ``POST /v1/admin/playground`` — completion ad-hoc aislada (sin DB/sesión/memoria).
+  Valida el modelo (422), rechaza el backend fake (409), aplica el preset low_perf,
+  y mapea la familia ``LlmError`` a status SIN ecoar el payload (regla #4: el
+  ``detail`` es solo ``type(exc).__name__``).
+
+Setup espejado de ``tests/api/test_admin_auth.py`` / ``test_chat.py``: ``httpx.AsyncClient``
++ ``ASGITransport(app=app)``, override de ``get_db`` con el ``db_session`` del fixture
+(el gate admin carga el ``User``), override de ``get_llm_client`` con un ``FakeLlmClient``
+programado, y patch de ``get_settings`` para forzar ``LLM_BACKEND=vllm`` (serving real)
+salvo en el test del guard 409. Ningún endpoint commitea: el rollback del fixture limpia.
+"""
+
+from __future__ import annotations
+
+import uuid
+from collections.abc import AsyncIterator, Iterator
+from unittest.mock import patch
+
+import httpx
+import pytest
+from httpx import ASGITransport
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import Settings
+from app.core.deps import get_db, get_llm_client
+from app.core.security import create_access_token
+from app.llm.clients.fakes import FakeLlmClient
+from app.llm.errors import (
+    LlmBadRequestError,
+    LlmContextOverflowError,
+    LlmError,
+    LlmOverloadedError,
+    LlmTimeoutError,
+    LlmUnavailableError,
+    ModelNotServedError,
+)
+from app.llm.schemas import CompletionResult
+from app.main import app
+from app.models.user import User
+
+pytestmark = pytest.mark.integration
+
+# served_names reales del catálogo (ynara.config.json): gemma4 (conversational) +
+# qwen (agent). El Fake del lifespan anuncia ambos.
+_SERVED = frozenset({"gemma4", "qwen"})
+
+
+def _real_settings() -> Settings:
+    """Settings con ``LLM_BACKEND=vllm`` -> ``_wants_real_llm`` True (serving real).
+
+    El playground guardea el backend fake con un 409; para ejercitar el camino real
+    (happy-path + mapeo de errores) hay que forzar el flag SIN mentir ``environment``.
+    """
+    return Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        DATABASE_URL="postgresql://test:test@localhost/test",
+        REDIS_URL="redis://localhost:6379/0",
+        JWT_SECRET="test-secret-no-usar-en-prod-min-32b",
+        LLM_BACKEND="vllm",
+    )
+
+
+def _fake_settings() -> Settings:
+    """Settings con el default ``LLM_BACKEND=fake`` -> serving real NO disponible."""
+    return Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        DATABASE_URL="postgresql://test:test@localhost/test",
+        REDIS_URL="redis://localhost:6379/0",
+        JWT_SECRET="test-secret-no-usar-en-prod-min-32b",
+    )
+
+
+def _completion(
+    *,
+    text: str = "respuesta de prueba",
+    finish_reason: str = "stop",
+    model_name: str = "gemma4",
+) -> CompletionResult:
+    """``CompletionResult`` mínimo para programar el ``FakeLlmClient``."""
+    return CompletionResult(
+        text=text,
+        finish_reason=finish_reason,
+        tool_calls=[],
+        prompt_tokens=12,
+        completion_tokens=7,
+        model_name=model_name,
+        latency_ms=33.0,
+    )
+
+
+async def _seed_admin(session: AsyncSession) -> User:
+    """Inserta un User admin y hace flush para que tenga id asignado."""
+    user = User(is_admin=True)
+    session.add(user)
+    await session.flush()
+    await session.refresh(user)
+    return user
+
+
+def _bearer(user_id: uuid.UUID) -> dict[str, str]:
+    return {"Authorization": f"Bearer {create_access_token(str(user_id))}"}
+
+
+def _client(db_session: AsyncSession, *, llm_client: FakeLlmClient) -> httpx.AsyncClient:
+    """Overridea ``get_db`` + ``get_llm_client`` y devuelve el cliente ASGI.
+
+    El caller limpia los overrides en su ``finally`` (``app.dependency_overrides.clear()``).
+    """
+
+    async def _override_db() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[get_llm_client] = lambda: llm_client
+    transport = ASGITransport(app=app)
+    return httpx.AsyncClient(transport=transport, base_url="http://test")
+
+
+def _patch_settings(settings: Settings) -> Iterator[None]:
+    """Patchea ``get_settings`` en admin.py para controlar ``_wants_real_llm``."""
+    return patch("app.api.v1.admin.get_settings", return_value=settings)
+
+
+# ---------------------------------------------------------------------------
+# GET /v1/admin/serving
+# ---------------------------------------------------------------------------
+
+
+async def test_serving_real_backend_inventory(db_session: AsyncSession) -> None:
+    """Con LLM_BACKEND=vllm: is_real=True, low_perf_available=True, ambos modelos sanos."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.get("/v1/admin/serving", headers=_bearer(admin.id))
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["backend"] == "vllm"
+        assert body["is_real"] is True
+        assert body["serving_healthy"] is True
+        assert body["low_perf_available"] is True
+        assert body["request_timeout_s"] == 120.0
+        assert body["embedder"] == "bge-m3"
+        assert body["reranker"] == "bge-reranker-v2-m3"
+
+        served_names = {m["served_name"] for m in body["models"]}
+        assert served_names == {"gemma4", "qwen"}
+        by_served = {m["served_name"]: m for m in body["models"]}
+        # gemma4 = conversational (default_thinking False); qwen = agent (True).
+        assert by_served["gemma4"]["role"] == "conversational"
+        assert by_served["gemma4"]["default_thinking"] is False
+        assert by_served["gemma4"]["max_model_len"] == 8192
+        assert by_served["gemma4"]["tool_parser"] == "gemma4"
+        assert by_served["qwen"]["role"] == "agent"
+        assert by_served["qwen"]["default_thinking"] is True
+        assert by_served["qwen"]["max_model_len"] == 32768
+        assert by_served["qwen"]["tool_parser"] == "hermes"
+        # Todos sanos: el Fake reporta healthy y sirve ambos served_names.
+        assert all(m["healthy"] for m in body["models"])
+        assert all(m["quantization"] == "awq_marlin" for m in body["models"])
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_serving_fake_backend_flags_not_real(db_session: AsyncSession) -> None:
+    """Con backend fake: serving_healthy True (el Fake reporta sano) pero is_real /
+    low_perf_available son False para que la UI advierta que no hay generación real."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_fake_settings()):
+            async with client:
+                resp = await client.get("/v1/admin/serving", headers=_bearer(admin.id))
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["backend"] == "fake"
+        assert body["is_real"] is False
+        assert body["low_perf_available"] is False
+        assert body["serving_healthy"] is True
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_serving_never_exposes_base_url(db_session: AsyncSession) -> None:
+    """Regla #4: la respuesta del serving NUNCA contiene base_url ni connection strings."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.get("/v1/admin/serving", headers=_bearer(admin.id))
+
+        assert resp.status_code == 200
+        # Ni el campo, ni el host de serving por default (localhost:11434).
+        assert "base_url" not in resp.text
+        assert "11434" not in resp.text
+        assert "localhost" not in resp.text
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/admin/playground — happy path
+# ---------------------------------------------------------------------------
+
+
+async def test_playground_happy_path(db_session: AsyncSession) -> None:
+    """200 + PlaygroundOut con el CompletionResult del Fake; llama complete() directo."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_result(_completion(text="hola desde el playground", model_name="gemma4"))
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground",
+                    json={"model": "gemma4", "message": "hola"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["text"] == "hola desde el playground"
+        assert body["finish_reason"] == "stop"
+        assert body["model_name"] == "gemma4"
+        assert body["prompt_tokens"] == 12
+        assert body["completion_tokens"] == 7
+        assert body["latency_ms"] == 33.0
+        # gemma4 = conversational -> default thinking False.
+        assert body["thinking_used"] is False
+
+        # Aislamiento: se llamó complete() con el served_name, sin tools.
+        assert len(fake.complete_calls) == 1
+        call = fake.complete_calls[0]
+        assert call["model"] == "gemma4"
+        assert call["tools"] is None
+        # messages = [system, user]; el user trae el mensaje del operador.
+        messages = call["messages"]
+        assert messages[0].role == "system"
+        assert messages[1].role == "user"
+        assert messages[1].content == "hola"
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_thinking_default_per_role_agent(db_session: AsyncSession) -> None:
+    """qwen = agent -> default thinking True cuando el body no lo overridea."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_result(_completion(model_name="qwen"))
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground",
+                    json={"model": "qwen", "message": "que onda"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        assert resp.json()["thinking_used"] is True
+        assert fake.complete_calls[0]["thinking"] is True
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_thinking_manual_override(db_session: AsyncSession) -> None:
+    """El override manual del body gana sobre el default por role (gemma4 + thinking=True)."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_result(_completion(model_name="gemma4"))
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground",
+                    json={"model": "gemma4", "message": "hola", "thinking": True},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        assert resp.json()["thinking_used"] is True
+        assert fake.complete_calls[0]["thinking"] is True
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/admin/playground — low_perf preset
+# ---------------------------------------------------------------------------
+
+
+async def test_playground_low_perf_applies_preset(db_session: AsyncSession) -> None:
+    """low_perf pisa max_tokens<=256, temp<=0.2 y thinking=False, sea cual sea el body."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_result(_completion(model_name="qwen"))
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground",
+                    json={
+                        "model": "qwen",  # agent -> default thinking True, pero low_perf lo pisa
+                        "message": "hola",
+                        "thinking": True,  # también pisado por el preset
+                        "params": {"max_tokens": 4096, "temperature": 1.5, "low_perf": True},
+                    },
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        # thinking efectivo (devuelto + pasado al cliente) forzado a False por el preset.
+        assert resp.json()["thinking_used"] is False
+        assert fake.complete_calls[0]["thinking"] is False
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/admin/playground — validación de modelo + guard de backend fake
+# ---------------------------------------------------------------------------
+
+
+async def test_playground_invalid_model_422(db_session: AsyncSession) -> None:
+    """Un served_name fuera del catálogo -> 422 con detail neutro 'modelo no servido'."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground",
+                    json={"model": "no-existe", "message": "hola"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "modelo no servido"
+        # No se intentó llamar al cliente con un modelo inválido.
+        assert fake.complete_calls == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_fake_backend_409(db_session: AsyncSession) -> None:
+    """Con backend fake -> 409 ANTES de llamar complete() (evita la AssertionError/500)."""
+    admin = await _seed_admin(db_session)
+    # El Fake del lifespan NO tiene resultados encolados: si el endpoint lo llamara,
+    # reventaría con AssertionError (500). El guard 409 debe cortar antes.
+    fake = FakeLlmClient(served_models=_SERVED)
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_fake_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground",
+                    json={"model": "gemma4", "message": "hola"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 409
+        assert resp.json()["detail"] == "serving real no disponible"
+        assert fake.complete_calls == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/admin/playground — mapeo de LlmError (sin ecoar payload, regla #4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_status"),
+    [
+        (LlmTimeoutError(), 504),
+        (LlmUnavailableError(), 503),
+        (LlmOverloadedError(), 503),
+        (LlmContextOverflowError(), 422),
+        (LlmBadRequestError(), 422),
+        (ModelNotServedError(), 422),
+        (LlmError(), 502),
+    ],
+)
+async def test_playground_llm_error_mapping(
+    db_session: AsyncSession, error: LlmError, expected_status: int
+) -> None:
+    """Cada familia de LlmError mapea a su status; el detail es solo el nombre de la clase."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_error(error)
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground",
+                    json={"model": "gemma4", "message": "hola"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == expected_status
+        assert resp.json()["detail"] == type(error).__name__
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_error_detail_never_echoes_payload(db_session: AsyncSession) -> None:
+    """Regla #4: el detail del error NO contiene el payload crudo (str(exc)), solo el
+    nombre de la clase. Aunque el LlmError lleve un ``detail`` técnico sensible, no viaja."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    secret = "PAYLOAD-SENSIBLE-1234"
+    fake.queue_error(LlmTimeoutError(detail=secret))
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground",
+                    json={"model": "gemma4", "message": "hola"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 504
+        assert resp.json()["detail"] == "LlmTimeoutError"
+        # El payload sensible no aparece en NINGÚN lado de la respuesta.
+        assert secret not in resp.text
+    finally:
+        app.dependency_overrides.clear()

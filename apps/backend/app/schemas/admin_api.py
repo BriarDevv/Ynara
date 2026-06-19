@@ -14,8 +14,11 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
+from pydantic import Field
+
 from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode
 from app.schemas.base import YnaraBaseModel
+from app.schemas.chat import CHAT_TEXT_MAX_LENGTH
 
 
 class AdminAuditRow(YnaraBaseModel):
@@ -47,3 +50,88 @@ class AdminAuditPage(YnaraBaseModel):
     items: list[AdminAuditRow]
     total: int
     sensitive_pct: float
+
+
+# ---------------------------------------------------------------------------
+# Playground admin (F1 ADR-018): inventario de serving read-only + chat de prueba
+# ---------------------------------------------------------------------------
+#
+# Privacidad (regla #4): el inventario de serving NUNCA expone ``base_url`` ni
+# connection strings — solo ``backend`` (fake/vllm), ``served_names``, ``role``,
+# ``quant``, etc. El playground no persiste nada y nunca ecoa el payload crudo de
+# un ``LlmError`` (el mapeo de errores usa solo ``type(exc).__name__``).
+
+
+class ServingModelOut(YnaraBaseModel):
+    """Estado read-only de un modelo del catálogo de serving (F1 ADR-018).
+
+    Combina el contrato de producto (``ynara.config.json`` -> ``ModelConfig`` +
+    ``ServingConfig``) con la salud runtime agregada del cliente LLM. NUNCA lleva
+    ``base_url`` ni nada que filtre la topología del serving (regla #4).
+    """
+
+    key: str  # key interna ("gemma-4-12b" | "qwen-3.5-9b")
+    served_name: str  # alias que se pasa a complete() ("gemma4" | "qwen")
+    role: str  # "conversational" | "agent"
+    writes_memory: bool
+    context_window: int
+    max_model_len: int  # cfg.serving.max_model_len[key]
+    quantization: str  # perfil de serving ("awq_marlin")
+    tool_parser: str  # "gemma4" | "hermes"
+    healthy: bool  # serves_model(served_name) ∧ health agregada
+    default_thinking: bool  # False conversational, True agent (gotcha Gemma, ADR-012 D4)
+
+
+class ServingOut(YnaraBaseModel):
+    """Estado read-only del serving completo (F1 ADR-018).
+
+    Config estática (backend, timeout, embedder/reranker) + salud runtime. Sin
+    secretos: NO ``base_url``, NO connection strings. La UI usa ``is_real`` para
+    advertir "serving real no disponible" cuando el backend es el Fake.
+    """
+
+    backend: str  # settings.llm_backend: "fake" | "vllm"
+    is_real: bool  # _wants_real_llm(settings)
+    serving_healthy: bool  # await llm_client.health().healthy
+    request_timeout_s: float  # cfg.serving.request_timeout_s (120)
+    low_perf_available: bool  # True con serving real (preset per-request); False si fake
+    models: list[ServingModelOut]
+    embedder: str  # settings.embedding_model ("bge-m3")
+    reranker: str  # settings.reranker_model ("bge-reranker-v2-m3")
+
+
+class PlaygroundParams(YnaraBaseModel):
+    """Params per-request del playground. ``low_perf`` activa el preset de bajo
+    rendimiento (overridea ``max_tokens``/``temperature``/``thinking``)."""
+
+    max_tokens: int = Field(default=1024, ge=1, le=4096)
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    low_perf: bool = False
+
+
+class PlaygroundIn(YnaraBaseModel):
+    """Body de ``POST /v1/admin/playground``: completion ad-hoc aislada (F1 ADR-018).
+
+    ``model`` es el ``served_name`` ("gemma4"|"qwen"), validado contra el catálogo.
+    ``mode`` opcional: si viene (y no hay ``system_prompt`` crudo) se usa
+    ``load_prompt(mode)`` como system. ``thinking`` ``None`` -> default por role.
+    """
+
+    model: str
+    mode: str | None = None
+    message: str = Field(min_length=1, max_length=CHAT_TEXT_MAX_LENGTH)
+    system_prompt: str | None = None
+    params: PlaygroundParams = Field(default_factory=PlaygroundParams)
+    thinking: bool | None = None
+
+
+class PlaygroundOut(YnaraBaseModel):
+    """Respuesta del playground: el ``CompletionResult`` crudo + el thinking efectivo."""
+
+    text: str
+    finish_reason: str
+    model_name: str
+    prompt_tokens: int
+    completion_tokens: int
+    latency_ms: float
+    thinking_used: bool  # el thinking efectivo aplicado (para mostrar en UI)
