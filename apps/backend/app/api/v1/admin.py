@@ -54,6 +54,7 @@ from app.llm.errors import (
 )
 from app.llm.prompts.loader import load_prompt
 from app.llm.schemas import ChatMessage
+from app.llm.text_utils import split_thinking
 from app.models.audit import AuditLog
 from app.models.memory import EpisodicMemory, ProceduralMemory, SemanticMemory
 from app.models.session import ChatSession
@@ -98,6 +99,7 @@ from app.schemas.admin_api import (
     PlaygroundOut,
     ServingModelOut,
     ServingOut,
+    TraceStep,
 )
 
 router = APIRouter()
@@ -932,12 +934,36 @@ async def admin_playground(
     except LlmError as exc:
         raise _map_llm_error(exc) from exc
 
+    # 8) Separar el bloque <think>...</think> embebido (Qwen thinking model): el
+    #    ``text`` que devolvemos queda limpio y el razonamiento crudo va aparte.
+    clean_text, thinking_text = split_thinking(result.text)
+
+    # 9) Trace observable del lifecycle (Fase A, aditivo). PRIVACIDAD (regla #4):
+    #    los ``detail`` solo concatenan params PÚBLICOS (los que el operador ya mandó)
+    #    + metadata del ``CompletionResult``. NUNCA base_url, system prompt ni str(exc).
+    trace = [
+        TraceStep(
+            name="request",
+            detail=f"{model_cfg.served_name} · max_tokens={max_tokens} · temp={temperature}"
+            + (" · preset low_perf" if body.params.low_perf else ""),
+        ),
+        TraceStep(name="thinking", detail="on" if thinking else "off"),
+        TraceStep(
+            name="completion",
+            detail=f"{result.finish_reason} · "
+            f"{result.prompt_tokens + result.completion_tokens} tok",
+            duration_ms=result.latency_ms,
+        ),
+    ]
+
     return PlaygroundOut(
-        text=result.text,
+        text=clean_text,
         finish_reason=result.finish_reason,
         model_name=result.model_name,
         prompt_tokens=result.prompt_tokens,
         completion_tokens=result.completion_tokens,
         latency_ms=result.latency_ms,
         thinking_used=thinking,
+        thinking=thinking_text,
+        trace=trace,
     )

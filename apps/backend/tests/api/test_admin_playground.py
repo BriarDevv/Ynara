@@ -247,6 +247,28 @@ async def test_playground_happy_path(db_session: AsyncSession) -> None:
         assert body["latency_ms"] == 33.0
         # gemma4 = conversational -> default thinking False.
         assert body["thinking_used"] is False
+        # Sin <think> en el text -> thinking separado es None.
+        assert body["thinking"] is None
+
+        # Trace (Fase A): 3 steps con los names del lifecycle, en orden.
+        trace = body["trace"]
+        assert [step["name"] for step in trace] == ["request", "thinking", "completion"]
+        by_name = {step["name"]: step for step in trace}
+        # request: served_name + params públicos; sin preset low_perf por default.
+        assert "gemma4" in by_name["request"]["detail"]
+        assert "max_tokens=1024" in by_name["request"]["detail"]
+        assert "preset low_perf" not in by_name["request"]["detail"]
+        # thinking off (gemma4 conversational sin override).
+        assert by_name["thinking"]["detail"] == "off"
+        # completion: finish_reason + tokens totales + duration_ms == latency_ms.
+        assert "stop" in by_name["completion"]["detail"]
+        assert "19 tok" in by_name["completion"]["detail"]  # 12 + 7
+        assert by_name["completion"]["duration_ms"] == 33.0
+        # request/thinking no llevan duration_ms.
+        assert by_name["request"]["duration_ms"] is None
+        # Regla #4: el trace NUNCA filtra system prompt ni base_url.
+        assert "asistente útil" not in resp.text
+        assert "base_url" not in resp.text
 
         # Aislamiento: se llamó complete() con el served_name, sin tools.
         assert len(fake.complete_calls) == 1
@@ -304,6 +326,75 @@ async def test_playground_thinking_manual_override(db_session: AsyncSession) -> 
         assert resp.status_code == 200
         assert resp.json()["thinking_used"] is True
         assert fake.complete_calls[0]["thinking"] is True
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/admin/playground — trace + thinking separado (Fase A)
+# ---------------------------------------------------------------------------
+
+
+async def test_playground_splits_thinking_block(db_session: AsyncSession) -> None:
+    """Si el text del modelo trae <think>...</think>, se separa: text limpio + thinking aparte."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    raw = "<think>razonando un toque</think>Hola, esta es la respuesta final."
+    fake.queue_result(_completion(text=raw, model_name="qwen"))
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground",
+                    json={"model": "qwen", "message": "hola", "thinking": True},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        # text queda LIMPIO (sin el bloque <think>).
+        assert body["text"] == "Hola, esta es la respuesta final."
+        assert "<think>" not in body["text"]
+        # el thinking crudo (con tags) viaja aparte.
+        assert body["thinking"] == "<think>razonando un toque</think>"
+        # qwen + thinking override True -> step thinking "on".
+        by_name = {step["name"]: step for step in body["trace"]}
+        assert by_name["thinking"]["detail"] == "on"
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_trace_request_step_flags_low_perf(db_session: AsyncSession) -> None:
+    """Con low_perf el step 'request' del trace marca el preset (detail público)."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_result(_completion(model_name="qwen"))
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground",
+                    json={
+                        "model": "qwen",
+                        "message": "hola",
+                        "params": {"max_tokens": 4096, "temperature": 1.5, "low_perf": True},
+                    },
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        by_name = {step["name"]: step for step in resp.json()["trace"]}
+        detail = by_name["request"]["detail"]
+        assert "preset low_perf" in detail
+        # El preset pisa los params: el detail refleja los EFECTIVOS, no los del body.
+        assert "max_tokens=256" in detail
+        assert "temp=0.2" in detail
+        # low_perf fuerza thinking=False.
+        assert by_name["thinking"]["detail"] == "off"
     finally:
         app.dependency_overrides.clear()
 

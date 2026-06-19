@@ -39,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode
 from app.llm.clients.base import LLMClient
 from app.llm.schemas import ChatMessage
+from app.llm.text_utils import THINK_BLOCK_RE
 from app.memory.hashing import compute_record_hash, procedural_hash_payload
 from app.schemas.memory import ProceduralMemoryUpsert, SemanticMemoryCreate
 
@@ -230,8 +231,10 @@ _VALID_LAYERS: frozenset[str] = frozenset({"semantic", "procedural"})
 # (output JSON limpio, ADR-012 D4), pero si el server igual antepone un bloque
 # <think>...</think> (default del server / Ollama sin reasoning-parser) o envuelve
 # el JSON en un fence markdown, se limpia ANTES de json.loads para no degradar la
-# extraccion a [] / summary vacio en silencio (#235).
-_THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>.*?</think>", re.DOTALL | re.IGNORECASE)
+# extraccion a [] / summary vacio en silencio (#235). El regex vive ahora en
+# ``app.llm.text_utils`` (util publico compartido); se reexporta con el nombre
+# privado historico para no cambiar el uso interno de este modulo.
+_THINK_BLOCK_RE = THINK_BLOCK_RE
 
 
 def _strip_reasoning_and_fences(raw_text: str) -> str:
