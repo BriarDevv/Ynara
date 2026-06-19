@@ -47,7 +47,9 @@ type VariantConfig = {
   density: FieldDensity;
   /** Énfasis de los hilos entre nodos (red). */
   link: number;
-  /** Opacidad del grano (capa CSS estática, §3.6). */
+  /** Opacidad del grano (capa CSS estática, §3.6). Banda sutil ≤0.10 en
+   *  todas las variantes: alcanza para matar el banding de los gradientes
+   *  calmos en OLED sin que el ruido se lea de un vistazo (era hasta 0.85). */
   grain: number;
   /** Fuerza de los blooms de profundidad. */
   aura: number;
@@ -63,7 +65,7 @@ const VARIANTS: Record<LivingFieldVariant, VariantConfig> = {
     pointer: true,
     density: "sutil",
     link: 0.8,
-    grain: 0.42,
+    grain: 0.1,
     aura: 1,
     concentrate: "top",
   },
@@ -74,7 +76,7 @@ const VARIANTS: Record<LivingFieldVariant, VariantConfig> = {
     pointer: true,
     density: "intensa",
     link: 0.5,
-    grain: 0.3,
+    grain: 0.08,
     aura: 0.85,
     concentrate: "full",
   },
@@ -85,18 +87,19 @@ const VARIANTS: Record<LivingFieldVariant, VariantConfig> = {
     pointer: true,
     density: "media",
     link: 2.4,
-    grain: 0.28,
+    grain: 0.08,
     aura: 0.9,
     concentrate: "full",
   },
-  // Agenda: grano — limpio, casi quieto, sin cursor.
+  // Agenda: limpio, casi quieto, sin cursor. La grilla es lectura densa, así
+  // que el grano es el más bajo de todos (era 0.85, el outlier que enturbiaba).
   paper: {
     waves: false,
     particles: true,
     pointer: false,
     density: "sutil",
     link: 0.25,
-    grain: 0.85,
+    grain: 0.05,
     aura: 0.5,
     concentrate: "top",
   },
@@ -107,7 +110,7 @@ const VARIANTS: Record<LivingFieldVariant, VariantConfig> = {
     pointer: false,
     density: "sutil",
     link: 1,
-    grain: 0.5,
+    grain: 0.08,
     aura: 1.6,
     concentrate: "full",
   },
