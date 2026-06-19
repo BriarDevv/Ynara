@@ -97,3 +97,4 @@ test-results/
 
 # Next.js generated — NO se commitea (regenerado por `next dev`/`next build`).
 apps/web/next-env.d.ts
+apps/admin/next-env.d.ts
