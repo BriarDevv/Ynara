@@ -1,4 +1,4 @@
-import { HttpResponse, http } from "msw";
+import { delay, HttpResponse, http } from "msw";
 import { ModeId, RangeId } from "@/features/_shared/schemas";
 import {
   type AuditFilterState,
@@ -8,12 +8,14 @@ import {
   EMPTY_AUDIT_FILTERS,
 } from "@/features/audit/schemas";
 import { MeOut, type MeOutT, TokenOut, type TokenOutT } from "@/features/auth/schemas";
+import type { PlaygroundInT } from "@/features/playground/schemas";
 import { env } from "@/lib/env";
 import type { RangeId as RangeIdStore } from "@/stores/range";
 import { auditPage } from "./audit";
 import { moatFixture } from "./moat";
 import { modesFixture } from "./modes";
 import { overviewFixture } from "./overview";
+import { playgroundEcho, servingFixture } from "./playground";
 import { systemFixture } from "./system";
 import { usersFixture } from "./users";
 
@@ -135,4 +137,14 @@ export const adminHandlers = [
 
   // GET /v1/admin/system  (sin range: runtime/config)
   http.get(apiUrl("/v1/admin/system"), () => HttpResponse.json(systemFixture())),
+
+  // GET /v1/admin/serving  (sin range: runtime/config) — backend "vllm" real.
+  http.get(apiUrl("/v1/admin/serving"), () => HttpResponse.json(servingFixture())),
+
+  // POST /v1/admin/playground — eco determinista con latencia simulada.
+  http.post(apiUrl("/v1/admin/playground"), async ({ request }) => {
+    const body = (await request.json()) as PlaygroundInT;
+    await delay(800); // simula la generación del modelo
+    return HttpResponse.json(playgroundEcho(body));
+  }),
 ];

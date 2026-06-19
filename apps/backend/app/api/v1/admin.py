@@ -31,15 +31,29 @@ import time
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import Float, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import __version__
 from app.core.config import get_settings
 from app.core.db_guard import _host_of, is_prod_db_host
-from app.core.deps import CurrentAdmin, DbSession
+from app.core.deps import CurrentAdmin, DbSession, get_llm_client
 from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode, enum_values
+from app.llm.clients.base import LLMClient
+from app.llm.clients.factory import _wants_real_llm
+from app.llm.config import load_llm_config
+from app.llm.errors import (
+    LlmBadRequestError,
+    LlmContextOverflowError,
+    LlmError,
+    LlmOverloadedError,
+    LlmTimeoutError,
+    LlmUnavailableError,
+    ModelNotServedError,
+)
+from app.llm.prompts.loader import load_prompt
+from app.llm.schemas import ChatMessage
 from app.models.audit import AuditLog
 from app.models.memory import EpisodicMemory, ProceduralMemory, SemanticMemory
 from app.models.session import ChatSession
@@ -77,7 +91,14 @@ from app.schemas.admin import (
     TimePoint,
     UsersActivity,
 )
-from app.schemas.admin_api import AdminAuditPage, AdminAuditRow
+from app.schemas.admin_api import (
+    AdminAuditPage,
+    AdminAuditRow,
+    PlaygroundIn,
+    PlaygroundOut,
+    ServingModelOut,
+    ServingOut,
+)
 
 router = APIRouter()
 
@@ -743,4 +764,180 @@ async def admin_system(
         guard=guard,
         services=SystemServices(postgres=postgres, redis=redis),
         runtime=runtime,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Playground admin (F1 ADR-018): inventario de serving + chat de prueba aislado
+# ---------------------------------------------------------------------------
+#
+# Privacidad (regla #4) — invariantes NO re-litigables:
+# (1) NUNCA se expone ``base_url`` ni connection strings del serving (host/creds):
+#     ``ServingOut`` ni siquiera tiene el campo. Solo backend (fake/vllm),
+#     served_names, role, quant, etc.
+# (2) El playground NO persiste nada (sin ``DbSession`` en la firma -> cero
+#     ``ChatSession``/``conversation_turns``/``episodic``/``consolidate_turn``).
+# (3) NUNCA se ecoa el body crudo de un ``LlmError``: el mapeo de errores usa solo
+#     ``type(exc).__name__``, jamás ``str(exc)`` con payload.
+
+# Preset "bajo rendimiento" (F1 ADR-018): topes per-request que materializan el
+# modo de bajo rendimiento (menos VRAM-time/latencia). Pisan los params del body.
+_LOW_PERF_MAX_TOKENS = 256
+_LOW_PERF_TEMPERATURE = 0.2
+_LOW_PERF_TIMEOUT_S = 30.0
+
+# System prompt neutro por default cuando el operador no manda ``system_prompt`` ni
+# ``mode`` (el playground es un probe del modelo crudo, sin la voz de producto).
+_PLAYGROUND_DEFAULT_SYSTEM = "Sos un asistente útil. Respondé de forma concisa."
+
+
+@router.get("/admin/serving", response_model=ServingOut, status_code=200)
+async def admin_serving(
+    admin_id: CurrentAdmin,
+    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+) -> ServingOut:
+    """Inventario read-only del serving: config estática + salud runtime agregada.
+
+    Combina ``load_llm_config()`` + ``settings`` con una sola ``llm_client.health()``.
+    NUNCA expone ``base_url`` ni connection strings (regla #4): solo backend
+    (fake/vllm), served_names, role, quant, tool_parser, etc. Con backend fake el
+    Fake reporta sano (``serving_healthy=True``) pero ``is_real``/``low_perf_available``
+    son ``False`` para que la UI advierta que no hay generación real.
+    """
+    settings = get_settings()
+    cfg = load_llm_config()
+    is_real = _wants_real_llm(settings)
+
+    # Una sola llamada de health agregada; se combina con serves_model por modelo.
+    health = await llm_client.health()
+
+    models = [
+        ServingModelOut(
+            key=model.key,
+            served_name=model.served_name,
+            role=model.role,
+            writes_memory=model.writes_memory,
+            context_window=model.context_window,
+            max_model_len=cfg.serving.max_model_len[model.key],
+            quantization=cfg.serving.quantization,
+            tool_parser=cfg.serving.tool_parsers[model.key],
+            healthy=health.healthy and llm_client.serves_model(model.served_name),
+            default_thinking=model.role == "agent",
+        )
+        for model in cfg.models.values()
+    ]
+
+    return ServingOut(
+        backend=settings.llm_backend,
+        is_real=is_real,
+        serving_healthy=health.healthy,
+        request_timeout_s=float(cfg.serving.request_timeout_s),
+        low_perf_available=is_real,
+        models=models,
+        embedder=settings.embedding_model,
+        reranker=settings.reranker_model,
+    )
+
+
+def _map_llm_error(exc: LlmError) -> HTTPException:
+    """Mapea un ``LlmError`` a un ``HTTPException`` SIN ecoar el payload (regla #4).
+
+    El ``detail`` es solo el nombre de la clase de la excepción (``type(exc).__name__``),
+    nunca ``str(exc)`` (que podría llevar detalle técnico del request/respuesta).
+    Transitorios -> 503/504; permanentes -> 422; genérico -> 502.
+    """
+    if isinstance(exc, LlmTimeoutError):
+        code = status.HTTP_504_GATEWAY_TIMEOUT
+    elif isinstance(exc, (LlmUnavailableError, LlmOverloadedError)):
+        code = status.HTTP_503_SERVICE_UNAVAILABLE
+    elif isinstance(exc, (LlmContextOverflowError, LlmBadRequestError, ModelNotServedError)):
+        code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    else:
+        code = status.HTTP_502_BAD_GATEWAY
+    return HTTPException(status_code=code, detail=type(exc).__name__)
+
+
+@router.post("/admin/playground", response_model=PlaygroundOut, status_code=200)
+async def admin_playground(
+    body: PlaygroundIn,
+    admin_id: CurrentAdmin,
+    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+) -> PlaygroundOut:
+    """Completion ad-hoc aislada contra un modelo elegido (F1 ADR-018).
+
+    Llama ``llm_client.complete()`` DIRECTO (sin ``route()``/``run_tool_loop()``, sin
+    ``DbSession``): cero sesión/memoria/tools. Valida el ``served_name`` contra el
+    catálogo (422 si no se sirve), rechaza el backend fake (409, evita la
+    ``AssertionError`` del Fake del lifespan), aplica el preset low_perf si se pidió y
+    mapea la familia ``LlmError`` a status sin ecoar el payload (regla #4).
+    """
+    settings = get_settings()
+    cfg = load_llm_config()
+
+    # 1) Validar el modelo elegido contra el catálogo de served_names.
+    models_by_served = {m.served_name: m for m in cfg.models.values()}
+    model_cfg = models_by_served.get(body.model)
+    if model_cfg is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modelo no servido"
+        )
+
+    # 2) Sin serving real (backend fake) no hay generación: el Fake del lifespan no
+    #    tiene respuestas encoladas -> 409 ANTES de llamar complete() (evita el 500).
+    if not _wants_real_llm(settings):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="serving real no disponible"
+        )
+
+    # 3) Thinking efectivo: override manual del body, si no el default por role
+    #    (False conversational / True agent; gotcha Gemma+thinking -> content vacío).
+    thinking = body.thinking if body.thinking is not None else model_cfg.role == "agent"
+
+    # 4) Params efectivos; el preset low_perf pisa max_tokens/temp/thinking + timeout.
+    max_tokens = body.params.max_tokens
+    temperature = body.params.temperature
+    timeout_s: float | None = None
+    if body.params.low_perf:
+        max_tokens = min(_LOW_PERF_MAX_TOKENS, body.params.max_tokens)
+        temperature = min(_LOW_PERF_TEMPERATURE, body.params.temperature)
+        thinking = False
+        timeout_s = _LOW_PERF_TIMEOUT_S
+
+    # 5) System prompt: override crudo > load_prompt(mode) > default neutro.
+    system_content = body.system_prompt or _PLAYGROUND_DEFAULT_SYSTEM
+    if body.system_prompt is None and body.mode is not None:
+        try:
+            system_content = load_prompt(Mode(body.mode))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modo desconocido"
+            ) from exc
+
+    messages = [
+        ChatMessage(role="system", content=system_content),
+        ChatMessage(role="user", content=body.message),
+    ]
+
+    # 6) Llamada directa al cliente; 7) mapear LlmError a status sin ecoar payload.
+    try:
+        result = await llm_client.complete(
+            model=model_cfg.served_name,
+            messages=messages,
+            tools=None,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            thinking=thinking,
+            timeout_s=timeout_s,
+        )
+    except LlmError as exc:
+        raise _map_llm_error(exc) from exc
+
+    return PlaygroundOut(
+        text=result.text,
+        finish_reason=result.finish_reason,
+        model_name=result.model_name,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        latency_ms=result.latency_ms,
+        thinking_used=thinking,
     )

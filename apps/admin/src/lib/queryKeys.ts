@@ -24,5 +24,6 @@ export const qk = {
     audit: (range: RangeId, filters: unknown, page: number) =>
       ["admin", "audit", range, filters, page] as const,
     system: () => ["admin", "system"] as const,
+    playground: () => ["admin", "playground"] as const,
   },
 } as const;

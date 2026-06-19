@@ -379,6 +379,25 @@ Invariantes transversales:
   - Response 200: `AdminAuditPage = { items: AdminAuditRow[], total, sensitive_pct }` donde `AdminAuditRow = { id, created_at, operation, target_layer, origin_mode, origin_model, origin_tool, sensitive }`. **SIN `record_hash` ni `target_id`** (omitidos del SELECT y del schema, regla #4). `total` es el conteo completo que matchea los filtros; `sensitive_pct` el porcentaje sensible dentro del total filtrado. Orden `created_at` DESC, paginación `limit` (1..100, default 50) / `offset` (≥0). Fuera de rango → 422.
 - **GET** `/v1/admin/system` — salud de infra + guard anti-prod + inventario de runtime. **Sin** `range`, sin queries de negocio.
   - Response 200: `AdminSystemOut = { guard{active, db_target, is_prod_in_dev}, services{postgres{up, latency_ms, detail, checked_at}, redis{...}}, runtime{models, modes, schema_head, embedder, reranker, build_version} }`. `db_target` es solo el **host** (nunca el connection string con credenciales, regla #2). Postgres = `SELECT 1`; Redis = `PING` al singleton `app.state.redis`; `schema_head` = head de Alembic.
+
+### Playground admin (F1 ADR-018)
+
+Inventario de serving read-only + chat de prueba aislado. **Sin** `range`. Contrato +
+lógica del handler en el docstring de [`../app/api/v1/admin.py`](../app/api/v1/admin.py)
+(sección "Playground admin"). Privacidad (regla #4): el serving **nunca** expone
+`base_url` ni connection strings; el playground **no persiste nada** (sin `DbSession`) y
+**nunca** ecoa el payload crudo de un `LlmError` (el `detail` del error es solo
+`type(exc).__name__`).
+
+- **GET** `/v1/admin/serving` — estado read-only del serving: config estática (`ynara.config.json` + settings) + salud runtime agregada (`await llm_client.health()`). **Sin** `range`.
+  - Response 200: `ServingOut = { backend: "fake"|"vllm", is_real, serving_healthy, request_timeout_s, low_perf_available, models: ServingModelOut[], embedder, reranker }` donde `ServingModelOut = { key, served_name, role, writes_memory, context_window, max_model_len, quantization, tool_parser, healthy, default_thinking }`. **SIN `base_url` ni connection strings** (regla #4). Con `backend=fake`: `serving_healthy=true` (el Fake reporta sano) pero `is_real=false` y `low_perf_available=false` (la UI usa `is_real` para advertir "serving real no disponible"). `healthy` por modelo = `health().healthy` ∧ `serves_model(served_name)`. `default_thinking` = `false` conversational / `true` agent (gotcha Gemma+thinking, ADR-012 D4).
+- **POST** `/v1/admin/playground` — completion ad-hoc **sync** contra un modelo elegido, llamando `llm_client.complete()` **directo** (sin `route()`/`run_tool_loop()`, sin `DbSession`): cero sesión/memoria/tools/consolidación. **Aislamiento total**.
+  - Request: `PlaygroundIn = { model: string (served_name "gemma4"|"qwen"), mode?: string|null, message: string (1..4000), system_prompt?: string|null, params: PlaygroundParams, thinking?: bool|null }` donde `PlaygroundParams = { max_tokens: int (1..4096, default 1024), temperature: float (0..2, default 0.7), low_perf: bool (default false) }`. System prompt = `system_prompt` > `load_prompt(mode)` (si hay `mode`) > default neutro. `thinking` `null` → default por role (`false` conversational / `true` agent).
+  - **Preset "bajo rendimiento"** (`params.low_perf=true`): pisa `max_tokens=min(256, …)`, `temperature=min(0.2, …)`, `thinking=false`, `timeout_s=30`. Es un preset **per-request** (no muta el serving global, F1 vs F2).
+  - Response 200: `PlaygroundOut = { text, finish_reason, model_name, prompt_tokens, completion_tokens, latency_ms, thinking_used }`. `thinking_used` = el thinking efectivo aplicado (override/preset/default por role), para mostrar en la UI.
+  - Response 422: `model` fuera del catálogo de served_names (`detail: "modelo no servido"`), `mode` desconocido (`detail: "modo desconocido"`), o validación del body (`message` vacío/>4000, params fuera de rango).
+  - Response 409: backend fake (`detail: "serving real no disponible"`) — corta **antes** de llamar `complete()` para no reventar contra el Fake del lifespan (sin respuestas encoladas → `AssertionError`/500). El playground es útil solo con `LLM_BACKEND=vllm`.
+  - Response 502/503/504: mapeo de la familia `LlmError` del cliente real, **sin ecoar el payload** (regla #4: `detail = type(exc).__name__`): `LlmTimeoutError`→504; `LlmUnavailableError`/`LlmOverloadedError`→503; `LlmContextOverflowError`/`LlmBadRequestError`/`ModelNotServedError`→422; genérico `LlmError`→502.
 - Response 401 (todas las rutas): sin token / token inválido / user no admin.
 - Permisos: **admin** (flag `is_admin` o `ADMIN_BOOTSTRAP_IDS`).
 
