@@ -2,7 +2,10 @@
 
 ## Estado
 
-Propuesto
+Aceptado
+
+<!-- Aprobado por @BriarDevv (CODEOWNER) el 2026-06-19 vía PR #312
+     ("está 10 puntos"), habilitando la implementación (F0 en adelante). -->
 
 ## Fecha
 
