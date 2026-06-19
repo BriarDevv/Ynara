@@ -89,7 +89,7 @@ const VARIANTS: Record<LivingFieldVariant, VariantConfig> = {
     aura: 0.9,
     concentrate: "full",
   },
-  // Agenda (pendiente): grano — limpio, casi quieto, sin cursor.
+  // Agenda: grano — limpio, casi quieto, sin cursor.
   paper: {
     waves: false,
     particles: true,
@@ -100,7 +100,7 @@ const VARIANTS: Record<LivingFieldVariant, VariantConfig> = {
     aura: 0.5,
     concentrate: "top",
   },
-  // Tu/perfil (pendiente): profundidad pura (blooms, sin partículas).
+  // Tú/perfil: profundidad pura (blooms, sin partículas).
   depth: {
     waves: false,
     particles: false,
