@@ -14,6 +14,7 @@ import type { IconName } from "@ynara/ui";
  *  - `memoria` → Salud del Moat: las tres capas de memoria (el isotipo de capas).
  *  - `nota` → Audit Log: el registro escrito de operaciones.
  *  - `conexion` → System Health: el enlace con la infra (DB/Redis).
+ *  - `dialogo` → Playground: el probe conversacional crudo del modelo.
  */
 export type NavItem = {
   href: string;
@@ -45,6 +46,7 @@ export const NAV_ITEMS: readonly NavGroup[] = [
     items: [
       { href: "/audit", label: "Audit Log", icon: "nota" },
       { href: "/sistema", label: "System Health", icon: "conexion" },
+      { href: "/playground", label: "Playground", icon: "dialogo" },
     ],
   },
 ];
