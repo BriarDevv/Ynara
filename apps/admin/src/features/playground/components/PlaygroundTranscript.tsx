@@ -12,8 +12,15 @@ type Props = {
   isReal: boolean;
   /** El mensaje del operador del último turno (null = sin turno todavía). */
   userMessage: string | null;
-  /** La respuesta del turno (null mientras no llegó). */
+  /** La respuesta del turno probe (null mientras no llegó / en modo agente). */
   result: PlaygroundOutT | null;
+  /**
+   * Texto del resultado agente (Fase B, modo agente). Mutuamente excluyente con
+   * `result`: cuando está en modo agente `result` llega `null` y este campo trae
+   * el `text` de `PlaygroundAgentOut`. Permite mostrar la respuesta del loop sin
+   * métricas de probe (tokens/latencia/thinking no aplican en el loop agente).
+   */
+  agentText?: string | null;
   /** True mientras la mutation está en vuelo (cursor pulsante). */
   isPending: boolean;
   /** El error del turno (null si no hubo). */
@@ -32,13 +39,14 @@ type Props = {
  *  3. burbuja del operador (derecha) + respuesta:
  *     - `isPending` → burbuja assistant con cursor pulsante `▍`.
  *     - `error`     → caja de error por status (copy neutro) + "Reintentar".
- *     - `result`    → burbuja assistant (texto plano `whitespace-pre-wrap`, v1
- *                     sin markdown) + footer de métricas `tabular-nums`.
+ *     - `result`    → burbuja assistant (texto plano, probe crudo, con métricas).
+ *     - `agentText` → burbuja assistant (texto del loop agente, sin métricas).
  */
 export function PlaygroundTranscript({
   isReal,
   userMessage,
   result,
+  agentText,
   isPending,
   error,
   onRetry,
@@ -62,6 +70,8 @@ export function PlaygroundTranscript({
             <PendingBubble />
           ) : result ? (
             <AssistantBubble result={result} />
+          ) : agentText ? (
+            <AgentBubble text={agentText} />
           ) : null}
         </div>
       )}
@@ -108,6 +118,25 @@ function AssistantBubble({ result }: { result: PlaygroundOutT }) {
           </span>
           <span className="tabular-nums">{Math.round(result.latency_ms)}ms</span>
           <span>thinking {result.thinking_used ? "on" : "off"}</span>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Burbuja del assistant en modo agente (Fase B): solo el texto del loop, sin
+ * métricas de tokens/latencia (el loop descarta los `CompletionResult`
+ * intermedios — limitación conocida del ADR). La traza de tools está en el
+ * inspector, no en el transcript.
+ */
+function AgentBubble({ text }: { text: string }) {
+  return (
+    <div className="flex justify-start">
+      <div className="flex max-w-[80%] flex-col gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-3">
+        <p className="whitespace-pre-wrap text-body text-[var(--color-ink)]">{text}</p>
+        <footer className="border-t border-[var(--color-border)] pt-2 text-caption text-[var(--color-ink-soft)]">
+          modo agente · tools en el inspector
         </footer>
       </div>
     </div>

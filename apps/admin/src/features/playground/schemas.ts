@@ -116,3 +116,45 @@ export const PlaygroundOut = z.object({
   trace: z.array(TraceStep).default([]),
 });
 export type PlaygroundOutT = z.infer<typeof PlaygroundOut>;
+
+/**
+ * Una tool-call observada del tool-loop del modo agente (Fase B, blueprint §4).
+ * Espejo Zod del `ToolCallOut` Pydantic (`run_tool_loop` → `actions`): el modelo
+ * decide llamar la tool, el loop la corre contra el `default_registry()` de stubs
+ * (`not_wired`, cero efecto real) y captura args + result.
+ *
+ *  - `id`: identificador de la llamada que emitió el modelo.
+ *  - `name`: nombre de la tool (`"calendar.create_event"`, `"reminder.set"`…).
+ *  - `arguments`: los args con que el modelo invocó la tool (string JSON crudo).
+ *  - `result`: lo que devolvió el stub (`"not_wired"`) o `"unknown_tool"` si la
+ *    tool no está cableada (p. ej. `memory.*`, inalcanzable por construcción).
+ */
+export const ToolCallOut = z.object({
+  id: z.string(),
+  name: z.string(),
+  arguments: z.string(),
+  result: z.string(),
+});
+export type ToolCallOutT = z.infer<typeof ToolCallOut>;
+
+/**
+ * Respuesta del turno en **modo agente** (`POST /v1/admin/playground/agent`,
+ * Fase B). Estructuralmente distinta de `PlaygroundOut` (probe crudo): lleva la
+ * traza de tools del loop en `actions`, sin métricas/latencia por iteración (el
+ * loop descarta los `CompletionResult` intermedios, limitación conocida del ADR).
+ *
+ * `thinking`/`trace` quedan opcionales por si el backend los expone más adelante
+ * (mismo shape que `PlaygroundOut`); hoy el inspector solo consume `actions`.
+ */
+export const PlaygroundAgentOut = z.object({
+  text: z.string(),
+  finish_reason: z.string(),
+  model_name: z.string(),
+  /** Las tool-calls observadas del loop, en orden de ejecución. */
+  actions: z.array(ToolCallOut).default([]),
+  /** El `<think>…</think>` separado, si el backend lo expone (opcional). */
+  thinking: z.string().nullable().optional(),
+  /** Timeline de pasos, si el backend lo expone (opcional). */
+  trace: z.array(TraceStep).default([]),
+});
+export type PlaygroundAgentOutT = z.infer<typeof PlaygroundAgentOut>;

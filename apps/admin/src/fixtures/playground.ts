@@ -1,4 +1,6 @@
 import {
+  PlaygroundAgentOut,
+  type PlaygroundAgentOutT,
   type PlaygroundInT,
   PlaygroundOut,
   type PlaygroundOutT,
@@ -15,7 +17,8 @@ import {
  * conversational + qwen agent) sobre un backend `vllm` real y sano, para que el
  * dev vea la pantalla en su estado feliz. `playgroundEcho` devuelve un turno
  * determinista que refleja modelo/low_perf/thinking efectivo (mismo cálculo que
- * el server) con latencia simulada por el handler.
+ * el server) con latencia simulada por el handler. `playgroundAgentEcho` devuelve
+ * un turno de modo agente con 2 tool-calls de ejemplo (Fase B).
  *
  * Cada fixture se devuelve **parseado por su propio Zod**, igual que el resto de
  * los fixtures del panel: el `parse` es la última garantía de que lo que sale por
@@ -155,4 +158,57 @@ export function playgroundEcho(body: PlaygroundInT): PlaygroundOutT {
     ],
   };
   return PlaygroundOut.parse(data);
+}
+
+/**
+ * `POST /v1/admin/playground/agent` — eco agente determinista (Fase B,
+ * blueprint §4): simula el tool-loop del modelo con 2 tool-calls de ejemplo
+ * (stubs `not_wired`, cero efecto real) para que el modo agente se vea en dev.
+ *
+ * - `calendar.create_event`: el modelo pide crear un evento con args derivados
+ *   del mensaje; el stub devuelve `not_wired` (tool no cableada en dev).
+ * - `reminder.set`: el modelo pide un recordatorio; ídem `not_wired`.
+ *
+ * El delay de "generación" lo agrega el handler MSW, no este fixture.
+ * Los IDs de call-id son deterministas para que el fixture sea estable en tests.
+ */
+export function playgroundAgentEcho(body: PlaygroundInT): PlaygroundAgentOutT {
+  const data: PlaygroundAgentOutT = {
+    text: `[Modo agente · ${body.model}] Procesé tu pedido con el tool-loop observado. Llamé calendar.create_event y reminder.set — ambas devuelven not_wired en dev (sin efecto real). Respuesta: "${body.message}"`,
+    finish_reason: "stop",
+    model_name: body.model,
+    // trace vacío: el loop no expone TraceSteps por iteración (limitación ADR).
+    trace: [],
+    actions: [
+      {
+        id: "call-001",
+        name: "calendar.create_event",
+        // JSON crudo de args: lo que el modelo emitió en la tool-call.
+        arguments: JSON.stringify(
+          {
+            title: body.message.slice(0, 60),
+            start: "2026-07-01T10:00:00Z",
+            end: "2026-07-01T11:00:00Z",
+          },
+          null,
+          2,
+        ),
+        result: "not_wired",
+      },
+      {
+        id: "call-002",
+        name: "reminder.set",
+        arguments: JSON.stringify(
+          {
+            message: body.message.slice(0, 60),
+            at: "2026-07-01T09:30:00Z",
+          },
+          null,
+          2,
+        ),
+        result: "not_wired",
+      },
+    ],
+  };
+  return PlaygroundAgentOut.parse(data);
 }

@@ -17,6 +17,11 @@ export type PlaygroundConfig = {
   maxTokens: number;
   temperature: number;
   thinking: ThinkingChoice;
+  /**
+   * Modo agente (Fase B): el envío corre contra `/v1/admin/playground/agent`
+   * (tool-loop observado) en vez del probe crudo. `false` = directo.
+   */
+  agentMode: boolean;
 };
 
 type Props = {
@@ -28,6 +33,9 @@ type Props = {
 
 /** Hint del preset bajo rendimiento (la materialización del toggle, §2.2 paso 4). */
 const LOW_PERF_HINT = "256 tokens · sin thinking · temp 0.2 · timeout 30s";
+
+/** Hint del modo agente (Fase B): qué hace el tool-loop observado. */
+const AGENT_MODE_HINT = "Corre el tool-loop con tools observadas (sin efecto real)";
 
 const THINKING_OPTIONS: readonly { value: ThinkingChoice; label: string }[] = [
   { value: "auto", label: "Auto" },
@@ -46,6 +54,9 @@ const THINKING_OPTIONS: readonly { value: ThinkingChoice; label: string }[] = [
  * - **MaxTokens / Temperature**: sliders nativos con valor `tabular-nums`.
  * - **ThinkingChip**: `ChipGroup ["Auto","On","Off"]`; muestra un warning si el
  *   modelo es Gemma (conversational) y se fuerza `On` (content vacío, ADR-012 D4).
+ * - **AgentModeToggle** (Fase B): `Switch` que rutea el envío al tool-loop
+ *   observado (`/playground/agent`) en vez del probe crudo; el hint deja claro
+ *   que las tools son no-op (`not_wired`, sin efecto real).
  */
 export function PlaygroundControls({ models, config, onChange, className }: Props) {
   const set = <K extends keyof PlaygroundConfig>(key: K, value: PlaygroundConfig[K]) =>
@@ -75,6 +86,13 @@ export function PlaygroundControls({ models, config, onChange, className }: Prop
         hint={LOW_PERF_HINT}
         checked={config.lowPerf}
         onChange={(v) => set("lowPerf", v)}
+      />
+
+      <Switch
+        label="Modo agente"
+        hint={AGENT_MODE_HINT}
+        checked={config.agentMode}
+        onChange={(v) => set("agentMode", v)}
       />
 
       <div className={cn("flex flex-col gap-5", config.lowPerf && "opacity-50")}>

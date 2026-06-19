@@ -15,7 +15,7 @@ import { auditPage } from "./audit";
 import { moatFixture } from "./moat";
 import { modesFixture } from "./modes";
 import { overviewFixture } from "./overview";
-import { playgroundEcho, servingFixture } from "./playground";
+import { playgroundAgentEcho, playgroundEcho, servingFixture } from "./playground";
 import { systemFixture } from "./system";
 import { usersFixture } from "./users";
 
@@ -146,5 +146,13 @@ export const adminHandlers = [
     const body = (await request.json()) as PlaygroundInT;
     await delay(800); // simula la generación del modelo
     return HttpResponse.json(playgroundEcho(body));
+  }),
+
+  // POST /v1/admin/playground/agent — eco agente con 2 tool-calls de ejemplo
+  // (calendar.create_event + reminder.set, result "not_wired"). Fase B del inspector.
+  http.post(apiUrl("/v1/admin/playground/agent"), async ({ request }) => {
+    const body = (await request.json()) as PlaygroundInT;
+    await delay(1200); // simula el tool-loop (más lento que el probe crudo)
+    return HttpResponse.json(playgroundAgentEcho(body));
   }),
 ];
