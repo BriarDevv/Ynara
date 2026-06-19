@@ -7,6 +7,7 @@ se agrega acá + en ``apps/backend/.env.example``.
 from __future__ import annotations
 
 import ipaddress
+import uuid
 from functools import lru_cache
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
@@ -196,6 +197,19 @@ class Settings(BaseSettings):
         alias="CORS_ORIGINS",
     )
 
+    # Bootstrap de admins del panel interno (/v1/admin/*). CSV human-friendly de
+    # UUIDs de usuarios que arrancan como admin ANTES de que exista la columna
+    # ``users.is_admin`` poblada (huevo-y-la-gallina): ``get_current_admin`` gatea
+    # contra ``user.is_admin OR str(user_id) in admin_bootstrap_ids``. Default VACÍO
+    # = nadie es admin por bootstrap (solo los que tengan la flag en DB). ``NoDecode``
+    # desactiva el JSON-decode que ``EnvSettingsSource`` aplicaría a un ``list[str]``
+    # (que crashea ante ``ADMIN_BOOTSTRAP_IDS=`` o ``=uuid1,uuid2``): el string crudo
+    # del env llega tal cual al ``field_validator`` de abajo, que lo splittea por comas
+    # (mismo patrón que ``trusted_proxy_ips`` / ``cors_origins``).
+    admin_bootstrap_ids: Annotated[list[str], NoDecode] = Field(
+        default_factory=list, alias="ADMIN_BOOTSTRAP_IDS"
+    )
+
     @field_validator("trusted_proxy_ips", mode="before")
     @classmethod
     def _split_trusted_proxy_ips(cls, v: object) -> object:
@@ -224,6 +238,21 @@ class Settings(BaseSettings):
         lista ya parseada (kwargs / JSON) pasa intacta — así los tests que pasan
         ``cors_origins=[...]`` por kwarg siguen funcionando sin cambios. Mismo patrón
         que ``_split_trusted_proxy_ips``.
+        """
+        if isinstance(v, str):
+            return [part.strip() for part in v.split(",") if part.strip()]
+        return v
+
+    @field_validator("admin_bootstrap_ids", mode="before")
+    @classmethod
+    def _split_admin_bootstrap_ids(cls, v: object) -> object:
+        """Acepta CSV/vacío desde env (pydantic-settings parsea ``list[str]`` como JSON).
+
+        Sin esto, ``ADMIN_BOOTSTRAP_IDS=`` o ``ADMIN_BOOTSTRAP_IDS=uuid1,uuid2`` crashean
+        el boot porque el parser de env espera un JSON-array. Normaliza un string separado
+        por comas a lista (vacío -> ``[]``); una lista ya parseada (kwargs / JSON) pasa
+        intacta. El ``_validate_admin_bootstrap_ids`` de después valida que cada entry sea
+        un UUID parseable. Mismo patrón que ``_split_trusted_proxy_ips``.
         """
         if isinstance(v, str):
             return [part.strip() for part in v.split(",") if part.strip()]
@@ -330,6 +359,26 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"TRUSTED_PROXY_IPS contiene una entry inválida ({entry!r}): "
                     "cada valor debe ser un IP o CIDR parseable (p.ej. 127.0.0.1 o 10.0.0.0/8)"
+                ) from exc
+        return self
+
+    @model_validator(mode="after")
+    def _validate_admin_bootstrap_ids(self) -> Settings:
+        """Fail-fast: cada entry de ``admin_bootstrap_ids`` debe ser un UUID válido.
+
+        El bootstrap de admin gobierna el acceso al panel interno (/v1/admin/*) antes de
+        que ``users.is_admin`` esté poblado: una entry malformada que silenciosamente no
+        matchee ningún ``user_id`` dejaría sin admin de arranque sin aviso. Validar al boot
+        (consistente con los demás validators fail-fast del módulo) convierte una mala
+        config en un error de arranque. Mismo estilo que ``_validate_trusted_proxy_ips``.
+        """
+        for entry in self.admin_bootstrap_ids:
+            try:
+                uuid.UUID(entry)
+            except ValueError as exc:
+                raise ValueError(
+                    f"ADMIN_BOOTSTRAP_IDS contiene una entry inválida ({entry!r}): "
+                    "cada valor debe ser un UUID parseable"
                 ) from exc
         return self
 

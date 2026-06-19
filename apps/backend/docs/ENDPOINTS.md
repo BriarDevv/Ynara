@@ -344,6 +344,44 @@ una inexistente (sin oráculo de existencia ajena). Todas las read surfaces son
   baseline). El check corre **antes** de tocar la DB.
 - Modos: todos.
 
+## /v1/admin
+
+Panel admin interno: 6 GET de **métricas read-only** del dashboard. Contrato +
+decisiones en el docstring de [`../app/api/v1/admin.py`](../app/api/v1/admin.py).
+
+Invariantes transversales:
+
+- **Gate de admin** (`get_current_admin`, `app/core/deps.py`): firma/exp/type/blocklist
+  del JWT + flag `users.is_admin` **o** bootstrap (`str(user_id) in
+  ADMIN_BOOTSTRAP_IDS`). Sin admin → **401 estático** (mismo `detail` que credenciales
+  inválidas; sin oráculo de "existe pero no es admin", regla #4).
+- **Solo lectura**: ningún endpoint muta ni encola; todo es COUNT/GROUP BY on-the-fly
+  (sin agregados precalculados). No hay rate-limit aplicativo (acceso de operador).
+- **Privacidad (regla #4)**: NUNCA se descifra contenido de memoria; el audit del panel
+  NUNCA expone `record_hash` ni `target_id` (ausentes del SELECT y del schema). Los UUID
+  que viajan (id de audit / episodic) son opacos, sin email ni PII.
+- **Query `range`** ∈ `{24h, 7d, 30d, 90d}` (default `7d`) en los 5 endpoints de
+  métricas; `/admin/system` **no** toma rango (runtime/config). Fuera de rango → 422.
+- **Honestidad de dato** (gaps del schema): DAU/WAU/MAU son **aproximados** por sesiones
+  (`is_approximate=true`; no hay `last_seen`); la conversión efímero→registrado es
+  **estimada** (`is_estimate=true`; no hay timestamp de conversión); la duración por modo
+  cuenta solo sesiones cerradas.
+
+- **GET** `/v1/admin/overview?range=7d` — KPIs + serie de sesiones + mix de modos + preview de audit.
+  - Response 200: `AdminOverviewOut = { perimeter{status, detail, checked_at}, kpis{users_total, sessions, memories, audit_events}, sessions_series: TimePoint[], mode_mix: {mode, value}[], audit_preview: {id, created_at, operation, target_layer, origin_mode, sensitive}[] }`. `memories` = suma de las 3 capas. El `audit_preview` **no** incluye `record_hash`/`target_id`.
+- **GET** `/v1/admin/users?range=7d` — actividad aproximada, heatmap, conversión, signups.
+  - Response 200: `AdminUsersOut = { activity{dau, wau, mau, is_approximate}, heatmap: {date, count, level}[], conversion{ephemeral, registered, conversion_pct, is_estimate}, signups: {date, count}[] }`. DAU/WAU/MAU = COUNT(DISTINCT user_id) sobre `sessions.started_at` por ventana (proxy).
+- **GET** `/v1/admin/modes?range=7d` — mix de sesiones por modo + duración media por modo.
+  - Response 200: `AdminModesOut = { total, mix: {mode, sessions, pct}[], duration: {mode, avg_minutes, closed_sessions, open_sessions}[] }`. Duración = AVG(`ended_at - started_at`) solo sobre cerradas; abiertas contadas aparte.
+- **GET** `/v1/admin/moat?range=7d` — conteos por capa + crecimiento + salud procedural + consolidación. **Cero descifrado**.
+  - Response 200: `AdminMoatOut = { counts{semantic, episodic, procedural}, deltas{...}, growth: {key, points: TimePoint[]}[], procedural{stale_count, healthy_count, confidence_buckets: {range, count}[]}, consolidation{backlog, recent_episodic: {id, occurred_at, is_sensitive}[]} }`. `backlog` = sesiones cerradas sin episódica consolidada. `recent_episodic` es solo metadata (sin `summary`).
+- **GET** `/v1/admin/audit?range=7d&operation=&target_layer=&origin_mode=&origin_model=&sensitive=&limit=50&offset=0` — página de audit filtrable.
+  - Response 200: `AdminAuditPage = { items: AdminAuditRow[], total, sensitive_pct }` donde `AdminAuditRow = { id, created_at, operation, target_layer, origin_mode, origin_model, origin_tool, sensitive }`. **SIN `record_hash` ni `target_id`** (omitidos del SELECT y del schema, regla #4). `total` es el conteo completo que matchea los filtros; `sensitive_pct` el porcentaje sensible dentro del total filtrado. Orden `created_at` DESC, paginación `limit` (1..100, default 50) / `offset` (≥0). Fuera de rango → 422.
+- **GET** `/v1/admin/system` — salud de infra + guard anti-prod + inventario de runtime. **Sin** `range`, sin queries de negocio.
+  - Response 200: `AdminSystemOut = { guard{active, db_target, is_prod_in_dev}, services{postgres{up, latency_ms, detail, checked_at}, redis{...}}, runtime{models, modes, schema_head, embedder, reranker, build_version} }`. `db_target` es solo el **host** (nunca el connection string con credenciales, regla #2). Postgres = `SELECT 1`; Redis = `PING` al singleton `app.state.redis`; `schema_head` = head de Alembic.
+- Response 401 (todas las rutas): sin token / token inválido / user no admin.
+- Permisos: **admin** (flag `is_admin` o `ADMIN_BOOTSTRAP_IDS`).
+
 ---
 
 Toda ruta nueva agrega entrada acá en el mismo PR.

@@ -28,6 +28,7 @@ from app.core.token_store import TokenStore
 from app.llm.clients.base import LLMClient
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
+from app.models.user import User
 
 # Detail ÚNICO del 401 de credenciales, compartido por ``get_current_claims`` /
 # ``get_current_user`` (acá) y por ``auth.py`` (login/refresh/me). Vive en ``deps.py``
@@ -192,6 +193,36 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[UUID, Depends(get_current_user)]
+
+
+async def get_current_admin(
+    user_id: Annotated[UUID, Depends(get_current_user)],
+    session: DbSession,
+) -> UUID:
+    """Gate de admin del panel interno (/v1/admin/*). Devuelve el ``user_id`` admin.
+
+    Se apoya en ``get_current_user`` (firma/exp/type/blocklist ya validados) y carga el
+    ``User`` para chequear la flag. Resuelve el huevo-y-la-gallina del bootstrap: es admin
+    si ``user.is_admin`` (fuente de verdad persistente) O ``str(user_id)`` está en
+    ``settings.admin_bootstrap_ids`` (bootstrap antes de poblar la columna). Si el user no
+    existe (identidad caduca) o no es admin -> **mismo 401 estático** que credenciales
+    inválidas (``UNAUTHORIZED_DETAIL``): sin oráculo de "existe pero no es admin"
+    (anti-enumeración, regla #4). El ``detail`` NUNCA se arma con el ``user_id`` crudo.
+    """
+    user = await session.get(User, user_id)
+    is_admin = user is not None and (
+        user.is_admin or str(user_id) in get_settings().admin_bootstrap_ids
+    )
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=UNAUTHORIZED_DETAIL,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user_id
+
+
+CurrentAdmin = Annotated[UUID, Depends(get_current_admin)]
 
 
 # ---------------------------------------------------------------------------

@@ -200,6 +200,7 @@ familia entera vía `sid` + blocklist por `jti` — #142).
 | `display_name` | VARCHAR(40) | Nullable hasta que onboarding lo capture |
 | `is_ephemeral` | BOOLEAN NOT NULL DEFAULT false | Modo "probar sin cuenta" |
 | `onboarding_completed` | BOOLEAN NOT NULL DEFAULT false | Setea el frontend al final del onboarding |
+| `is_admin` | BOOLEAN NOT NULL DEFAULT false | Gate del panel admin interno (`/v1/admin/*`). `server_default=false` para no romper filas existentes. Bootstrap inicial (antes de poblar la columna) vía `ADMIN_BOOTSTRAP_IDS` en `get_current_admin`; esta flag es la fuente de verdad persistente. Agregada en la migración `20260619_1200_add_is_admin_and_admin_audit` |
 | `retention_sensitive_days` | INTEGER NOT NULL DEFAULT 180 | TTL configurable por usuario para episódica con `is_sensitive=true`. Rango 30-365 (constraint) |
 | `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
 
@@ -259,6 +260,33 @@ Aun siendo operativa, el `content` viaja **cifrado AES-256-GCM per-user** (regla
   `UNIQUE (session_id, seq)` cubre el acceso por sesión. Reemplaza los 3 índices parciales
   originales (`ix_..._user_id`, `ix_..._session_id`, `ix_..._session_id_seq`), eliminados en la
   migración `20260615_0200_drop_redundant_conversation_turns_indexes`.
+
+### admin_audit
+
+**OPERATIVA**, no sagrada (sin 🔴): registra las acciones que un **operador** (admin)
+ejecuta sobre el panel interno (`/v1/admin/*`). **No es `audit_log`** (sagrada,
+inmutable, audita operaciones sobre la **memoria cifrada** del usuario): `admin_audit`
+audita actividad del operador, no contenido del moat. Modelo en
+`app/models/admin_audit.py` (`UUIDPKMixin` + `TimestampMixin`). Agregada en la migración
+`20260619_1200_add_is_admin_and_admin_audit`.
+
+Privacidad (regla #4): `admin_id` es un UUID opaco (no PII); `meta` (JSONB) lleva
+contexto liviano de la acción, **nunca** contenido de memoria descifrado ni PII del
+usuario observado. La columna se llama `meta` y no `metadata` porque `metadata` choca
+con el atributo reservado de la declarative base de SQLAlchemy.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | `gen_random_uuid()` |
+| `admin_id` | UUID FK → users.id, ON DELETE CASCADE | indexed; al borrar el admin se borra su rastro |
+| `action` | VARCHAR(80) NOT NULL | Nombre de la acción del panel |
+| `target_type` | VARCHAR(40) | Tipo del objeto afectado, nullable |
+| `target_id` | UUID | Id opaco del objeto afectado, nullable |
+| `meta` | JSONB NOT NULL DEFAULT '{}' | Contexto liviano (sin PII / sin contenido descifrado) |
+| `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
+
+**Índice**:
+- `ix_admin_audit_admin_id` (btree, por `admin_id`) — queries por admin + cascade-delete.
 
 ## Migración inicial
 
