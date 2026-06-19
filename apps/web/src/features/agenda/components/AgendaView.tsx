@@ -9,11 +9,12 @@ import { MODE_BY_ID } from "@/components/ui/modes";
 import { useActiveMode } from "@/hooks/useActiveMode";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/cn";
-import { useEvents } from "../api";
+import { type AgendaEvent, useEvents } from "../api";
 import { startOfWeek } from "../format";
 import { formatDayLong, formatMonthYear, formatWeekRange, isSameDay, isSameMonth } from "../labels";
 import { AgendaSkeleton } from "./AgendaSkeleton";
 import { DayView } from "./DayView";
+import { EventEditSheet } from "./EventEditSheet";
 import { EventFab } from "./EventFab";
 import { ListView } from "./ListView";
 import { MonthView } from "./MonthView";
@@ -48,6 +49,8 @@ export function AgendaView() {
   const [now] = useState(() => new Date());
   const [view, setView] = useState<ViewMode>("lista");
   const [anchor, setAnchor] = useState<Date>(() => new Date());
+  // Evento en edición (tap-para-editar); `null` = sheet cerrado.
+  const [editing, setEditing] = useState<AgendaEvent | null>(null);
 
   const { data, isPending, isError, refetch, isFetching } = useEvents();
 
@@ -171,9 +174,9 @@ export function AgendaView() {
               }
             />
           ) : effectiveView === "lista" ? (
-            <ListView events={data} now={now} />
+            <ListView events={data} now={now} onEventClick={setEditing} />
           ) : effectiveView === "dia" ? (
-            <DayView events={data} day={anchor} now={now} />
+            <DayView events={data} day={anchor} now={now} onEventClick={setEditing} />
           ) : effectiveView === "mes" ? (
             <MonthView
               events={data}
@@ -185,13 +188,16 @@ export function AgendaView() {
               }}
             />
           ) : (
-            <WeekView events={data} anchor={anchor} now={now} />
+            <WeekView events={data} anchor={anchor} now={now} onEventClick={setEditing} />
           )}
         </div>
       </HeroReveal>
 
       {/* FAB flotante */}
       <EventFab fillVar={fabFill} activeMode={activeMode} />
+
+      {/* Sheet de edición (tap-para-editar): se abre al tocar un evento. */}
+      <EventEditSheet event={editing} onClose={() => setEditing(null)} />
     </div>
   );
 }

@@ -29,6 +29,8 @@ type Props = {
   day: Date;
   /** Referencia de "ahora" (fijada en montaje). */
   now: Date;
+  /** Tocar un evento abre el sheet de edición. */
+  onEventClick: (event: AgendaEvent) => void;
 };
 
 type EventBlockProps = {
@@ -38,10 +40,16 @@ type EventBlockProps = {
   minH: number;
   /** Columna asignada por el algoritmo de solapamiento (lado-a-lado). */
   placement: ColumnPlacement;
+  onEventClick: (event: AgendaEvent) => void;
 };
 
-/** Bloque de evento posicionado absolute dentro de la grilla. */
-function GridEventBlock({ event, rowPx, minH, placement }: EventBlockProps) {
+/**
+ * Bloque de evento posicionado absolute dentro de la grilla. Es un `<button>`
+ * clickeable (mouse/touch) — pero `tabIndex={-1}` y el grid es `aria-hidden`: la
+ * edición por teclado/lector va por la vista Lista (que cubre la semana actual;
+ * los eventos de otras semanas quedan solo con mouse acá — deuda de a11y).
+ */
+function GridEventBlock({ event, rowPx, minH, placement, onEventClick }: EventBlockProps) {
   const tintVar = event.mode ? MODE_BY_ID[event.mode].tintVar : "var(--color-border-strong)";
   const cancelled = event.status === "cancelled";
   const tentative = event.status === "tentative";
@@ -60,9 +68,12 @@ function GridEventBlock({ event, rowPx, minH, placement }: EventBlockProps) {
     `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
   return (
-    <article
+    <button
+      type="button"
+      tabIndex={-1}
+      onClick={() => onEventClick(event)}
       className={cn(
-        "absolute flex gap-2 overflow-hidden rounded-[var(--radius-md)] px-2 py-1",
+        "absolute flex gap-2 overflow-hidden rounded-[var(--radius-md)] px-2 py-1 text-left",
         tentative ? "border border-dashed border-[var(--color-border-strong)]" : "",
         cancelled && "opacity-50",
       )}
@@ -95,7 +106,7 @@ function GridEventBlock({ event, rowPx, minH, placement }: EventBlockProps) {
           </span>
         ) : null}
       </div>
-    </article>
+    </button>
   );
 }
 
@@ -105,9 +116,10 @@ type GridProps = {
   day: Date;
   now: Date;
   rowPx: number;
+  onEventClick: (event: AgendaEvent) => void;
 };
 
-function DayGrid({ events, day, now, rowPx }: GridProps) {
+function DayGrid({ events, day, now, rowPx, onEventClick }: GridProps) {
   // Ventana horaria auto-fit: base 8–20h expandida a los eventos del día (cero
   // recorte). Antes era fija 8–20h y clipeaba los de madrugada/noche.
   const { minH, maxH } = hourBounds(events, [day]);
@@ -168,6 +180,7 @@ function DayGrid({ events, day, now, rowPx }: GridProps) {
               rowPx={rowPx}
               minH={minH}
               placement={placements.get(event.id) ?? { col: 0, cols: 1 }}
+              onEventClick={onEventClick}
             />
           ))}
 
@@ -204,7 +217,7 @@ function DayGrid({ events, day, now, rowPx }: GridProps) {
  * scroll propio, que al montar arranca en la hora actual (scroll-to-now) o en
  * el inicio laboral. Responsive: 52 px/hora en desktop, 36 px/hora en mobile.
  */
-export function DayView({ events, day, now }: Props) {
+export function DayView({ events, day, now, onEventClick }: Props) {
   const dayEvents = eventsForDay(events, day);
 
   if (dayEvents.length === 0 && !isSameDay(day, now)) {
@@ -235,11 +248,23 @@ export function DayView({ events, day, now }: Props) {
       <div className="relative overflow-x-hidden" aria-hidden>
         {/* Mobile */}
         <div className="md:hidden">
-          <DayGrid events={dayEvents} day={day} now={now} rowPx={ROW_MOBILE} />
+          <DayGrid
+            events={dayEvents}
+            day={day}
+            now={now}
+            rowPx={ROW_MOBILE}
+            onEventClick={onEventClick}
+          />
         </div>
         {/* Desktop */}
         <div className="hidden md:block">
-          <DayGrid events={dayEvents} day={day} now={now} rowPx={ROW_DESKTOP} />
+          <DayGrid
+            events={dayEvents}
+            day={day}
+            now={now}
+            rowPx={ROW_DESKTOP}
+            onEventClick={onEventClick}
+          />
         </div>
       </div>
     </>
