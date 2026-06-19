@@ -38,7 +38,7 @@ export function HoyHeader({ displayName, activeMode, now }: Props) {
           onClick={() => setSheetOpen(true)}
           aria-haspopup="dialog"
           aria-label={`Modo ${mode.label}. Cambiar de modo`}
-          className="inline-flex items-center gap-2 rounded-[var(--radius-pill)] bg-[var(--color-bg-soft)] py-1.5 pr-2 pl-3 text-body-sm transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-border)]"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-[var(--radius-pill)] bg-[var(--color-bg-soft)] py-1.5 pr-2 pl-3 text-body-sm transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-border)]"
         >
           <span
             aria-hidden
