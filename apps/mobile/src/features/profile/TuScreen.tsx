@@ -13,6 +13,7 @@ import { TextField } from "@/components/ui/TextField";
 import { Toggle } from "@/components/ui/Toggle";
 import { useA11yStore } from "@/stores/a11y";
 import { useUserStore } from "@/stores/user";
+import { LogoutSheet } from "./components/LogoutSheet";
 import { WipeMemorySheet } from "./components/WipeMemorySheet";
 
 // ChipGroup es string-genérico; los valores de retención viajan como strings
@@ -50,6 +51,7 @@ export function TuScreen() {
   const displayNameStored = useUserStore((s) => s.displayName);
   const setDisplayName = useUserStore((s) => s.setDisplayName);
   const reset = useUserStore((s) => s.reset);
+  const isEphemeral = useUserStore((s) => s.isEphemeral);
 
   // ----- A11y store -----
   const textSize = useA11yStore((s) => s.textSize);
@@ -131,6 +133,7 @@ export function TuScreen() {
   const [wipeOpen, setWipeOpen] = useState(false);
 
   // ----- Logout -----
+  const [logoutOpen, setLogoutOpen] = useState(false);
   function handleLogout() {
     reset();
     router.replace("/onboarding");
@@ -250,7 +253,7 @@ export function TuScreen() {
         {/* ──── Sección: Cuenta ──── */}
         <View className="gap-4 rounded-xl border border-border bg-bg p-5">
           <Text className="text-caption text-ink-soft">CUENTA</Text>
-          <Button variant="ghost" onPress={handleLogout}>
+          <Button variant="ghost" onPress={() => setLogoutOpen(true)}>
             Cerrar sesión
           </Button>
         </View>
@@ -258,6 +261,14 @@ export function TuScreen() {
 
       {/* Sheet de confirmación de wipe */}
       <WipeMemorySheet open={wipeOpen} onClose={() => setWipeOpen(false)} />
+
+      {/* Confirmación de cierre de sesión (auditoría H4) */}
+      <LogoutSheet
+        open={logoutOpen}
+        isEphemeral={isEphemeral}
+        onClose={() => setLogoutOpen(false)}
+        onConfirm={handleLogout}
+      />
     </SafeAreaView>
   );
 }
