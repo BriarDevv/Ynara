@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { type ReactNode, useEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -39,6 +41,19 @@ export function StepShell({
   hero = false,
   className,
 }: Props) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  // Al montar un step nuevo, llevar el foco a su título (tabIndex -1) para que
+  // teclado y lector de pantalla no queden en el <body> tras navegar — y el SR
+  // anuncie el título del paso. Si un input con autoFocus (auth/nombre) ya tomó
+  // el foco, no se lo robamos.
+  useEffect(() => {
+    const active = document.activeElement;
+    if (!active || active === document.body) {
+      headingRef.current?.focus();
+    }
+  }, []);
+
   return (
     <div
       /*
@@ -59,7 +74,11 @@ export function StepShell({
         {/* Template literal (no cn): tailwind-merge trataría `text-display`/
             `text-title` y `text-[var(--color-ink-deep)]` como `text-*` en
             conflicto y descartaría el de tamaño. */}
-        <h1 className={`${hero ? "text-display" : "text-title"} text-[var(--color-ink-deep)]`}>
+        <h1
+          ref={headingRef}
+          tabIndex={-1}
+          className={`${hero ? "text-display" : "text-title"} text-[var(--color-ink-deep)] outline-none focus-visible:shadow-none`}
+        >
           {title}
         </h1>
         {subtitle ? <p className="text-body text-[var(--color-ink-soft)]">{subtitle}</p> : null}
