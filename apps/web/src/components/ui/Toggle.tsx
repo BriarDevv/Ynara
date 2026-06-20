@@ -36,7 +36,7 @@ export function Toggle({ label, hint, checked, onChange, disabled = false, class
         <span
           aria-hidden
           className={cn(
-            "absolute top-1 h-5 w-5 rounded-[var(--radius-pill)] bg-white shadow-soft transition-transform duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
+            "absolute top-1 h-5 w-5 rounded-[var(--radius-pill)] bg-[var(--color-on-dark)] shadow-soft transition-transform duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
             checked ? "translate-x-[22px]" : "translate-x-1",
           )}
         />

@@ -54,7 +54,7 @@ export function ChatHome() {
           <button
             type="button"
             onClick={startNew}
-            className="flex items-center justify-center gap-2 rounded-[var(--radius-lg)] px-4 py-3.5 text-button font-semibold text-white transition-opacity duration-[var(--duration-fast)] hover:opacity-90"
+            className="flex items-center justify-center gap-2 rounded-[var(--radius-lg)] px-4 py-3.5 text-button font-semibold text-[var(--color-on-dark)] transition-opacity duration-[var(--duration-fast)] hover:opacity-90"
             style={{ backgroundColor: mode.fillVar }}
           >
             <Icon name="dialogo" size={20} />

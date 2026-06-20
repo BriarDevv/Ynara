@@ -83,7 +83,7 @@ export function PaywallSheet({ open, onClose }: Props) {
             <button
               type="button"
               onClick={handleActivar}
-              className="text-button inline-flex w-full items-center justify-center rounded-[var(--radius-md)] px-6 py-3 font-semibold text-white transition-[opacity,transform] duration-[var(--duration-base)] ease-[var(--ease-out-soft)] active:scale-[0.98] disabled:opacity-50"
+              className="text-button inline-flex w-full items-center justify-center rounded-[var(--radius-md)] px-6 py-3 font-semibold text-[var(--color-on-dark)] transition-[opacity,transform] duration-[var(--duration-base)] ease-[var(--ease-out-soft)] active:scale-[0.98] disabled:opacity-50"
               style={{ backgroundColor: violetaFill }}
             >
               Activar Premium

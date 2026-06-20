@@ -54,7 +54,7 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
       <div className="flex justify-end">
         <div
           className={cn(
-            "max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-[7px] border px-4 py-2.5 text-body text-[var(--color-ink)]",
+            "max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-xl)] rounded-br-[7px] border px-4 py-2.5 text-body text-[var(--color-ink)]",
             message.status === "sending" && "opacity-70",
           )}
           style={{
