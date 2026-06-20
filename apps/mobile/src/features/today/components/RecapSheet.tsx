@@ -33,7 +33,7 @@ export function RecapSheet({ open, onClose, recap }: Props) {
             </View>
 
             {recap.headline ? (
-              <Text className="text-body font-medium text-ink">{recap.headline}</Text>
+              <Text className="text-body font-body-medium text-ink">{recap.headline}</Text>
             ) : null}
 
             {recap.highlights.length > 0 ? (

@@ -64,7 +64,7 @@ export function ChatComposer({ onSend, busy, onCancel }: Props) {
               !canSend && "opacity-40",
             )}
           >
-            <Text className="text-button font-semibold text-on-dark">↑</Text>
+            <Text className="text-button font-body-semibold text-on-dark">↑</Text>
           </Pressable>
         )}
       </View>

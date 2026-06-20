@@ -56,7 +56,7 @@ export function Button({
       )}
       {...rest}
     >
-      <Text className={cn("text-button font-semibold text-center", LABEL[variant])}>
+      <Text className={cn("text-button font-body-semibold text-center", LABEL[variant])}>
         {children}
       </Text>
     </Pressable>

@@ -54,7 +54,7 @@ export function ChatHome() {
                 <View className="flex-row items-center gap-3">
                   <View className={cn("h-3 w-3 rounded-pill", MODE_DOT_CLASS[m.id])} />
                   <View className="flex-1">
-                    <Text className="text-body font-semibold text-ink">{m.label}</Text>
+                    <Text className="text-body font-body-semibold text-ink">{m.label}</Text>
                     <Text className="text-body-sm text-ink-soft">{m.blurb}</Text>
                   </View>
                 </View>
