@@ -45,7 +45,7 @@ export function RecapSheet({ open, onClose, recap }: Props) {
               {formatHoyDate(new Date(recap.date))}
             </p>
             <h2 className="mt-0.5 text-[1.4rem] font-semibold leading-[1.05] tracking-tight text-[var(--color-ink)]">
-              {recap.headline ?? "Cómo te fue hoy"}
+              {recap.headline || "Cómo te fue hoy"}
             </h2>
           </div>
         </div>
