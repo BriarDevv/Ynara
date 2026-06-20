@@ -28,7 +28,7 @@ export function SuggestionCard({ mode, title, subtitle, className }: Props) {
         )}
       />
       <View className="flex-1 gap-1">
-        <Text className="text-body font-medium text-ink-deep">{title}</Text>
+        <Text className="text-body font-body-medium text-ink-deep">{title}</Text>
         {subtitle ? <Text className="text-body-sm text-ink-soft">{subtitle}</Text> : null}
       </View>
     </View>

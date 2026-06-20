@@ -157,8 +157,8 @@ export function WipeMemorySheet({ open, onClose }: Props) {
                 {/* Conteos de lo que se borraría */}
                 <View className="rounded-lg border border-border bg-bg p-4 gap-1">
                   <Text className="text-body text-ink">
-                    Se borrarán <Text className="font-semibold">{preview.total} recuerdos</Text> en
-                    total:
+                    Se borrarán{" "}
+                    <Text className="font-body-semibold">{preview.total} recuerdos</Text> en total:
                   </Text>
                   <Text className="text-body-sm text-ink-soft">
                     {preview.semantic} hechos · {preview.episodic} momentos · {preview.procedural}{" "}

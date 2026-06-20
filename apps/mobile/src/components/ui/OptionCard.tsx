@@ -44,7 +44,7 @@ export function OptionCard({
       <View className="flex-row items-center gap-3">
         {leading ? <View className="shrink-0">{leading}</View> : null}
         <View className="flex-1 flex-col">
-          <Text className="text-body font-medium text-ink-deep">{title}</Text>
+          <Text className="text-body font-body-medium text-ink-deep">{title}</Text>
           {hint ? <Text className="text-body-sm text-ink-soft">{hint}</Text> : null}
         </View>
       </View>

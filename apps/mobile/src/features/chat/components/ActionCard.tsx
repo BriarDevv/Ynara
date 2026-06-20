@@ -39,7 +39,7 @@ export function ActionCard({ action }: { action: Action }) {
         <View className="mt-1 h-2.5 w-2.5 rounded-pill bg-azul" />
       )}
       <View className="flex-1 gap-0.5">
-        <Text className="text-body-sm font-semibold text-ink">{label}</Text>
+        <Text className="text-body-sm font-body-semibold text-ink">{label}</Text>
         {detail ? <Text className="text-body-sm text-ink-soft">{detail}</Text> : null}
         {notWired ? (
           <Text className="text-caption text-ink-muted">Acción de ejemplo (sin conectar)</Text>

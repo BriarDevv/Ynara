@@ -16,7 +16,7 @@ export function RecapCta({ onOpen }: { onOpen: () => void }) {
     >
       <View className="flex-1 gap-0.5">
         <Text className="text-caption text-on-dark opacity-80">Recap pendiente</Text>
-        <Text className="text-body font-medium text-on-dark">Cerrá el día con Ynara</Text>
+        <Text className="text-body font-body-medium text-on-dark">Cerrá el día con Ynara</Text>
       </View>
       <Text className="text-body text-on-dark opacity-80">›</Text>
     </Pressable>

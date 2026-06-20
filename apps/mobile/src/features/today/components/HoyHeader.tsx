@@ -37,7 +37,7 @@ export function HoyHeader({ displayName, activeMode, onPressMode, now }: Props) 
           importantForAccessibility="no-hide-descendants"
           className="h-10 w-10 items-center justify-center rounded-pill bg-bg-soft"
         >
-          <Text className="text-body-sm font-medium text-ink-soft">{initial || "?"}</Text>
+          <Text className="text-body-sm font-body-medium text-ink-soft">{initial || "?"}</Text>
         </View>
       </View>
       <View className="gap-1">

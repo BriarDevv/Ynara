@@ -16,7 +16,7 @@ export default function TestUi() {
   return (
     <SafeAreaView className="flex-1 bg-bg-canvas">
       <ScrollView contentContainerClassName="gap-6 p-6">
-        <Text className="text-hero font-semibold text-ink">Componentes base</Text>
+        <Text className="text-hero font-body-semibold text-ink">Componentes base</Text>
 
         <View className="gap-3">
           <Text className="text-caption text-ink-soft">Button</Text>
