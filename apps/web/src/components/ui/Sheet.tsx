@@ -81,13 +81,38 @@ export function Sheet({
           <div
             ref={panelRef}
             className={cn(
-              "anim-fade-up relative flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-[var(--radius-xl)] bg-[var(--color-bg)] p-6 shadow-lifted",
+              "anim-fade-up relative flex max-h-[85vh] w-full flex-col rounded-t-[var(--radius-xl)] bg-[var(--color-bg)] shadow-lifted",
               "sm:max-h-[80vh] sm:w-full sm:max-w-[480px] sm:rounded-[var(--radius-lg)]",
               className,
             )}
           >
-            {/* Botón de cierre visible: hasta ahora el cierre dependía solo de
-                Escape o click en el backdrop, invisibles para mouse/touch. */}
+            {/* Contenido scrolleable. El scroll vive acá (no en el panel) para
+                que el botón de cierre quede fijo y no se vaya con el scroll. */}
+            <div className="min-h-0 overflow-y-auto p-6">
+              <div
+                aria-hidden
+                className="mx-auto mb-4 h-1 w-10 rounded-full bg-[var(--color-border-strong)] sm:hidden"
+              />
+              <h2
+                id={titleId}
+                className={cn(
+                  "text-subtitle pr-10 text-[var(--color-ink)]",
+                  titleHidden && "sr-only",
+                )}
+              >
+                {title}
+              </h2>
+              {description ? (
+                <p id={descId} className="text-body-sm mt-1 pr-10 text-[var(--color-ink-soft)]">
+                  {description}
+                </p>
+              ) : null}
+              <div className="mt-4">{children}</div>
+            </div>
+            {/* Botón de cierre visible (Escape/backdrop seguían siendo invisibles
+                para mouse/touch). Va al FINAL del DOM —para no ser el primer
+                focusable que showModal enfoca— pero fijo arriba a la derecha del
+                panel (que no scrollea), así no se va con el contenido. */}
             <button
               type="button"
               onClick={onClose}
@@ -96,22 +121,6 @@ export function Sheet({
             >
               <Icon name="cerrar" size={18} />
             </button>
-            <div
-              aria-hidden
-              className="mx-auto mb-4 h-1 w-10 rounded-full bg-[var(--color-border-strong)] sm:hidden"
-            />
-            <h2
-              id={titleId}
-              className={cn("text-subtitle text-[var(--color-ink)]", titleHidden && "sr-only")}
-            >
-              {title}
-            </h2>
-            {description ? (
-              <p id={descId} className="text-body-sm mt-1 text-[var(--color-ink-soft)]">
-                {description}
-              </p>
-            ) : null}
-            <div className="mt-4">{children}</div>
           </div>
         </div>
       ) : null}
