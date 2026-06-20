@@ -60,9 +60,6 @@ module.exports = {
           bienestar: "#8165a3",
           vida: "#5c6fb3",
           memoria: "#8b9ad0",
-          // Fill AA-safe de Memoria: el lavanda claro falla AA con blanco
-          // (2.75:1); este tono va para fill/texto teñido (DESIGN.md §3.5).
-          "memoria-deep": "#565f81",
         },
       },
       borderRadius: {

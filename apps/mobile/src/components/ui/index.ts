@@ -1,5 +1,5 @@
 export { Button } from "./Button";
-export { Card, PressableCard } from "./Card";
+export { Card } from "./Card";
 export { ChipGroup } from "./ChipGroup";
 export { OptionCard } from "./OptionCard";
 export { ProgressDots } from "./ProgressDots";

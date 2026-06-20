@@ -13,6 +13,9 @@ type Props = {
   onClose: () => void;
 };
 
+/** Palabra que el usuario debe escribir para habilitar el borrado. */
+const CONFIRM_WORD = "BORRAR";
+
 /**
  * Sheet de confirmación del wipe total de memoria (mobile). Espeja la lógica
  * del `WipeMemoryDialog` de web, adaptada al patrón `Modal` de `RecapSheet`:
@@ -82,6 +85,10 @@ export function WipeMemorySheet({ open, onClose }: Props) {
           });
         }
         setConfirmText("");
+      } else {
+        // Cualquier otro error (500, timeout, red): avisar en vez de tragarlo —
+        // es una acción irreversible y el usuario tiene que saber que falló.
+        setConflictMsg("No pudimos borrar la memoria. Revisá la conexión y probá de nuevo.");
       }
     }
   }
@@ -94,7 +101,7 @@ export function WipeMemorySheet({ open, onClose }: Props) {
     onClose();
   }
 
-  const canConfirm = confirmText === "BORRAR" && preview !== null && !wipeExecute.isPending;
+  const canConfirm = confirmText === CONFIRM_WORD && preview !== null && !wipeExecute.isPending;
 
   return (
     <Modal
@@ -168,12 +175,12 @@ export function WipeMemorySheet({ open, onClose }: Props) {
 
                 {/* Campo de confirmación */}
                 <TextField
-                  label='Escribí "BORRAR" para confirmar'
+                  label={`Escribí "${CONFIRM_WORD}" para confirmar`}
                   value={confirmText}
                   onChangeText={setConfirmText}
                   autoCapitalize="characters"
                   autoCorrect={false}
-                  placeholder="BORRAR"
+                  placeholder={CONFIRM_WORD}
                 />
 
                 <View className="flex-row gap-3">

@@ -8,7 +8,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#242c3f"
     },
     "scheme": "ynara",
     "userInterfaceStyle": "automatic",
@@ -36,7 +36,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#242c3f"
         }
       ],
       "expo-font"

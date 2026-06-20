@@ -32,21 +32,14 @@ export function A11yStep() {
   const setHighContrast = useA11yStore((s) => s.setHighContrast);
   const setMotion = useA11yStore((s) => s.setMotion);
 
-  const { complete, isPending } = useCompleteOnboarding();
+  const { complete } = useCompleteOnboarding();
 
   return (
     <StepShell
       eyebrow={copy.eyebrow}
       title={copy.title}
       subtitle={copy.subtitle}
-      footer={
-        <StepFooter
-          onBack={back}
-          onNext={complete}
-          nextLabel={isPending ? "Guardando…" : "Listo"}
-          nextDisabled={isPending}
-        />
-      }
+      footer={<StepFooter onBack={back} onNext={complete} nextLabel="Listo" />}
     >
       <View className="gap-6">
         <ChipGroup
