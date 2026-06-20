@@ -97,8 +97,11 @@ type ChatActions = {
    */
   failAssistantStream: (sessionId: string, assistantId: string, errorCode?: string) => void;
   /**
-   * Cancela el stream (path del AbortController): el mensaje del assistant
-   * queda "canceled" conservando el parcial que haya llegado, `streamStatus:"idle"`.
+   * Cancela el stream (path del AbortController): si llegó texto parcial, el
+   * mensaje del assistant queda "canceled" conservándolo; si NO llegó ningún
+   * token, se descarta el placeholder vacío (mismo criterio que
+   * `failAssistantStream`, para no dejar una burbuja vacía y muda).
+   * `streamStatus:"idle"`.
    */
   cancelAssistantStream: (sessionId: string, assistantId: string) => void;
   reset: () => void;
@@ -318,14 +321,17 @@ export function createChatStore(storage: StateStorage) {
           set((s) => {
             const list = s.messages[sessionId];
             if (!list) return s;
+            const assistant = list.find((m) => m.id === assistantId);
+            const hasPartial = (assistant?.text.length ?? 0) > 0;
+            // Con parcial: lo conservamos marcado "canceled". Sin ningún token:
+            // descartamos el placeholder vacío (si no, queda una burbuja vacía y
+            // muda en la conversación). Mismo criterio que failAssistantStream.
+            const next = hasPartial
+              ? list.map((m) => (m.id === assistantId ? { ...m, status: "canceled" as const } : m))
+              : list.filter((m) => m.id !== assistantId);
             const session = s.sessions[sessionId];
             return {
-              messages: {
-                ...s.messages,
-                [sessionId]: list.map((m) =>
-                  m.id === assistantId ? { ...m, status: "canceled" as const } : m,
-                ),
-              },
+              messages: { ...s.messages, [sessionId]: next },
               sessions: session
                 ? { ...s.sessions, [sessionId]: { ...session, updatedAt: Date.now() } }
                 : s.sessions,

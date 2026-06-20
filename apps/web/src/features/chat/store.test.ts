@@ -227,6 +227,23 @@ describe("useChatStore — streaming (W3)", () => {
     expect(useChatStore.getState().streamStatus).toBe("idle");
   });
 
+  it("cancelAssistantStream SIN texto descarta el placeholder vacío", () => {
+    const sid = useChatStore.getState().createSession("vida");
+    const userId = useChatStore.getState().appendUserMessage(sid, "hola");
+    const aid = useChatStore.getState().startAssistantStream(sid, userId);
+
+    // Cancel antes del primer token: no hay parcial que conservar.
+    useChatStore.getState().cancelAssistantStream(sid, aid);
+
+    const list = useChatStore.getState().messages[sid] ?? [];
+    expect(list.find((m) => m.id === aid)).toBeUndefined();
+    // El user del turno queda como lo dejó startAssistantStream (done), sin
+    // burbuja de assistant vacía detrás.
+    expect(list).toHaveLength(1);
+    expect(list[0]?.role).toBe("user");
+    expect(useChatStore.getState().streamStatus).toBe("idle");
+  });
+
   it("streamStatus no se persiste (no aparece en el storage)", () => {
     const sid = useChatStore.getState().createSession("vida");
     const userId = useChatStore.getState().appendUserMessage(sid, "hola");
