@@ -1,4 +1,5 @@
 export * from "./api";
+export * from "./interaction";
 export * from "./layout";
 // `expand` (engine de recurrencia con rrule-temporal + Temporal polyfill) NO se
 // re-exporta acá a propósito: el barrel lo consume `apps/web` solo por

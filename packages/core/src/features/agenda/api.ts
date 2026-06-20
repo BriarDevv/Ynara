@@ -59,6 +59,24 @@ export function usePatchEvent(id: string) {
   });
 }
 
+/**
+ * Como `usePatchEvent` pero con el `id` en la llamada, no en el hook. Para
+ * editar cualquier evento desde un único punto (ej. drag-mover/redimensionar en
+ * la grilla, donde el id sale del bloque arrastrado).
+ */
+export function usePatchEventById() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: EventPatch }): Promise<AgendaEvent> => {
+      const raw = await api.patch<unknown>(`/v1/events/${encodeURIComponent(id)}`, patch);
+      return AgendaEventSchema.parse(raw);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.agenda.all() });
+    },
+  });
+}
+
 /** Borra un evento (`DELETE /v1/events/{id}`, 204) e invalida la lista. */
 export function useDeleteEvent(id: string) {
   const queryClient = useQueryClient();
