@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChipGroup } from "@/components/ui/ChipGroup";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { LivingField } from "@/components/ui/LivingField";
+import { Toast } from "@/components/ui/Toast";
 import { useActiveMode } from "@/hooks/useActiveMode";
 import { type TimelineFilter, useMemoryTimeline } from "../api";
+import { takeMemoryFlash } from "../flash";
 import { groupByBucket } from "../timeline";
 import { MemorySearchLink } from "./MemorySearchLink";
 import { MemoryTimelineSkeleton } from "./MemoryTimelineSkeleton";
@@ -36,6 +38,19 @@ export function MemoryView() {
   // relativas sin re-evaluar en cada render.
   const [now] = useState(() => new Date());
   const groups = useMemo(() => (data ? groupByBucket(data, now) : []), [data, now]);
+
+  // Acuse de una acción de la vista de detalle que navegó hasta acá (p.ej.
+  // "Recuerdo borrado."), sembrado en sessionStorage. Lo consumimos una sola
+  // vez tras montar (lectura destructiva): el ref evita que el doble-mount de
+  // StrictMode en dev se coma la key, y el useEffect (vs. leer en el render)
+  // evita un mismatch de hidratación.
+  const [flash, setFlash] = useState<string | null>(null);
+  const flashChecked = useRef(false);
+  useEffect(() => {
+    if (flashChecked.current) return;
+    flashChecked.current = true;
+    setFlash(takeMemoryFlash());
+  }, []);
 
   return (
     <div className="relative isolate flex min-h-full flex-col">
@@ -106,6 +121,13 @@ export function MemoryView() {
           </div>
         )}
       </div>
+
+      <Toast
+        message={flash ?? ""}
+        visible={flash !== null}
+        variant="success"
+        onDismiss={() => setFlash(null)}
+      />
     </div>
   );
 }
