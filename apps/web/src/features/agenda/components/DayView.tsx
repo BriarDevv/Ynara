@@ -20,7 +20,12 @@ function startMinOf(event: AgendaEvent): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-/** ISO del evento con el inicio movido a `startMin` (mismo día, hora local). */
+/**
+ * ISO del evento con el inicio movido a `startMin` (mismo día, hora local).
+ * TODO(tz): usa `setHours` sobre el `Date` local → en un borde de DST podría
+ * correr 1h. Cuando el evento traiga `time_zone` (ADR-018), recalcular en ese
+ * huso con Temporal (ya entra por `expand.ts`). Mock-first hoy no lo expone.
+ */
 function isoWithStartMin(originalIso: string, startMin: number): string {
   const d = new Date(originalIso);
   d.setHours(Math.floor(startMin / 60), startMin % 60, 0, 0);
@@ -127,7 +132,10 @@ function GridEventBlock({
   }
 
   function handlePointerMove(e: ReactPointerEvent<HTMLButtonElement>) {
-    if (!drag) return;
+    // Los all-day no se arrastran en el time-grid (mover/redimensionar los
+    // convertiría en timed): se ignora el movimiento → el pointerup queda como
+    // tap (abre el sheet). `moved` nunca pasa a true.
+    if (!drag || event.all_day) return;
     const deltaY = e.clientY - drag.pointerY;
     const moved = drag.moved || Math.abs(deltaY) > MOVE_THRESHOLD_PX;
     if (drag.kind === "move") {
