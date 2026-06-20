@@ -1,6 +1,7 @@
 import type { OnboardingStep } from "@ynara/core/features/onboarding";
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LivingField } from "@/components/ui/LivingField";
 import { OnboardingHeader } from "./components/OnboardingHeader";
 import { A11yStep } from "./steps/A11yStep";
 import { AuthStep } from "./steps/AuthStep";
@@ -36,9 +37,12 @@ export function OnboardingWizard() {
   const { currentStep, index, total } = useOnboardingNav();
 
   return (
-    <SafeAreaView className="flex-1 bg-bg-canvas" edges={["top", "bottom"]}>
-      <OnboardingHeader total={total} current={index} />
-      <View className="flex-1">{renderStep(currentStep)}</View>
-    </SafeAreaView>
+    <View className="flex-1 bg-bg-canvas">
+      <LivingField variant="constellation" />
+      <SafeAreaView className="flex-1" edges={["top", "bottom"]}>
+        <OnboardingHeader total={total} current={index} />
+        <View className="flex-1">{renderStep(currentStep)}</View>
+      </SafeAreaView>
+    </View>
   );
 }

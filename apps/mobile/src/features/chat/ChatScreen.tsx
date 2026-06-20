@@ -1,5 +1,6 @@
 import { KeyboardAvoidingView, Platform, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LivingField } from "@/components/ui/LivingField";
 import { useChatStore } from "@/stores/chat";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
@@ -34,19 +35,22 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-bg-canvas" edges={["top", "bottom"]}>
-      <ChatHeader mode={mode} />
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <View className="flex-1">
-          <MessageList messages={messages ?? []} mode={mode} onRetry={handleRetry} />
-        </View>
-        <View className="px-4 pb-2">
-          <ChatComposer onSend={handleSend} busy={stream.isStreaming} onCancel={stream.cancel} />
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <View className="flex-1 bg-bg-canvas">
+      <LivingField variant="constellation" />
+      <SafeAreaView className="flex-1" edges={["top", "bottom"]}>
+        <ChatHeader mode={mode} />
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View className="flex-1">
+            <MessageList messages={messages ?? []} mode={mode} onRetry={handleRetry} />
+          </View>
+          <View className="px-4 pb-2">
+            <ChatComposer onSend={handleSend} busy={stream.isStreaming} onCancel={stream.cancel} />
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
