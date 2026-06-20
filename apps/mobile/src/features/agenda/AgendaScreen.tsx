@@ -50,7 +50,7 @@ export function AgendaScreen() {
 
   return (
     <View className="flex-1 bg-bg-canvas">
-      <LivingField variant="paper" />
+      <LivingField variant="aurora" />
       <SafeAreaView className="flex-1" edges={["top"]}>
         <ScrollView contentContainerClassName="gap-8 px-6 py-8">
           {/* Header */}
