@@ -1,7 +1,7 @@
 import { useTasks, useToggleTask } from "@ynara/core/features/today";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
+import { ErrorCard } from "@/components/ui/ErrorCard";
 import { Text } from "@/components/ui/Text";
-import { cn } from "@/lib/cn";
 import { PrioritiesSkeleton } from "./PrioritiesSkeleton";
 import { PriorityRow } from "./PriorityRow";
 
@@ -22,17 +22,12 @@ export function PrioritiesSection() {
       {isPending ? (
         <PrioritiesSkeleton />
       ) : isError ? (
-        <View className="gap-2 rounded-lg border border-border bg-bg p-4">
-          <Text className="text-body text-ink">No pudimos traer tus prioridades</Text>
-          <Text className="text-body-sm text-ink-soft">
-            Puede ser un problema de conexión. Probá de nuevo.
-          </Text>
-          <Pressable onPress={() => refetch()} disabled={isFetching} hitSlop={8}>
-            <Text className={cn("text-button text-ink underline", isFetching && "opacity-50")}>
-              Reintentar
-            </Text>
-          </Pressable>
-        </View>
+        <ErrorCard
+          title="No pudimos traer tus prioridades"
+          hint="Puede ser un problema de conexión. Probá de nuevo."
+          onRetry={() => refetch()}
+          retrying={isFetching}
+        />
       ) : data.length === 0 ? (
         <View className="gap-1 rounded-lg border border-border bg-bg p-4">
           <Text className="text-body text-ink">Sin urgentes esta hora</Text>
