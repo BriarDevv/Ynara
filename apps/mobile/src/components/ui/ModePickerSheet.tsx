@@ -14,7 +14,7 @@ type Props = {
 
 /**
  * Selector de modo activo (F2): usa el `BottomSheet` compartido. Lista los 5
- * modos ordenados onboarding-primero (igual que ChatHome), marca el activo y al
+ * modos ordenados onboarding-primero (igual que el selector de modo del chat), marca el activo y al
  * elegir uno lo fija en el store global y cierra. El tinte de la app sigue al
  * modo elegido.
  */

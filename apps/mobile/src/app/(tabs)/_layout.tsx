@@ -13,8 +13,7 @@ const TAB_BAR_BORDER = "rgba(243,240,234,0.10)"; // colors.border
 /**
  * Layout de tabs — la home post-onboarding: **Hoy** · **Agenda** · **Chat** ·
  * **Tú** (Memoria accesible desde Tú). Hace de gate: sin onboarding completo
- * manda al wizard. La conversación (`/chat/[sessionId]`) vive en el stack raíz,
- * así que abre full-screen por encima del tab bar.
+ * manda al wizard. El Chat vive dentro de su tab (entrás directo a la conversación).
  *
  * Iconos geométricos con Views (sin `@expo/vector-icons`, que no es dep directa
  * de mobile): cuadrado redondeado = Hoy, círculo con aguja = Agenda, pill = Chat,
