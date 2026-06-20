@@ -137,7 +137,7 @@ export function TuScreen() {
   const [logoutOpen, setLogoutOpen] = useState(false);
   function handleLogout() {
     reset();
-    router.replace("/onboarding");
+    router.replace("/welcome");
   }
 
   return (
