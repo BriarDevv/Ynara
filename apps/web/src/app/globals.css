@@ -517,5 +517,7 @@ html.motion-off *::after {
   box-shadow:
     0 0 0 2px var(--color-bg),
     0 0 0 4px var(--color-accent);
-  border-radius: var(--radius-sm);
+  /* Sin `border-radius` forzado: el ring por box-shadow ya sigue el radio
+     propio del elemento. Forzar --radius-sm cuadraba los pills (chips, switch)
+     a 8px al recibir foco de teclado. */
 }
