@@ -158,3 +158,54 @@ export const PlaygroundAgentOut = z.object({
   trace: z.array(TraceStep).default([]),
 });
 export type PlaygroundAgentOutT = z.infer<typeof PlaygroundAgentOut>;
+
+// ---------------------------------------------------------------------------
+// Streaming SSE (`POST /v1/admin/playground/stream`)
+// ---------------------------------------------------------------------------
+//
+// Espejo Zod de los payloads de los eventos SSE del endpoint de streaming. El
+// transporte NO es JSON-sync: el hook lee `text/event-stream`, parsea los frames
+// (`event:`/`data:`) y valida cada `data` con estos schemas en el borde, igual
+// que el resto del panel. Tres eventos: `token` (delta incremental), `done`
+// (métricas finales) y `error` (fallo neutro, regla #4).
+
+/** `event: token` — un delta incremental de texto del modelo. */
+export const PlaygroundStreamToken = z.object({
+  delta: z.string(),
+});
+export type PlaygroundStreamTokenT = z.infer<typeof PlaygroundStreamToken>;
+
+/**
+ * `event: reasoning` — un fragmento del canal de razonamiento SEPARADO del modelo
+ * (qwen thinking vía Ollama: viaja en `delta.reasoning`, APARTE del `content`). El
+ * hook lo acumula y lo muestra en vivo como "qué piensa el modelo"; NO cuenta como
+ * token de respuesta. El `thinking` final autoritativo llega en `done`.
+ */
+export const PlaygroundStreamReasoning = z.object({
+  delta: z.string(),
+});
+export type PlaygroundStreamReasoningT = z.infer<typeof PlaygroundStreamReasoning>;
+
+/**
+ * `event: done` — métricas finales del turno streameado. NO trae `prompt_tokens`
+ * (el stream del modelo no expone `usage`); `tokens_per_second` ya viene derivado
+ * del server (chunks / latencia medida). `thinking` es el `<think>…</think>`
+ * separado, o `null` si el modelo no expuso pensamiento.
+ */
+export const PlaygroundStreamDone = z.object({
+  finish_reason: z.string(),
+  model_name: z.string(),
+  completion_tokens: z.number(),
+  latency_ms: z.number(),
+  tokens_per_second: z.number(),
+  thinking_used: z.boolean(),
+  thinking: z.string().nullable().optional(),
+});
+export type PlaygroundStreamDoneT = z.infer<typeof PlaygroundStreamDone>;
+
+/** `event: error` — fallo del stream con mensaje neutro (regla #4). */
+export const PlaygroundStreamError = z.object({
+  code: z.string(),
+  message: z.string(),
+});
+export type PlaygroundStreamErrorT = z.infer<typeof PlaygroundStreamError>;

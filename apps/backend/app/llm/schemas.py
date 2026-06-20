@@ -97,6 +97,12 @@ class CompletionResult(BaseModel):
     completion_tokens: int
     model_name: str
     latency_ms: float
+    # Razonamiento del modelo en su canal SEPARADO (campo ``reasoning`` del message
+    # OpenAI). Ollama / vLLM con reasoning-parser lo emiten APARTE del ``content``
+    # para los thinking models (qwen): el ``text`` queda limpio y el pensamiento
+    # viaja acá. ``None`` cuando el modelo no expone canal de razonamiento o thinking
+    # estuvo apagado. Aditivo: los consumidores que lo ignoran no cambian.
+    reasoning: str | None = None
 
 
 class CompletionChunk(BaseModel):
@@ -108,6 +114,11 @@ class CompletionChunk(BaseModel):
     delta_text: str
     tool_call_delta: dict[str, Any] | None = None
     finish_reason: str | None = None
+    # Canal de razonamiento separado (campo ``reasoning`` del delta OpenAI). Ollama
+    # y vLLM con reasoning-parser lo emiten APARTE del ``content`` para los modelos
+    # thinking (qwen): el texto de respuesta queda limpio y el razonamiento viaja
+    # acá. ``None``/ausente cuando el modelo no expone un canal de razonamiento.
+    reasoning_delta: str | None = None
 
 
 class ModelHealth(BaseModel):

@@ -36,6 +36,15 @@ export function usePlayground() {
  */
 export function playgroundErrorCopy(error: unknown): { title: string; hint: string } {
   const status = error instanceof ApiError ? error.status : 0;
+  return playgroundStatusCopy(status);
+}
+
+/**
+ * Mismo mapeo que `playgroundErrorCopy` pero a partir del status crudo (para el
+ * transporte SSE, donde el error no viaja como `ApiError` sino como el código de
+ * la respuesta HTTP del gate o un fallo de stream con `null`).
+ */
+export function playgroundStatusCopy(status: number | null): { title: string; hint: string } {
   switch (status) {
     case 409:
       return {

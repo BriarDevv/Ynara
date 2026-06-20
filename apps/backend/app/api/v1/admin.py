@@ -29,10 +29,12 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import Float, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -937,9 +939,12 @@ async def admin_playground(
     except LlmError as exc:
         raise _map_llm_error(exc) from exc
 
-    # 8) Separar el bloque <think>...</think> embebido (Qwen thinking model): el
-    #    ``text`` que devolvemos queda limpio y el razonamiento crudo va aparte.
-    clean_text, thinking_text = split_thinking(result.text)
+    # 8) Pensamiento del turno: el canal ``reasoning`` separado (qwen via Ollama lo
+    #    manda en ``message.reasoning``, no inline) tiene precedencia; si el modelo
+    #    en cambio embebió <think>...</think> en el ``content`` (vLLM sin
+    #    reasoning-parser) lo separamos de ahí. El ``text`` queda siempre limpio.
+    clean_text, inline_thinking = split_thinking(result.text)
+    thinking_text = result.reasoning or inline_thinking
 
     # 9) Trace observable del lifecycle (Fase A, aditivo). PRIVACIDAD (regla #4):
     #    los ``detail`` solo concatenan params PÚBLICOS (los que el operador ya mandó)
@@ -969,6 +974,161 @@ async def admin_playground(
         thinking_used=thinking,
         thinking=thinking_text,
         trace=trace,
+    )
+
+
+def _sse_event(event: str, data: dict[str, Any]) -> bytes:
+    """Serializa un evento SSE (``event:`` + ``data:`` JSON + ``\\n\\n``).
+
+    ``ensure_ascii=False`` para no escapar los acentos del delta del modelo. El
+    payload NUNCA lleva secretos (base_url, system prompt ni ``str(exc)``): solo
+    el delta de texto y, en ``done``, métricas derivadas del stream (regla #4).
+    """
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n".encode()
+
+
+@router.post("/admin/playground/stream")
+async def admin_playground_stream(
+    body: PlaygroundIn,
+    admin_id: CurrentAdmin,
+    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+) -> StreamingResponse:
+    """Completion ad-hoc en STREAMING (SSE) — gemela de ``/admin/playground``.
+
+    Mismo aislamiento (sin ``DbSession``, sin sesión/memoria/tools) y mismas
+    validaciones que el probe sync, pero emite la generación token-por-token vía
+    Server-Sent Events para que el panel pinte el texto en vivo + tokens/seg. Las
+    validaciones (422 modelo no servido, 409 backend fake, 422 modo desconocido)
+    corren ANTES de construir el ``StreamingResponse`` -> salen como HTTP normal,
+    no como SSE.
+
+    Contrato de eventos (consumido por el panel):
+      - ``token``     -> ``{"delta": <str>}`` por cada chunk de TEXTO del modelo.
+      - ``reasoning`` -> ``{"delta": <str>}`` por cada fragmento del canal de
+        razonamiento SEPARADO (qwen thinking; APARTE del ``content``). Se pinta en
+        vivo y el ``thinking`` final del ``done`` lo trae acumulado. NO cuenta como
+        ``completion_token`` (esos son solo los del texto de respuesta).
+      - ``done``  -> métricas finales (finish_reason, model_name, completion_tokens,
+        latency_ms, tokens_per_second, thinking_used, thinking separado).
+      - ``error`` -> ``{"code": "stream_error", "message": <neutro>}`` ante
+        cualquier ``LlmError`` (NUNCA el ``str(exc)``, regla #4).
+
+    ``completion_tokens`` se cuenta como chunks con delta no vacío (granularidad
+    real del stream del modelo) y ``tokens_per_second`` se deriva con la latencia
+    medida en el server. El stream NO trae ``usage`` -> sin ``prompt_tokens``.
+    """
+    settings = get_settings()
+    cfg = load_llm_config()
+
+    # 1) Validar el modelo contra el catálogo de served_names (gate del probe sync).
+    models_by_served = {m.served_name: m for m in cfg.models.values()}
+    model_cfg = models_by_served.get(body.model)
+    if model_cfg is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modelo no servido"
+        )
+
+    # 2) Sin serving real (backend fake) no hay generación -> 409 ANTES del stream.
+    if not _wants_real_llm(settings):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="serving real no disponible"
+        )
+
+    # 3) Thinking efectivo: override manual del body, si no el default por role.
+    thinking = body.thinking if body.thinking is not None else model_cfg.role == "agent"
+
+    # 4) Params efectivos; el preset low_perf pisa max_tokens/temp/thinking + timeout.
+    max_tokens = body.params.max_tokens
+    temperature = body.params.temperature
+    timeout_s: float | None = None
+    if body.params.low_perf:
+        max_tokens = min(_LOW_PERF_MAX_TOKENS, body.params.max_tokens)
+        temperature = min(_LOW_PERF_TEMPERATURE, body.params.temperature)
+        thinking = False
+        timeout_s = _LOW_PERF_TIMEOUT_S
+
+    # 5) System prompt: override crudo > load_prompt(mode) > default neutro.
+    system_content = body.system_prompt or _PLAYGROUND_DEFAULT_SYSTEM
+    if body.system_prompt is None and body.mode is not None:
+        try:
+            system_content = load_prompt(Mode(body.mode))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modo desconocido"
+            ) from exc
+
+    messages = [
+        ChatMessage(role="system", content=system_content),
+        ChatMessage(role="user", content=body.message),
+    ]
+    # Snapshot a primitivos: el generator cierra sobre valores ya resueltos (no
+    # sobre el request/Depends), mismo cuidado que /chat/stream.
+    served_name = model_cfg.served_name
+    effective_thinking = thinking
+
+    async def _gen() -> AsyncIterator[bytes]:
+        started = time.perf_counter()
+        parts: list[str] = []
+        reasoning_parts: list[str] = []
+        completion_tokens = 0
+        finish_reason = "stop"
+        try:
+            async for chunk in llm_client.stream(
+                model=served_name,
+                messages=messages,
+                tools=None,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                thinking=effective_thinking,
+                timeout_s=timeout_s,
+            ):
+                # Canal de razonamiento (qwen): llega APARTE del content. Se emite en
+                # vivo para pintar "qué piensa" mientras pasa; NO suma completion_token.
+                if chunk.reasoning_delta:
+                    reasoning_parts.append(chunk.reasoning_delta)
+                    yield _sse_event("reasoning", {"delta": chunk.reasoning_delta})
+                if chunk.delta_text:
+                    parts.append(chunk.delta_text)
+                    completion_tokens += 1
+                    yield _sse_event("token", {"delta": chunk.delta_text})
+                if chunk.finish_reason is not None:
+                    finish_reason = chunk.finish_reason
+        except LlmError:
+            # Mensaje NEUTRO (regla #4): nunca el str(exc) ni el payload del error.
+            yield _sse_event(
+                "error",
+                {"code": "stream_error", "message": "No se pudo completar la respuesta"},
+            )
+            return
+
+        latency_ms = (time.perf_counter() - started) * 1000.0
+        tps = completion_tokens / (latency_ms / 1000.0) if latency_ms > 0 else 0.0
+        # Pensamiento del turno: el canal ``reasoning`` acumulado (qwen via Ollama)
+        # tiene precedencia; si en cambio vino embebido como <think>...</think> en el
+        # content (vLLM sin reasoning-parser), lo separamos de ahí.
+        _clean, inline_thinking = split_thinking("".join(parts))
+        thinking_text = "".join(reasoning_parts) or inline_thinking
+        yield _sse_event(
+            "done",
+            {
+                "finish_reason": finish_reason,
+                "model_name": served_name,
+                "completion_tokens": completion_tokens,
+                "latency_ms": latency_ms,
+                "tokens_per_second": tps,
+                "thinking_used": effective_thinking,
+                "thinking": thinking_text,
+            },
+        )
+
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
     )
 
 
