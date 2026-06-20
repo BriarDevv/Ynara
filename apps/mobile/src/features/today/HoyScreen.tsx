@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ScrollView } from "react-native";
+import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LivingField } from "@/components/ui/LivingField";
 import { ModePickerSheet } from "@/components/ui/ModePickerSheet";
 import { useActiveMode } from "@/hooks/useActiveMode";
 import { useUserStore } from "@/stores/user";
@@ -12,8 +13,8 @@ import { SuggestionsSection } from "./components/SuggestionsSection";
 /**
  * Pantalla **Hoy** (mobile) — la home real post-onboarding (wireframe 06):
  * header + Prioridades del día + Sugerencias ("Ynara sugiere") + Recap.
- * Espejo de `HoyView` de web, sin el fondo aurora ni el stagger GSAP (flourishes
- * exclusivos de web).
+ * Espejo de `HoyView` de web, con el fondo aurora (F3.2); sin el stagger GSAP
+ * (flourish exclusivo de web).
  *
  * El modo activo tinta el header y sale del store de modo global
  * (`useActiveMode`): el override del selector, o el primer modo del onboarding.
@@ -27,19 +28,22 @@ export function HoyScreen() {
   const [now] = useState(() => new Date());
 
   return (
-    <SafeAreaView className="flex-1 bg-bg-canvas" edges={["top"]}>
-      <ScrollView contentContainerClassName="gap-8 px-6 py-8">
-        <HoyHeader
-          displayName={displayName}
-          activeMode={activeMode}
-          onPressMode={() => setModePickerOpen(true)}
-          now={now}
-        />
-        <PrioritiesSection />
-        <SuggestionsSection />
-        <RecapSection />
-      </ScrollView>
-      <ModePickerSheet open={modePickerOpen} onClose={() => setModePickerOpen(false)} />
-    </SafeAreaView>
+    <View className="flex-1 bg-bg-canvas">
+      <LivingField variant="aurora" />
+      <SafeAreaView className="flex-1" edges={["top"]}>
+        <ScrollView contentContainerClassName="gap-8 px-6 py-8">
+          <HoyHeader
+            displayName={displayName}
+            activeMode={activeMode}
+            onPressMode={() => setModePickerOpen(true)}
+            now={now}
+          />
+          <PrioritiesSection />
+          <SuggestionsSection />
+          <RecapSection />
+        </ScrollView>
+        <ModePickerSheet open={modePickerOpen} onClose={() => setModePickerOpen(false)} />
+      </SafeAreaView>
+    </View>
   );
 }

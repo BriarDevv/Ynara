@@ -25,6 +25,13 @@ const LINK2 = FIELD.LINK * FIELD.LINK;
 const T_STEP = 0.0045;
 /** Escala del radio de los nodos para que se lean en mobile. */
 const NODE_SCALE = 1.7;
+// Ondas de marca (espejo de model.ts): nº de cintas/hilos, paso de muestreo en
+// px, y TAU para la fase de las curvas.
+const RIBBONS = 7;
+const THREADS = 5;
+const RIBBON_STEP = 12;
+const THREAD_STEP = 10;
+const TAU = 6.2832;
 
 /** RNG determinístico (mulberry32): mismo seed → mismo campo, no re-randomiza. */
 function mulberry32(seed: number): () => number {
@@ -41,11 +48,11 @@ function mulberry32(seed: number): () => number {
 /**
  * Fondo vivo (F3) con **Skia**, consumiendo el modelo compartido
  * `@ynara/core/features/field` (geometría `seedField`, config `VARIANTS`, clima
- * `MODE_CLIMATE`, constantes `FIELD`). Todas las variantes de nodos/blooms
- * comparten este worklet (params de `VARIANTS`): `network`/`constellation`/
- * `paper` con partículas y `depth` solo-blooms (`seedField` devuelve 0 nodos si
- * `particles` es false). Las ondas (`waves`, variante `aurora`) todavía no se
- * portaron a Skia → aurora se vería sin sus ondas (pendiente, fase 2).
+ * `MODE_CLIMATE`, constantes `FIELD`). Todas las variantes comparten este
+ * worklet (params de `VARIANTS`): blooms siempre; partículas (nodos + hilos +
+ * diamantes) si `particles` (network/constellation/paper); ondas (cintas +
+ * hilos) si `waves` (aurora); `depth` queda solo-blooms (`seedField` devuelve 0
+ * nodos si `particles` es false).
  *
  * La animación corre en el hilo de UI: `useFrameCallback` avanza el reloj `t` y
  * `useDerivedValue` redibuja el `SkPicture` por frame. Las fórmulas de evolución
@@ -70,6 +77,18 @@ export function LivingField({ variant }: Props) {
   const climA = useMemo(() => hexToRgb(climate.a), [climate.a]);
   const climB = useMemo(() => hexToRgb(climate.b), [climate.b]);
   const dotC = useMemo(() => dotColor(true), []);
+  // Paleta de las ondas (`waveColors` de model.ts): clima a/b + 3 stops oficiales.
+  // Solo varía con el modo (clima a/b); el worklet la lee.
+  const waveCols = useMemo(
+    () => [
+      hexToRgb(climate.a),
+      hexToRgb(climate.b),
+      hexToRgb(MODE_CLIMATE.memoria.b),
+      hexToRgb(MODE_CLIMATE.bienestar.a),
+      hexToRgb(MODE_CLIMATE.productividad.b),
+    ],
+    [climate.a, climate.b],
+  );
 
   // Paints reusados (HostObjects accesibles en el worklet).
   const fill = useMemo(() => Skia.Paint(), []);
@@ -80,6 +99,9 @@ export function LivingField({ variant }: Props) {
     return p;
   }, []);
   const recorder = useMemo(() => Skia.PictureRecorder(), []);
+  // Path reusable para las ondas: se `reset()`ea por cinta/hilo en vez de allocar
+  // uno por frame (drawPath snapshotea la geometría en la grabación).
+  const wavePath = useMemo(() => Skia.Path.Make(), []);
 
   const animate = useFieldActive();
   const t = useSharedValue(0);
@@ -126,6 +148,82 @@ export function LivingField({ variant }: Props) {
       canvas.drawRect(Skia.XYWHRect(0, 0, w, h), fill);
     }
     fill.setShader(null);
+
+    // ── Ondas de marca: cintas + hilos (buildWaves inline, espejo de model.ts).
+    // Solo en variantes con `waves` (aurora). Cada banda/hilo lleva un gradiente
+    // horizontal izq→der (de transparente al alpha del extremo). ──
+    if (cfg.waves) {
+      for (let k = 0; k < RIBBONS; k++) {
+        const cy = h * (0.1 + k * 0.075);
+        const amp = h * (0.034 + k * 0.012);
+        const thick = h * (0.075 + (k % 3) * 0.022);
+        const wl = w * (0.9 + (k % 3) * 0.34);
+        const ph = tv * (0.32 + k * 0.13);
+        const rgb = waveCols[k % waveCols.length];
+        const aEnd = 0.34 * (0.84 + 0.16 * Math.sin(tv * 0.4 + k * 0.9)) * (0.8 + 0.2 * br);
+        wavePath.reset();
+        for (let x = 0; x <= w; x += RIBBON_STEP) {
+          const u = (x / wl) * TAU;
+          const y =
+            cy - thick / 2 + Math.sin(u + ph) * amp + Math.sin(u * 0.5 - ph * 1.2) * amp * 0.32;
+          if (x === 0) wavePath.moveTo(x, y);
+          else wavePath.lineTo(x, y);
+        }
+        for (let x = w; x >= 0; x -= RIBBON_STEP) {
+          const u = (x / wl) * TAU;
+          const y =
+            cy + thick / 2 + Math.sin(u + ph) * amp + Math.sin(u * 0.5 - ph * 1.2) * amp * 0.32;
+          wavePath.lineTo(x, y);
+        }
+        wavePath.close();
+        fill.setShader(
+          Skia.Shader.MakeLinearGradient(
+            { x: 0, y: 0 },
+            { x: w, y: 0 },
+            [
+              Skia.Color(`rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`),
+              Skia.Color(`rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${aEnd * 0.55})`),
+              Skia.Color(`rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${aEnd})`),
+            ],
+            [0, 0.3, 1],
+            0,
+          ),
+        );
+        canvas.drawPath(wavePath, fill);
+      }
+      fill.setShader(null);
+
+      for (let k = 0; k < THREADS; k++) {
+        const cy = h * (0.12 + k * 0.1);
+        const amp = h * (0.045 + k * 0.014);
+        const wl = w * (0.96 + (k % 2) * 0.28);
+        const ph = tv * (0.28 + k * 0.12) + k * 1.1;
+        const rgb = waveCols[(k + 1) % waveCols.length];
+        const aEnd = 0.42 * (0.8 + 0.2 * br);
+        wavePath.reset();
+        for (let x = 0; x <= w; x += THREAD_STEP) {
+          const u = (x / wl) * TAU;
+          const y = cy + Math.sin(u + ph) * amp + Math.sin(u * 0.5 - ph) * amp * 0.3;
+          if (x === 0) wavePath.moveTo(x, y);
+          else wavePath.lineTo(x, y);
+        }
+        stroke.setShader(
+          Skia.Shader.MakeLinearGradient(
+            { x: 0, y: 0 },
+            { x: w, y: 0 },
+            [
+              Skia.Color(`rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0)`),
+              Skia.Color(`rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${aEnd})`),
+              Skia.Color(`rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${aEnd * 0.85})`),
+            ],
+            [0, 0.5, 1],
+            0,
+          ),
+        );
+        canvas.drawPath(wavePath, stroke);
+      }
+      stroke.setShader(null);
+    }
 
     // ── Posiciones animadas de los nodos (stepNodes inline: deriva + wrap) ──
     const W = w + 20;
@@ -179,7 +277,7 @@ export function LivingField({ variant }: Props) {
     }
 
     return recorder.finishRecordingAsPicture();
-  }, [w, h, climA, climB, dotC, geom, cfg]);
+  }, [w, h, climA, climB, dotC, geom, cfg, waveCols]);
 
   return (
     <View
