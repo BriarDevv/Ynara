@@ -202,3 +202,51 @@ class PlaygroundAgentOut(YnaraBaseModel):
     finish_reason: str
     model_name: str
     actions: list[ToolCallOut] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Conexión / Compartir (control plane): estado del tailnet + URLs para compartir
+# ---------------------------------------------------------------------------
+#
+# Privacidad (regla #4): el probe de Tailscale NUNCA ecoa ``str(exc)`` (solo
+# ``type(exc).__name__``). El ``tailnet_ip``/``hostname`` son la identidad de ESTA
+# máquina en el tailnet del operador (no datos de usuario ni connection strings):
+# es lo análogo al ``db_target`` (host) que ya expone ``GET /admin/system``.
+
+
+class TailscaleStatus(YnaraBaseModel):
+    """Estado del daemon de Tailscale en el host (probe read-only).
+
+    ``up=True`` solo si ``tailscale status --json`` reportó ``BackendState=Running``
+    con una IPv4 del tailnet. ``detail`` es legible y acotado: ``"up"`` |
+    ``"not_installed"`` | ``"timeout"`` | el estado del backend ("needslogin"…) | el
+    nombre de la clase de excepción. NUNCA el payload de un error (regla #4).
+    """
+
+    up: bool
+    hostname: str | None = None  # Self.HostName del tailnet (solo display)
+    tailnet_ip: str | None = None  # Self.TailscaleIPs[IPv4] (100.x): base de las URLs
+    detail: str
+
+
+class ShareTarget(YnaraBaseModel):
+    """Una superficie consumible del serving compartida por el tailnet.
+
+    Se arma con el ``tailnet_ip`` + el puerto del servicio. ``url`` es alcanzable
+    desde cualquier máquina del tailnet del operador y NO lleva credenciales.
+    """
+
+    label: str  # "API (OpenAI-compatible)" | "Chat (Open WebUI)"
+    url: str  # "http://100.x.y.z:11434/v1"
+    port: int
+
+
+class ConnectivityOut(YnaraBaseModel):
+    """Estado de conectividad para compartir el serving con otra máquina.
+
+    ``tailscale`` es el estado del tailnet; ``targets`` son las URLs para repartir
+    (vacío si el tailnet no está arriba: sin IP no hay URL alcanzable que compartir).
+    """
+
+    tailscale: TailscaleStatus
+    targets: list[ShareTarget]
