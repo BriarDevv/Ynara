@@ -1,15 +1,15 @@
-import { ONBOARDING_STEPS, STEP_INDEX } from "@ynara/core/features/onboarding";
 import { useCallback } from "react";
-import { useOnboardingStore } from "@/stores/onboarding";
+import { useOnboardingStepStore } from "@/stores/onboardingStep";
+import { ONBOARDING_STEPS, STEP_INDEX } from "./steps";
 
 /**
- * Navegación del wizard de onboarding (mobile). A diferencia de la web (que
- * usa rutas por step), acá el wizard es una sola pantalla manejada por
- * `currentStep` del draft store. `next`/`back` solo mueven ese step.
+ * Navegación del wizard de onboarding (mobile). El wizard es una sola pantalla
+ * manejada por `step` del step store (mobile, decoplado de core para incluir
+ * "sobre-vos"). `next`/`back` solo mueven ese step.
  */
 export function useOnboardingNav() {
-  const currentStep = useOnboardingStore((s) => s.currentStep);
-  const setStep = useOnboardingStore((s) => s.setStep);
+  const currentStep = useOnboardingStepStore((s) => s.step);
+  const setStep = useOnboardingStepStore((s) => s.setStep);
 
   const index = STEP_INDEX[currentStep];
   const isFirst = index === 0;

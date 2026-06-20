@@ -2,6 +2,7 @@ import { type Mode, ModeSchema } from "@ynara/shared-schemas";
 import { useRouter } from "expo-router";
 import { useCallback } from "react";
 import { useOnboardingStore } from "@/stores/onboarding";
+import { useOnboardingStepStore } from "@/stores/onboardingStep";
 import { useUserStore } from "@/stores/user";
 
 /**
@@ -42,6 +43,7 @@ export function useCompleteOnboarding() {
     }
     user.completeOnboarding();
     useOnboardingStore.getState().reset();
+    useOnboardingStepStore.getState().reset();
 
     router.replace("/");
   }, [router]);

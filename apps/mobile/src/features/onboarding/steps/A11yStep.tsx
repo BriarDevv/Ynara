@@ -16,10 +16,10 @@ const TEXT_SIZE_OPTIONS: readonly { value: TextSize; label: string }[] = [
 ];
 
 /**
- * Step final del onboarding — preferencias de a11y (mobile). Cada control
- * escribe directo al a11y store. El motion se mapea binario: ON → "reduce",
- * OFF → "auto". "Listo" cierra el onboarding (cierre local por ahora; ver
- * useCompleteOnboarding). Aplicar las prefs app-wide es un follow-up.
+ * Step final del onboarding — preferencias de a11y (mobile). Cada control escribe
+ * directo al a11y store. El motion se mapea binario: ON → "reduce", OFF → "auto".
+ * "Listo" cierra el onboarding (cierre local; ver useCompleteOnboarding). Aplicar
+ * las prefs app-wide es un follow-up.
  */
 export function A11yStep() {
   const copy = STEP_COPY.a11y;
