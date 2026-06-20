@@ -2,7 +2,7 @@ import { logIn } from "@ynara/core/features/auth";
 import { LoginRequestSchema } from "@ynara/shared-schemas";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { View } from "react-native";
+import { Image, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "@/components/ui/Button";
 import { LivingField } from "@/components/ui/LivingField";
@@ -12,13 +12,14 @@ import { TextField } from "@/components/ui/TextField";
 import "@/lib/api";
 import { env } from "@/lib/env";
 import { useUserStore } from "@/stores/user";
+import logo from "../../../assets/splash-icon.png";
 import { authErrorMessage } from "./errors";
 
 /** Usuario fake para el OAuth de maqueta (dev, ENABLE_MOCKS). */
 const MOCK_OAUTH_USER_ID = "0193f000-0000-7000-8000-0000000000bb";
 
 /**
- * Bienvenida (entrada sin sesión): nombre arriba, y abajo login email/clave
+ * Bienvenida (entrada sin sesión): logo + nombre arriba, y abajo login email/clave
  * + OAuth (maqueta) + olvidé contraseña + crear cuenta. Layout sin scroll: dos
  * bloques flex reparten el alto (nunca desborda). Fondo vivo constellation.
  *
@@ -81,14 +82,17 @@ export function WelcomeScreen() {
 
   return (
     <View className="flex-1 bg-bg-canvas">
-      <LivingField variant="constellation" />
+      <LivingField variant="aurora" />
       <SafeAreaView className="flex-1" edges={["top", "bottom"]}>
         <View className="flex-1 px-6 py-4">
-          {/* Nombre: centrado, un poco hacia arriba. La marca (logo) queda como
-              follow-up: necesita un PNG con fondo transparente (sin el tile blanco). */}
-          <View className="flex-[2] items-center justify-center gap-2">
-            <Text className="text-hero font-display text-ink-deep">Ynara</Text>
-            <Text className="text-body text-ink-soft">Tu asistente que recuerda con vos.</Text>
+          {/* Logo + nombre: centrado, un poco hacia arriba. El logo usa el icono
+              con tile blanco por ahora; falta un PNG con fondo transparente. */}
+          <View className="flex-[2] items-center justify-center gap-4">
+            <Image source={logo} style={{ width: 88, height: 88, borderRadius: 20 }} />
+            <View className="items-center gap-1">
+              <Text className="text-hero font-display text-ink-deep">Ynara</Text>
+              <Text className="text-body text-ink-soft">Tu asistente que recuerda con vos.</Text>
+            </View>
           </View>
 
           {/* Login + OAuth + crear cuenta */}

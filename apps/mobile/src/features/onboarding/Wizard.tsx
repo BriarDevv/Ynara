@@ -38,7 +38,7 @@ export function OnboardingWizard() {
 
   return (
     <View className="flex-1 bg-bg-canvas">
-      <LivingField variant="constellation" />
+      <LivingField variant="aurora" />
       <SafeAreaView className="flex-1" edges={["top", "bottom"]}>
         <OnboardingHeader total={total} current={index} />
         <View className="flex-1">{renderStep(currentStep)}</View>
