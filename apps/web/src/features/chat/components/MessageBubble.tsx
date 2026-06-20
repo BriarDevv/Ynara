@@ -14,6 +14,10 @@ import { Markdown } from "./Markdown";
  * - Assistant: izquierda, hairline con el tint del modo, markdown sanitizado.
  * - Error: burbuja de sistema con copy humano (mapeado de `errorCode`) +
  *   botón reintentar (el handler lo pasa el padre).
+ * - Canceled: el parcial que alcanzó a llegar + un pie sutil "Respuesta
+ *   cancelada", para distinguirlo de una respuesta completa (el cancel sin
+ *   ningún token descarta la burbuja en el store, así que acá siempre hay
+ *   parcial).
  *
  * El cursor de streaming y el render token-a-token llegan en W3; acá el
  * status "streaming" se trata como texto parcial sin cursor.
@@ -64,7 +68,8 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
     );
   }
 
-  // assistant
+  // assistant (incluye "canceled": parcial + pie sutil)
+  const canceled = message.status === "canceled";
   return (
     <div className="flex justify-start">
       <div className="flex max-w-[85%] gap-3">
@@ -75,6 +80,9 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
         />
         <div className="text-body text-[var(--color-ink)]">
           <Markdown>{message.text}</Markdown>
+          {canceled ? (
+            <p className="mt-1.5 text-caption text-[var(--color-ink-soft)]">Respuesta cancelada</p>
+          ) : null}
         </div>
       </div>
     </div>
