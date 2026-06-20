@@ -71,4 +71,27 @@ describe("CheckinSheet", () => {
     fireEvent.click(screen.getByRole("button", { name: /listo/i }));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("resetea mood, energía y nota al cerrar y reabrir", () => {
+    const { rerender } = render(<CheckinSheet open onClose={vi.fn()} />);
+    // Tocar el formulario: elegir mood, subir energía, escribir nota.
+    fireEvent.click(screen.getByRole("button", { name: /tranquilo/i }));
+    fireEvent.change(screen.getByRole("slider", { name: /energía/i }), { target: { value: "9" } });
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "algo en la cabeza" } });
+    expect(screen.getByRole("button", { name: /tranquilo/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    // Cerrar (desmonta los hijos) y reabrir: el estado vuelve a los defaults.
+    rerender(<CheckinSheet open={false} onClose={vi.fn()} />);
+    rerender(<CheckinSheet open onClose={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: /tranquilo/i })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByRole("slider", { name: /energía/i })).toHaveValue("6");
+    expect(screen.getByRole("textbox")).toHaveValue("");
+  });
 });
