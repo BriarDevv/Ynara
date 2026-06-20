@@ -1,3 +1,4 @@
+import { Redirect } from "expo-router";
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -5,9 +6,12 @@ import { Button, Card, TextField } from "@/components/ui";
 import { Text } from "@/components/ui/Text";
 
 // Showcase de dev de los componentes base (espejo del /test-ds de la web).
-// Sirve para QA visual de tokens + primitives. No es parte del producto.
+// Sirve para QA visual de tokens + primitives. No es parte del producto: en
+// release la ruta /test-ui redirige al inicio (expo-router registra todo src/app).
 export default function TestUi() {
   const [value, setValue] = useState("");
+
+  if (!__DEV__) return <Redirect href="/" />;
 
   return (
     <SafeAreaView className="flex-1 bg-bg-canvas">
