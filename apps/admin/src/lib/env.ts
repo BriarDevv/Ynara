@@ -47,5 +47,4 @@ export const env: ClientEnv = parsed.data;
  * `NODE_ENV !== "production"`.
  */
 export const shouldEnableMocks =
-  process.env.NODE_ENV !== "production" &&
-  (process.env.NODE_ENV === "development" || env.NEXT_PUBLIC_ENABLE_MOCKS);
+  process.env.NODE_ENV !== "production" && env.NEXT_PUBLIC_ENABLE_MOCKS;
