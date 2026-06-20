@@ -8,16 +8,17 @@ import { Toast } from "@/components/ui/Toast";
 import { useActiveMode } from "@/hooks/useActiveMode";
 import { type TimelineFilter, useMemoryTimeline } from "../api";
 import { takeMemoryFlash } from "../flash";
+import { LAYER_BY_ID, MEMORY_LAYERS } from "../layers";
 import { groupByBucket } from "../timeline";
 import { MemorySearchLink } from "./MemorySearchLink";
 import { MemoryTimelineSkeleton } from "./MemoryTimelineSkeleton";
 import { TimelineEntryRow } from "./TimelineEntryRow";
 
+// "Todo" + las 3 capas. Las labels de capa salen de la fuente única
+// (`MEMORY_LAYERS`) para no duplicar "Hechos/Momentos/Costumbres".
 const FILTER_OPTIONS: readonly { value: TimelineFilter; label: string }[] = [
   { value: "all", label: "Todo" },
-  { value: "semantic", label: "Hechos" },
-  { value: "episodic", label: "Momentos" },
-  { value: "procedural", label: "Costumbres" },
+  ...MEMORY_LAYERS.map((l) => ({ value: l.id, label: l.label })),
 ];
 
 /**
@@ -68,12 +69,19 @@ export function MemoryView() {
 
         <MemorySearchLink />
 
-        <ChipGroup
-          label="Filtrar por tipo"
-          options={FILTER_OPTIONS}
-          value={filter}
-          onChange={setFilter}
-        />
+        <div className="flex flex-col gap-2">
+          <ChipGroup
+            label="Filtrar por tipo"
+            options={FILTER_OPTIONS}
+            value={filter}
+            onChange={setFilter}
+          />
+          {/* Blurb de la capa elegida: explica qué guarda cada una (pilar de las
+              3 capas), en vez de dejar "Hechos/Momentos/Costumbres" sin contexto. */}
+          {filter !== "all" ? (
+            <p className="text-body-sm text-[var(--color-ink-soft)]">{LAYER_BY_ID[filter].blurb}</p>
+          ) : null}
+        </div>
 
         {isPending ? (
           <MemoryTimelineSkeleton />
