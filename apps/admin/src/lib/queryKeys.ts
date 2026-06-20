@@ -25,5 +25,6 @@ export const qk = {
       ["admin", "audit", range, filters, page] as const,
     system: () => ["admin", "system"] as const,
     playground: () => ["admin", "playground"] as const,
+    connectivity: () => ["admin", "connectivity"] as const,
   },
 } as const;

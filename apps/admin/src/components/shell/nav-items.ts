@@ -15,6 +15,7 @@ import type { IconName } from "@ynara/ui";
  *  - `nota` → Audit Log: el registro escrito de operaciones.
  *  - `conexion` → System Health: el enlace con la infra (DB/Redis).
  *  - `dialogo` → Playground: el probe conversacional crudo del modelo.
+ *  - `enviar` → Compartir: exponer el serving (API + chat) a otra máquina del tailnet.
  */
 export type NavItem = {
   href: string;
@@ -46,6 +47,7 @@ export const NAV_ITEMS: readonly NavGroup[] = [
     items: [
       { href: "/audit", label: "Audit Log", icon: "nota" },
       { href: "/sistema", label: "System Health", icon: "conexion" },
+      { href: "/compartir", label: "Compartir", icon: "enviar" },
       { href: "/playground", label: "Playground", icon: "dialogo" },
     ],
   },
