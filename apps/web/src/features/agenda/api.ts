@@ -13,4 +13,5 @@ export {
   useDeleteEvent,
   useEvents,
   usePatchEvent,
+  usePatchEventById,
 } from "@ynara/core/features/agenda";
