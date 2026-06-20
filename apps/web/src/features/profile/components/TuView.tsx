@@ -17,6 +17,7 @@ import { useMemoryExport } from "@/features/memory/api";
 import { useOnboardingResumeStore } from "@/features/onboarding/resumeStore";
 import { useOnboardingStore } from "@/features/onboarding/store";
 import { useUpdateMe } from "@/features/profile/api";
+import { useAvisosStore } from "@/features/today/avisosStore";
 import { useActiveMode } from "@/hooks/useActiveMode";
 import { applyA11yClasses, type TextSize, useA11yStore } from "@/stores/a11y";
 import { useActiveModeStore } from "@/stores/mode";
@@ -216,6 +217,7 @@ export function TuView() {
     resetUser();
     useChatStore.getState().reset();
     useActiveModeStore.getState().reset();
+    useAvisosStore.getState().reset();
     useOnboardingStore.getState().reset();
     useOnboardingResumeStore.getState().setResuming(false);
     queryClient.clear();
