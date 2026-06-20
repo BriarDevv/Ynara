@@ -98,6 +98,13 @@ class Settings(BaseSettings):
     reranker_model: str = Field("bge-reranker-v2-m3", alias="RERANKER_MODEL")
     reranker_timeout_s: float = Field(30.0, gt=0, alias="RERANKER_TIMEOUT_S")
 
+    # Conexión / Compartir (control plane del admin, /v1/admin/connectivity): puertos
+    # de los servicios que se exponen a otra máquina por el tailnet de Tailscale. El
+    # panel arma las URLs para compartir con el IP del tailnet + estos puertos. Default:
+    # Ollama (OpenAI-compatible) en 11434, Open WebUI en 3001. Se setean por env si varían.
+    ollama_api_port: int = Field(11434, gt=0, le=65535, alias="OLLAMA_API_PORT")
+    openwebui_port: int = Field(3001, gt=0, le=65535, alias="OPENWEBUI_PORT")
+
     # Cifrado de memoria a nivel campo (ADR-007 D3). Base64 de 32 bytes random
     # (`openssl rand -base64 32`). Vacío => el helper de crypto falla al primer
     # uso (no se importa la key al boot). NUNCA commitear (regla #2).
