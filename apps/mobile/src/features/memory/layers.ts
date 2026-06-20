@@ -31,7 +31,7 @@ export const LAYER_BY_ID: Record<MemoryLayer, LayerDescriptor> = MEMORY_LAYERS.r
  * literal en build time). Tints de la paleta de marca.
  */
 export const LAYER_DOT_CLASS: Record<MemoryLayer, string> = {
-  semantic: "bg-azul",
+  semantic: "bg-celeste",
   episodic: "bg-violeta",
-  procedural: "bg-celeste",
+  procedural: "bg-violaceo",
 };
