@@ -1,0 +1,23 @@
+import { ConnectivityOut, type ConnectivityOutT } from "@/features/sharing/schemas";
+
+/**
+ * Fixture de `GET /v1/admin/connectivity` (Conexión / Compartir).
+ *
+ * Estado feliz para dev/demo: tailnet arriba en "lonchos" (100.64.0.1) con las dos
+ * superficies para compartir (API OpenAI-compatible de Ollama + Open WebUI).
+ * Parseado por su Zod, igual que el resto de fixtures: un fixture roto tira acá.
+ */
+export function connectivityFixture(): ConnectivityOutT {
+  return ConnectivityOut.parse({
+    tailscale: {
+      up: true,
+      hostname: "lonchos",
+      tailnet_ip: "100.64.0.1",
+      detail: "up",
+    },
+    targets: [
+      { label: "API (OpenAI-compatible)", url: "http://100.64.0.1:11434/v1", port: 11434 },
+      { label: "Chat (Open WebUI)", url: "http://100.64.0.1:3001", port: 3001 },
+    ],
+  });
+}

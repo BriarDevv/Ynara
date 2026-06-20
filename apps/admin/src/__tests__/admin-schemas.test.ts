@@ -4,9 +4,11 @@ import { AdminMoatOut } from "@/features/moat/schemas";
 import { AdminModesOut } from "@/features/modes/schemas";
 import { AdminOverviewOut } from "@/features/overview/schemas";
 import { PlaygroundAgentOut, PlaygroundOut } from "@/features/playground/schemas";
+import { ConnectivityOut } from "@/features/sharing/schemas";
 import { AdminSystemOut } from "@/features/system/schemas";
 import { AdminUsersOut } from "@/features/users/schemas";
 import { auditPage } from "@/fixtures/audit";
+import { connectivityFixture } from "@/fixtures/connectivity";
 import { moatFixture } from "@/fixtures/moat";
 import { modesFixture } from "@/fixtures/modes";
 import { overviewFixture } from "@/fixtures/overview";
@@ -56,6 +58,10 @@ describe("contrato fixtures ↔ Zod (blueprint §4)", () => {
 
   it("system parsea (sin rango)", () => {
     expect(() => AdminSystemOut.parse(systemFixture())).not.toThrow();
+  });
+
+  it("connectivity parsea (sin rango)", () => {
+    expect(() => ConnectivityOut.parse(connectivityFixture())).not.toThrow();
   });
 
   it("audit page parsea sin filtros y paginada", () => {
