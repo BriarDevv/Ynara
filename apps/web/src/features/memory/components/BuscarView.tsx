@@ -35,6 +35,15 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
     return () => clearTimeout(id);
   }, [input]);
 
+  // Sincronizar la query con la URL (?q=) para que el link sea compartible (la
+  // página lo promete y la ruta ya lee ?q= como initialQuery). `replaceState`
+  // actualiza la barra sin re-navegar ni re-correr el server component por tecla.
+  useEffect(() => {
+    const q = debounced.trim();
+    const url = q ? `/buscar?q=${encodeURIComponent(q)}` : "/buscar";
+    window.history.replaceState(null, "", url);
+  }, [debounced]);
+
   const active = debounced.trim().length >= SEARCH_MIN_LENGTH;
   const search = useMemorySearch(debounced);
 
@@ -129,9 +138,18 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
             <h2 className="text-caption text-[var(--color-ink-soft)]">
               {search.data.total} {search.data.total === 1 ? "resultado" : "resultados"}
             </h2>
-            <ul className="flex flex-col divide-y divide-[var(--color-border)]">
+            <ul
+              aria-busy={search.isFetching}
+              className="flex flex-col divide-y divide-[var(--color-border)]"
+            >
               {search.data.results.map((hit, i) => (
-                <SearchResultRow key={`${hit.layer}:${hit.ref}`} hit={hit} now={now} index={i} />
+                <SearchResultRow
+                  key={`${hit.layer}:${hit.ref}`}
+                  hit={hit}
+                  now={now}
+                  index={i}
+                  query={search.data.query}
+                />
               ))}
             </ul>
           </section>
