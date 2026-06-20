@@ -3,24 +3,13 @@ import { View } from "react-native";
 import { MODE_DOT_CLASS } from "@/components/ui/modes";
 import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
+import { INK_MUTED, MODE_COLOR } from "@/lib/tokens";
 import { formatEventRange } from "../format";
 
 /** Etiqueta del estado no-confirmado (el confirmado no lleva tag). */
 const STATUS_LABEL: Record<"tentative" | "cancelled", string> = {
   tentative: "Tentativo",
   cancelled: "Cancelado",
-};
-
-/**
- * Color del spine lateral por modo. Mapa estático (NativeWind no puede
- * interpolar `bg-mode-${id}` en runtime). Espeja `EventBlock` de web.
- */
-const MODE_SPINE_COLOR: Record<string, string> = {
-  productividad: "#4f7fd4",
-  estudio: "#7c6fd4",
-  bienestar: "#4fbf8a",
-  vida: "#d47c4f",
-  memoria: "#d4b74f",
 };
 
 type Props = {
@@ -34,7 +23,7 @@ type Props = {
  * Espejo de `EventBlock` (web), adaptado a React Native / NativeWind.
  */
 export function AgendaEventRow({ event }: Props) {
-  const spineColor = event.mode ? (MODE_SPINE_COLOR[event.mode] ?? "#9ca3af") : "#9ca3af";
+  const spineColor = event.mode ? MODE_COLOR[event.mode] : INK_MUTED;
   const cancelled = event.status === "cancelled";
   const tentative = event.status === "tentative";
 
