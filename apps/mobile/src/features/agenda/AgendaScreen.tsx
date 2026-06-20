@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChipGroup } from "@/components/ui/ChipGroup";
+import { ErrorCard } from "@/components/ui/ErrorCard";
 import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { AgendaSkeleton } from "./components/AgendaSkeleton";
@@ -93,17 +94,12 @@ export function AgendaScreen() {
         {isPending ? (
           <AgendaSkeleton />
         ) : isError ? (
-          <View className="gap-2 rounded-lg border border-border bg-bg p-4">
-            <Text className="text-body text-ink">No pudimos traer tu agenda</Text>
-            <Text className="text-body-sm text-ink-soft">
-              Puede ser un problema de conexión. Probá de nuevo.
-            </Text>
-            <Pressable onPress={() => refetch()} disabled={isFetching} hitSlop={8}>
-              <Text className={cn("text-button text-ink underline", isFetching && "opacity-50")}>
-                Reintentar
-              </Text>
-            </Pressable>
-          </View>
+          <ErrorCard
+            title="No pudimos traer tu agenda"
+            hint="Puede ser un problema de conexión. Probá de nuevo."
+            onRetry={() => refetch()}
+            retrying={isFetching}
+          />
         ) : view === "dia" ? (
           <DayView events={data} day={anchor} />
         ) : (

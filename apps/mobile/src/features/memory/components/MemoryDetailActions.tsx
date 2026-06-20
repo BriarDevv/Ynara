@@ -2,8 +2,8 @@ import { useDeleteMemory, usePatchMemory } from "@ynara/core/features/memory";
 import type { MemoryItemOut, MemoryLayer, SemanticMemoryOut } from "@ynara/shared-schemas";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Modal, Pressable, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { View } from "react-native";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { Text } from "@/components/ui/Text";
 import { Textarea } from "@/components/ui/Textarea";
@@ -21,8 +21,8 @@ function refOf(layer: MemoryLayer, item: MemoryItemOut): string {
 /**
  * Acciones del detalle: **editar** (`PATCH`, solo capa semántica — episódica da
  * 405 y procedural queda para después) y **borrar** (`DELETE`, las 3 capas, con
- * confirmación). Sheets = `Modal` RN bottom-anchored (espejo de RecapSheet).
- * Espejo de `MemoryDetailActions` de web. Borrar → vuelve a la lista.
+ * confirmación). Ambos sobre el `BottomSheet` compartido. Espejo de
+ * `MemoryDetailActions` de web. Borrar → vuelve a la lista.
  */
 export function MemoryDetailActions({ layer, item }: Props) {
   const router = useRouter();
@@ -62,89 +62,59 @@ export function MemoryDetailActions({ layer, item }: Props) {
       </Button>
 
       {/* Editar (solo semántica) */}
-      <Modal
-        visible={editOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setEditOpen(false)}
-      >
-        <View className="flex-1 justify-end bg-black/40">
-          <Pressable
-            className="flex-1"
-            accessibilityLabel="Cerrar"
-            onPress={() => setEditOpen(false)}
+      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)}>
+        <View className="gap-4 px-6 pb-6 pt-5">
+          <View className="gap-1">
+            <Text className="text-title font-display text-ink-deep">Editar el recuerdo</Text>
+            <Text className="text-body-sm text-ink-soft">
+              Ajustá lo que Ynara guardó. Se vuelve a indexar al guardar.
+            </Text>
+          </View>
+          <Textarea
+            label="Texto del recuerdo"
+            value={draft}
+            onChangeText={setDraft}
+            maxLength={4096}
+            error={patch.isError ? "No se pudo guardar. Probá de nuevo." : undefined}
           />
-          <SafeAreaView edges={["bottom"]} className="rounded-t-xl bg-bg">
-            <View className="gap-4 px-6 pb-6 pt-5">
-              <View className="gap-1">
-                <Text className="text-title font-display text-ink-deep">Editar el recuerdo</Text>
-                <Text className="text-body-sm text-ink-soft">
-                  Ajustá lo que Ynara guardó. Se vuelve a indexar al guardar.
-                </Text>
-              </View>
-              <Textarea
-                label="Texto del recuerdo"
-                value={draft}
-                onChangeText={setDraft}
-                maxLength={4096}
-                error={patch.isError ? "No se pudo guardar. Probá de nuevo." : undefined}
-              />
-              <View className="flex-row justify-end gap-3">
-                <Button variant="ghost" onPress={() => setEditOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button onPress={saveEdit} disabled={patch.isPending || draft.trim().length === 0}>
-                  {patch.isPending ? "Guardando…" : "Guardar"}
-                </Button>
-              </View>
-            </View>
-          </SafeAreaView>
+          <View className="flex-row justify-end gap-3">
+            <Button variant="ghost" onPress={() => setEditOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onPress={saveEdit} disabled={patch.isPending || draft.trim().length === 0}>
+              {patch.isPending ? "Guardando…" : "Guardar"}
+            </Button>
+          </View>
         </View>
-      </Modal>
+      </BottomSheet>
 
       {/* Borrar (con confirmación) */}
-      <Modal
-        visible={deleteOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setDeleteOpen(false)}
-      >
-        <View className="flex-1 justify-end bg-black/40">
-          <Pressable
-            className="flex-1"
-            accessibilityLabel="Cerrar"
-            onPress={() => setDeleteOpen(false)}
-          />
-          <SafeAreaView edges={["bottom"]} className="rounded-t-xl bg-bg">
-            <View className="gap-4 px-6 pb-6 pt-5">
-              <View className="gap-1">
-                <Text className="text-title font-display text-ink-deep">
-                  ¿Borrar este recuerdo?
-                </Text>
-                <Text className="text-body-sm text-ink-soft">
-                  Se va para siempre. Ynara no lo va a volver a tener en cuenta.
-                </Text>
-              </View>
-              {remove.isError ? (
-                <Text className="text-body-sm text-error">No se pudo borrar. Probá de nuevo.</Text>
-              ) : null}
-              <View className="flex-row justify-end gap-3">
-                <Button variant="ghost" onPress={() => setDeleteOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="border-error"
-                  onPress={confirmDelete}
-                  disabled={remove.isPending}
-                >
-                  {remove.isPending ? "Borrando…" : "Borrar"}
-                </Button>
-              </View>
-            </View>
-          </SafeAreaView>
+      <BottomSheet open={deleteOpen} onClose={() => setDeleteOpen(false)}>
+        <View className="gap-4 px-6 pb-6 pt-5">
+          <View className="gap-1">
+            <Text className="text-title font-display text-ink-deep">¿Borrar este recuerdo?</Text>
+            <Text className="text-body-sm text-ink-soft">
+              Se va para siempre. Ynara no lo va a volver a tener en cuenta.
+            </Text>
+          </View>
+          {remove.isError ? (
+            <Text className="text-body-sm text-error">No se pudo borrar. Probá de nuevo.</Text>
+          ) : null}
+          <View className="flex-row justify-end gap-3">
+            <Button variant="ghost" onPress={() => setDeleteOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="secondary"
+              className="border-error"
+              onPress={confirmDelete}
+              disabled={remove.isPending}
+            >
+              {remove.isPending ? "Borrando…" : "Borrar"}
+            </Button>
+          </View>
         </View>
-      </Modal>
+      </BottomSheet>
     </>
   );
 }

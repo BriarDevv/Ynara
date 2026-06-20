@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChipGroup } from "@/components/ui/ChipGroup";
+import { ErrorCard } from "@/components/ui/ErrorCard";
 import { LivingField } from "@/components/ui/LivingField";
 import { Text } from "@/components/ui/Text";
-import { cn } from "@/lib/cn";
 import { MemoryTimelineSkeleton } from "./components/MemoryTimelineSkeleton";
 import { TimelineEntryRow } from "./components/TimelineEntryRow";
 
@@ -65,17 +65,12 @@ export function MemoriaScreen() {
           {isPending ? (
             <MemoryTimelineSkeleton />
           ) : isError ? (
-            <View className="gap-2 rounded-lg border border-border bg-bg p-4">
-              <Text className="text-body text-ink">No pudimos traer tu memoria</Text>
-              <Text className="text-body-sm text-ink-soft">
-                Puede ser un problema de conexión. Probá de nuevo.
-              </Text>
-              <Pressable onPress={() => refetch()} disabled={isFetching} hitSlop={8}>
-                <Text className={cn("text-button text-ink underline", isFetching && "opacity-50")}>
-                  Reintentar
-                </Text>
-              </Pressable>
-            </View>
+            <ErrorCard
+              title="No pudimos traer tu memoria"
+              hint="Puede ser un problema de conexión. Probá de nuevo."
+              onRetry={() => refetch()}
+              retrying={isFetching}
+            />
           ) : groups.length === 0 ? (
             <View className="gap-1 rounded-lg border border-border bg-bg p-4">
               <Text className="text-body text-ink">Todavía no hay nada acá</Text>

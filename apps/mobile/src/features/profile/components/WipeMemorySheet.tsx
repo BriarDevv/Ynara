@@ -1,8 +1,8 @@
 import { useMemoryWipeExecute, useMemoryWipePreview } from "@ynara/core/features/memory";
 import type { MemoryWipePreview } from "@ynara/shared-schemas";
 import { useState } from "react";
-import { Modal, Pressable, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Pressable, View } from "react-native";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { Text } from "@/components/ui/Text";
 import { TextField } from "@/components/ui/TextField";
@@ -17,8 +17,8 @@ type Props = {
 const CONFIRM_WORD = "BORRAR";
 
 /**
- * Sheet de confirmación del wipe total de memoria (mobile). Espeja la lógica
- * del `WipeMemoryDialog` de web, adaptada al patrón `Modal` de `RecapSheet`:
+ * Sheet de confirmación del wipe total de memoria (mobile), sobre el `BottomSheet`
+ * compartido. Espeja la lógica del `WipeMemoryDialog` de web:
  *
  * 1. Al abrir → `useMemoryWipePreview` para mostrar conteos (lo que se borraría).
  * 2. El usuario escribe "BORRAR" para habilitar el botón.
@@ -104,103 +104,90 @@ export function WipeMemorySheet({ open, onClose }: Props) {
   const canConfirm = confirmText === CONFIRM_WORD && preview !== null && !wipeExecute.isPending;
 
   return (
-    <Modal
-      visible={open}
-      animationType="slide"
-      transparent
-      onRequestClose={handleClose}
-      onShow={handleOpen}
-    >
-      <View className="flex-1 justify-end bg-black/40">
-        {/* Backdrop: tap fuera del panel cierra. */}
-        <Pressable className="flex-1" accessibilityLabel="Cerrar" onPress={handleClose} />
+    <BottomSheet open={open} onClose={handleClose} onShow={handleOpen}>
+      <View className="gap-5 px-6 pb-6 pt-5">
+        <View className="gap-1">
+          <Text className="text-title font-display text-ink-deep">Borrar toda la memoria</Text>
+          <Text className="text-body-sm text-ink-soft">
+            Esta acción es irreversible. Ynara olvidará todo lo que guardó con vos.
+          </Text>
+        </View>
 
-        <SafeAreaView edges={["bottom"]} className="rounded-t-xl bg-bg">
-          <View className="gap-5 px-6 pb-6 pt-5">
-            <View className="gap-1">
-              <Text className="text-title font-display text-ink-deep">Borrar toda la memoria</Text>
+        {/* Estado: cargando preview */}
+        {wipePreview.isPending && !preview ? (
+          <Text className="text-body text-ink-soft">Calculando conteos…</Text>
+        ) : wipePreview.isError && !preview ? (
+          <View className="gap-2 rounded-lg border border-border bg-bg p-4">
+            <Text className="text-body text-ink">No pudimos calcular los conteos</Text>
+            <Pressable
+              onPress={() =>
+                wipePreview
+                  .mutateAsync()
+                  .then(setPreview)
+                  .catch(() => null)
+              }
+            >
+              <Text className="text-button text-ink underline">Reintentar</Text>
+            </Pressable>
+          </View>
+        ) : successMsg ? (
+          // Estado: wipe exitoso.
+          <View className="gap-4">
+            <View className="rounded-lg border border-border bg-bg p-4">
+              <Text className="text-body text-ink-soft">{successMsg}</Text>
+            </View>
+            <Button variant="secondary" onPress={handleClose}>
+              Listo
+            </Button>
+          </View>
+        ) : preview ? (
+          // Estado normal: preview disponible.
+          <View className="gap-4">
+            {/* Conteos de lo que se borraría */}
+            <View className="rounded-lg border border-border bg-bg p-4 gap-1">
+              <Text className="text-body text-ink">
+                Se borrarán <Text className="font-body-semibold">{preview.total} recuerdos</Text> en
+                total:
+              </Text>
               <Text className="text-body-sm text-ink-soft">
-                Esta acción es irreversible. Ynara olvidará todo lo que guardó con vos.
+                {preview.semantic} hechos · {preview.episodic} momentos · {preview.procedural}{" "}
+                costumbres
               </Text>
             </View>
 
-            {/* Estado: cargando preview */}
-            {wipePreview.isPending && !preview ? (
-              <Text className="text-body text-ink-soft">Calculando conteos…</Text>
-            ) : wipePreview.isError && !preview ? (
-              <View className="gap-2 rounded-lg border border-border bg-bg p-4">
-                <Text className="text-body text-ink">No pudimos calcular los conteos</Text>
-                <Pressable
-                  onPress={() =>
-                    wipePreview
-                      .mutateAsync()
-                      .then(setPreview)
-                      .catch(() => null)
-                  }
-                >
-                  <Text className="text-button text-ink underline">Reintentar</Text>
-                </Pressable>
-              </View>
-            ) : successMsg ? (
-              // Estado: wipe exitoso.
-              <View className="gap-4">
-                <View className="rounded-lg border border-border bg-bg p-4">
-                  <Text className="text-body text-ink-soft">{successMsg}</Text>
-                </View>
-                <Button variant="secondary" onPress={handleClose}>
-                  Listo
-                </Button>
-              </View>
-            ) : preview ? (
-              // Estado normal: preview disponible.
-              <View className="gap-4">
-                {/* Conteos de lo que se borraría */}
-                <View className="rounded-lg border border-border bg-bg p-4 gap-1">
-                  <Text className="text-body text-ink">
-                    Se borrarán{" "}
-                    <Text className="font-body-semibold">{preview.total} recuerdos</Text> en total:
-                  </Text>
-                  <Text className="text-body-sm text-ink-soft">
-                    {preview.semantic} hechos · {preview.episodic} momentos · {preview.procedural}{" "}
-                    costumbres
-                  </Text>
-                </View>
-
-                {/* Aviso de 409 */}
-                {conflictMsg ? (
-                  <View className="rounded-lg border border-border bg-bg p-3">
-                    <Text className="text-body-sm text-error">{conflictMsg}</Text>
-                  </View>
-                ) : null}
-
-                {/* Campo de confirmación */}
-                <TextField
-                  label={`Escribí "${CONFIRM_WORD}" para confirmar`}
-                  value={confirmText}
-                  onChangeText={setConfirmText}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  placeholder={CONFIRM_WORD}
-                />
-
-                <View className="flex-row gap-3">
-                  <Button variant="secondary" onPress={handleClose} className="flex-1">
-                    Cancelar
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onPress={handleConfirm}
-                    disabled={!canConfirm}
-                    className="flex-1"
-                  >
-                    {wipeExecute.isPending ? "Borrando…" : "Borrar todo"}
-                  </Button>
-                </View>
+            {/* Aviso de 409 */}
+            {conflictMsg ? (
+              <View className="rounded-lg border border-border bg-bg p-3">
+                <Text className="text-body-sm text-error">{conflictMsg}</Text>
               </View>
             ) : null}
+
+            {/* Campo de confirmación */}
+            <TextField
+              label={`Escribí "${CONFIRM_WORD}" para confirmar`}
+              value={confirmText}
+              onChangeText={setConfirmText}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              placeholder={CONFIRM_WORD}
+            />
+
+            <View className="flex-row gap-3">
+              <Button variant="secondary" onPress={handleClose} className="flex-1">
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                onPress={handleConfirm}
+                disabled={!canConfirm}
+                className="flex-1"
+              >
+                {wipeExecute.isPending ? "Borrando…" : "Borrar todo"}
+              </Button>
+            </View>
           </View>
-        </SafeAreaView>
+        ) : null}
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
