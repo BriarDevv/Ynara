@@ -1,5 +1,5 @@
 import { useSuggestions } from "@ynara/core/features/today";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { SuggestionCard } from "@/components/ui/SuggestionCard";
 import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
@@ -19,15 +19,20 @@ export function SuggestionsSection() {
     return (
       <View className="gap-3">
         <Text className="text-caption text-ink-soft">Ynara sugiere</Text>
-        <Text className="text-body-sm text-ink-soft">
-          No pudimos traer las sugerencias.{" "}
-          <Text
+        {/* Línea discreta: mensaje + reintento como botón (rol + área táctil). */}
+        <View className="flex-row flex-wrap items-center gap-1">
+          <Text className="text-body-sm text-ink-soft">No pudimos traer las sugerencias.</Text>
+          <Pressable
+            accessibilityRole="button"
             onPress={() => refetch()}
-            className={cn("text-ink underline", isFetching && "opacity-50")}
+            disabled={isFetching}
+            hitSlop={12}
           >
-            Reintentar
-          </Text>
-        </Text>
+            <Text className={cn("text-body-sm text-ink underline", isFetching && "opacity-50")}>
+              Reintentar
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   }

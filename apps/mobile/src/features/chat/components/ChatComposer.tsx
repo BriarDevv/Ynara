@@ -49,6 +49,7 @@ export function ChatComposer({ onSend, busy, onCancel }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Detener"
             onPress={onCancel}
+            hitSlop={8}
             className="h-9 items-center justify-center rounded-pill border border-border-strong px-4"
           >
             <Text className="text-button text-ink">Detener</Text>
@@ -59,6 +60,8 @@ export function ChatComposer({ onSend, busy, onCancel }: Props) {
             accessibilityLabel="Enviar"
             onPress={handleSend}
             disabled={!canSend}
+            // Área táctil ≥44px: el botón visible mide 36px.
+            hitSlop={8}
             className={cn(
               "h-9 w-9 items-center justify-center rounded-pill bg-blue-flat",
               !canSend && "opacity-40",

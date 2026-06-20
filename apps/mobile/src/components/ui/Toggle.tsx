@@ -27,6 +27,8 @@ export function Toggle({ label, hint, checked, onChange, disabled = false, class
         accessibilityState={{ checked, disabled }}
         disabled={disabled}
         onPress={() => onChange(!checked)}
+        // Área táctil ≥44px: el track visible mide 28px de alto.
+        hitSlop={8}
         className={cn(
           "h-7 w-12 shrink-0 justify-center rounded-pill px-1",
           checked ? "bg-blue-flat" : "bg-border-strong",
