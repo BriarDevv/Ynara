@@ -183,6 +183,9 @@ export function LivingField({ variant }: Props) {
   return (
     <View
       pointerEvents="none"
+      // Decorativo: invisible para lectores de pantalla (iOS + Android).
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
       style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
     >
       <Canvas style={{ flex: 1, opacity: 0.55 }}>

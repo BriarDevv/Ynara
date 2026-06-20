@@ -29,7 +29,12 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
           <Text className="text-body text-ink">{chatErrorCopy(message.errorCode)}</Text>
         </View>
         {onRetry ? (
-          <Pressable accessibilityRole="button" onPress={onRetry} className="px-3 py-1.5">
+          <Pressable
+            accessibilityRole="button"
+            onPress={onRetry}
+            hitSlop={8}
+            className="px-3 py-1.5"
+          >
             <Text className="text-body-sm text-ink-soft underline">Reintentar</Text>
           </Pressable>
         ) : null}

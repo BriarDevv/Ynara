@@ -30,7 +30,8 @@ export function PriorityRow({ task, onToggle, first }: Props) {
           done ? `Marcar "${task.title}" como pendiente` : `Marcar "${task.title}" como hecha`
         }
         onPress={() => onToggle(task)}
-        hitSlop={8}
+        // Área táctil ≥44px: el check visible mide 24px (24 + 2×10 = 44).
+        hitSlop={10}
         className={cn(
           "mt-0.5 h-6 w-6 items-center justify-center rounded-pill border-2",
           done ? "border-ink bg-ink" : "border-border-strong bg-transparent",
