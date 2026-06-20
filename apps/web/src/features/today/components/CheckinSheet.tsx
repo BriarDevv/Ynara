@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
 import { Textarea } from "@/components/ui/Textarea";
@@ -36,6 +36,17 @@ export function CheckinSheet({ open, onClose, onDone }: Props) {
   const [mood, setMood] = useState<MoodId | null>(null);
   const [energy, setEnergy] = useState(6);
   const [note, setNote] = useState("");
+
+  // Resetear al cerrar: el componente vive montado (CheckinSection lo mantiene),
+  // así que sin esto el mood/energía/nota de la sesión anterior reaparecen al
+  // reabrir. Los hijos del Sheet se desmontan al cerrar, así que es invisible.
+  useEffect(() => {
+    if (!open) {
+      setMood(null);
+      setEnergy(6);
+      setNote("");
+    }
+  }, [open]);
 
   function handleClose() {
     onClose();
