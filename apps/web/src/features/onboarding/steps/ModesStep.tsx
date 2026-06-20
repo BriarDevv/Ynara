@@ -84,7 +84,8 @@ export function ModesStep() {
           render={({ field }) => {
             const selected = field.value;
             return (
-              <div className="flex flex-col gap-3">
+              <fieldset className="flex flex-col gap-3 border-none p-0">
+                <legend className="sr-only">Modos que te interesan — elegí al menos uno</legend>
                 {AVAILABLE_MODES.map((modeId) => {
                   const descriptor = MODE_BY_ID[modeId];
                   const isSelected = selected.includes(modeId);
@@ -119,7 +120,7 @@ export function ModesStep() {
                     {form.formState.errors.interestedModes.message}
                   </p>
                 ) : null}
-              </div>
+              </fieldset>
             );
           }}
         />
