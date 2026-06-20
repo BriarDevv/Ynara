@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type MemoryExport,
   MemoryExportSchema,
@@ -95,6 +95,11 @@ export const SEARCH_MIN_LENGTH = 2;
  * todavía no existe en el backend, así que en dev corre contra el handler MSW;
  * al cablear el endpoint real, esta función no cambia. Sólo se dispara con una
  * query de al menos `SEARCH_MIN_LENGTH` caracteres (ya recortada por el caller).
+ *
+ * `placeholderData: keepPreviousData`: cada query distinta es una entrada de
+ * cache nueva (la queryKey incluye `q`); sin esto, `isLoading` volvía a true
+ * entre tecla y tecla y la vista parpadeaba lista→skeleton→lista. Con esto se
+ * mantienen los resultados previos mientras llega la nueva tanda (`isFetching`).
  */
 export function useMemorySearch(query: string) {
   const q = query.trim();
@@ -105,6 +110,7 @@ export function useMemorySearch(query: string) {
       return MemorySearchResponseSchema.parse(raw);
     },
     enabled: q.length >= SEARCH_MIN_LENGTH,
+    placeholderData: keepPreviousData,
   });
 }
 
