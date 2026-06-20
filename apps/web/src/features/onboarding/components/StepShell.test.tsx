@@ -81,6 +81,27 @@ describe("StepShell", () => {
     expect(children.indexOf(eyebrow)).toBeLessThan(children.indexOf(heading));
   });
 
+  it("lleva el foco al h1 al montar (tabIndex -1) cuando nada más lo toma", () => {
+    render(
+      <StepShell title="Tu día">
+        <p>Body</p>
+      </StepShell>,
+    );
+    const heading = screen.getByRole("heading", { level: 1, name: "Tu día" });
+    expect(heading).toHaveAttribute("tabindex", "-1");
+    expect(heading).toHaveFocus();
+  });
+
+  it("no le roba el foco a un input con autoFocus del step", () => {
+    render(
+      <StepShell title="Tu nombre">
+        {/* biome-ignore lint/a11y/noAutofocus: simula el autoFocus de los steps con input (auth/nombre) */}
+        <input autoFocus aria-label="Nombre" />
+      </StepShell>,
+    );
+    expect(screen.getByLabelText("Nombre")).toHaveFocus();
+  });
+
   it("renderiza children en el body", () => {
     render(
       <StepShell title="T">
