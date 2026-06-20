@@ -1,12 +1,13 @@
-import type { OnboardingStep } from "@ynara/core/features/onboarding";
+import type { OnboardingStepId } from "./steps";
 
 /**
  * Copy de cada step del onboarding (mobile). El mismo tono que la web
  * (apps/web/src/features/onboarding/constants.ts); el copy es platform-specific
- * (la UI difiere), así que vive en cada app.
+ * (la UI difiere), así que vive en cada app. Tipado contra la lista mobile de
+ * pasos (incluye "sobre-vos").
  */
 export const STEP_COPY: Record<
-  OnboardingStep,
+  OnboardingStepId,
   { eyebrow: string; title: string; subtitle: string }
 > = {
   auth: {
@@ -29,8 +30,13 @@ export const STEP_COPY: Record<
     title: "¿Para qué te puedo servir?",
     subtitle: "Empezás por lo que te interese. Después abrís más.",
   },
+  "sobre-vos": {
+    eyebrow: "Paso 5 — Sobre vos",
+    title: "Contame un poco de vos",
+    subtitle: "Para conocerte y acordarme de quién sos. Es opcional.",
+  },
   a11y: {
-    eyebrow: "Paso 5 — Cómo se lee",
+    eyebrow: "Paso 6 — Cómo se lee",
     title: "Ajustemos cómo se lee.",
     subtitle: "Lo cambiás cuando quieras.",
   },
