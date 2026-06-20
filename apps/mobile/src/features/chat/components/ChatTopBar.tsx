@@ -34,12 +34,14 @@ export function ChatTopBar({ mode, onPressMode, onPressRecents }: Props) {
         accessibilityLabel="Conversaciones recientes"
         onPress={onPressRecents}
         hitSlop={12}
-        className="items-center justify-center gap-1.5 p-2 active:opacity-60"
+        className="items-center justify-center gap-1 rounded-lg border border-border bg-bg px-3 py-2 active:bg-bg-soft"
       >
-        {/* Hamburguesa clásico: 3 líneas claras (despliega los chats recientes). */}
-        <View className="h-0.5 w-6 rounded-pill bg-ink" />
-        <View className="h-0.5 w-6 rounded-pill bg-ink" />
-        <View className="h-0.5 w-6 rounded-pill bg-ink" />
+        {/* Hamburguesa clásico dentro de un recuadro (como el chip de modo): el
+            fondo `bg` opaco lo despega del fondo animado y las 3 líneas se ven
+            nítidas. */}
+        <View className="h-0.5 w-5 rounded-pill bg-ink" />
+        <View className="h-0.5 w-5 rounded-pill bg-ink" />
+        <View className="h-0.5 w-5 rounded-pill bg-ink" />
       </Pressable>
     </View>
   );
