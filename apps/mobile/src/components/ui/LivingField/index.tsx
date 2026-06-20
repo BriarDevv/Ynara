@@ -41,8 +41,11 @@ function mulberry32(seed: number): () => number {
 /**
  * Fondo vivo (F3) con **Skia**, consumiendo el modelo compartido
  * `@ynara/core/features/field` (geometría `seedField`, config `VARIANTS`, clima
- * `MODE_CLIMATE`, constantes `FIELD`). En F3 solo la variante `network`
- * (Memoria) está implementada; el resto devuelve null hasta extender.
+ * `MODE_CLIMATE`, constantes `FIELD`). Todas las variantes de nodos/blooms
+ * comparten este worklet (params de `VARIANTS`): `network`/`constellation`/
+ * `paper` con partículas y `depth` solo-blooms (`seedField` devuelve 0 nodos si
+ * `particles` es false). Las ondas (`waves`, variante `aurora`) todavía no se
+ * portaron a Skia → aurora se vería sin sus ondas (pendiente, fase 2).
  *
  * La animación corre en el hilo de UI: `useFrameCallback` avanza el reloj `t` y
  * `useDerivedValue` redibuja el `SkPicture` por frame. Las fórmulas de evolución
@@ -177,8 +180,6 @@ export function LivingField({ variant }: Props) {
 
     return recorder.finishRecordingAsPicture();
   }, [w, h, climA, climB, dotC, geom, cfg]);
-
-  if (variant !== "network") return null;
 
   return (
     <View
