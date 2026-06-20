@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LivingField } from "@/components/ui/LivingField";
 import { Text } from "@/components/ui/Text";
 import { MemoryTimelineSkeleton } from "./components/MemoryTimelineSkeleton";
 import { SearchResultRow } from "./components/SearchResultRow";
@@ -42,93 +43,96 @@ export function BuscarScreen() {
   const search = useMemorySearch(debounced);
 
   return (
-    <SafeAreaView className="flex-1 bg-bg-canvas" edges={["top"]}>
-      <ScrollView contentContainerClassName="gap-6 px-6 py-8" keyboardShouldPersistTaps="handled">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Volver a Memoria"
-          hitSlop={8}
-          onPress={() => router.back()}
-          className="self-start"
-        >
-          <Text className="text-button text-ink-soft">‹ Memoria</Text>
-        </Pressable>
+    <View className="flex-1 bg-bg-canvas">
+      <LivingField variant="network" />
+      <SafeAreaView className="flex-1" edges={["top"]}>
+        <ScrollView contentContainerClassName="gap-6 px-6 py-8" keyboardShouldPersistTaps="handled">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Volver a Memoria"
+            hitSlop={8}
+            onPress={() => router.back()}
+            className="self-start"
+          >
+            <Text className="text-button text-ink-soft">‹ Memoria</Text>
+          </Pressable>
 
-        <Text className="text-title font-display text-ink-deep">Buscar</Text>
+          <Text className="text-title font-display text-ink-deep">Buscar</Text>
 
-        <View className="h-12 flex-row items-center gap-3 rounded-lg border border-border bg-bg-soft px-4">
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder="Buscá en tu memoria…"
-            placeholderTextColor={PLACEHOLDER_COLOR}
-            autoFocus
-            returnKeyType="search"
-            accessibilityLabel="Buscar en tu memoria"
-            className="h-full flex-1 text-body text-ink"
-          />
-          {input.length > 0 ? (
-            <Pressable
-              onPress={() => setInput("")}
-              accessibilityRole="button"
-              accessibilityLabel="Limpiar búsqueda"
-              hitSlop={8}
-            >
-              <Text className="text-body text-ink-soft">✕</Text>
-            </Pressable>
+          <View className="h-12 flex-row items-center gap-3 rounded-lg border border-border bg-bg-soft px-4">
+            <TextInput
+              value={input}
+              onChangeText={setInput}
+              placeholder="Buscá en tu memoria…"
+              placeholderTextColor={PLACEHOLDER_COLOR}
+              autoFocus
+              returnKeyType="search"
+              accessibilityLabel="Buscar en tu memoria"
+              className="h-full flex-1 text-body text-ink"
+            />
+            {input.length > 0 ? (
+              <Pressable
+                onPress={() => setInput("")}
+                accessibilityRole="button"
+                accessibilityLabel="Limpiar búsqueda"
+                hitSlop={8}
+              >
+                <Text className="text-body text-ink-soft">✕</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {!active ? (
+            <View className="gap-3">
+              <Text className="text-caption text-ink-soft">Probá buscar</Text>
+              <View className="flex-row flex-wrap gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <Pressable
+                    key={s}
+                    accessibilityRole="button"
+                    onPress={() => setInput(s)}
+                    className="rounded-pill border border-border bg-bg px-3 py-1.5 active:bg-bg-soft"
+                  >
+                    <Text className="text-body-sm text-ink">{s}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : search.isLoading ? (
+            <MemoryTimelineSkeleton />
+          ) : search.isError ? (
+            <View className="gap-1 rounded-lg border border-border bg-bg p-4">
+              <Text className="text-body text-ink">No pudimos buscar</Text>
+              <Text className="text-body-sm text-ink-soft">
+                Puede ser un problema de conexión. Probá de nuevo en un momento.
+              </Text>
+            </View>
+          ) : search.data && search.data.total === 0 ? (
+            <View className="gap-1 rounded-lg border border-border bg-bg p-4">
+              <Text className="text-body text-ink">Nada para «{search.data.query}»</Text>
+              <Text className="text-body-sm text-ink-soft">
+                Probá con otras palabras, o revisá el timeline completo.
+              </Text>
+            </View>
+          ) : search.data ? (
+            <View className="gap-3">
+              <Text className="text-caption text-ink-soft">
+                {search.data.total} {search.data.total === 1 ? "resultado" : "resultados"}
+              </Text>
+              <View>
+                {search.data.results.map((hit, index) => (
+                  <SearchResultRow
+                    key={`${hit.layer}:${hit.ref}`}
+                    hit={hit}
+                    now={now}
+                    first={index === 0}
+                  />
+                ))}
+              </View>
+            </View>
           ) : null}
-        </View>
-
-        {!active ? (
-          <View className="gap-3">
-            <Text className="text-caption text-ink-soft">Probá buscar</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {SUGGESTIONS.map((s) => (
-                <Pressable
-                  key={s}
-                  accessibilityRole="button"
-                  onPress={() => setInput(s)}
-                  className="rounded-pill border border-border bg-bg px-3 py-1.5 active:bg-bg-soft"
-                >
-                  <Text className="text-body-sm text-ink">{s}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        ) : search.isLoading ? (
-          <MemoryTimelineSkeleton />
-        ) : search.isError ? (
-          <View className="gap-1 rounded-lg border border-border bg-bg p-4">
-            <Text className="text-body text-ink">No pudimos buscar</Text>
-            <Text className="text-body-sm text-ink-soft">
-              Puede ser un problema de conexión. Probá de nuevo en un momento.
-            </Text>
-          </View>
-        ) : search.data && search.data.total === 0 ? (
-          <View className="gap-1 rounded-lg border border-border bg-bg p-4">
-            <Text className="text-body text-ink">Nada para «{search.data.query}»</Text>
-            <Text className="text-body-sm text-ink-soft">
-              Probá con otras palabras, o revisá el timeline completo.
-            </Text>
-          </View>
-        ) : search.data ? (
-          <View className="gap-3">
-            <Text className="text-caption text-ink-soft">
-              {search.data.total} {search.data.total === 1 ? "resultado" : "resultados"}
-            </Text>
-            <View>
-              {search.data.results.map((hit, index) => (
-                <SearchResultRow
-                  key={`${hit.layer}:${hit.ref}`}
-                  hit={hit}
-                  now={now}
-                  first={index === 0}
-                />
-              ))}
-            </View>
-          </View>
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }

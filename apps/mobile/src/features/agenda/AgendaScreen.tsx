@@ -4,6 +4,7 @@ import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChipGroup } from "@/components/ui/ChipGroup";
 import { ErrorCard } from "@/components/ui/ErrorCard";
+import { LivingField } from "@/components/ui/LivingField";
 import { Text } from "@/components/ui/Text";
 import { cn } from "@/lib/cn";
 import { AgendaSkeleton } from "./components/AgendaSkeleton";
@@ -48,64 +49,67 @@ export function AgendaScreen() {
     view === "dia" ? isSameDay(anchor, now) : isSameDay(startOfWeek(anchor), startOfWeek(now));
 
   return (
-    <SafeAreaView className="flex-1 bg-bg-canvas" edges={["top"]}>
-      <ScrollView contentContainerClassName="gap-8 px-6 py-8">
-        {/* Header */}
-        <View className="gap-4">
-          <View className="flex-row items-center justify-between gap-3">
-            <Text className="text-title font-display text-ink">Agenda</Text>
-            <ChipGroup options={VIEW_OPTIONS} value={view} onChange={(v) => setView(v)} />
+    <View className="flex-1 bg-bg-canvas">
+      <LivingField variant="paper" />
+      <SafeAreaView className="flex-1" edges={["top"]}>
+        <ScrollView contentContainerClassName="gap-8 px-6 py-8">
+          {/* Header */}
+          <View className="gap-4">
+            <View className="flex-row items-center justify-between gap-3">
+              <Text className="text-title font-display text-ink">Agenda</Text>
+              <ChipGroup options={VIEW_OPTIONS} value={view} onChange={(v) => setView(v)} />
+            </View>
+
+            <Text className="text-body text-ink-soft">{periodLabel}</Text>
+
+            {/* Navegación anterior / hoy / siguiente */}
+            <View className="flex-row items-center gap-2">
+              <Pressable
+                onPress={() => shift(-1)}
+                accessibilityLabel={view === "dia" ? "Día anterior" : "Semana anterior"}
+                hitSlop={8}
+                className="h-9 w-9 items-center justify-center rounded-full border border-border"
+              >
+                <Text className="text-body text-ink-soft">‹</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setAnchor(new Date())}
+                disabled={onNow}
+                hitSlop={8}
+                className={cn("rounded-pill px-4 py-2", onNow && "opacity-40")}
+              >
+                <Text className="text-button text-ink-soft">Hoy</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => shift(1)}
+                accessibilityLabel={view === "dia" ? "Día siguiente" : "Semana siguiente"}
+                hitSlop={8}
+                className="h-9 w-9 items-center justify-center rounded-full border border-border"
+              >
+                <Text className="text-body text-ink-soft">›</Text>
+              </Pressable>
+            </View>
           </View>
 
-          <Text className="text-body text-ink-soft">{periodLabel}</Text>
-
-          {/* Navegación anterior / hoy / siguiente */}
-          <View className="flex-row items-center gap-2">
-            <Pressable
-              onPress={() => shift(-1)}
-              accessibilityLabel={view === "dia" ? "Día anterior" : "Semana anterior"}
-              hitSlop={8}
-              className="h-9 w-9 items-center justify-center rounded-full border border-border"
-            >
-              <Text className="text-body text-ink-soft">‹</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setAnchor(new Date())}
-              disabled={onNow}
-              hitSlop={8}
-              className={cn("rounded-pill px-4 py-2", onNow && "opacity-40")}
-            >
-              <Text className="text-button text-ink-soft">Hoy</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => shift(1)}
-              accessibilityLabel={view === "dia" ? "Día siguiente" : "Semana siguiente"}
-              hitSlop={8}
-              className="h-9 w-9 items-center justify-center rounded-full border border-border"
-            >
-              <Text className="text-body text-ink-soft">›</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Contenido: 4 estados */}
-        {isPending ? (
-          <AgendaSkeleton />
-        ) : isError ? (
-          <ErrorCard
-            title="No pudimos traer tu agenda"
-            hint="Puede ser un problema de conexión. Probá de nuevo."
-            onRetry={() => refetch()}
-            retrying={isFetching}
-          />
-        ) : view === "dia" ? (
-          <DayView events={data} day={anchor} />
-        ) : (
-          <WeekView events={data} anchor={anchor} now={now} />
-        )}
-      </ScrollView>
-    </SafeAreaView>
+          {/* Contenido: 4 estados */}
+          {isPending ? (
+            <AgendaSkeleton />
+          ) : isError ? (
+            <ErrorCard
+              title="No pudimos traer tu agenda"
+              hint="Puede ser un problema de conexión. Probá de nuevo."
+              onRetry={() => refetch()}
+              retrying={isFetching}
+            />
+          ) : view === "dia" ? (
+            <DayView events={data} day={anchor} />
+          ) : (
+            <WeekView events={data} anchor={anchor} now={now} />
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
