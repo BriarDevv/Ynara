@@ -71,7 +71,13 @@ export function MoodStep() {
             const selected = field.value;
             const limitReached = selected.length >= MAX_MOOD;
             return (
-              <div className="flex flex-col gap-3">
+              <fieldset className="flex flex-col gap-3 border-none p-0">
+                <legend className="sr-only">Cómo venís — elegí hasta 2</legend>
+                {/* Anuncia al lector de pantalla cuando se alcanza el máximo (las
+                    cards no elegidas pasan a disabled y salen del orden de foco). */}
+                <p className="sr-only" role="status" aria-live="polite">
+                  {limitReached ? "Llegaste al máximo de 2 opciones." : ""}
+                </p>
                 {MOOD_OPTIONS.map((opt) => {
                   const isSelected = selected.includes(opt.value);
                   const isDisabled = !isSelected && limitReached;
@@ -98,7 +104,7 @@ export function MoodStep() {
                     {form.formState.errors.mood.message}
                   </p>
                 ) : null}
-              </div>
+              </fieldset>
             );
           }}
         />
