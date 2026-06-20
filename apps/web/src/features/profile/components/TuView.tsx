@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { DisplayNameSchema } from "@ynara/shared-schemas";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -11,12 +12,14 @@ import { MODE_BY_ID } from "@/components/ui/modes";
 import { TextField } from "@/components/ui/TextField";
 import { Toast } from "@/components/ui/Toast";
 import { Toggle } from "@/components/ui/Toggle";
+import { useChatStore } from "@/features/chat/store";
 import { useMemoryExport } from "@/features/memory/api";
 import { useOnboardingResumeStore } from "@/features/onboarding/resumeStore";
 import { useOnboardingStore } from "@/features/onboarding/store";
 import { useUpdateMe } from "@/features/profile/api";
 import { useActiveMode } from "@/hooks/useActiveMode";
 import { applyA11yClasses, type TextSize, useA11yStore } from "@/stores/a11y";
+import { useActiveModeStore } from "@/stores/mode";
 import { applyThemeClass, type ThemePreference, useThemeStore } from "@/stores/theme";
 import { useUserStore } from "@/stores/user";
 import { LogoutDialog } from "./LogoutDialog";
@@ -66,6 +69,7 @@ type RetentionValue = "30" | "90" | "180" | "365";
  */
 export function TuView() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const activeMode = useActiveMode();
   const modeDescriptor = MODE_BY_ID[activeMode];
 
@@ -201,11 +205,20 @@ export function TuView() {
   // ── Logout ────────────────────────────────────────────────────────────────
 
   function handleLogout() {
+    // Logout total: además de la sesión del usuario, limpiar TODO el estado con
+    // datos personales. `router.push` es navegación client-side (no recarga), así
+    // que el chat store (sessions+messages en localStorage) y la cache de memoria
+    // de TanStack Query sobreviven al logout y los vería el próximo usuario del
+    // dispositivo. Esto cumple la promesa del LogoutDialog efímero ("se borran tus
+    // datos de este dispositivo"). Tema y a11y NO se tocan: son prefs del
+    // dispositivo, no datos del usuario (limpiar a11y degradaría la accesibilidad
+    // del próximo que use el equipo).
     resetUser();
-    // Limpiar el flag de resume por las dudas: aunque resetUser pone
-    // onboardingCompleted=false (y el guard ya no matchearía), no lo dejamos
-    // pegado en sessionStorage al volver a un onboarding fresco.
+    useChatStore.getState().reset();
+    useActiveModeStore.getState().reset();
+    useOnboardingStore.getState().reset();
     useOnboardingResumeStore.getState().setResuming(false);
+    queryClient.clear();
     router.push("/onboarding");
   }
 

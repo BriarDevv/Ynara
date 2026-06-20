@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -98,59 +99,70 @@ beforeAll(() => {
   };
 });
 
+// TuView usa `useQueryClient` (logout total limpia la cache): envolvemos en un
+// QueryClientProvider real. Las mutations de red siguen mockeadas arriba.
+function renderTuView() {
+  const queryClient = new QueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <TuView />
+    </QueryClientProvider>,
+  );
+}
+
 describe("TuView — smoke", () => {
   it("renderiza el nombre del usuario como heading principal", () => {
-    render(<TuView />);
+    renderTuView();
     expect(screen.getByRole("heading", { level: 1, name: "Mateo" })).toBeInTheDocument();
   });
 
   it("muestra el avatar con la inicial del nombre", () => {
-    render(<TuView />);
+    renderTuView();
     expect(screen.getByRole("img", { name: /avatar de mateo/i })).toBeInTheDocument();
   });
 
   it("muestra el badge de plan", () => {
-    render(<TuView />);
+    renderTuView();
     expect(screen.getByText(/plan gratis/i)).toBeInTheDocument();
   });
 
   it("muestra el campo de nombre con el valor del usuario", () => {
-    render(<TuView />);
+    renderTuView();
     const input = screen.getByRole("textbox", { name: /tu nombre/i });
     expect((input as HTMLInputElement).value).toBe("Mateo");
   });
 
   it("muestra los links de memoria", () => {
-    render(<TuView />);
+    renderTuView();
     expect(screen.getByRole("link", { name: /tu memoria/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /buscar/i })).toBeInTheDocument();
   });
 
   it("muestra el botón destructivo de borrar memoria", () => {
-    render(<TuView />);
+    renderTuView();
     expect(screen.getByRole("button", { name: /borrar toda mi memoria/i })).toBeInTheDocument();
   });
 
   it("muestra el botón de cerrar sesión", () => {
-    render(<TuView />);
+    renderTuView();
     expect(screen.getByRole("button", { name: /cerrar sesión/i })).toBeInTheDocument();
   });
 
   it("muestra el selector de tema Claro/Oscuro", () => {
-    render(<TuView />);
+    renderTuView();
     // ChipGroup de tema renderiza opciones como radio/button
     expect(screen.getByText(/claro/i)).toBeInTheDocument();
     expect(screen.getByText(/oscuro/i)).toBeInTheDocument();
   });
 
   it("muestra el footer con versión y tagline", () => {
-    render(<TuView />);
+    renderTuView();
     expect(screen.getByText(/ynara · mvp 2026/i)).toBeInTheDocument();
     expect(screen.getByText(/pensar mejor, recordar siempre/i)).toBeInTheDocument();
   });
 
   it("muestra el botón de exportar memoria", () => {
-    render(<TuView />);
+    renderTuView();
     expect(screen.getByRole("button", { name: /exportar mi memoria/i })).toBeInTheDocument();
   });
 });
