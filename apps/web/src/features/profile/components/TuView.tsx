@@ -256,7 +256,7 @@ export function TuView() {
         <div data-hero-reveal className="flex items-center gap-4">
           {/* Avatar circular con fill sólido del modo activo (sin gradiente — guard §3.4) */}
           <div
-            className="flex h-[60px] w-[60px] flex-shrink-0 items-center justify-center rounded-full text-[25px] font-semibold text-white"
+            className="flex h-[60px] w-[60px] flex-shrink-0 items-center justify-center rounded-full text-[25px] font-semibold text-[var(--color-on-dark)]"
             style={{ backgroundColor: modeDescriptor.fillVar }}
             role="img"
             aria-label={`Avatar de ${displayName ?? "usuario"}`}
@@ -279,7 +279,7 @@ export function TuView() {
               <button
                 type="button"
                 onClick={() => setPaywallOpen(true)}
-                className="text-caption inline-block rounded-full px-2.5 py-0.5 font-semibold text-white transition-opacity hover:opacity-90 active:opacity-75"
+                className="text-caption inline-block rounded-full px-2.5 py-0.5 font-semibold text-[var(--color-on-dark)] transition-opacity hover:opacity-90 active:opacity-75"
                 style={{ backgroundColor: MODE_BY_ID.bienestar.fillVar }}
                 aria-label="Subir a Premium"
               >

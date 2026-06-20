@@ -242,7 +242,7 @@ export function SidebarNav() {
             {avisosCount > 0 && (
               <span
                 aria-hidden
-                className="flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white"
+                className="flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-[var(--color-on-dark)]"
                 // fill (no tint): el tint de memoria es lavanda claro y el
                 // número blanco encima fallaría AA; el *-fill es AA-safe.
                 style={{ backgroundColor: "var(--mode-memoria-fill)" }}
@@ -281,7 +281,7 @@ export function SidebarNav() {
         >
           <span
             aria-hidden
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-body-sm font-semibold text-white"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-body-sm font-semibold text-[var(--color-on-dark)]"
             // Fill sólido teñido por el modo activo (no gradiente: §3.4 reserva
             // los gradientes al campo vivo / logo / orbe). El `*-fill` es el
             // tono AA-safe del modo, así la inicial blanca contrasta.
