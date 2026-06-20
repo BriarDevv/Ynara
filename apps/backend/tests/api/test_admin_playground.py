@@ -20,6 +20,7 @@ salvo en el test del guard 409. Ningún endpoint commitea: el rollback del fixtu
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from unittest.mock import patch
@@ -42,7 +43,7 @@ from app.llm.errors import (
     LlmUnavailableError,
     ModelNotServedError,
 )
-from app.llm.schemas import CompletionResult, ToolCall
+from app.llm.schemas import CompletionChunk, CompletionResult, ToolCall
 from app.main import app
 from app.models.user import User
 
@@ -724,5 +725,254 @@ async def test_playground_agent_fake_backend_409(db_session: AsyncSession) -> No
         assert resp.status_code == 409
         assert resp.json()["detail"] == "serving real no disponible"
         assert fake.complete_calls == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/admin/playground/stream — SSE token-por-token + canal reasoning
+# ---------------------------------------------------------------------------
+
+
+def _parse_sse(text: str) -> list[tuple[str, dict[str, object] | None]]:
+    """Parsea el cuerpo SSE: frames ``event:``/``data:`` separados por línea en blanco."""
+    events: list[tuple[str, dict[str, object] | None]] = []
+    for frame in text.split("\n\n"):
+        frame = frame.strip()
+        if not frame:
+            continue
+        event: str | None = None
+        data: dict[str, object] | None = None
+        for ln in frame.splitlines():
+            if ln.startswith("event:"):
+                event = ln.split(":", 1)[1].strip()
+            elif ln.startswith("data:"):
+                data = json.loads(ln.split(":", 1)[1].strip())
+        if event is not None:
+            events.append((event, data))
+    return events
+
+
+def _chunk(
+    *, text: str = "", reasoning: str | None = None, finish_reason: str | None = None
+) -> CompletionChunk:
+    """Un ``CompletionChunk`` para programar ``FakeLlmClient.stream`` (contenido y/o reasoning)."""
+    return CompletionChunk(delta_text=text, reasoning_delta=reasoning, finish_reason=finish_reason)
+
+
+async def test_playground_stream_emits_tokens_and_done(db_session: AsyncSession) -> None:
+    """Cada chunk de texto -> un evento ``token``; al final un ``done`` con las métricas."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_chunks(
+        [_chunk(text="Hola"), _chunk(text=", "), _chunk(text="mundo", finish_reason="stop")]
+    )
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/stream",
+                    json={"model": "gemma4", "message": "hola"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        events = _parse_sse(resp.text)
+        assert [d["delta"] for ev, d in events if ev == "token"] == ["Hola", ", ", "mundo"]
+        done = next(d for ev, d in events if ev == "done")
+        assert done["finish_reason"] == "stop"
+        assert done["model_name"] == "gemma4"
+        assert done["completion_tokens"] == 3
+        assert done["thinking_used"] is False
+        # Sin canal reasoning ni <think> -> thinking vacío; ningún evento reasoning.
+        assert not done["thinking"]
+        assert all(ev != "reasoning" for ev, _ in events)
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_stream_captures_reasoning_channel(db_session: AsyncSession) -> None:
+    """qwen: el canal ``reasoning`` separado -> eventos ``reasoning`` + thinking final en ``done``.
+
+    Reproduce el caso real (Ollama): el razonamiento llega en ``delta.reasoning`` APARTE
+    del ``content``. El endpoint lo emite como eventos ``reasoning`` y lo acumula en
+    ``done.thinking``; los ``completion_tokens`` cuentan SOLO los chunks de texto.
+    """
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_chunks(
+        [
+            _chunk(reasoning="Pensando"),
+            _chunk(reasoning=" el problema"),
+            _chunk(text="La respuesta es 42.", finish_reason="stop"),
+        ]
+    )
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/stream",
+                    json={"model": "qwen", "message": "pensá y respondé", "thinking": True},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        assert [d["delta"] for ev, d in events if ev == "reasoning"] == ["Pensando", " el problema"]
+        assert [d["delta"] for ev, d in events if ev == "token"] == ["La respuesta es 42."]
+        done = next(d for ev, d in events if ev == "done")
+        # thinking final = el reasoning acumulado (no el content).
+        assert done["thinking"] == "Pensando el problema"
+        # completion_tokens cuenta SOLO el chunk de texto, no los de reasoning.
+        assert done["completion_tokens"] == 1
+        assert done["thinking_used"] is True
+        # el thinking pasado al cliente fue True (qwen agent + override).
+        assert fake.stream_calls[0]["thinking"] is True
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_stream_reasoning_only_empty_answer(db_session: AsyncSession) -> None:
+    """El caso que confundía: qwen gasta el budget razonando y no emite texto.
+
+    Sin chunks de ``content`` el answer queda vacío (``completion_tokens == 0``) pero el
+    razonamiento SÍ se captura: eventos ``reasoning`` + ``done.thinking`` poblado.
+    """
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_chunks(
+        [_chunk(reasoning="Sigo pensando"), _chunk(reasoning="…", finish_reason="length")]
+    )
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/stream",
+                    json={"model": "qwen", "message": "pensá mucho", "thinking": True},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        assert [d["delta"] for ev, d in events if ev == "reasoning"] == ["Sigo pensando", "…"]
+        assert all(ev != "token" for ev, _ in events)
+        done = next(d for ev, d in events if ev == "done")
+        assert done["completion_tokens"] == 0
+        assert done["finish_reason"] == "length"
+        assert done["thinking"] == "Sigo pensando…"
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_stream_inline_think_block(db_session: AsyncSession) -> None:
+    """Fallback: si el modelo embebe <think>...</think> en el ``content`` (vLLM sin
+    reasoning-parser), el thinking final se separa de ahí (precedencia: reasoning > inline)."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    fake.queue_chunks(
+        [
+            _chunk(text="<think>razonando</think>"),
+            _chunk(text="Respuesta final.", finish_reason="stop"),
+        ]
+    )
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/stream",
+                    json={"model": "qwen", "message": "hola", "thinking": True},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        done = next(d for ev, d in events if ev == "done")
+        # Sin canal reasoning -> se separa el <think> del content acumulado.
+        assert done["thinking"] == "<think>razonando</think>"
+        assert all(ev != "reasoning" for ev, _ in events)
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_stream_error_event_neutral(db_session: AsyncSession) -> None:
+    """Un LlmError a mitad del stream -> evento ``error`` con mensaje NEUTRO (regla #4)."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+    secret = "PAYLOAD-SENSIBLE-9999"
+    fake.queue_stream_error(LlmTimeoutError(detail=secret))
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/stream",
+                    json={"model": "gemma4", "message": "hola"},
+                    headers=_bearer(admin.id),
+                )
+
+        # El stream ya abrió (200): el error viaja como evento SSE, no como status.
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        error = next(d for ev, d in events if ev == "error")
+        assert error["code"] == "stream_error"
+        # Regla #4: ni el payload sensible ni el nombre de la clase viajan.
+        assert secret not in resp.text
+        assert "LlmTimeoutError" not in resp.text
+        # No se emite done tras el error.
+        assert all(ev != "done" for ev, _ in events)
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_stream_invalid_model_422(db_session: AsyncSession) -> None:
+    """Modelo fuera del catálogo -> 422 HTTP (no SSE), antes de abrir el stream."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_real_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/stream",
+                    json={"model": "no-existe", "message": "hola"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "modelo no servido"
+        assert fake.stream_calls == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_playground_stream_fake_backend_409(db_session: AsyncSession) -> None:
+    """Backend fake -> 409 HTTP antes de abrir el stream (mismo guard que el sync)."""
+    admin = await _seed_admin(db_session)
+    fake = FakeLlmClient(served_models=_SERVED)
+
+    client = _client(db_session, llm_client=fake)
+    try:
+        with _patch_settings(_fake_settings()):
+            async with client:
+                resp = await client.post(
+                    "/v1/admin/playground/stream",
+                    json={"model": "gemma4", "message": "hola"},
+                    headers=_bearer(admin.id),
+                )
+
+        assert resp.status_code == 409
+        assert resp.json()["detail"] == "serving real no disponible"
+        assert fake.stream_calls == []
     finally:
         app.dependency_overrides.clear()
