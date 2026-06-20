@@ -36,6 +36,11 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   };
 
   const handleRetry = (messageId: string) => {
+    // No-op si ya hay un stream en vuelo: `stream.send` lo ignoraría por el guard
+    // single-in-flight, pero el mensaje ya quedaría marcado "sending" sin que nada
+    // lo cierre (ni done ni error) → burbuja colgada. Gateamos antes de tocar el
+    // status para evitar ese estado huérfano.
+    if (stream.isStreaming) return;
     const msg = (messages ?? []).find((m) => m.id === messageId);
     if (!msg) return;
     setMessageStatus(sessionId, messageId, "sending");
