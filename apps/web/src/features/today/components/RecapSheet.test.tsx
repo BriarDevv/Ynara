@@ -27,6 +27,21 @@ describe("RecapSheet", () => {
     expect(screen.getByText("Dormiste mejor")).toBeInTheDocument();
   });
 
+  it("muestra el headline editorial como título cuando existe", () => {
+    render(<RecapSheet open onClose={() => {}} recap={baseRecap} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Un día redondo" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /cómo te fue hoy/i })).not.toBeInTheDocument();
+  });
+
+  it("cae al título genérico cuando el headline es null o vacío", () => {
+    const { rerender } = render(
+      <RecapSheet open onClose={() => {}} recap={{ ...baseRecap, headline: null }} />,
+    );
+    expect(screen.getByRole("heading", { level: 2, name: /cómo te fue hoy/i })).toBeInTheDocument();
+    rerender(<RecapSheet open onClose={() => {}} recap={{ ...baseRecap, headline: "" }} />);
+    expect(screen.getByRole("heading", { level: 2, name: /cómo te fue hoy/i })).toBeInTheDocument();
+  });
+
   it("muestra el empty-state cuando no hay highlights", () => {
     render(
       <RecapSheet
