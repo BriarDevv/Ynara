@@ -36,7 +36,7 @@ export function SuggestionsSection() {
   if (!isPending && data.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-3" aria-busy={isPending}>
       <h2 className="text-caption text-[var(--color-ink-soft)]">Ynara sugiere</h2>
       {isPending ? (
         <SuggestionsSkeleton />

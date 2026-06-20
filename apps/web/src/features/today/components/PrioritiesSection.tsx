@@ -25,7 +25,7 @@ export function PrioritiesSection() {
   }
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-3" aria-busy={isPending}>
       <h2 className="text-caption text-[var(--color-ink-soft)]">Prioridades del día</h2>
 
       {isPending ? (
