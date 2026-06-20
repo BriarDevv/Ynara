@@ -4,30 +4,18 @@ import { PlaygroundScreen } from "@/features/playground/components/PlaygroundScr
 export const metadata: Metadata = { title: "Playground" };
 
 /**
- * Playground · ruta "/playground" (ADR-018 F1, control plane F3).
+ * Playground · ruta "/playground" (ADR-018/019, control plane F3).
  *
- * Server component: header editorial estático + `metadata`, delega la
- * composición de datos a `<PlaygroundScreen/>` (client, consume `useServing()` +
- * `usePlayground()`). NO lleva `range` —es runtime/config, foto única—.
+ * Server component fino: delega TODA la composición a `<PlaygroundScreen/>`
+ * (client). El chat es la superficie protagonista —ocupa el alto disponible con
+ * scroll interno por panel—, así que la página NO mete un header editorial que
+ * le robe espacio: el contexto (modelo activo, sesión) vive en el `ChatHeader`.
  *
- * Probe del modelo CRUDO: manda un mensaje ad-hoc a un modelo elegido con params
- * per-request (incluido el preset "bajo rendimiento") **sin** mutar el serving
- * global, sin sesión/memoria/tools. El "bajo rendimiento" es por mensaje, no
- * global (frontera F1/F2 del ADR-018).
+ * Probe del modelo en STREAMING: manda mensajes ad-hoc al modelo elegido y ve la
+ * respuesta token-por-token + tok/s, con historial de sesiones (client-side),
+ * salud del serving e inspector del turno. Aislado: no toca memoria, sesiones del
+ * producto ni el serving global.
  */
 export default function PlaygroundPage() {
-  return (
-    <section className="flex flex-col gap-8">
-      <header className="anim-fade-in flex flex-col gap-2">
-        <p className="text-caption text-[var(--color-ink-soft)]">Soberanía</p>
-        <h1 className="text-display text-[var(--color-ink-deep)]">Playground</h1>
-        <p className="max-w-[var(--measure-prose)] text-body text-[var(--color-ink-soft)]">
-          Probá un modelo del serving con un mensaje ad-hoc y parámetros por turno (incluido el modo
-          bajo rendimiento). Aislado: no toca memoria, sesiones ni el serving global.
-        </p>
-      </header>
-
-      <PlaygroundScreen />
-    </section>
-  );
+  return <PlaygroundScreen />;
 }

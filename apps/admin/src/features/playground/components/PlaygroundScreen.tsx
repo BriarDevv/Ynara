@@ -1,47 +1,48 @@
 "use client";
 
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
-import { Toast } from "@/components/ui/Toast";
-import { cn } from "@/lib/cn";
-import { usePlayground } from "../hooks/usePlayground";
+import { ApiError } from "@/lib/api";
+import { type ChatTurn, usePlaygroundSessions } from "@/stores/playgroundSessions";
 import { usePlaygroundAgent } from "../hooks/usePlaygroundAgent";
+import { type StreamFinal, usePlaygroundStream } from "../hooks/usePlaygroundStream";
 import { useServing } from "../hooks/useServing";
-import { buildAgentTrace, buildTrace } from "../inspector/trace";
-import type { PlaygroundAgentOutT, PlaygroundInT, PlaygroundOutT, ServingOutT } from "../schemas";
+import type { PlaygroundAgentOutT, PlaygroundInT, ServingOutT } from "../schemas";
+import { ChatHeader } from "./ChatHeader";
+import { ChatThread } from "./ChatThread";
+import { ModelHealthPanel } from "./ModelHealthPanel";
 import { PlaygroundComposer } from "./PlaygroundComposer";
 import {
   type PlaygroundConfig,
   PlaygroundControls,
   type ThinkingChoice,
 } from "./PlaygroundControls";
-import { PlaygroundInspector } from "./PlaygroundInspector";
-import { PlaygroundTranscript } from "./PlaygroundTranscript";
-import { ServingInventory } from "./ServingInventory";
+import { SessionSidebar } from "./SessionSidebar";
+import { TurnInspector } from "./TurnInspector";
 
 /**
- * Composición client del Playground (ADR-018 §3) — patrón `SystemView`.
+ * Playground rediseñado (chat protagonista, ADR-018/019 + control plane F3).
  *
- * Vive separada de `page.tsx` (server, conserva `metadata`) y es la única capa
- * client: consume `useServing` (catálogo) + `usePlayground` / `usePlaygroundAgent`
- * (mutations sync). NO lleva `range` (runtime/config, foto única). Grilla por
- * bandas con reveal `anim-stagger-up`:
- *  0. `ServingInventory` — estado read-only del serving (full-width).
- *  1. `PlaygroundControls` — modelo + bajo rendimiento + params (full-width).
- *  2. Split chat | inspector (blueprint §4, misma proporción que `MoatScreen`):
- *     - `lg:col-span-8` chat: `PlaygroundTranscript` + `PlaygroundComposer`.
- *     - `lg:col-span-4` `PlaygroundInspector` (timeline + thinking + tool-calls),
- *       sticky al scrollear respuestas largas; colapsa a stack debajo de `lg`.
+ * Tres columnas a `xl+` (app-like, alto fijo con scroll interno por panel):
+ *  - **Sesiones** (izq) — historial client-side (`usePlaygroundSessions`).
+ *  - **Chat** (centro, protagonista) — header con IA activa + tok/s en vivo,
+ *    hilo completo con streaming token-por-token, composer anclado al pie.
+ *  - **Riel** (der) — salud de modelos (qué IA activa), controles del turno e
+ *    inspector (métricas + tool-calls).
  *
- * El estado del turno es LOCAL (`useState`): un playground efímero no persiste
- * conversaciones de prueba (sin store, sin semántica de `Mode`).
+ * Debajo de `xl` apila en una columna con el chat primero (sigue siendo el
+ * protagonista). Gatea el render con `mounted` + `useServing` para no chocar la
+ * hidratación del store persistido ni pintar antes de tener el catálogo.
  */
 export function PlaygroundScreen() {
-  const { data, isPending: servingPending, isError, refetch } = useServing();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  if (servingPending) return <PlaygroundSkeleton />;
+  const { data, isPending, isError, refetch } = useServing();
 
-  if (isError) {
+  if (!mounted || isPending) return <PlaygroundSkeleton />;
+
+  if (isError || !data) {
     return (
       <EmptyStateCard
         title="No pudimos leer el estado del serving."
@@ -59,32 +60,13 @@ export function PlaygroundScreen() {
     );
   }
 
-  if (!data) {
-    return (
-      <EmptyStateCard
-        title="Sin datos de serving."
-        hint="El endpoint /v1/admin/serving devolvió vacío."
-      />
-    );
-  }
-
   return <PlaygroundBody serving={data} />;
 }
 
-/**
- * Cuerpo con datos ya cargados: dueña el estado del turno + el de los controles,
- * mapea la config a `PlaygroundIn` y dispara la mutation correcta según el modo:
- *  - `agentMode=false` → `usePlayground` (probe crudo, `/playground`).
- *  - `agentMode=true`  → `usePlaygroundAgent` (tool-loop observado, `/playground/agent`).
- *
- * La trace del inspector se deriva con `buildTrace` (probe) o `buildAgentTrace`
- * (agente) antes de pasarla al inspector, que solo consume `InspectorTrace`.
- */
 function PlaygroundBody({ serving }: { serving: ServingOutT }) {
-  const directMutation = usePlayground();
-  const agentMutation = usePlaygroundAgent();
+  const sessions = usePlaygroundSessions((s) => s.sessions);
+  const activeId = usePlaygroundSessions((s) => s.activeId);
 
-  // Config inicial: primer modelo sano (o el primero), params por default.
   const firstHealthy = serving.models.find((m) => m.healthy) ?? serving.models[0];
   const [config, setConfig] = useState<PlaygroundConfig>({
     model: firstHealthy?.served_name ?? "",
@@ -95,125 +77,134 @@ function PlaygroundBody({ serving }: { serving: ServingOutT }) {
     agentMode: false,
   });
 
-  // Estado local del turno (efímero, sin persistencia).
   const [draft, setDraft] = useState("");
-  const [sentMessage, setSentMessage] = useState<string | null>(null);
-  const [directResult, setDirectResult] = useState<PlaygroundOutT | null>(null);
-  const [agentResult, setAgentResult] = useState<PlaygroundAgentOutT | null>(null);
-  const [toastVisible, setToastVisible] = useState(false);
+  const stream = usePlaygroundStream();
+  const agent = usePlaygroundAgent();
 
-  /** La mutation activa según el modo (para `isPending` y `error`). */
-  const activeMutation = config.agentMode ? agentMutation : directMutation;
+  const activeSession = useMemo(
+    () => sessions.find((s) => s.id === activeId) ?? null,
+    [sessions, activeId],
+  );
+  const messages = activeSession?.messages ?? [];
+  const lastAssistant = useMemo(
+    () => [...messages].reverse().find((m) => m.role === "assistant") ?? null,
+    [messages],
+  );
 
-  const send = (message: string) => {
-    const text = message.trim();
-    if (!text || !serving.is_real || !config.model) return;
-    setSentMessage(text);
-    setDirectResult(null);
-    setAgentResult(null);
+  const activeModel = serving.models.find((m) => m.served_name === config.model);
+  const isBusy = stream.isStreaming || agent.isPending;
+  const canSend = serving.is_real && config.model !== "" && draft.trim().length > 0 && !isBusy;
+
+  const runGeneration = (sessionId: string, text: string) => {
     const body = toPlaygroundIn(config, text);
-
     if (config.agentMode) {
-      agentMutation.mutate(body, {
-        onSuccess: (out) => setAgentResult(out),
-        onError: () => setToastVisible(true),
+      agent.mutate(body, {
+        onSuccess: (out) =>
+          usePlaygroundSessions.getState().appendMessage(sessionId, agentTurn(out)),
+        onError: (err) =>
+          usePlaygroundSessions.getState().appendMessage(sessionId, errorTurn(statusOf(err))),
       });
     } else {
-      directMutation.mutate(body, {
-        onSuccess: (out) => setDirectResult(out),
-        onError: () => setToastVisible(true),
+      stream.start(body, {
+        onComplete: (final) =>
+          usePlaygroundSessions.getState().appendMessage(sessionId, streamTurn(final)),
+        onError: (status) =>
+          usePlaygroundSessions.getState().appendMessage(sessionId, errorTurn(status)),
       });
     }
   };
 
   const handleSend = () => {
-    send(draft);
+    const text = draft.trim();
+    if (!text || !canSend) return;
+    const store = usePlaygroundSessions.getState();
+    const sessionId = activeId ?? store.newSession();
+    store.appendMessage(sessionId, userTurn(text));
+    setDraft("");
+    runGeneration(sessionId, text);
+  };
+
+  const handleStop = () => stream.abort();
+
+  const handleRetry = () => {
+    if (!activeSession) return;
+    const lastUser = [...activeSession.messages].reverse().find((m) => m.role === "user");
+    if (!lastUser) return;
+    const last = activeSession.messages.at(-1);
+    if (last && last.role === "assistant" && last.status === "error") {
+      usePlaygroundSessions.getState().dropLast(activeSession.id);
+    }
+    runGeneration(activeSession.id, lastUser.content);
+  };
+
+  const handleNew = () => {
+    stream.abort();
+    usePlaygroundSessions.getState().newSession();
     setDraft("");
   };
 
   const handleClear = () => {
-    setDraft("");
-    setSentMessage(null);
-    setDirectResult(null);
-    setAgentResult(null);
-    directMutation.reset();
-    agentMutation.reset();
+    stream.reset();
+    usePlaygroundSessions.getState().clearActive();
   };
 
-  const handleRetry = () => {
-    if (sentMessage) send(sentMessage);
+  const handleSelect = (id: string) => {
+    stream.abort();
+    usePlaygroundSessions.getState().selectSession(id);
   };
-
-  const canSend = serving.is_real && config.model !== "" && draft.trim().length > 0;
-
-  // La InspectorTrace se deriva con la función pura correcta según el modo.
-  const inspectorTrace = config.agentMode
-    ? buildAgentTrace(config, agentResult, { isPending: agentMutation.isPending })
-    : buildTrace(config, directResult, { isPending: directMutation.isPending });
-
-  // El Transcript muestra: en modo probe el resultado completo; en modo agente
-  // el texto del resultado agente (solo texto, sin métricas de tokens/latencia).
-  const transcriptResult: PlaygroundOutT | null = config.agentMode ? null : directResult;
-  const agentText: string | null = config.agentMode && agentResult ? agentResult.text : null;
 
   return (
-    <>
-      <div className="grid grid-cols-12 gap-8">
-        <Band span={12} index={0}>
-          <ServingInventory serving={serving} />
-        </Band>
-
-        <Band span={12} index={1}>
-          <PlaygroundControls models={serving.models} config={config} onChange={setConfig} />
-        </Band>
-
-        {/* Banda 2 — split chat | inspector (misma proporción que MoatScreen). */}
-        <Band span={12} index={2}>
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-            <div className="flex flex-col gap-8 lg:col-span-8">
-              <PlaygroundTranscript
-                isReal={serving.is_real}
-                userMessage={sentMessage}
-                result={transcriptResult}
-                agentText={agentText}
-                isPending={activeMutation.isPending}
-                error={activeMutation.error}
-                onRetry={handleRetry}
-              />
-              <PlaygroundComposer
-                value={draft}
-                onChange={setDraft}
-                onSend={handleSend}
-                onClear={handleClear}
-                canSend={canSend}
-                isPending={activeMutation.isPending}
-              />
-            </div>
-
-            <PlaygroundInspector
-              trace={inspectorTrace}
-              hasTurn={sentMessage !== null}
-              className="lg:sticky lg:top-[88px] lg:col-span-4 lg:self-start"
-            />
-          </div>
-        </Band>
-      </div>
-
-      <Toast
-        message="No pudimos contactar el serving. Reintentá."
-        variant="error"
-        visible={toastVisible}
-        onDismiss={() => setToastVisible(false)}
+    <div className="anim-screen-in flex flex-col gap-6 xl:h-[calc(100dvh-9rem)] xl:min-h-[34rem] xl:flex-row">
+      <SessionSidebar
+        sessions={sessions}
+        activeId={activeId}
+        onSelect={handleSelect}
+        onNew={handleNew}
+        onDelete={(id) => usePlaygroundSessions.getState().deleteSession(id)}
+        onRename={(id, title) => usePlaygroundSessions.getState().renameSession(id, title)}
+        className="order-2 shrink-0 xl:order-1 xl:w-[clamp(180px,15vw,240px)] xl:overflow-y-auto xl:scrollbar-none"
       />
-    </>
+
+      <section className="order-1 flex min-h-[28rem] min-w-0 flex-1 flex-col gap-4 xl:order-2 xl:min-h-0">
+        <ChatHeader
+          sessionTitle={activeSession?.title ?? null}
+          activeModel={activeModel}
+          isStreaming={stream.isStreaming}
+          liveTokensPerSecond={stream.live.tokensPerSecond}
+          liveTokens={stream.live.completionTokens}
+          thinkingOn={config.thinking === "on"}
+          agentMode={config.agentMode}
+          onClear={handleClear}
+          canClear={messages.length > 0 && !isBusy}
+        />
+        <ChatThread
+          messages={messages}
+          live={stream.live}
+          agentPending={agent.isPending}
+          isReal={serving.is_real}
+          onRetry={handleRetry}
+          className="min-h-[18rem] xl:min-h-0"
+        />
+        <PlaygroundComposer
+          value={draft}
+          onChange={setDraft}
+          onSend={handleSend}
+          onStop={handleStop}
+          canSend={canSend}
+          isStreaming={isBusy}
+        />
+      </section>
+
+      <aside className="order-3 flex shrink-0 flex-col gap-6 xl:w-[clamp(300px,24vw,360px)] xl:overflow-y-auto xl:scrollbar-none">
+        <ModelHealthPanel serving={serving} activeModel={config.model} />
+        <PlaygroundControls models={serving.models} config={config} onChange={setConfig} />
+        <TurnInspector turn={lastAssistant} live={stream.live} />
+      </aside>
+    </div>
   );
 }
 
-/**
- * Mapea la config de UI al body `PlaygroundIn` del contrato. `thinking` "auto"
- * viaja como `null` (el server resuelve el default por role); "on"/"off" como
- * booleano explícito.
- */
+/** Mapea la config de UI al body `PlaygroundIn` del contrato. */
 function toPlaygroundIn(config: PlaygroundConfig, message: string): PlaygroundInT {
   return {
     model: config.model,
@@ -233,36 +224,76 @@ function thinkingToWire(choice: ThinkingChoice): boolean | null {
   return choice === "on";
 }
 
-/** Mapeo de `span` a clase de columna (Tailwind necesita clases estáticas). */
-const SPAN_CLASS: Record<12, string> = {
-  12: "col-span-12",
-};
-
-/**
- * Banda de la grilla con reveal escalonado de page-load (mismo patrón que
- * `SystemView`): cada banda entra con `.anim-stagger-up` y su `--stagger-index`.
- */
-function Band({ span, index, children }: { span: 12; index: number; children: ReactNode }) {
-  return (
-    <div
-      className={cn(SPAN_CLASS[span], "anim-stagger-up")}
-      style={{ "--stagger-index": index } as CSSProperties}
-    >
-      {children}
-    </div>
-  );
+function userTurn(text: string): ChatTurn {
+  return {
+    id: crypto.randomUUID(),
+    role: "user",
+    content: text,
+    status: "ok",
+    createdAt: Date.now(),
+  };
 }
 
-/** Skeleton con la topología de la pantalla, para que no salte al cargar. */
+function streamTurn(final: StreamFinal): ChatTurn {
+  const d = final.done;
+  return {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    content: final.text,
+    status: "ok",
+    model: d.model_name,
+    finishReason: d.finish_reason,
+    completionTokens: d.completion_tokens,
+    latencyMs: d.latency_ms,
+    tokensPerSecond: d.tokens_per_second,
+    thinkingUsed: d.thinking_used,
+    thinking: final.thinking,
+    agent: false,
+    createdAt: Date.now(),
+  };
+}
+
+function agentTurn(out: PlaygroundAgentOutT): ChatTurn {
+  return {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    content: out.text,
+    status: "ok",
+    model: out.model_name,
+    finishReason: out.finish_reason,
+    thinking: out.thinking ?? null,
+    thinkingUsed: out.thinking != null,
+    agent: true,
+    actions: out.actions,
+    createdAt: Date.now(),
+  };
+}
+
+function errorTurn(status: number | null): ChatTurn {
+  return {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    content: "",
+    status: "error",
+    errorStatus: status,
+    createdAt: Date.now(),
+  };
+}
+
+function statusOf(err: unknown): number | null {
+  return err instanceof ApiError ? err.status : null;
+}
+
+/** Skeleton con la topología de 3 columnas (no salta al cargar). */
 function PlaygroundSkeleton() {
   return (
-    <div className="grid grid-cols-12 gap-8" aria-hidden>
-      <div className="anim-fade-in col-span-12 h-48 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)]" />
-      <div className="anim-fade-in col-span-12 h-64 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)]" />
-      <div className="anim-fade-in col-span-12 grid grid-cols-1 gap-8 lg:grid-cols-12">
-        <div className="h-72 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] lg:col-span-8" />
-        <div className="h-72 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] lg:col-span-4" />
-      </div>
+    <div
+      className="flex flex-col gap-6 xl:h-[calc(100dvh-9rem)] xl:min-h-[34rem] xl:flex-row"
+      aria-hidden
+    >
+      <div className="anim-fade-in hidden h-full rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] xl:block xl:w-[clamp(180px,15vw,240px)]" />
+      <div className="anim-fade-in min-h-[28rem] flex-1 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)]" />
+      <div className="anim-fade-in hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] xl:block xl:w-[clamp(300px,24vw,360px)]" />
     </div>
   );
 }
