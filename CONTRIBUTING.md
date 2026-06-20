@@ -36,10 +36,15 @@
      `git checkout main && git pull --rebase origin main`. Ver
      landmine "Ramas nuevas derivadas de un PR ajeno" en
      [`docs/conventions/AI-GUIDELINES.md`](./docs/conventions/AI-GUIDELINES.md).
-   - **Sync con remote: rebase, no merge**. Usar
-     `git pull --rebase origin main` siempre. Configuración global
-     recomendada: `git config --global pull.rebase true`. Detalle
-     en la sección "Sync con remote: usá rebase, no merge" de
+   - **Sync con remote: rebase, no merge — obligatorio** (regla #1
+     de `AGENTS.md`). Usar `git pull --rebase origin main` siempre;
+     un `git pull` plano que genere merge commit está **prohibido**.
+     Actualizar una rama feature contra `main` también va con
+     `git rebase origin/main`, nunca `git merge main`. Configuración
+     global **obligatoria** (una vez por máquina):
+     `git config --global pull.rebase true` y
+     `git config --global rebase.autoStash true`. Detalle en la
+     sección "Sync con remote: usá rebase, no merge" de
      `AI-GUIDELINES.md`.
 
 2. **Commits**: Conventional Commits en español (descripción
@@ -139,7 +144,8 @@ implementación. Ver `skills/adr-create/SKILL.md`.
 
 ## Para IAs
 
-- Leer `AGENTS.md` siempre antes de empezar.
+- Leer `AGENTS.md` **y este `CONTRIBUTING.md` completo** siempre
+  antes de empezar cualquier tarea — lectura obligatoria, no opcional.
 - Respetar las 10 reglas no negociables.
 - Pedir confirmación humana cuando aplica (regla #1).
 - Si hay un `TODO` o ambigüedad, preguntar — no inventar.

@@ -25,11 +25,11 @@ Las carpetas `.claude/`, `.codex/`, `.gemini/` son **adapters** para los IDEs/CL
 
 ## Read Order
 
-### Always first (obligatorio antes de cualquier PR)
+### Always first (obligatorio antes de hacer cualquier cosa, no solo antes del PR)
 
 1. Este archivo (`AGENTS.md`).
 2. [`README.md`](./README.md).
-3. [`CONTRIBUTING.md`](./CONTRIBUTING.md) — flujo de trabajo, branches, commits, PR, review, merge strategy (rebase merge). Es la guía operativa diaria del repo.
+3. [`CONTRIBUTING.md`](./CONTRIBUTING.md) — **lectura obligatoria antes de empezar cualquier tarea, no opcional**: flujo de trabajo, branches, commits, PR, review, merge strategy (rebase merge). Es la guía operativa diaria del repo.
 4. [`docs/conventions/COMMITS.md`](./docs/conventions/COMMITS.md) — formato de commits + cómo splitear en atómicos (regla #7 es bloqueante).
 
 ### Then choose by task
@@ -189,7 +189,7 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 
 ## Las 10 reglas no negociables
 
-1. **Confirmación humana** antes de `git commit`, `git push`, `git rebase`, `git tag`, `pnpm add`, `pnpm install`, `uv add`, `uv sync`, cambios en `.md` raíz, cambios en `ynara.config.json` y cambios en migraciones Alembic. **Toda actualización de `main` ocurre exclusivamente vía PR mergeado en GitHub** — prohibido `git push origin main` directo, `git merge` local hacia `main` y su push, force-push a `main`, o borrar `main`, aunque haya OK humano para los comandos individuales. Flujo completo en [`CONTRIBUTING.md`](./CONTRIBUTING.md#flujo-de-trabajo). **Severidad: bloqueante.**
+1. **Confirmación humana** antes de `git commit`, `git push`, `git rebase`, `git tag`, `pnpm add`, `pnpm install`, `uv add`, `uv sync`, cambios en `.md` raíz, cambios en `ynara.config.json` y cambios en migraciones Alembic. **Toda actualización de `main` ocurre exclusivamente vía PR mergeado en GitHub** — prohibido `git push origin main` directo, `git merge` local hacia `main` y su push, force-push a `main`, o borrar `main`, aunque haya OK humano para los comandos individuales. **Rebase siempre, nunca merge:** toda sincronización con remote va con `git pull --rebase` (nunca un `git pull` plano que genere merge commit), toda rama feature se actualiza contra `main` con `git rebase origin/main` (jamás `git merge main`), y el merge de cada PR a `main` es **rebase merge** (`gh pr merge <N> --rebase --delete-branch`) — historia lineal, sin merge commits (branch protection: `required_linear_history: true`). Config una vez por máquina: `git config --global pull.rebase true`. Flujo completo en [`CONTRIBUTING.md`](./CONTRIBUTING.md#flujo-de-trabajo). **Severidad: bloqueante.**
 
 2. **Nunca tocar secrets.** Prohibido leer, copiar, mover o commitear `.env`, claves API, tokens, certificados. Si detectás un secret expuesto, alertá inmediatamente y no toques nada. **Severidad: bloqueante.**
 
@@ -207,7 +207,7 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 
 9. **Rioplatense conversacional** en docs y contenido de usuario. Voseo, evitar peninsular (vosotros, ordenador, vale). Nombres de variables y funciones en inglés; comentarios y docs en español. **Review obligatorio.**
 
-10. **Antes de tocar código nuevo**: leer este archivo, después el `AGENTS.md` del app/package, después los ADRs relevantes. Si no entendés algo, **preguntá**. Mejor preguntar que inventar. **Recomendado fuerte.**
+10. **Antes de hacer cualquier cosa** (tocar código, docs, branches o git): leer este archivo (`AGENTS.md`) y el [`CONTRIBUTING.md`](./CONTRIBUTING.md) **completo — lectura obligatoria, no opcional**; después el `AGENTS.md` del app/package y los ADRs relevantes. Si no entendés algo, **preguntá**. Mejor preguntar que inventar. **Severidad: bloqueante** para leer `AGENTS.md` + `CONTRIBUTING.md`; recomendado fuerte para el resto.
 
 Reglas extendidas (15 más + landmines del scaffold): [`docs/conventions/AI-GUIDELINES.md`](./docs/conventions/AI-GUIDELINES.md).
 
