@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
-    "test": "echo 'TODO: configurar Jest + react-native-testing-library'"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",
@@ -47,6 +47,7 @@
   "devDependencies": {
     "@babel/core": "^7.25.0",
     "@types/react": "19.1.17",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.6"
   }
 }
