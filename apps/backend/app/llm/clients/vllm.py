@@ -341,6 +341,9 @@ class VllmClient:
             completion_tokens=int(usage.get("completion_tokens", 0)),
             model_name=body.get("model") or model,
             latency_ms=latency_ms,
+            # Canal de razonamiento separado (qwen via Ollama lo manda en
+            # ``message.reasoning``, no inline en ``content``).
+            reasoning=message.get("reasoning") or None,
         )
 
     @staticmethod
@@ -364,4 +367,7 @@ class VllmClient:
             delta_text=delta.get("content") or "",
             tool_call_delta={"choices": [choice]} if delta.get("tool_calls") else None,
             finish_reason=choice.get("finish_reason"),
+            # Delta del canal de razonamiento (qwen via Ollama: ``delta.reasoning``,
+            # APARTE del ``content`` que queda vacio durante el thinking).
+            reasoning_delta=delta.get("reasoning") or None,
         )
