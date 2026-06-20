@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { buildAnticipations } from "../anticipations";
+import { useAvisosStore } from "../avisosStore";
 import { AnticipationCard } from "./AnticipationCard";
 
 /**
@@ -19,9 +20,12 @@ import { AnticipationCard } from "./AnticipationCard";
  */
 export function AnticipationsSection() {
   const initial = useMemo(() => buildAnticipations(), []);
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  // Estado compartido (store): descartar acá lo deja resuelto en /avisos y baja
+  // el badge del sidebar — antes era estado local desincronizado.
+  const resolvedIds = useAvisosStore((s) => s.resolvedIds);
+  const resolve = useAvisosStore((s) => s.resolve);
 
-  const visible = initial.filter((a) => !dismissed.has(a.id));
+  const visible = initial.filter((a) => !resolvedIds.has(a.id));
 
   return (
     <section aria-live="polite" className="flex flex-col gap-3">
@@ -29,7 +33,7 @@ export function AnticipationsSection() {
         <AnticipationCard
           key={anticipation.id}
           anticipation={anticipation}
-          onDismiss={() => setDismissed((prev) => new Set([...prev, anticipation.id]))}
+          onDismiss={() => resolve(anticipation.id)}
         />
       ))}
       {/* Link discreto hacia /avisos — accesible en mobile donde no hay sidebar peek */}

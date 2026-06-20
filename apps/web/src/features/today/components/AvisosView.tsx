@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { HeroReveal } from "@/components/ui/HeroReveal";
 import { LivingField } from "@/components/ui/LivingField";
 import { useActiveMode } from "@/hooks/useActiveMode";
 import { buildAnticipations } from "../anticipations";
+import { useAvisosStore } from "../avisosStore";
 import { AnticipationCard } from "./AnticipationCard";
 
 /**
@@ -22,14 +23,13 @@ import { AnticipationCard } from "./AnticipationCard";
 export function AvisosView() {
   const activeMode = useActiveMode();
   const initial = useMemo(() => buildAnticipations(), []);
-  const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
+  // Estado compartido (store): resolver acá baja el badge del sidebar y saca el
+  // aviso de Hoy — antes era estado local desincronizado de los otros dos.
+  const resolvedIds = useAvisosStore((s) => s.resolvedIds);
+  const resolve = useAvisosStore((s) => s.resolve);
 
   const active = initial.filter((a) => !resolvedIds.has(a.id));
   const resolved = initial.filter((a) => resolvedIds.has(a.id));
-
-  function resolve(id: string) {
-    setResolvedIds((prev) => new Set([...prev, id]));
-  }
 
   const pendientes = active.length;
   const subline =

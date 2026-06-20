@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { AnchorHTMLAttributes } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useAvisosStore } from "../avisosStore";
 
 // next/link → <a> plano para jsdom.
 vi.mock("next/link", () => ({
@@ -51,6 +52,12 @@ vi.mock("../anticipations", () => ({
 const { AvisosView } = await import("./AvisosView");
 
 describe("AvisosView", () => {
+  // El estado de avisos resueltos es un store compartido (singleton): reset
+  // entre tests para que resolver en uno no filtre al siguiente.
+  beforeEach(() => {
+    useAvisosStore.getState().reset();
+  });
+
   it("muestra el header 'Avisos' y el subline con pendientes", () => {
     render(<AvisosView />);
     expect(screen.getByRole("heading", { name: "Avisos" })).toBeInTheDocument();
