@@ -22,8 +22,10 @@ import { cn } from "@/lib/cn";
  * - Vacío o solo-espacios → enviar deshabilitado.
  * - Límite ~4000 chars (`CHAT_TEXT_MAX_LENGTH`, mirror del backend M9). Se
  *   muestra un contador al acercarse y se bloquea el envío si se pasa.
- * - Mientras `busy` (esperando respuesta): textarea deshabilitado. El botón
- *   "Detener" (cancelar stream) llega en W3; acá `busy` solo deshabilita.
+ * - Mientras `busy` (esperando respuesta): textarea deshabilitado y el botón
+ *   de enviar muta a "Detener" (si el padre pasa `onStop`), que cancela el
+ *   stream en curso — el usuario nunca queda atrapado mirando una respuesta
+ *   que no quiere.
  * - Al enviar OK, se limpia y el foco vuelve al textarea (encadenar con teclado).
  */
 type Props = {
@@ -31,6 +33,8 @@ type Props = {
   busy: boolean;
   /** Modo de la sesión: tiñe el borde del composer y el botón de enviar. */
   mode: ModeId;
+  /** Cancela el stream en curso. Si se pasa, el botón muta a "Detener" con `busy`. */
+  onStop?: () => void;
   /** Prefill desde una recomendación de la home (W5). */
   initialText?: string;
 };
@@ -42,7 +46,7 @@ const MAX_HEIGHT_PX = LINE_HEIGHT_PX * MAX_ROWS;
 /** A cuántos chars del límite empezamos a mostrar el contador. */
 const COUNTER_THRESHOLD = CHAT_TEXT_MAX_LENGTH - 300;
 
-export function ChatComposer({ onSend, busy, mode, initialText = "" }: Props) {
+export function ChatComposer({ onSend, busy, mode, onStop, initialText = "" }: Props) {
   const [text, setText] = useState(initialText);
   const ref = useRef<HTMLTextAreaElement>(null);
   const tintVar = MODE_BY_ID[mode].tintVar;
@@ -119,18 +123,32 @@ export function ChatComposer({ onSend, busy, mode, initialText = "" }: Props) {
           style={{ maxHeight: `${MAX_HEIGHT_PX}px` }}
           className="text-body flex-1 resize-none bg-transparent px-2 py-1.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-soft)] outline-none disabled:opacity-60"
         />
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={!canSend}
-          aria-label="Enviar"
-          // Botón redondo teñido por el modo de la sesión (mockup); gris cuando
-          // está deshabilitado (vacío o esperando respuesta).
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--color-on-dark)] transition-[background-color,opacity] duration-[var(--duration-fast)] disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ backgroundColor: canSend ? fillVar : "var(--color-border-strong)" }}
-        >
-          <Icon name="enviar" size={18} />
-        </button>
+        {busy && onStop ? (
+          <button
+            type="button"
+            onClick={onStop}
+            aria-label="Detener"
+            // Mientras streamea, el botón redondo muta a "Detener" (cancela el
+            // stream) — sigue teñido por el modo, activo (no deshabilitado).
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--color-on-dark)] transition-[background-color,opacity] duration-[var(--duration-fast)]"
+            style={{ backgroundColor: fillVar }}
+          >
+            <Icon name="detener" size={16} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={!canSend}
+            aria-label="Enviar"
+            // Botón redondo teñido por el modo de la sesión (mockup); gris cuando
+            // está deshabilitado (vacío o esperando respuesta).
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--color-on-dark)] transition-[background-color,opacity] duration-[var(--duration-fast)] disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ backgroundColor: canSend ? fillVar : "var(--color-border-strong)" }}
+          >
+            <Icon name="enviar" size={18} />
+          </button>
+        )}
       </div>
       {showCounter ? (
         <p

@@ -63,7 +63,12 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
           onSend={handleSend}
         />
         <div className="px-4 pb-4">
-          <ChatComposer onSend={handleSend} busy={stream.isStreaming} mode={session.mode} />
+          <ChatComposer
+            onSend={handleSend}
+            busy={stream.isStreaming}
+            onStop={stream.cancel}
+            mode={session.mode}
+          />
         </div>
       </div>
     </div>
