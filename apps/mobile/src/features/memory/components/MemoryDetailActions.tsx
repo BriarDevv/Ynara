@@ -19,6 +19,14 @@ function refOf(layer: MemoryLayer, item: MemoryItemOut): string {
 }
 
 /**
+ * Type guard: la capa semántica garantiza un `SemanticMemoryOut` (la API lo
+ * asegura por contrato). Estrecha `item` sin el cast `as SemanticMemoryOut`.
+ */
+function isSemantic(layer: MemoryLayer, item: MemoryItemOut): item is SemanticMemoryOut {
+  return layer === "semantic";
+}
+
+/**
  * Acciones del detalle: **editar** (`PATCH`, solo capa semántica — episódica da
  * 405 y procedural queda para después) y **borrar** (`DELETE`, las 3 capas, con
  * confirmación). Ambos sobre el `BottomSheet` compartido. Espejo de
@@ -30,10 +38,12 @@ export function MemoryDetailActions({ layer, item }: Props) {
   const patch = usePatchMemory(layer, ref);
   const remove = useDeleteMemory(layer, ref);
 
-  const canEdit = layer === "semantic";
+  // `layer` discrimina la unión, pero TS no estrecha `item` por sí solo; el guard sí.
+  const semantic = isSemantic(layer, item) ? item : null;
+  const canEdit = semantic !== null;
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [draft, setDraft] = useState(() => (canEdit ? (item as SemanticMemoryOut).content : ""));
+  const [draft, setDraft] = useState(() => semantic?.content ?? "");
 
   const saveEdit = () => {
     patch.mutate({ content: draft.trim() }, { onSuccess: () => setEditOpen(false) });
@@ -49,7 +59,7 @@ export function MemoryDetailActions({ layer, item }: Props) {
         <Button
           variant="secondary"
           onPress={() => {
-            setDraft((item as SemanticMemoryOut).content);
+            setDraft(semantic?.content ?? "");
             patch.reset();
             setEditOpen(true);
           }}
