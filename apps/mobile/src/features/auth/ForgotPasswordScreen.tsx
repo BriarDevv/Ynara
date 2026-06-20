@@ -18,7 +18,7 @@ export function ForgotPasswordScreen() {
 
   return (
     <View className="flex-1 bg-bg-canvas">
-      <LivingField variant="constellation" />
+      <LivingField variant="aurora" />
       <SafeAreaView className="flex-1" edges={["top", "bottom"]}>
         <ScrollView
           contentContainerClassName="flex-1 justify-center gap-6 px-6"
