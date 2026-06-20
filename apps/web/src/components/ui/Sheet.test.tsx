@@ -57,6 +57,17 @@ describe("Sheet", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("cierra al clickear el botón Cerrar", () => {
+    const onClose = vi.fn();
+    render(
+      <Sheet open onClose={onClose} title="Cambiar modo">
+        <p>Contenido del sheet</p>
+      </Sheet>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("expone aria-labelledby apuntando al título", () => {
     const { container } = render(
       <Sheet open onClose={() => {}} title="Cambiar modo">

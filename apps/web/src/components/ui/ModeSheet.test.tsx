@@ -27,7 +27,11 @@ describe("ModeSheet", () => {
   it("lista los 5 modos y marca el actual", () => {
     render(<ModeSheet open onClose={() => {}} current="estudio" />);
     expect(screen.getByRole("heading", { name: /elegí cómo te acompaño/i })).toBeInTheDocument();
-    expect(screen.getAllByRole("button")).toHaveLength(5);
+    // 5 modos; excluimos el botón "Cerrar" del Sheet (chrome, no un modo).
+    const modeButtons = screen
+      .getAllByRole("button")
+      .filter((b) => b.getAttribute("aria-label") !== "Cerrar");
+    expect(modeButtons).toHaveLength(5);
     expect(screen.getByText("Estudio", { exact: true }).closest("button")).toHaveAttribute(
       "aria-current",
       "true",

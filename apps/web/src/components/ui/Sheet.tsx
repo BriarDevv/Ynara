@@ -1,5 +1,6 @@
 "use client";
 
+import { Icon } from "@ynara/ui";
 import { type ReactNode, useEffect, useId, useRef } from "react";
 import { cn } from "@/lib/cn";
 
@@ -80,11 +81,21 @@ export function Sheet({
           <div
             ref={panelRef}
             className={cn(
-              "anim-fade-up flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-[var(--radius-xl)] bg-[var(--color-bg)] p-6 shadow-lifted",
+              "anim-fade-up relative flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-[var(--radius-xl)] bg-[var(--color-bg)] p-6 shadow-lifted",
               "sm:max-h-[80vh] sm:w-full sm:max-w-[480px] sm:rounded-[var(--radius-lg)]",
               className,
             )}
           >
+            {/* Botón de cierre visible: hasta ahora el cierre dependía solo de
+                Escape o click en el backdrop, invisibles para mouse/touch. */}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar"
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-ink-soft)] transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-bg-soft)] hover:text-[var(--color-ink)]"
+            >
+              <Icon name="cerrar" size={18} />
+            </button>
             <div
               aria-hidden
               className="mx-auto mb-4 h-1 w-10 rounded-full bg-[var(--color-border-strong)] sm:hidden"
