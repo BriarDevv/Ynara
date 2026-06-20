@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
 import { Textarea } from "@/components/ui/Textarea";
@@ -33,6 +33,7 @@ type Props = {
  */
 export function CheckinSheet({ open, onClose, onDone }: Props) {
   const activeMode = useActiveMode();
+  const energyLabelId = useId();
   const [mood, setMood] = useState<MoodId | null>(null);
   const [energy, setEnergy] = useState(6);
   const [note, setNote] = useState("");
@@ -131,7 +132,10 @@ export function CheckinSheet({ open, onClose, onDone }: Props) {
         {/* Energía */}
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between px-0.5">
-            <span className="text-[11px] font-bold uppercase tracking-[.14em] text-[var(--color-ink-soft)]">
+            <span
+              id={energyLabelId}
+              className="text-[11px] font-bold uppercase tracking-[.14em] text-[var(--color-ink-soft)]"
+            >
               Energía
             </span>
             <span className="text-[16px] font-semibold text-[var(--color-blue-flat)]">
@@ -144,7 +148,7 @@ export function CheckinSheet({ open, onClose, onDone }: Props) {
             max={10}
             value={energy}
             onChange={(e) => setEnergy(Number(e.target.value))}
-            aria-label="Nivel de energía"
+            aria-labelledby={energyLabelId}
             aria-valuenow={energy}
             aria-valuemin={0}
             aria-valuemax={10}
