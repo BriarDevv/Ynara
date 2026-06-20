@@ -6,7 +6,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
 import { Textarea } from "@/components/ui/Textarea";
+import { Toast } from "@/components/ui/Toast";
 import { useDeleteMemory, usePatchMemory } from "../api";
+import { setMemoryFlash } from "../flash";
 
 type Props = {
   layer: MemoryLayer;
@@ -35,19 +37,29 @@ export function MemoryDetailActions({ layer, item }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [draft, setDraft] = useState(() => (canEdit ? (item as SemanticMemoryOut).content : ""));
+  // Acuse de la edición (la edición no navega; el detalle sigue montado).
+  const [savedToast, setSavedToast] = useState(false);
 
   const saveEdit = () => {
     patch.mutate(
       { content: draft.trim() },
       {
-        onSuccess: () => setEditOpen(false),
+        onSuccess: () => {
+          setEditOpen(false);
+          setSavedToast(true);
+        },
       },
     );
   };
 
   const confirmDelete = () => {
     remove.mutate(undefined, {
-      onSuccess: () => router.push("/memoria"),
+      onSuccess: () => {
+        // El detalle se desmonta al navegar, así que el acuse de borrado se
+        // muestra al aterrizar en el timeline (flash en sessionStorage).
+        setMemoryFlash("Recuerdo borrado.");
+        router.push("/memoria");
+      },
     });
   };
 
@@ -122,6 +134,13 @@ export function MemoryDetailActions({ layer, item }: Props) {
           </div>
         </div>
       </Sheet>
+
+      <Toast
+        message="Recuerdo guardado."
+        visible={savedToast}
+        variant="success"
+        onDismiss={() => setSavedToast(false)}
+      />
     </>
   );
 }
