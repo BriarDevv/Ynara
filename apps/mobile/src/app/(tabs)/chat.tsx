@@ -1,7 +1,7 @@
-import { ChatHome } from "@/features/chat/ChatHome";
+import { ChatTab } from "@/features/chat/ChatTab";
 
-// Tab "Chat" (ruta `/chat`): home de conversaciones. Abrir una empuja
-// /chat/[sessionId] en el stack raíz (full-screen sobre el tab bar).
-export default function ChatTab() {
-  return <ChatHome />;
+// Tab "Chat": entrás directo a una conversación (sin home intermedia). El modo y
+// los recientes se manejan dentro del tab (in-place).
+export default function ChatTabRoute() {
+  return <ChatTab />;
 }
