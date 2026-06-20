@@ -275,15 +275,20 @@ git fetch origin
 git rebase origin/main
 ```
 
-Cuándo SÍ está bien hacer merge en lugar de rebase:
+Cuándo SÍ está bien NO rebasear (excepciones acotadas):
 
-- **Mergear un PR a `main`** vía GitHub UI o `gh pr merge`. Acá el
-  merge commit es valioso: marca el evento "PR #N entró a main" y
-  el log `--first-parent main` queda como historial de PRs.
 - **Conflictos masivos** donde reescribir la historia de la rama
-  feature sería más caro que aceptar un merge commit.
+  feature sería más caro y riesgoso que resolverlos de otra forma —
+  parar y coordinar con el equipo antes de decidir.
 - **Ramas compartidas con otra persona** — rebasear una rama que
   otro ya pulló rompe su copia local. Para ramas solas, rebase OK.
+
+El merge de un PR a `main` **no** es una excepción: va siempre con
+**rebase merge** (`gh pr merge <N> --rebase --delete-branch`), sin
+merge commit. `main` mantiene historia lineal
+(`required_linear_history: true`); el historial de PRs se lee por el
+número de PR en los mensajes de commit, no por merge commits. Ver
+"Merge strategy: rebase merge" en `CONTRIBUTING.md`.
 
 Si la rama tiene commits que otra persona ya bajó, alternativa
 sin reescribir: `git pull --rebase` solo afecta los commits
