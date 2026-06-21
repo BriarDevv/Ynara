@@ -46,7 +46,9 @@ Esto es regla #3 de [`AGENTS.md`](../../../AGENTS.md).
 | `20260529_1949_initial_schema.py` | `b7b06025f4bb` | (inicial) | 6 tablas sagradas/operativas, 4 enums, pgvector + pgcrypto. |
 | `20260602_1015_audit_log_block_update_trigger.py` | `a1f3c9d27e84` | `b7b06025f4bb` | Trigger BEFORE UPDATE que bloquea UPDATE sobre `audit_log` (inmutabilidad). |
 | `20260614_1700_conversation_turns_table.py` | `c4e8a1d50b93` | `a1f3c9d27e84` | Tabla **operativa** `conversation_turns` (buffer de turnos para la episódica, issue #209) + enum `turn_role_enum` + UNIQUE `(session_id, seq)` + 3 índices parciales. |
-| `20260615_0200_drop_redundant_conversation_turns_indexes.py` | `b7e2f4a16c9d` | `c4e8a1d50b93` | **HEAD.** Tabla **operativa** `conversation_turns`: dropea los 3 índices parciales (`user_id`; `session_id`; `(session_id, seq)`) y crea el único índice compuesto `(user_id, session_id, seq)` que matchea el patrón real de queries del store. El `downgrade` recrea los 3 originales (round-trip limpio). |
+| `20260615_0200_drop_redundant_conversation_turns_indexes.py` | `b7e2f4a16c9d` | `c4e8a1d50b93` | Tabla **operativa** `conversation_turns`: dropea los 3 índices parciales (`user_id`; `session_id`; `(session_id, seq)`) y crea el único índice compuesto `(user_id, session_id, seq)` que matchea el patrón real de queries del store. El `downgrade` recrea los 3 originales (round-trip limpio). |
+| `20260619_1200_add_is_admin_and_admin_audit.py` | `f3a9c1d27e84` | `b7e2f4a16c9d` | Agrega `is_admin` a `users` (`server_default=false`, no rompe filas existentes) + crea la tabla **operativa** `admin_audit` (audit de acciones del operador del panel `/v1/admin/*`; NO es `audit_log`, que es sagrada e inmutable). `downgrade` simétrico (dropea solo la columna y la tabla). |
+| `20260620_2200_index_operational_date_columns.py` | `d1c2b3a49e87` | `f3a9c1d27e84` | **HEAD.** Índices btree **aditivos** sobre tablas **operativas**: `sessions.started_at` y `users.created_at` (el panel admin filtra/agrupa por fecha en casi todos sus endpoints; sin índice = sequential scans crecientes). `downgrade` simétrico. |
 
 ## Migraciones peligrosas
 

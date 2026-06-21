@@ -405,6 +405,20 @@ lógica del handler en el docstring de
 - Response 401 (todas las rutas): sin token / token inválido / user no admin.
 - Permisos: **admin** (flag `is_admin` o `ADMIN_BOOTSTRAP_IDS`).
 
+### Conexión / Compartir (control plane)
+
+Estado del tailnet de Tailscale + URLs para compartir las superficies de Ynara con otra
+máquina del tailnet. Contrato + lógica en el docstring de
+[`../app/api/v1/admin/connectivity.py`](../app/api/v1/admin/connectivity.py). Privacidad
+(regla #4): el probe es read-only (`tailscale status --json`, exec sin shell ni input del
+request) y **nunca** ecoa `str(exc)`; `tailnet_ip`/`hostname` son la identidad de ESTA
+máquina en el tailnet (análogo al `db_target` de `/admin/system`), no datos de usuario.
+
+- **GET** `/v1/admin/connectivity` — estado del tailnet + targets para compartir. **Sin** `range`, sin queries de negocio.
+  - Response 200: `ConnectivityOut = { tailscale: TailscaleStatus, targets: ShareTarget[] }` donde `TailscaleStatus = { up: bool, hostname?: string|null, tailnet_ip?: string|null, detail: string }` y `ShareTarget = { label: string, url: string, port: int }`. Con el tailnet arriba, `targets` arma 4 superficies en orden de uso — panel admin (`:3002`), app web (`:3000`), API OpenAI-compatible de Ollama (`:11434/v1`), chat de Open WebUI (`:3001`) — con el `tailnet_ip` + los puertos de config (`ADMIN_PORT`/`WEB_PORT`/`OLLAMA_API_PORT`/`OPENWEBUI_PORT`). Si el tailnet está abajo, `targets=[]`. **Sin secretos** (regla #4): solo IP del tailnet + puertos, nunca `base_url` ni credenciales.
+  - Response 401: sin token / token inválido / user no admin.
+  - Permisos: **admin** (flag `is_admin` o `ADMIN_BOOTSTRAP_IDS`).
+
 ---
 
 Toda ruta nueva agrega entrada acá en el mismo PR.
