@@ -38,6 +38,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.constants import EMBEDDING_DIM
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
 
 if TYPE_CHECKING:
@@ -45,7 +46,10 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
-EMBEDDING_DIM = 1024
+# ``EMBEDDING_DIM`` (bge-m3, 1024) es la fuente única de verdad de
+# ``app/core/constants.py``. Se importa acá para ``Vector(EMBEDDING_DIM)`` y
+# queda re-exportado por el namespace del módulo: ``from app.models.memory
+# import EMBEDDING_DIM`` sigue funcionando.
 
 
 class SemanticMemory(UUIDPKMixin, TimestampMixin, Base):
