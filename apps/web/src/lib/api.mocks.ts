@@ -37,6 +37,9 @@ function errorResponse(body: ApiErrorBody, status: number) {
 export const handlers = [
   http.get(apiUrl("/v1/health"), () => HttpResponse.json({ ok: true, ts: Date.now() })),
 
+  // ALIAS TEMPORAL del contrato PROVISIONAL camelCase (@ynara/shared-schemas:
+  // {token, userId}). La web YA NO los usa (migró a register/token de core);
+  // se dejan hasta retirar shared-schemas/auth. Ver BriarDevv/Ynara#6.
   http.post(apiUrl("/v1/auth/signup"), async ({ request }) => {
     const json = await request.json().catch(() => null);
     const parsed = SignupRequestSchema.safeParse(json);
@@ -81,6 +84,86 @@ export const handlers = [
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     };
     return HttpResponse.json(response);
+  }),
+
+  // Contrato REAL de auth (mirror de los Pydantic de apps/backend, rutas
+  // /v1/auth/*). El AuthStep de la web usa signUp/logIn de @ynara/core, que
+  // pegan a /register THEN /token (signup) y /token + /me (login). Estos
+  // handlers espejan ese contrato para que dev-con-mocks siga andando.
+  //
+  // POST /v1/auth/register -> UserOut (SIN token; el token se pide aparte).
+  http.post(apiUrl("/v1/auth/register"), async ({ request }) => {
+    const json = await request.json().catch(() => null);
+    const parsed = SignupRequestSchema.safeParse(json);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      // El backend (FastAPI) responde 422 a validación de request.
+      return errorResponse(
+        {
+          error: "validation",
+          detail: first?.message ?? "body inválido",
+          field: first?.path[0] !== undefined ? String(first.path[0]) : undefined,
+        },
+        422,
+      );
+    }
+    const now = new Date().toISOString();
+    // Shape de UserOut (snake_case) que parsea AuthUserSchema de core.
+    return HttpResponse.json(
+      {
+        id: `mock-user-${Date.now()}`,
+        email: parsed.data.email,
+        display_name: null,
+        is_ephemeral: false,
+        onboarding_completed: false,
+        retention_sensitive_days: 180,
+        created_at: now,
+        updated_at: now,
+      },
+      { status: 201 },
+    );
+  }),
+
+  // POST /v1/auth/token -> TokenOut (access + refresh, snake_case). Cualquier
+  // par con shape válido pasa; para simular 401 cambiar este return a mano.
+  http.post(apiUrl("/v1/auth/token"), async ({ request }) => {
+    const json = await request.json().catch(() => null);
+    const parsed = LoginRequestSchema.safeParse(json);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      return errorResponse(
+        {
+          error: "validation",
+          detail: first?.message ?? "body inválido",
+          field: first?.path[0] !== undefined ? String(first.path[0]) : undefined,
+        },
+        422,
+      );
+    }
+    // Shape de TokenOut que parsea TokenResponseSchema de core. El
+    // refresh_token se devuelve poblado aunque la web hoy lo descarte.
+    return HttpResponse.json({
+      access_token: `mock-token-${Date.now()}`,
+      token_type: "bearer",
+      refresh_token: `mock-refresh-${Date.now()}`,
+    });
+  }),
+
+  // GET /v1/auth/me -> UserOut. logIn de core lo llama (con el Bearer del
+  // token recién emitido) para resolver el userId. Sin este handler el login
+  // con mocks daría 404 tras /token.
+  http.get(apiUrl("/v1/auth/me"), () => {
+    const now = new Date().toISOString();
+    return HttpResponse.json({
+      id: `mock-user-${Date.now()}`,
+      email: "mock@ynara.app",
+      display_name: null,
+      is_ephemeral: false,
+      onboarding_completed: false,
+      retention_sensitive_days: 180,
+      created_at: now,
+      updated_at: now,
+    });
   }),
 
   http.post(apiUrl("/v1/user/onboard"), async ({ request }) => {
