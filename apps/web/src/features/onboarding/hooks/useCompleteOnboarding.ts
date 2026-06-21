@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
+import type { UserOut } from "@ynara/shared-schemas";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import type { ModeId } from "@/components/ui/modes";
@@ -23,14 +24,23 @@ type Returns = {
 
 /**
  * Orquesta el cierre del onboarding:
- *  1. Valida el draft completo con `OnboardRequestSchema`.
- *  2. POST `/v1/user/onboard`.
+ *  1. Valida el draft completo con `OnboardRequestSchema` (validación LOCAL).
+ *  2. `PATCH /v1/users/me` con `{ display_name, onboarding_completed: true }`.
  *  3. Traslada datos al `useUserStore` (incluyendo `isEphemeral`).
  *  4. Resetea el draft del onboarding.
  *  5. Setea `isCelebrating=true` para que la UI monte `CelebrationOutro`.
  *  6. Cuando `CelebrationOutro` llama `triggerOutroComplete()`, navega
  *     a `/hoy?welcome=true` (la tab Hoy del app shell; el query param dispara
  *     el toast de bienvenida que `HoyView` consume y limpia).
+ *
+ * Contrato (reconcile con el backend real): el backend NO tiene un endpoint
+ * `onboard`; marca el onboarding con `PATCH /v1/users/me` (body `UserUpdate`
+ * snake_case, `extra='forbid'`, solo `{display_name?, onboarding_completed?,
+ * retention_sensitive_days?}` → `200 UserOut`). Por eso al backend SOLO le
+ * mandamos `{ display_name, onboarding_completed: true }`; `mood`/`moodFreeText`/
+ * `interestedModes`/`a11y` no tienen columna server-side y quedan client-side
+ * (`useUserStore` + `useA11yStore`). La response (`UserOut`) no se consume: el
+ * flujo de celebración sigue con el draft local validado.
  *
  * El a11y vive en `useA11yStore` (D3), no en el draft.
  */
@@ -65,7 +75,15 @@ export function useCompleteOnboarding(): Returns & {
         const first = parsed.error.issues[0];
         throw new Error(first?.message ?? "Revisá tus datos.");
       }
-      await api.post<unknown>("/v1/user/onboard", parsed.data);
+      // El backend solo persiste `display_name` y la flag de onboarding; el
+      // resto del draft (mood/interestedModes/a11y) no tiene columna y queda
+      // client-side. Traducimos camelCase→snake_case y mandamos SOLO lo que
+      // `UserUpdate` acepta (extra='forbid' rechazaría cualquier campo de más).
+      // La response `UserOut` no se consume: `onSuccess` sigue con el draft local.
+      await api.patch<UserOut>("/v1/users/me", {
+        display_name: parsed.data.displayName,
+        onboarding_completed: true,
+      });
       return parsed.data;
     },
     onSuccess: (data) => {

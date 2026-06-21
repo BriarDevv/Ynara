@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LivingField } from "@/components/ui/LivingField";
+import { useBackendSessionStore } from "../backendSessions";
 import { useChatStore } from "../store";
 import { useChatStream } from "../useChatStream";
 import { ChatComposer } from "./ChatComposer";
@@ -27,6 +28,14 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   // `isStreaming`, y el propio hook ignora un segundo `send()` concurrente.
   const stream = useChatStream(sessionId);
 
+  // `sessionId` es el id LOCAL (crypto.randomUUID del store de core), que el
+  // backend no conoce: solo crea sesión cuando el request manda `session_id:
+  // null`, y devuelve 404 para un id que no insertó él. Por eso al backend le
+  // mandamos el id REAL que confirmó en el `done` del primer turno —o `null` si
+  // todavía no lo confirmó (sesión nueva). El hook adopta el id real y a partir
+  // del 2do turno lo reusa, encadenando la conversación server-side.
+  const getBackendSessionId = useBackendSessionStore((s) => s.getBackendSessionId);
+
   // Prefill de Hoy→Chat: una sugerencia/anticipación abre la conversación con el
   // composer pre-cargado (sin auto-enviar) vía `?q=`. Lo leemos UNA vez (estable
   // para el mount del composer) y limpiamos la URL para que un refresh no
@@ -46,7 +55,12 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
 
   const handleSend = (text: string) => {
     const userMessageId = appendUserMessage(sessionId, text);
-    stream.send({ text, mode: session.mode, session_id: sessionId }, userMessageId);
+    // 1er turno → backendSessionId null (el backend crea la sesión); turnos
+    // siguientes → el id real ya confirmado.
+    stream.send(
+      { text, mode: session.mode, session_id: getBackendSessionId(sessionId) },
+      userMessageId,
+    );
   };
 
   const handleRetry = (messageId: string) => {
@@ -58,7 +72,10 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const msg = (messages ?? []).find((m) => m.id === messageId);
     if (!msg) return;
     setMessageStatus(sessionId, messageId, "sending");
-    stream.send({ text: msg.text, mode: session.mode, session_id: sessionId }, messageId);
+    stream.send(
+      { text: msg.text, mode: session.mode, session_id: getBackendSessionId(sessionId) },
+      messageId,
+    );
   };
 
   // `h-full`: calza exacto en el área de contenido del shell (que es de

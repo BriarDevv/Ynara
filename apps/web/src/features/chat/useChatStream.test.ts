@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useBackendSessionStore } from "./backendSessions";
 import { useChatStore } from "./store";
 import { useChatStream } from "./useChatStream";
 
@@ -54,6 +55,7 @@ function assistantOf(sessionId: string) {
 
 beforeEach(() => {
   useChatStore.getState().reset();
+  useBackendSessionStore.getState().reset();
   localStorage.clear();
 });
 
@@ -90,6 +92,34 @@ describe("useChatStream", () => {
     expect(assistant?.actions).toHaveLength(1);
     expect(useChatStore.getState().streamStatus).toBe("idle");
     expect(result.current.isStreaming).toBe(false);
+  });
+
+  it("adopta el session_id real del evento done (mapeo localId→backendId)", async () => {
+    // El backend devuelve en `done` el id REAL de la ChatSession que creó (el
+    // primer turno mandó session_id:null). El hook debe persistir ese id para que
+    // los turnos siguientes lo reusen y encadenen la conversación.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        okResponse([
+          'event: token\ndata: {"delta":"hola"}\n\n',
+          'event: done\ndata: {"session_id":"backend-real-id","actions":[],"finish_reason":"stop"}\n\n',
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { sessionId, userMessageId } = setupSession();
+    expect(useBackendSessionStore.getState().getBackendSessionId(sessionId)).toBeNull();
+
+    const { result } = renderHook(() => useChatStream(sessionId));
+    await act(async () => {
+      // 1er turno: session_id null (el backend crea la sesión).
+      await result.current.send({ text: "hola", mode: "vida", session_id: null }, userMessageId);
+    });
+
+    expect(useBackendSessionStore.getState().getBackendSessionId(sessionId)).toBe(
+      "backend-real-id",
+    );
   });
 
   it("manda los headers de SSE y el Bearer del store", async () => {

@@ -2,12 +2,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock del cliente HTTP: solo necesitamos api.post; ApiError real para el
+// Mock del cliente HTTP: el cierre del onboarding hace `PATCH /v1/users/me`
+// (no existe `/v1/user/onboard` en el backend real). ApiError real para el
 // instanceof del onError.
-const post = vi.fn();
+const patch = vi.fn();
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
-  return { ...actual, api: { post } };
+  return { ...actual, api: { patch } };
 });
 
 const replace = vi.fn();
@@ -34,25 +35,27 @@ function seedDraft({ auth }: { auth: "ephemeral" | "signup" | null }) {
 }
 
 beforeEach(() => {
-  post.mockReset();
+  patch.mockReset();
   replace.mockClear();
   useUserStore.getState().reset();
   useOnboardingStore.getState().reset();
 });
 
 describe("useCompleteOnboarding", () => {
-  it("éxito: postea, flipea onboardingCompleted y deriva isEphemeral del authMode", async () => {
+  it("éxito: PATCH /v1/users/me snake_case, flipea onboardingCompleted y deriva isEphemeral del authMode", async () => {
     seedDraft({ auth: "ephemeral" });
-    post.mockResolvedValue({ ok: true });
+    patch.mockResolvedValue({ id: "u1", onboarding_completed: true });
 
     const { result } = renderHook(() => useCompleteOnboarding(), { wrapper });
     act(() => result.current.complete());
 
     await waitFor(() => expect(result.current.isCelebrating).toBe(true));
-    expect(post).toHaveBeenCalledWith(
-      "/v1/user/onboard",
-      expect.objectContaining({ displayName: "Mateo", interestedModes: ["productividad"] }),
-    );
+    // Contrato real: PATCH /v1/users/me con SOLO los campos que UserUpdate acepta
+    // (snake_case, extra='forbid'). mood/interestedModes/a11y NO viajan al backend.
+    expect(patch).toHaveBeenCalledWith("/v1/users/me", {
+      display_name: "Mateo",
+      onboarding_completed: true,
+    });
     expect(useUserStore.getState().onboardingCompleted).toBe(true);
     expect(useUserStore.getState().isEphemeral).toBe(true);
     expect(result.current.error).toBeNull();
@@ -60,7 +63,7 @@ describe("useCompleteOnboarding", () => {
 
   it("cuenta registrada (signup): isEphemeral queda en false", async () => {
     seedDraft({ auth: "signup" });
-    post.mockResolvedValue({ ok: true });
+    patch.mockResolvedValue({ id: "u1", onboarding_completed: true });
     // Forzamos el previo a true para que el assert distinga "seteado a false"
     // de "nunca tocado" (no tautológico).
     useUserStore.getState().setAuth({ userId: "x", token: "x", isEphemeral: true });
@@ -74,7 +77,7 @@ describe("useCompleteOnboarding", () => {
 
   it("sin auth en el draft: error 'Sesión inválida' y NO completa el onboarding", async () => {
     seedDraft({ auth: null });
-    post.mockResolvedValue({ ok: true });
+    patch.mockResolvedValue({ id: "u1", onboarding_completed: true });
 
     const { result } = renderHook(() => useCompleteOnboarding(), { wrapper });
     act(() => result.current.complete());
@@ -83,13 +86,13 @@ describe("useCompleteOnboarding", () => {
     expect(useUserStore.getState().onboardingCompleted).toBe(false);
     expect(result.current.isCelebrating).toBe(false);
     // Documenta el gap del audit: el guard de auth vive en onSuccess, así que
-    // el POST igual corre antes de detectar la sesión inválida.
-    expect(post).toHaveBeenCalledTimes(1);
+    // el PATCH igual corre antes de detectar la sesión inválida.
+    expect(patch).toHaveBeenCalledTimes(1);
   });
 
   it("ApiError: mapea body.detail al mensaje de error y no completa", async () => {
     seedDraft({ auth: "ephemeral" });
-    post.mockRejectedValue(new ApiError(500, { detail: "Backend caído" }));
+    patch.mockRejectedValue(new ApiError(500, { detail: "Backend caído" }));
 
     const { result } = renderHook(() => useCompleteOnboarding(), { wrapper });
     act(() => result.current.complete());

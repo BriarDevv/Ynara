@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { applyAuthHeader } from "@/lib/api";
 import { extractErrorCode } from "@/lib/chat";
 import { env } from "@/lib/env";
+import { useBackendSessionStore } from "./backendSessions";
 import { useChatStore } from "./store";
 
 /**
@@ -57,6 +58,7 @@ export function useChatStream(sessionId: string): UseChatStream {
   const finishAssistantStream = useChatStore((s) => s.finishAssistantStream);
   const failAssistantStream = useChatStore((s) => s.failAssistantStream);
   const cancelAssistantStream = useChatStore((s) => s.cancelAssistantStream);
+  const setBackendSessionId = useBackendSessionStore((s) => s.setBackendSessionId);
 
   const [isStreaming, setIsStreaming] = useState(false);
   // Stream en vuelo (null = no hay). Guarda el controller Y el id del assistant
@@ -115,6 +117,12 @@ export function useChatStream(sessionId: string): UseChatStream {
             if (event.type === "token") {
               appendStreamDelta(sessionId, assistantId, event.data.delta);
             } else if (event.type === "done") {
+              // Adoptamos el `session_id` REAL que el backend resolvió/creó: en el
+              // primer turno mandamos `null` y el backend devuelve acá el id de la
+              // ChatSession nueva. Guardarlo (mapeo web-local localId→backendId) es
+              // lo que permite encadenar los turnos siguientes; sin esto el 2do
+              // turno volvería a crear sesión (memoria/historial fragmentados).
+              setBackendSessionId(sessionId, event.data.session_id);
               finishAssistantStream(sessionId, assistantId, { actions: event.data.actions });
               return true;
             } else {
@@ -186,6 +194,7 @@ export function useChatStream(sessionId: string): UseChatStream {
       appendStreamDelta,
       finishAssistantStream,
       failAssistantStream,
+      setBackendSessionId,
     ],
   );
 
