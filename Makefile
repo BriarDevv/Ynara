@@ -3,7 +3,7 @@
 # equivalentes, o WSL2.
 
 .PHONY: help install install-web install-mobile install-backend \
-        dev dev-web dev-mobile dev-backend dev-stack \
+        dev dev-web dev-mobile dev-backend dev-stack share \
         build build-web build-mobile build-backend \
         test test-web test-mobile test-backend \
         lint lint-js lint-py format format-js format-py \
@@ -48,6 +48,9 @@ dev-backend:
 	cd apps/backend && uv run uvicorn app.main:app --reload --port 8080
 
 dev-stack: docker-dev-up dev-backend ## Redis local + backend
+
+share: ## Comandos para compartir el playground admin por Tailscale (resuelve la IP del tailnet)
+	bash scripts/share-playground.sh
 
 # ---------- Build ----------
 
