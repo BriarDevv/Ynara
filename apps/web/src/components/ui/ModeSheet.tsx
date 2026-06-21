@@ -1,5 +1,6 @@
 "use client";
 
+import { isAgentMode } from "@ynara/core/features/chat";
 import { Diamond } from "@/components/ui/Diamond";
 import { MODES, type ModeId } from "@/components/ui/modes";
 import { Sheet } from "@/components/ui/Sheet";
@@ -71,9 +72,19 @@ export function ModeSheet({ open, onClose, current, onAfterPick, note }: Props) 
                   className="h-2.5 w-2.5 shrink-0 rounded-[var(--radius-pill)]"
                   style={{ backgroundColor: mode.tintVar }}
                 />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-body font-semibold text-[var(--color-ink)]">
-                    {mode.label}
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="flex items-center gap-2">
+                    <span className="text-body font-semibold text-[var(--color-ink)]">
+                      {mode.label}
+                    </span>
+                    {/* Micro-indicador de capacidad (derivado del routing real,
+                        isAgentMode de @ynara/core): los modos agente actúan por
+                        vos (ejecutan tools, escriben memoria); el resto solo
+                        conversa. "Actúa por vos" en vez de "agenda" porque
+                        Memoria es agente pero no toca el calendario. */}
+                    <span className="text-caption shrink-0 rounded-[var(--radius-pill)] bg-[var(--color-bg-soft)] px-2 py-0.5 text-[var(--color-ink-soft)]">
+                      {isAgentMode(mode.id) ? "Actúa por vos" : "Solo conversa"}
+                    </span>
                   </span>
                   <span className="text-body-sm text-[var(--color-ink-soft)]">{mode.blurb}</span>
                 </span>

@@ -38,6 +38,13 @@ describe("ModeSheet", () => {
     );
   });
 
+  it("muestra el micro-indicador de capacidad por modo (agente vs conversa)", () => {
+    render(<ModeSheet open onClose={() => {}} current="estudio" />);
+    // Productividad y Memoria son agente (isAgentMode); el resto conversa.
+    expect(screen.getAllByText("Actúa por vos")).toHaveLength(2);
+    expect(screen.getAllByText("Solo conversa")).toHaveLength(3);
+  });
+
   it("elegir un modo fija el modo global, llama onAfterPick y cierra", () => {
     const onClose = vi.fn();
     const onAfterPick = vi.fn();
