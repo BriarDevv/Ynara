@@ -1,9 +1,10 @@
 """Connectivity del panel (``GET /v1/admin/connectivity``): tailnet + URLs para compartir.
 
-Control plane del operador (no es métrica de negocio): permite compartir el serving con
-otra máquina del tailnet de Tailscale (la API OpenAI-compatible de Ollama + el chat de
-Open WebUI). El probe de Tailscale es READ-ONLY (``tailscale status --json``, exec sin
-shell ni input del request) y degrada elegante si el binario no está. Gate ``CurrentAdmin``.
+Control plane del operador (no es métrica de negocio): permite compartir las superficies
+de Ynara con otra máquina del tailnet de Tailscale — el panel admin, la app web, la API
+OpenAI-compatible de Ollama y el chat de Open WebUI. El probe de Tailscale es READ-ONLY
+(``tailscale status --json``, exec sin shell ni input del request) y degrada elegante si
+el binario no está. Gate ``CurrentAdmin``.
 
 Sin secretos (regla #4): nunca se ecoa ``str(exc)`` (solo ``type(exc).__name__``);
 ``tailnet_ip``/``hostname`` son la identidad de ESTA máquina en el tailnet del operador,
@@ -98,12 +99,15 @@ async def _probe_tailscale(timeout_s: float = _TAILSCALE_PROBE_TIMEOUT_S) -> Tai
 async def admin_connectivity(
     admin_id: CurrentAdmin,
 ) -> ConnectivityOut:
-    """Estado del tailnet + URLs para compartir el serving con otra máquina.
+    """Estado del tailnet + URLs para compartir las superficies con otra máquina.
 
     Read-only, sin DB ni queries de negocio. Si el tailnet está arriba, arma las
     URLs de las superficies consumibles con el IP del tailnet + los puertos de
-    config (Ollama ``/v1`` OpenAI-compatible + Open WebUI). Si no, ``targets`` queda
-    vacío (sin IP no hay URL alcanzable que compartir).
+    config. Orden: panel admin (playground) y app web primero —lo que un invitado
+    usa— y después la API ``/v1`` OpenAI-compatible y el chat de Open WebUI. Si el
+    tailnet no está arriba, ``targets`` queda vacío (sin IP no hay URL alcanzable).
+    Las URLs se arman aunque el servicio no esté levantado: el panel ofrece el
+    destino; corré cada superficie que quieras compartir.
     """
     settings = get_settings()
     tailscale = await _probe_tailscale()
@@ -112,6 +116,16 @@ async def admin_connectivity(
     if tailscale.up and tailscale.tailnet_ip:
         ip = tailscale.tailnet_ip
         targets = [
+            ShareTarget(
+                label="Panel admin",
+                url=f"http://{ip}:{settings.admin_port}",
+                port=settings.admin_port,
+            ),
+            ShareTarget(
+                label="App web",
+                url=f"http://{ip}:{settings.web_port}",
+                port=settings.web_port,
+            ),
             ShareTarget(
                 label="API (OpenAI-compatible)",
                 url=f"http://{ip}:{settings.ollama_api_port}/v1",

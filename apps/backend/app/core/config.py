@@ -100,10 +100,13 @@ class Settings(BaseSettings):
 
     # Conexión / Compartir (control plane del admin, /v1/admin/connectivity): puertos
     # de los servicios que se exponen a otra máquina por el tailnet de Tailscale. El
-    # panel arma las URLs para compartir con el IP del tailnet + estos puertos. Default:
-    # Ollama (OpenAI-compatible) en 11434, Open WebUI en 3001. Se setean por env si varían.
+    # panel arma las URLs para compartir con el IP del tailnet + estos puertos. Defaults:
+    # Ollama (OpenAI-compatible) 11434, Open WebUI 3001, panel admin 3002, app web 3000.
+    # Se setean por env si corrés esos servicios en otro puerto.
     ollama_api_port: int = Field(11434, gt=0, le=65535, alias="OLLAMA_API_PORT")
     openwebui_port: int = Field(3001, gt=0, le=65535, alias="OPENWEBUI_PORT")
+    admin_port: int = Field(3002, gt=0, le=65535, alias="ADMIN_PORT")
+    web_port: int = Field(3000, gt=0, le=65535, alias="WEB_PORT")
 
     # Cifrado de memoria a nivel campo (ADR-007 D3). Base64 de 32 bytes random
     # (`openssl rand -base64 32`). Vacío => el helper de crypto falla al primer

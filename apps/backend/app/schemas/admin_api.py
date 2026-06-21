@@ -230,14 +230,14 @@ class TailscaleStatus(YnaraBaseModel):
 
 
 class ShareTarget(YnaraBaseModel):
-    """Una superficie consumible del serving compartida por el tailnet.
+    """Una superficie de Ynara compartida por el tailnet (panel, web o serving).
 
     Se arma con el ``tailnet_ip`` + el puerto del servicio. ``url`` es alcanzable
     desde cualquier máquina del tailnet del operador y NO lleva credenciales.
     """
 
-    label: str  # "API (OpenAI-compatible)" | "Chat (Open WebUI)"
-    url: str  # "http://100.x.y.z:11434/v1"
+    label: str  # "Panel admin" | "App web" | "API (OpenAI-compatible)" | "Chat (Open WebUI)"
+    url: str  # "http://100.x.y.z:3002" | "http://100.x.y.z:11434/v1"
     port: int
 
 
