@@ -174,11 +174,18 @@ export function TuView() {
   }
 
   async function handleRetentionChange(value: RetentionValue) {
+    // Optimista con revert: mostramos el valor elegido ya, pero si el server lo
+    // rechaza volvemos al previo — si no, el chip quedaba mostrando una
+    // retención que el backend no aceptó (UI mentirosa sobre un control de
+    // privacidad). (La hidratación del valor real depende de un GET /me que aún
+    // no existe; el default sigue siendo 365 hasta entonces.)
+    const previous = retention;
     setRetention(value);
     try {
       await updateMe.mutateAsync({ retention_sensitive_days: Number(value) });
       setToast({ message: "Retención actualizada.", variant: "success" });
     } catch {
+      setRetention(previous);
       setToast({ message: "No se pudo actualizar la retención.", variant: "error" });
     }
   }
