@@ -43,7 +43,10 @@ export function ProgressDots({ total, current, className, ariaLabel = "Progreso"
           key={dot.id}
           aria-hidden
           className={cn(
-            "h-1.5 rounded-[var(--radius-pill)] transition-[width,background-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
+            // Solo transicionamos el color (regla del repo: no animar width —
+            // dispara reflow por frame). El cambio de ancho del dot activo es
+            // instantáneo (snap); el color sí se atenúa suave.
+            "h-1.5 rounded-[var(--radius-pill)] transition-[background-color] duration-[var(--duration-base)] ease-[var(--ease-out-soft)]",
             dot.isCurrent
               ? /*
                  * Azul plano de marca (--color-blue-flat). Antes era el
