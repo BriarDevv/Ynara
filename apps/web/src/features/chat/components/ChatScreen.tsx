@@ -73,7 +73,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
           onboarding sino el que el usuario eligió para la conversación. */}
       <LivingField variant="constellation" modeId={session.mode} />
       <div className="mx-auto flex h-full w-full max-w-[720px] flex-col">
-        <ChatHeader mode={session.mode} />
+        <ChatHeader mode={session.mode} thinking={stream.isStreaming} />
         <MessageList
           messages={messages ?? []}
           mode={session.mode}

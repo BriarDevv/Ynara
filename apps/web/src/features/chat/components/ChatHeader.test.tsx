@@ -40,6 +40,17 @@ describe("ChatHeader", () => {
     expect(screen.getByRole("heading", { name: /elegí cómo te acompaño/i })).toBeInTheDocument();
   });
 
+  it("el orbe late más rápido (thinking) mientras Ynara responde", () => {
+    const { container, rerender } = render(<ChatHeader mode="estudio" thinking={false} />);
+    const orbBeat = () =>
+      container
+        .querySelector<HTMLElement>('[style*="--orb-beat"]')
+        ?.style.getPropertyValue("--orb-beat");
+    expect(orbBeat()).toBe("4200ms");
+    rerender(<ChatHeader mode="estudio" thinking />);
+    expect(orbBeat()).toBe("1500ms");
+  });
+
   it("elegir otro modo arranca una conversación nueva en ese modo y navega", () => {
     render(<ChatHeader mode="estudio" />);
     fireEvent.click(screen.getByRole("button", { name: /cambiar de modo/i }));

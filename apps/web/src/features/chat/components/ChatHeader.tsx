@@ -15,8 +15,11 @@ import { useChatStore } from "../store";
  * `ModeSheet` compartido. Elegir un modo fija el modo activo global; como una
  * sesión = un modo, si el modo elegido difiere del de esta conversación se
  * arranca una conversación nueva en él (la actual queda guardada).
+ *
+ * `thinking` hace latir el orbe más rápido mientras Ynara responde (presencia
+ * como estado, no como adorno): el orbe refleja que está trabajando.
  */
-export function ChatHeader({ mode }: { mode: ModeId }) {
+export function ChatHeader({ mode, thinking = false }: { mode: ModeId; thinking?: boolean }) {
   const router = useRouter();
   const createSession = useChatStore((s) => s.createSession);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -37,7 +40,7 @@ export function ChatHeader({ mode }: { mode: ModeId }) {
       >
         <Icon name="atras" size={20} />
       </button>
-      <YnaraOrb size={34} modeId={mode} />
+      <YnaraOrb size={34} modeId={mode} thinking={thinking} />
       <span
         className="text-body font-semibold text-[var(--color-ink)]"
         style={{ fontFamily: "var(--font-display), 'Space Grotesk', system-ui, sans-serif" }}
