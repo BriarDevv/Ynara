@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { LivingField } from "@/components/ui/LivingField";
 import { useChatStore } from "../store";
 import { useChatStream } from "../useChatStream";
@@ -25,6 +26,19 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   // Un solo stream en vuelo a la vez: el composer queda `busy` mientras
   // `isStreaming`, y el propio hook ignora un segundo `send()` concurrente.
   const stream = useChatStream(sessionId);
+
+  // Prefill de Hoy→Chat: una sugerencia/anticipación abre la conversación con el
+  // composer pre-cargado (sin auto-enviar) vía `?q=`. Lo leemos UNA vez (estable
+  // para el mount del composer) y limpiamos la URL para que un refresh no
+  // re-prefilee. ChatScreen siempre monta en cliente (ChatRoute lo gatea), así
+  // que leer window.location acá no rompe hidratación.
+  const [initialText] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("q") ?? "";
+  });
+  useEffect(() => {
+    if (initialText) window.history.replaceState(null, "", `/chat/${sessionId}`);
+  }, [initialText, sessionId]);
 
   // session puede ser undefined si el guard del dispatcher no corrió todavía;
   // el dispatcher (ChatRoute) garantiza que acá siempre haya sesión.
@@ -73,6 +87,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
             busy={stream.isStreaming}
             onStop={stream.cancel}
             mode={session.mode}
+            initialText={initialText}
           />
         </div>
       </div>

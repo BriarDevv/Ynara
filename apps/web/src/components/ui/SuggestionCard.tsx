@@ -7,8 +7,10 @@ type Props = {
   modeId?: ModeId | null;
   title: string;
   subtitle?: string;
-  /** Con handler es un botón accionable; sin handler, ítem display (`<li>`). */
+  /** Con handler es un botón accionable (grid); sin handler, ítem display (`<li>`). */
   onClick?: () => void;
+  /** En la variante lista (`<li>`), la vuelve una fila clickeable (abre un chat). */
+  onSelect?: () => void;
   /** Solo aplica a la variante accionable. */
   disabled?: boolean;
   /** Índice para el stagger de entrada (§8.2). Solo variante display. */
@@ -27,6 +29,7 @@ export function SuggestionCard({
   title,
   subtitle,
   onClick,
+  onSelect,
   disabled = false,
   staggerIndex,
   className,
@@ -35,17 +38,9 @@ export function SuggestionCard({
   const accentColor = mode ? mode.tintVar : "var(--color-border-strong)";
 
   if (!onClick) {
-    return (
-      // Fila des-encajonada (§12): sin caja, separada por el hairline del `<ul>`
-      // padre (`divide-y`). El acento de modo queda como marcador de barra a la
-      // izquierda — el único resto cromático de la sugerencia.
-      <li
-        className={cn(
-          "anim-stagger-up flex min-h-[44px] items-stretch gap-3 px-2 py-3.5",
-          className,
-        )}
-        style={{ "--stagger-index": Math.min(staggerIndex ?? 0, 5) } as CSSProperties}
-      >
+    // Contenido de la fila (acento de modo + título/subtítulo).
+    const rowContent = (
+      <>
         <span
           aria-hidden
           className="w-1 shrink-0 rounded-full"
@@ -57,6 +52,32 @@ export function SuggestionCard({
             <span className="text-body-sm text-[var(--color-ink-soft)]">{subtitle}</span>
           ) : null}
         </span>
+      </>
+    );
+    return (
+      // Fila des-encajonada (§12): sin caja, separada por el hairline del `<ul>`
+      // padre (`divide-y`). El acento de modo queda como marcador de barra a la
+      // izquierda. Con `onSelect` la fila se vuelve clickeable (abre un chat).
+      <li
+        className="anim-stagger-up"
+        style={{ "--stagger-index": Math.min(staggerIndex ?? 0, 5) } as CSSProperties}
+      >
+        {onSelect ? (
+          <button
+            type="button"
+            onClick={onSelect}
+            className={cn(
+              "flex min-h-[44px] w-full items-stretch gap-3 rounded-[var(--radius-md)] px-2 py-3.5 text-left transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:bg-[var(--color-bg-soft)]",
+              className,
+            )}
+          >
+            {rowContent}
+          </button>
+        ) : (
+          <div className={cn("flex min-h-[44px] items-stretch gap-3 px-2 py-3.5", className)}>
+            {rowContent}
+          </div>
+        )}
       </li>
     );
   }
