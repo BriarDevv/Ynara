@@ -62,7 +62,11 @@ from app.core.deps import (
     get_embedder,
     get_reranker,
 )
-from app.core.ratelimit import check_memory_export_rate_limit, check_memory_wipe_rate_limit
+from app.core.ratelimit import (
+    check_memory_export_rate_limit,
+    check_memory_search_rate_limit,
+    check_memory_wipe_rate_limit,
+)
 from app.enums import AuditOperation, MemoryLayer
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
@@ -511,6 +515,7 @@ def _build_search_response(
 async def search_memory(
     session: DbSession,
     user_id: CurrentUser,
+    store: TokenStoreDep,
     embedder: EmbedderDep,
     reranker: RerankerDep,
     q: Annotated[str, Query(min_length=1, max_length=200)],
@@ -527,12 +532,21 @@ async def search_memory(
     - AISLAMIENTO: los stores filtran por ``user_id`` (del JWT) en el ``__init__``;
       jamás se busca en memoria ajena.
 
+    Rate-limit (S4, P1 seguridad): el search dispara el pipeline caro embed → ANN →
+    rerank (GPU/CPU) en cada query. Bucket por ``user_id``, chequeado ANTES de instanciar
+    stores o correr el pipeline. Va DESPUÉS del short-circuit de query en blanco (una
+    query vacía no corre pipeline, así que no consume cuota). fail-open si Redis cae.
+    429 con ``Retry-After`` (mismo shape que export/wipe) si se cruza el techo.
+
     Regla #4: el ``snippet`` viaja descifrado (el store descifra in-process); el blob
     cifrado nunca entra a la respuesta. ``score`` es un proxy por rank.
     """
     query = q.strip()
     if not query:
         return MemorySearchResponse(query=q, total=0, results=[])
+
+    if not await check_memory_search_rate_limit(store, user_id=str(user_id)):
+        raise too_many_requests(get_settings().memory_search_window_seconds)
 
     semantic, episodic, _procedural = build_memory_stores(
         session, user_id, embedder=embedder, reranker=reranker

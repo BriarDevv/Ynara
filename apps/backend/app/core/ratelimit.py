@@ -56,6 +56,7 @@ _REFRESH_COUNTER_PREFIX = "auth:ratelimit:refresh:"
 _CHAT_COUNTER_PREFIX = "chat:ratelimit:turn:"
 _MEMORY_EXPORT_COUNTER_PREFIX = "memory:ratelimit:export:"
 _MEMORY_WIPE_COUNTER_PREFIX = "memory:ratelimit:wipe:"
+_MEMORY_SEARCH_COUNTER_PREFIX = "memory:ratelimit:search:"
 # Bucket de /v1/sessions (issue #208), por user_id. UN solo prefijo compartido por
 # las 3 rutas (list/get/close): un techo unico por usuario es el minimo viable que
 # cierra el gap de abuso (las 3 son ops baratas: 2 SELECTs el list, 1 get el detail,
@@ -105,6 +106,11 @@ def _memory_export_counter_key(user_id: str) -> str:
 def _memory_wipe_counter_key(user_id: str) -> str:
     # user_id es un UUID opaco (no PII directa): va crudo, no hasheado.
     return f"{_MEMORY_WIPE_COUNTER_PREFIX}{user_id}"
+
+
+def _memory_search_counter_key(user_id: str) -> str:
+    # user_id es un UUID opaco (no PII directa): va crudo, no hasheado.
+    return f"{_MEMORY_SEARCH_COUNTER_PREFIX}{user_id}"
 
 
 def _sessions_counter_key(user_id: str) -> str:
@@ -270,6 +276,31 @@ async def check_memory_wipe_rate_limit(store: TokenStore, *, user_id: str) -> bo
         ttl_seconds=settings.memory_wipe_window_seconds,
     )
     return count <= settings.memory_wipe_max_requests
+
+
+# ---------------------------------------------------------------------------
+# Memory search (por user_id — del CurrentUser autenticado)
+# ---------------------------------------------------------------------------
+
+
+async def check_memory_search_rate_limit(store: TokenStore, *, user_id: str) -> bool:
+    """``True`` si la búsqueda de memoria está permitida; ``False`` si excede el límite.
+
+    Bucket por ``user_id`` para el endpoint que dispara el pipeline caro
+    embed → ANN → rerank (GPU/CPU) en cada query. Un techo amplio por minuto corta el
+    abuso sin molestar la búsqueda interactiva legítima. Chequea + incrementa en una
+    sola op. fail-open: si Redis cae, ``incr_with_ttl`` => 0 => permite (baseline sin
+    freno, nunca auto-DoS).
+
+    El ``user_id`` es un UUID opaco (no PII directa): va crudo en la key, sin hashear
+    (ver ``_memory_search_counter_key``).
+    """
+    settings = get_settings()
+    count = await store.incr_with_ttl(
+        _memory_search_counter_key(user_id),
+        ttl_seconds=settings.memory_search_window_seconds,
+    )
+    return count <= settings.memory_search_max_requests
 
 
 # ---------------------------------------------------------------------------
