@@ -175,7 +175,7 @@ async def close_session(
     - Trigger episodico (issue #209): SOLO en la rama del PRIMER cierre real
       (``ended_at`` era ``None``), DESPUES del commit, se encola
       ``consolidate_session.delay(...)``. El enqueue post-commit (igual que el de
-      ``consolidate_turn`` en ``_run_chat_turn``) garantiza que el ``ended_at`` ya
+      ``consolidate_turn`` en ``ChatService.run_turn``) garantiza que el ``ended_at`` ya
       este persistido cuando el worker corra. Un segundo cierre (idempotente) NO
       re-encola: el episodio ya se disparo en el primero. Best-effort fail-open: si
       Redis esta caido, el ``.delay()`` tira y se loguea SOLO ``type(exc).__name__``

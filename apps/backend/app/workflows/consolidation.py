@@ -3,8 +3,8 @@
 Reglas no negociables (ADR-010 + critica adversarial M8):
 
 1. Solo encolada cuando el modelo del modo escribe memoria (Qwen). El caller
-   (``_run_chat_turn`` en el endpoint) ya filtra; esta task no re-chequea.
-2. La task NUNCA esta en el path de respuesta: ``_run_chat_turn`` encola con
+   (``ChatService.run_turn`` en el endpoint) ya filtra; esta task no re-chequea.
+2. La task NUNCA esta en el path de respuesta: ``ChatService.run_turn`` encola con
    ``.delay()`` DESPUES del commit (M10 Ola 0); la escritura ocurre aqui,
    en el worker Celery, de forma async.
 3. NUNCA episodica: ``layer`` = ``semantic`` | ``procedural`` solamente.
@@ -119,7 +119,7 @@ def _parse_source_session_id(session_id: str) -> UUID | None:
     """Parsea ``session_id`` (str) a ``UUID`` de forma DEFENSIVA (M10 Ola 1).
 
     El ``session_id`` que llega al worker es ``str(ChatSession.id)`` (el id real
-    de la sesion persistida; ver ``_run_chat_turn`` en ``app.api.v1.chat``), asi
+    de la sesion persistida; ver ``ChatService.run_turn`` en ``app.services.chat``), asi
     que en el camino feliz es siempre un UUID valido. Pero el worker NUNCA debe
     caerse por un payload corrupto en la cola: si el parse falla, se loguea un
     mensaje tecnico SIN contenido del usuario (regla #4 — el ``session_id`` es un

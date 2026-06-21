@@ -19,7 +19,7 @@ Pipeline:
   numerar turnos sin colisionar con el ``UniqueConstraint(session_id, seq)``
   al reusar una sesión existente (issue #209).
 - ``add``: cifra el plaintext con ``encrypt_for_user`` y hace ``flush`` (NO
-  ``commit``): el commit lo da el endpoint (``_run_chat_turn``) en la MISMA
+  ``commit``): el commit lo da el endpoint (``ChatService.run_turn``) en la MISMA
   transacción que la ``ChatSession``, así turnos + sesión son atómicos.
 - ``list_for_session``: trae los turnos de una sesión ORDER BY ``seq`` y los
   descifra in-process ANTES de construir el ``Out`` strict (que rechaza ``BYTEA``).
@@ -54,7 +54,7 @@ class ConversationTurnStore:
     async def add(self, payload: ConversationTurnCreate) -> None:
         """Persiste un turno: cifra el ``content`` plaintext e INSERTA (flush, sin commit).
 
-        El commit lo da el caller (``_run_chat_turn``) en la misma transacción que
+        El commit lo da el caller (``ChatService.run_turn``) en la misma transacción que
         la ``ChatSession``: turnos + sesión se persisten juntos o nada.
         """
         blob = encrypt_for_user(self._user_id, payload.content)

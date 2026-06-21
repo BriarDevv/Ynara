@@ -235,10 +235,9 @@ async def test_happy_qwen_actions_en_done(db_session: AsyncSession) -> None:
 
     client = await _client(db_session, llm_client=fake)
     try:
-        # Patch target M10 Ola 0: el enqueue se movio de route() a _run_chat_turn
-        # (compartido por /chat y /chat/stream); el binding real ahora es
-        # ``app.api.v1.chat.consolidate_turn``.
-        with patch("app.api.v1.chat.consolidate_turn") as mock_task:
+        # Patch target: el enqueue vive en ChatService.run_turn (compartido por /chat y
+        # /chat/stream); el binding real ahora es ``app.services.chat.consolidate_turn``.
+        with patch("app.services.chat.consolidate_turn") as mock_task:
             mock_task.delay = MagicMock()
             async with client:
                 resp = await client.post(
@@ -260,7 +259,7 @@ async def test_happy_qwen_actions_en_done(db_session: AsyncSession) -> None:
         assert action["name"] == "memory.search"
         assert action["arguments"] == {"query": "reuniones"}
         # Qwen escribe memoria -> /chat/stream TAMBIEN encola (hereda el enqueue
-        # post-commit de _run_chat_turn, igual que /chat).
+        # post-commit de ChatService.run_turn, igual que /chat).
         mock_task.delay.assert_called_once()
     finally:
         app.dependency_overrides.clear()
@@ -275,7 +274,7 @@ async def test_happy_qwen_actions_en_done(db_session: AsyncSession) -> None:
 async def test_stream_enqueues_consolidate_post_commit(db_session: AsyncSession) -> None:
     """/chat/stream encola consolidate_turn DESPUES del commit, con kwargs exactos.
 
-    El enqueue se movio de ``route()`` a ``_run_chat_turn`` (M10 Ola 0), que
+    El enqueue se movio de ``route()`` a ``ChatService.run_turn`` (M10 Ola 0), que
     ambos endpoints comparten: este test prueba que /chat/stream (no solo /chat)
     encola, y que cuando lo hace la ``ChatSession`` YA esta persistida en la DB
     (enqueue post-commit) con los kwargs que pasaba ``route()``. Qwen
@@ -287,7 +286,7 @@ async def test_stream_enqueues_consolidate_post_commit(db_session: AsyncSession)
 
     client = await _client(db_session, llm_client=fake)
     try:
-        with patch("app.api.v1.chat.consolidate_turn") as mock_task:
+        with patch("app.services.chat.consolidate_turn") as mock_task:
             mock_task.delay = MagicMock()
             async with client:
                 resp = await client.post(
@@ -300,7 +299,7 @@ async def test_stream_enqueues_consolidate_post_commit(db_session: AsyncSession)
         done = _done(_parse_sse(resp.text))
         session_id = done["session_id"]
 
-        # /chat/stream encola exactamente una vez (hereda de _run_chat_turn).
+        # /chat/stream encola exactamente una vez (hereda de ChatService.run_turn).
         mock_task.delay.assert_called_once()
         # Kwargs identicos a los que pasaba route(): todos str.
         call_kwargs = mock_task.delay.call_args.kwargs
@@ -570,7 +569,7 @@ async def test_invariante_join_igual_text(db_session: AsyncSession, payload_text
 async def test_finish_reason_none_coerciona_stop(db_session: AsyncSession) -> None:
     """resp.finish_reason None -> done.finish_reason == 'stop' (coercion D4).
 
-    Se parchea ``route`` (importado en el endpoint como ``app.api.v1.chat.route``)
+    Se parchea ``route`` (lo llama el service como ``app.services.chat.route``)
     para devolver un ``ChatResponse`` con ``finish_reason=None``: el path natural
     del tool loop nunca deja None (siempre un string), asi que forzarlo en el
     borde del router es la unica forma honesta de ejercitar la coercion.
@@ -586,7 +585,7 @@ async def test_finish_reason_none_coerciona_stop(db_session: AsyncSession) -> No
     )
     client = await _client(db_session, llm_client=fake)
     try:
-        with patch("app.api.v1.chat.route", new=AsyncMock(return_value=none_resp)):
+        with patch("app.services.chat.route", new=AsyncMock(return_value=none_resp)):
             async with client:
                 resp = await client.post(
                     "/v1/chat/stream",
@@ -657,7 +656,7 @@ async def test_text_vacio_cero_tokens_un_done(db_session: AsyncSession) -> None:
     empty_resp = ChatResponse(text="", actions=[], session_id="opaco", finish_reason="stop")
     client = await _client(db_session, llm_client=fake)
     try:
-        with patch("app.api.v1.chat.route", new=AsyncMock(return_value=empty_resp)):
+        with patch("app.services.chat.route", new=AsyncMock(return_value=empty_resp)):
             async with client:
                 resp = await client.post(
                     "/v1/chat/stream",
@@ -720,7 +719,7 @@ async def test_commit_falla_500_sin_stream_parcial(
 ) -> None:
     """Si session.commit() falla, el turno revienta ANTES del StreamingResponse.
 
-    El commit ocurre dentro de ``_run_chat_turn``, ANTES de construir el
+    El commit ocurre dentro de ``ChatService.run_turn``, ANTES de construir el
     ``StreamingResponse``: si lanza, la excepcion propaga como 500 (get_db hace
     rollback) y el stream NUNCA arranco -> 0 bytes SSE en el body. Se mockea el
     ``commit`` del MISMO ``db_session`` que cede el override, para fallar el
