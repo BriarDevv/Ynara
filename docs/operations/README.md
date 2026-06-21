@@ -6,6 +6,8 @@ Cómo se instala, se corre en local, se deploya y se mantiene.
 
 - [`INSTALL.md`](./INSTALL.md) — instalación inicial del repo.
 - [`LOCAL-DEV.md`](./LOCAL-DEV.md) — flujo de desarrollo diario.
+- [`TAILSCALE-SHARING.md`](./TAILSCALE-SHARING.md) — usar el serving,
+  el panel admin y la web desde otra máquina por el tailnet de Tailscale.
 - [`DEPLOY.md`](./DEPLOY.md) — deploy de web, mobile y backend.
 - [`RUNBOOK.md`](./RUNBOOK.md) — incidentes comunes y cómo
   responder.
