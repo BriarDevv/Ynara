@@ -9,6 +9,7 @@ import { useUserStore } from "@/stores/user";
 import { AnticipationsSection } from "./AnticipationsSection";
 import { CheckinSection } from "./CheckinSection";
 import { HoyHeader } from "./HoyHeader";
+import { HoyHub } from "./HoyHub";
 import { OfflineBanner } from "./OfflineBanner";
 import { PrioritiesSection } from "./PrioritiesSection";
 import { RecapSection } from "./RecapSection";
@@ -58,6 +59,10 @@ export function HoyView() {
         <OfflineBanner />
         <div data-hero-reveal>
           <HoyHeader displayName={displayName} activeMode={activeMode} now={now} />
+        </div>
+        {/* Hub de accesos (mobile): Memoria/Avisos/Buscar, enterrados en "Tú". */}
+        <div data-hero-reveal>
+          <HoyHub />
         </div>
         <div data-hero-reveal>
           <AnticipationsSection />
