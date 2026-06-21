@@ -189,12 +189,6 @@ class Settings(BaseSettings):
     )
     real_ip_header: str = Field("CF-Connecting-IP", alias="REAL_IP_HEADER")
 
-    # Storage (R2)
-    r2_account_id: str = Field("", alias="R2_ACCOUNT_ID")
-    r2_access_key_id: str = Field("", alias="R2_ACCESS_KEY_ID")
-    r2_secret_access_key: str = Field("", alias="R2_SECRET_ACCESS_KEY")
-    r2_bucket: str = Field("ynara-uploads", alias="R2_BUCKET")
-
     # Observabilidad
     sentry_dsn: str = Field("", alias="SENTRY_DSN")
     sentry_traces_sample_rate: float = Field(0.0, ge=0.0, le=1.0, alias="SENTRY_TRACES_SAMPLE_RATE")
@@ -230,49 +224,23 @@ class Settings(BaseSettings):
         default_factory=list, alias="ADMIN_BOOTSTRAP_IDS"
     )
 
-    @field_validator("trusted_proxy_ips", mode="before")
+    @field_validator("trusted_proxy_ips", "cors_origins", "admin_bootstrap_ids", mode="before")
     @classmethod
-    def _split_trusted_proxy_ips(cls, v: object) -> object:
-        """Acepta CSV/vacío desde env (pydantic-settings parsea ``list[str]`` como JSON).
+    def _split_csv_lists(cls, v: object) -> object:
+        """Acepta CSV/vacío desde env para los 3 ``list[str]`` marcados con ``NoDecode``.
 
-        Sin esto, ``TRUSTED_PROXY_IPS=`` (lo que documenta ``.env.example``) o
-        ``TRUSTED_PROXY_IPS=127.0.0.1,10.0.0.0/8`` (la sintaxis human-friendly del
-        comentario) crashean el boot porque el parser de env espera un JSON-array.
-        Normaliza un string separado por comas a lista (vacío -> ``[]``); una lista ya
-        parseada (kwargs / JSON) pasa intacta. El ``_validate_trusted_proxy_ips`` de
-        después valida que cada entry sea un IP/CIDR real.
-        """
-        if isinstance(v, str):
-            return [part.strip() for part in v.split(",") if part.strip()]
-        return v
+        ``trusted_proxy_ips`` / ``cors_origins`` / ``admin_bootstrap_ids`` usan
+        ``NoDecode`` (desactiva el JSON-decode que ``EnvSettingsSource`` aplicaría a un
+        ``list[str]``), así que el string crudo del env llega tal cual acá: un CSV
+        human-friendly (``a,b,c``) o vacío (``=``) que, sin esta normalización,
+        crashearía el boot (el parser esperaría un JSON-array). Convierte el string a
+        lista (vacío -> ``[]``); una lista ya parseada (kwargs / JSON) pasa intacta —
+        así los tests que pasan ``cors_origins=[...]`` por kwarg siguen funcionando.
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def _split_cors_origins(cls, v: object) -> object:
-        """Acepta CSV/vacío desde env (pydantic-settings parsea ``list[str]`` como JSON).
-
-        Sin esto, ``CORS_ORIGINS=https://app.ynara.com,https://api.ynara.com`` (el
-        formato human-friendly que documenta ``.env.example``) crashea el boot porque
-        el parser de env espera un JSON-array. Normaliza un string separado por comas a
-        lista (vacío -> ``[]``, que en prod hace fallar el fail-fast de dev-config); una
-        lista ya parseada (kwargs / JSON) pasa intacta — así los tests que pasan
-        ``cors_origins=[...]`` por kwarg siguen funcionando sin cambios. Mismo patrón
-        que ``_split_trusted_proxy_ips``.
-        """
-        if isinstance(v, str):
-            return [part.strip() for part in v.split(",") if part.strip()]
-        return v
-
-    @field_validator("admin_bootstrap_ids", mode="before")
-    @classmethod
-    def _split_admin_bootstrap_ids(cls, v: object) -> object:
-        """Acepta CSV/vacío desde env (pydantic-settings parsea ``list[str]`` como JSON).
-
-        Sin esto, ``ADMIN_BOOTSTRAP_IDS=`` o ``ADMIN_BOOTSTRAP_IDS=uuid1,uuid2`` crashean
-        el boot porque el parser de env espera un JSON-array. Normaliza un string separado
-        por comas a lista (vacío -> ``[]``); una lista ya parseada (kwargs / JSON) pasa
-        intacta. El ``_validate_admin_bootstrap_ids`` de después valida que cada entry sea
-        un UUID parseable. Mismo patrón que ``_split_trusted_proxy_ips``.
+        La validación de CONTENIDO la hacen los ``model_validator`` de después, por
+        campo: IP/CIDR (``_validate_trusted_proxy_ips``), UUID
+        (``_validate_admin_bootstrap_ids``) y rechazo de host de dev en prod
+        (``_reject_dev_config_in_prod`` para CORS). Antes eran 3 validators idénticos.
         """
         if isinstance(v, str):
             return [part.strip() for part in v.split(",") if part.strip()]
