@@ -213,7 +213,11 @@ def decay_procedural(self) -> None:  # bind=True, self no se usa (sin retry en M
             result.staled,
             result.deleted,
         )
-    except Exception:
+    except Exception as exc:
         # Regla: el worker NUNCA muere por un fallo de decay.
-        # Log tecnico sin datos de usuario (regla #4).
-        logger.exception("decay_procedural: fallo al aplicar decay (sin datos de usuario)")
+        # regla #4: logger.error (NO logger.exception): el traceback / str(exc) podria
+        # arrastrar contenido de usuario a los logs. Se loguea solo el TIPO de excepcion.
+        logger.error(
+            "decay_procedural: fallo al aplicar decay: %s (sin datos de usuario)",
+            type(exc).__name__,
+        )

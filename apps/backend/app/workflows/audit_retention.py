@@ -114,7 +114,11 @@ def purge_audit_log(self) -> None:  # bind=True, self no se usa (sin retry)
     try:
         deleted = asyncio.run(_async_purge_audit())
         logger.info("purge_audit_log: deleted=%d", deleted)
-    except Exception:
+    except Exception as exc:
         # Regla: el worker NUNCA muere por un fallo de retention.
-        # Log técnico sin datos de usuario (regla #4).
-        logger.exception("purge_audit_log: fallo al purgar audit_log (sin datos de usuario)")
+        # regla #4: logger.error (NO logger.exception): el traceback / str(exc) podría
+        # arrastrar contenido de usuario a los logs. Se loguea solo el TIPO de excepción.
+        logger.error(
+            "purge_audit_log: fallo al purgar audit_log: %s (sin datos de usuario)",
+            type(exc).__name__,
+        )

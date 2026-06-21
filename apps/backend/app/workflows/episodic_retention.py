@@ -148,9 +148,11 @@ def purge_episodic_memory(self) -> None:  # bind=True, self no se usa (sin retry
             non_sensitive,
             sensitive + non_sensitive,
         )
-    except Exception:
+    except Exception as exc:
         # Regla: el worker NUNCA muere por un fallo de retention.
-        # Log tecnico sin datos de usuario (regla #4).
-        logger.exception(
-            "purge_episodic_memory: fallo al purgar episodic_memory (sin datos de usuario)"
+        # regla #4: logger.error (NO logger.exception): el traceback / str(exc) podria
+        # arrastrar contenido de usuario a los logs. Se loguea solo el TIPO de excepcion.
+        logger.error(
+            "purge_episodic_memory: fallo al purgar episodic_memory: %s (sin datos de usuario)",
+            type(exc).__name__,
         )
