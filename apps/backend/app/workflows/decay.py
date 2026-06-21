@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete as sa_delete
+from sqlalchemy import func
 from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -138,10 +139,17 @@ async def _async_decay(
 
     async def _run(db: AsyncSession) -> DecayResult:
         # (a) DECAY — confidence *= factor a las no reforzadas en el ultimo intervalo.
+        # ``updated_at=func.now()``: el bulk UPDATE Core con
+        # ``synchronize_session=False`` bypassa el ``onupdate`` del ORM
+        # (TimestampMixin), asi que lo refrescamos a mano. El decay ES una
+        # modificacion: el timestamp debe avanzar.
         decay_stmt = (
             sa_update(ProceduralMemory)
             .where(ProceduralMemory.last_reinforced_at < decay_cutoff)
-            .values(confidence=ProceduralMemory.confidence * cfg.decay_factor)
+            .values(
+                confidence=ProceduralMemory.confidence * cfg.decay_factor,
+                updated_at=func.now(),
+            )
             .execution_options(synchronize_session=False)
         )
         decay_res = await db.execute(decay_stmt)
@@ -156,7 +164,10 @@ async def _async_decay(
                 ProceduralMemory.confidence < cfg.stale_threshold,
                 ProceduralMemory.stale.is_(False),
             )
-            .values(stale=True)
+            # Mismo motivo que en (a): el bulk UPDATE bypassa el ``onupdate``,
+            # asi que refrescamos ``updated_at`` a mano (marcar stale ES una
+            # modificacion).
+            .values(stale=True, updated_at=func.now())
             .execution_options(synchronize_session=False)
         )
         stale_res = await db.execute(stale_stmt)

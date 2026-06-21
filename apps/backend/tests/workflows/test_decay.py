@@ -187,6 +187,52 @@ class TestAsyncDecayConfigLoading:
         mock_loader.assert_not_called()
 
 
+class TestDecayRefreshesUpdatedAt:
+    """Los bulk UPDATE del decay refrescan ``updated_at`` a mano.
+
+    El bulk ``sa_update`` Core con ``synchronize_session=False`` bypassa el
+    ``onupdate`` del ORM (TimestampMixin), asi que el decay debe setear
+    ``updated_at=func.now()`` explicitamente en los pasos que modifican filas
+    (DECAY y STALE). Corremos contra la sesion mockeada (sin DB) y capturamos
+    los statements pasados a ``execute`` para inspeccionar sus ``.values()``.
+    """
+
+    @staticmethod
+    def _captured_value_columns() -> list[set[str]]:
+        """Corre ``_async_decay`` con sesion mock y devuelve, por cada statement
+        UPDATE ejecutado, el set de nombres de columna seteados en ``.values()``.
+        """
+        exec_result = MagicMock()
+        exec_result.rowcount = 0
+        fake_session = MagicMock()
+        fake_session.execute = AsyncMock(return_value=exec_result)
+        fake_session.flush = AsyncMock(return_value=None)
+
+        asyncio.run(_async_decay(session=fake_session, decay_config=DecayConfig()))
+
+        value_columns: list[set[str]] = []
+        for call in fake_session.execute.call_args_list:
+            stmt = call.args[0]
+            # Solo los UPDATE exponen ``_values`` (el DELETE no setea columnas).
+            values = getattr(stmt, "_values", None)
+            if not values:
+                continue
+            value_columns.append({col.name for col in values})
+        return value_columns
+
+    def test_decay_step_sets_updated_at(self) -> None:
+        """El UPDATE de DECAY (setea ``confidence``) incluye ``updated_at``."""
+        value_columns = self._captured_value_columns()
+        decay_values = next(cols for cols in value_columns if "confidence" in cols)
+        assert "updated_at" in decay_values
+
+    def test_stale_step_sets_updated_at(self) -> None:
+        """El UPDATE de STALE (setea ``stale``) incluye ``updated_at``."""
+        value_columns = self._captured_value_columns()
+        stale_values = next(cols for cols in value_columns if "stale" in cols)
+        assert "updated_at" in stale_values
+
+
 # ---------------------------------------------------------------------------
 # INTEGRATION tests — contra DB de tests real
 # ---------------------------------------------------------------------------
