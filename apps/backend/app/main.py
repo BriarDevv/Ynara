@@ -44,6 +44,16 @@ _BASE_SECURITY_HEADERS = {
 # en dev/local se sirve por HTTP y un HSTS cacheado rompería el acceso local.
 _HSTS_HEADER_VALUE = "max-age=31536000; includeSubDomains"
 
+# CSP API-only + Permissions-Policy: la API devuelve JSON, no carga recursos, así
+# que ``default-src 'none'`` (+ frame-ancestors/base-uri) es defensa en profundidad
+# sin impacto en clientes JSON; Permissions-Policy desactiva APIs del browser que la
+# API no usa. Se EXIMEN las rutas de docs interactivas (Swagger UI carga su propio
+# JS/CSS): en dev existen y necesitan CSP relajada; en prod no existen (docs_url y
+# openapi_url quedan en None), así que ahí la CSP estricta aplica a todo.
+_CSP_HEADER_VALUE = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+_PERMISSIONS_POLICY_VALUE = "camera=(), microphone=(), geolocation=()"
+_DOCS_PATHS = frozenset({"/docs", "/redoc", "/openapi.json"})
+
 
 class SecurityHeadersMiddleware:
     """Middleware ASGI puro: inyecta los headers de seguridad en TODA respuesta.
@@ -83,6 +93,11 @@ class SecurityHeadersMiddleware:
                     headers[header] = value
                 if get_settings().environment == "production":
                     headers["Strict-Transport-Security"] = _HSTS_HEADER_VALUE
+                # CSP/Permissions-Policy salvo en las rutas de docs interactivas
+                # (Swagger UI necesita cargar su JS/CSS; en prod esas rutas no existen).
+                if scope["path"] not in _DOCS_PATHS:
+                    headers["Content-Security-Policy"] = _CSP_HEADER_VALUE
+                    headers["Permissions-Policy"] = _PERMISSIONS_POLICY_VALUE
             await send(message)
 
         await self.app(scope, receive, send_with_headers)
@@ -164,6 +179,9 @@ app = FastAPI(
     description="API del asistente personal Ynara.",
     lifespan=lifespan,
     docs_url="/docs" if get_settings().environment != "production" else None,
+    # openapi_url cerrado en prod junto con docs: no exponer el schema (superficie de
+    # ataque) sin auth en una API privada on-prem. En dev queda abierto para Swagger.
+    openapi_url="/openapi.json" if get_settings().environment != "production" else None,
     redoc_url=None,
 )
 
@@ -172,8 +190,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Explícito (no ``["*"]``): la API solo usa estos métodos/headers. Reduce la
+    # superficie de preflight. Accept/Content-Language son CORS-safelisted (no hace
+    # falta listarlos); Authorization y Content-Type (application/json) sí.
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Security headers en cada respuesta normal (ver gap de 500-crudo en el docstring

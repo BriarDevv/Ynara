@@ -74,3 +74,24 @@ async def test_hsts_present_in_production(monkeypatch: pytest.MonkeyPatch) -> No
         if part.startswith("max-age=")
     )
     assert max_age >= 31_536_000
+
+
+async def test_csp_and_permissions_policy_present() -> None:
+    """CSP API-only + Permissions-Policy en una respuesta normal (ruta no-docs)."""
+    async for client in _client():
+        resp = await client.get(_HEALTH_URL)
+
+    assert resp.status_code == 200
+    assert resp.headers["Content-Security-Policy"] == (
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    )
+    assert "camera=()" in resp.headers["Permissions-Policy"]
+
+
+async def test_csp_exempt_on_docs_paths() -> None:
+    """Las rutas de docs (``/openapi.json`` en dev) NO llevan CSP (no romper Swagger UI)."""
+    async for client in _client():
+        resp = await client.get("http://test/openapi.json")
+
+    assert resp.status_code == 200
+    assert "Content-Security-Policy" not in resp.headers
