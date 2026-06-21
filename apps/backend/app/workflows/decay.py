@@ -44,14 +44,13 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import update as sa_update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.memory.config import DecayConfig, load_decay_config
 from app.models.memory import ProceduralMemory
 from app.workers.celery_app import celery_app
-from app.workflows.consolidation import _normalize_db_url
+from app.workflows._engine import worker_session
 
 logger = logging.getLogger(__name__)
 
@@ -183,21 +182,13 @@ async def _async_decay(
         # Modo test: usar la sesion inyectada, NO commitear (rollback del fixture).
         return await _run(session)
 
-    # Modo produccion: engine con NullPool (decision #4), commit + dispose.
-    # NOTA: binding separado (``_settings``, NO ``cfg``) para no pisar el
-    # ``DecayConfig`` capturado por el closure ``_run``: este ultimo lee
-    # ``cfg.decay_factor`` etc. y ``_run`` se invoca despues de esta linea.
+    # Modo produccion: engine NullPool efimero; worker_session commitea al salir
+    # del bloque y dispone el engine (decision #4 centralizada en _engine.py).
+    # Binding ``_settings`` (NO ``cfg``): ``cfg`` es el DecayConfig que captura el
+    # closure ``_run``; no pisarlo.
     _settings = settings or get_settings()
-    db_url = _normalize_db_url(_settings.database_url)
-    engine = create_async_engine(db_url, poolclass=NullPool)
-    try:
-        maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-        async with maker() as db_session:
-            result = await _run(db_session)
-            await db_session.commit()
-        return result
-    finally:
-        await engine.dispose()
+    async with worker_session(_settings) as db_session:
+        return await _run(db_session)
 
 
 # ---------------------------------------------------------------------------

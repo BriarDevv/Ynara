@@ -32,8 +32,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode
@@ -53,6 +52,7 @@ from app.memory.semantic import SemanticMemoryStore
 from app.models.memory import EpisodicMemory
 from app.schemas.memory import EpisodicMemoryCreate
 from app.workers.celery_app import celery_app
+from app.workflows._engine import worker_session
 
 logger = logging.getLogger(__name__)
 
@@ -60,13 +60,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Helpers de construccion de deps (inyectables en tests)
 # ---------------------------------------------------------------------------
-
-
-def _normalize_db_url(url: str) -> str:
-    """Normaliza la URL de DB a dialect asyncpg."""
-    if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    return url
 
 
 def _build_embedder(settings: Settings) -> EmbeddingClient:
@@ -213,67 +206,54 @@ async def _async_consolidate(
     source_session_id = _parse_source_session_id(session_id)
     # Parse defensivo del mode -> origin_mode de audit_log (nullable, best-effort).
     origin_mode = _parse_origin_mode(mode)
-    engine = None
 
-    try:
-        if session is not None:
-            # Modo test: usar la sesion inyectada, no crear engine.
-            sem_store = SemanticMemoryStore(session, uid, effective_embedder, effective_reranker)
-            proc_store = ProceduralMemoryStore(session, uid)
-            audit_store = AuditStore(session, uid)
+    if session is not None:
+        # Modo test: usar la sesion inyectada, no crear engine ni commitear
+        # (el fixture controla el rollback).
+        sem_store = SemanticMemoryStore(session, uid, effective_embedder, effective_reranker)
+        proc_store = ProceduralMemoryStore(session, uid)
+        audit_store = AuditStore(session, uid)
 
-            mem_engine = QwenMemoryEngine(effective_llm)
-            ops = await mem_engine.consolidate(
-                user_msg=user_msg,
-                model_response=model_response,
-                mode=mode,
-            )
-            applied = await apply_ops(
-                ops,
-                session=session,
-                semantic_store=sem_store,
-                procedural_store=proc_store,
-                source_session_id=source_session_id,
-                audit_store=audit_store,
-                origin_model=LlmModel.QWEN,
-                origin_mode=origin_mode,
-            )
-            # NO commitear aqui: el fixture controla el rollback.
-            return applied
+        mem_engine = QwenMemoryEngine(effective_llm)
+        ops = await mem_engine.consolidate(
+            user_msg=user_msg,
+            model_response=model_response,
+            mode=mode,
+        )
+        return await apply_ops(
+            ops,
+            session=session,
+            semantic_store=sem_store,
+            procedural_store=proc_store,
+            source_session_id=source_session_id,
+            audit_store=audit_store,
+            origin_model=LlmModel.QWEN,
+            origin_mode=origin_mode,
+        )
 
-        # Modo produccion: construir engine con NullPool (decision #4).
-        db_url = _normalize_db_url(cfg.database_url)
-        engine = create_async_engine(db_url, poolclass=NullPool)
-        maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    # Modo produccion: engine NullPool efimero; worker_session commitea al salir
+    # del bloque y dispone el engine (decision #4 centralizada en _engine.py).
+    async with worker_session(cfg) as db_session:
+        sem_store = SemanticMemoryStore(db_session, uid, effective_embedder, effective_reranker)
+        proc_store = ProceduralMemoryStore(db_session, uid)
+        audit_store = AuditStore(db_session, uid)
 
-        async with maker() as db_session:
-            sem_store = SemanticMemoryStore(db_session, uid, effective_embedder, effective_reranker)
-            proc_store = ProceduralMemoryStore(db_session, uid)
-            audit_store = AuditStore(db_session, uid)
-
-            mem_engine = QwenMemoryEngine(effective_llm)
-            ops = await mem_engine.consolidate(
-                user_msg=user_msg,
-                model_response=model_response,
-                mode=mode,
-            )
-            applied = await apply_ops(
-                ops,
-                session=db_session,
-                semantic_store=sem_store,
-                procedural_store=proc_store,
-                source_session_id=source_session_id,
-                audit_store=audit_store,
-                origin_model=LlmModel.QWEN,
-                origin_mode=origin_mode,
-            )
-            await db_session.commit()
-
-        return applied
-
-    finally:
-        if engine is not None:
-            await engine.dispose()
+        mem_engine = QwenMemoryEngine(effective_llm)
+        ops = await mem_engine.consolidate(
+            user_msg=user_msg,
+            model_response=model_response,
+            mode=mode,
+        )
+        return await apply_ops(
+            ops,
+            session=db_session,
+            semantic_store=sem_store,
+            procedural_store=proc_store,
+            source_session_id=source_session_id,
+            audit_store=audit_store,
+            origin_model=LlmModel.QWEN,
+            origin_mode=origin_mode,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -541,47 +521,35 @@ async def _async_consolidate_session(
         # session_id no-UUID: el episodio requiere una FK real -> no-op sin crash.
         return 0
     origin_mode = _parse_origin_mode(mode)
-    engine = None
 
-    try:
-        if session is not None:
-            # Modo test: usar la sesion inyectada, no crear engine ni commitear.
-            return await _consolidate_session_in_db(
-                session=session,
-                user_id=uid,
-                source_session_id=source_session_id,
-                mode=mode,
-                origin_mode=origin_mode,
-                llm_client=effective_llm,
-                embedder=effective_embedder,
-                reranker=effective_reranker,
-                retention_config=effective_retention,
-            )
+    if session is not None:
+        # Modo test: usar la sesion inyectada, no crear engine ni commitear.
+        return await _consolidate_session_in_db(
+            session=session,
+            user_id=uid,
+            source_session_id=source_session_id,
+            mode=mode,
+            origin_mode=origin_mode,
+            llm_client=effective_llm,
+            embedder=effective_embedder,
+            reranker=effective_reranker,
+            retention_config=effective_retention,
+        )
 
-        # Modo produccion: engine con NullPool (decision #4).
-        db_url = _normalize_db_url(cfg.database_url)
-        engine = create_async_engine(db_url, poolclass=NullPool)
-        maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-
-        async with maker() as db_session:
-            created = await _consolidate_session_in_db(
-                session=db_session,
-                user_id=uid,
-                source_session_id=source_session_id,
-                mode=mode,
-                origin_mode=origin_mode,
-                llm_client=effective_llm,
-                embedder=effective_embedder,
-                reranker=effective_reranker,
-                retention_config=effective_retention,
-            )
-            await db_session.commit()
-
-        return created
-
-    finally:
-        if engine is not None:
-            await engine.dispose()
+    # Modo produccion: engine NullPool efimero; worker_session commitea al salir
+    # del bloque y dispone el engine (decision #4 centralizada en _engine.py).
+    async with worker_session(cfg) as db_session:
+        return await _consolidate_session_in_db(
+            session=db_session,
+            user_id=uid,
+            source_session_id=source_session_id,
+            mode=mode,
+            origin_mode=origin_mode,
+            llm_client=effective_llm,
+            embedder=effective_embedder,
+            reranker=effective_reranker,
+            retention_config=effective_retention,
+        )
 
 
 @celery_app.task(bind=True, name="workflows.consolidate_session")

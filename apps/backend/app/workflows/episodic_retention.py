@@ -51,13 +51,12 @@ from datetime import UTC, datetime
 
 from sqlalchemy import ColumnElement, literal_column
 from sqlalchemy import delete as sa_delete
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.models.memory import EpisodicMemory
 from app.workers.celery_app import celery_app
-from app.workflows.consolidation import _normalize_db_url
+from app.workflows._engine import worker_session
 
 logger = logging.getLogger(__name__)
 
@@ -125,18 +124,11 @@ async def _async_purge_episodic(
         # Modo test: sesion inyectada, NO commitear (rollback del fixture).
         return await _run(session)
 
-    # Modo produccion: engine con NullPool, commit + dispose.
+    # Modo produccion: engine NullPool efimero; worker_session commitea al salir
+    # del bloque y dispone el engine (mismo patron centralizado en _engine.py).
     cfg = settings or get_settings()
-    db_url = _normalize_db_url(cfg.database_url)
-    engine = create_async_engine(db_url, poolclass=NullPool)
-    try:
-        maker = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-        async with maker() as db_session:
-            result = await _run(db_session)
-            await db_session.commit()
-        return result
-    finally:
-        await engine.dispose()
+    async with worker_session(cfg) as db_session:
+        return await _run(db_session)
 
 
 @celery_app.task(bind=True, name="workflows.purge_episodic_memory")
