@@ -159,6 +159,13 @@ class Settings(BaseSettings):
     # legitimo (raro). El preview (?dry_run=true) NO se frena. fail-OPEN si Redis cae.
     memory_wipe_max_requests: int = Field(5, alias="MEMORY_WIPE_MAX_REQUESTS")
     memory_wipe_window_seconds: int = Field(3600, alias="MEMORY_WIPE_WINDOW_SECONDS")
+    # Rate-limit de GET /v1/memory/search, por user_id. El search dispara el pipeline
+    # caro embed -> ANN -> rerank (GPU/CPU) en CADA query; sin freno un usuario
+    # autenticado podía saturarlo. Techo amplio (decenas por minuto) para no molestar
+    # la búsqueda interactiva legítima y cortar solo el scripting abusivo. fail-OPEN si
+    # Redis cae.
+    memory_search_max_requests: int = Field(30, alias="MEMORY_SEARCH_MAX_REQUESTS")
+    memory_search_window_seconds: int = Field(60, alias="MEMORY_SEARCH_WINDOW_SECONDS")
     # Rate-limit de /v1/sessions (issue #208), por user_id. UN bucket compartido por
     # list/get/close (las 3 son lecturas/ops baratas): default amplio para cubrir un
     # polling legitimo y solo cortar scripting abusivo. fail-OPEN si Redis cae.
