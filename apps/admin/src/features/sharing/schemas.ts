@@ -5,9 +5,10 @@ import { z } from "zod";
  *
  * Espejo Zod EXACTO del Pydantic del backend (snake_case): valida la respuesta en
  * el borde igual que el resto del panel. Estado del tailnet de Tailscale + las URLs
- * para compartir el serving (API OpenAI-compatible de Ollama + chat de Open WebUI)
- * con otra máquina. Sin secretos (regla #4): `tailnet_ip`/`hostname` son la
- * identidad de la propia máquina en el tailnet, no datos de usuario.
+ * para compartir las superficies (panel admin, app web, API OpenAI-compatible de
+ * Ollama y chat de Open WebUI) con otra máquina. Sin secretos (regla #4):
+ * `tailnet_ip`/`hostname` son la identidad de la propia máquina en el tailnet, no
+ * datos de usuario.
  */
 
 /** Estado del daemon de Tailscale en el host (probe read-only). */
