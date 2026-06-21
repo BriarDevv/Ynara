@@ -4,7 +4,6 @@ import {
   ChatRequestSchema,
   type ChatResponse,
   LoginRequestSchema,
-  OnboardRequestSchema,
   SignupRequestSchema,
 } from "@ynara/shared-schemas";
 import { HttpResponse, http } from "msw";
@@ -166,23 +165,6 @@ export const handlers = [
     });
   }),
 
-  http.post(apiUrl("/v1/user/onboard"), async ({ request }) => {
-    const json = await request.json().catch(() => null);
-    const parsed = OnboardRequestSchema.safeParse(json);
-    if (!parsed.success) {
-      const first = parsed.error.issues[0];
-      return errorResponse(
-        {
-          error: "validation",
-          detail: first?.message ?? "body inválido",
-          field: first?.path[0] !== undefined ? String(first.path[0]) : undefined,
-        },
-        400,
-      );
-    }
-    return HttpResponse.json({ ok: true, onboardedAt: Date.now() });
-  }),
-
   // POST /v1/chat (no-streaming). El streaming va aparte en /v1/chat/stream (W3).
   // Respuesta canned por modo; `actions` solo en modos Qwen (productividad,
   // memoria). El backend real es M9 — esto espeja el contrato cerrado en #61.
@@ -270,7 +252,9 @@ export const handlers = [
     });
   }),
 
-  // Perfil (PATCH /v1/users/me) — Fase G. Handlers viven con la feature.
+  // Perfil (PATCH /v1/users/me) — Fase G. Handlers viven con la feature. También
+  // es el endpoint que cierra el onboarding (`onboarding_completed: true`): no hay
+  // ruta `/v1/user/onboard` en el backend real, el onboarding se marca acá.
   ...profileHandlers,
 
   // Memoria — Fase C. Handlers + fixtures viven con la feature.
