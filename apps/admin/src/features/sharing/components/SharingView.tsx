@@ -16,7 +16,8 @@ import { TailscaleBanner } from "./TailscaleBanner";
  *
  * Grilla 12-col por bandas con reveal escalonado:
  *  1. `TailscaleBanner` (`col-span-12`) — el estado del tailnet, lo primero.
- *  2. N `ShareTargetCard` (`col-span-6`) — las URLs para repartir (API + chat).
+ *  2. N `ShareTargetCard` (`col-span-6`) — las URLs para repartir (panel admin y
+ *     app web primero, después API OpenAI-compatible y chat de Open WebUI).
  *
  * Si el tailnet está abajo no hay targets: se muestra un empty editorial con el
  * próximo paso (prender Tailscale en el host), no un error.
@@ -106,13 +107,17 @@ function Band({ span, index, children }: { span: 6 | 12; index: number; children
   );
 }
 
-/** Skeleton con la misma topología (banner + 2 cards) para que el layout no salte. */
+/** Skeleton con la misma topología (banner + 4 cards) para que el layout no salte. */
 function SharingSkeleton() {
   return (
     <div className="grid grid-cols-12 gap-8" aria-hidden>
       <div className="anim-fade-in col-span-12 h-28 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)]" />
-      <div className="anim-fade-in col-span-12 h-44 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] lg:col-span-6" />
-      <div className="anim-fade-in col-span-12 h-44 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] lg:col-span-6" />
+      {[0, 1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="anim-fade-in col-span-12 h-44 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] lg:col-span-6"
+        />
+      ))}
     </div>
   );
 }
