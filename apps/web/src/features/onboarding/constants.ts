@@ -12,7 +12,7 @@ export const STEP_COPY: Record<OnboardingStep, { title: string; subtitle: string
   auth: {
     title: "Antes que nada",
     subtitle:
-      "Me hace falta una cuenta para acordarme de vos. Tus datos viven en servidores propios — no se comparten.",
+      "Me hace falta una cuenta para acordarme de vos. Tu memoria es tuya, cifrada y exportable — y no se manda a IA de terceros.",
   },
   nombre: {
     title: "¿Cómo te llamo?",
