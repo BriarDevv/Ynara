@@ -133,12 +133,3 @@ class ProceduralMemoryOut(YnaraBaseModel):
     stale: bool
     created_at: datetime
     updated_at: datetime
-
-
-# ---------- Settings ----------
-
-
-class MemorySettingsUpdate(YnaraBaseModel):
-    """Payload del endpoint ``PATCH /v1/memory/settings`` (ver ADR-007 D2)."""
-
-    retention_sensitive_days: int | None = Field(default=None, ge=30, le=365)

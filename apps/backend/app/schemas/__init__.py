@@ -11,7 +11,6 @@ from app.schemas.chat import Action, ChatHttpRequest, ChatHttpResponse
 from app.schemas.memory import (
     EpisodicMemoryCreate,
     EpisodicMemoryOut,
-    MemorySettingsUpdate,
     ProceduralMemoryOut,
     ProceduralMemoryUpsert,
     SemanticMemoryCreate,
@@ -46,7 +45,6 @@ __all__ = [
     "MemoryExport",
     "MemoryGroupedResponse",
     "MemoryPatchRequest",
-    "MemorySettingsUpdate",
     "MemoryWipeConfirm",
     "MemoryWipePreview",
     "MemoryWipeResult",

@@ -80,10 +80,11 @@ class RetentionConfig(BaseModel):
     ``retention_sensitive_days=180``). ``sensitive`` es la retention por defecto de
     las entradas en modo Bienestar (``is_sensitive=True``); el rango
     ``[min, max]`` espeja el rango configurable por usuario via
-    ``PATCH /v1/memory/settings`` (constraint ``users.retention_sensitive_days
-    BETWEEN 30 AND 365``). El cap duro ``<=365`` para entradas sensibles lo sigue
-    enforzando el ``model_validator`` de ``EpisodicMemoryCreate`` + la CHECK
-    constraint (ADR-007 D2); aca solo se valida la coherencia del bloque de config.
+    ``PATCH /v1/users/me`` (campo ``retention_sensitive_days``; constraint
+    ``users.retention_sensitive_days BETWEEN 30 AND 365``). El cap duro ``<=365``
+    para entradas sensibles lo sigue enforzando el ``model_validator`` de
+    ``EpisodicMemoryCreate`` + la CHECK constraint (ADR-007 D2); aca solo se valida
+    la coherencia del bloque de config.
 
     Mismo contrato que ``DecayConfig``: ``strict`` + ``frozen`` + ``extra='forbid'``
     atrapan typos de operador en deploy (fail-fast) sin tumbar el worker (el
