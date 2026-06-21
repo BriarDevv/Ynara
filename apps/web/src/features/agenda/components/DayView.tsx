@@ -227,6 +227,11 @@ type GridProps = {
 };
 
 function DayGrid({ events, day, now, rowPx, onEventClick, onCommit }: GridProps) {
+  // Tick de 1 minuto para que `nowHour()` (la línea de "ahora") siga la hora
+  // real (sin esto quedaba congelada en el montaje). El `setInterval` se arma
+  // en el effect de abajo, gateado por `isToday` + copia visible.
+  const [, setNowTick] = useState(0);
+
   // Ventana horaria auto-fit: base 8–20h expandida a los eventos del día (cero
   // recorte). Antes era fija 8–20h y clipeaba los de madrugada/noche.
   const { minH, maxH } = hourBounds(events, [day]);
@@ -254,6 +259,15 @@ function DayGrid({ events, day, now, rowPx, onEventClick, onCommit }: GridProps)
     const target = (focusHour - minH) * rowPx;
     el.scrollTop = Math.max(0, target - el.clientHeight / 3);
   }, [focusHour, minH, rowPx]);
+
+  // Tick de la línea de "ahora": solo si es hoy y solo en la copia visible (la
+  // oculta tiene clientHeight 0, mismo guard que el scroll) — así no corren dos
+  // timers (mobile + desktop) ni se tickea cuando la línea ni se muestra.
+  useEffect(() => {
+    if (!isToday || scrollRef.current?.clientHeight === 0) return;
+    const id = setInterval(() => setNowTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, [isToday]);
 
   return (
     <div
