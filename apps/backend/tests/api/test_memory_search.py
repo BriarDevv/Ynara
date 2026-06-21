@@ -22,7 +22,6 @@ import pytest
 from httpx import ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.memory import _build_search_response, _rank_score
 from app.core.deps import get_db, get_embedder, get_reranker
 from app.core.security import create_access_token
 from app.llm.clients.embedding import FakeEmbeddingClient
@@ -30,6 +29,7 @@ from app.llm.clients.reranker import FakeReranker
 from app.main import app
 from app.models.user import User
 from app.schemas.memory import EpisodicMemoryOut, SemanticMemoryOut
+from app.services.memory import _build_search_response, _rank_score
 
 _T = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
