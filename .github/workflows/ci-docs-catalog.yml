@@ -1,0 +1,56 @@
+name: Backend Docs Catalog Guard
+
+# DRIFT GUARD de los catálogos de docs del backend. Evita que
+# docs/MIGRATIONS.md y docs/ENDPOINTS.md queden stale respecto del código (el
+# bug que ya nos pasó: agregar una migración/endpoint y olvidar registrarlo).
+#
+# Scopeada a propósito a los archivos que pueden generar drift: las migraciones
+# Alembic, las rutas del API y los dos catálogos. Cambios solo-frontend NO la
+# corren. NO es un check required: el guard de migraciones es estricto (exit 1)
+# pero arranca como CI informativa hasta promoverlo a required en GitHub.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/backend/alembic/**'
+      - 'apps/backend/app/api/**'
+      - 'apps/backend/docs/MIGRATIONS.md'
+      - 'apps/backend/docs/ENDPOINTS.md'
+      - '.github/workflows/ci-docs-catalog.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/backend/alembic/**'
+      - 'apps/backend/app/api/**'
+      - 'apps/backend/docs/MIGRATIONS.md'
+      - 'apps/backend/docs/ENDPOINTS.md'
+      - '.github/workflows/ci-docs-catalog.yml'
+
+concurrency:
+  group: ci-docs-catalog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs-catalog-guard:
+    name: Docs catalog drift guard
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/backend/uv.lock
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      # El script es stdlib-only: `uv run python` basta sin instalar deps. El
+      # guard de migraciones (estricto) falla el build si hay drift; el de
+      # endpoints solo imprime warnings (no cambia el exit code).
+      - name: Check doc catalogs (drift guard)
+        run: uv run python scripts/check_doc_catalogs.py
