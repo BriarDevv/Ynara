@@ -6,6 +6,7 @@ import { MODE_BY_ID, type ModeId } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
 import type { ChatUiMessage } from "../store";
 import { Markdown } from "./Markdown";
+import { MessageActions } from "./MessageActions";
 
 /**
  * Una burbuja de la conversación.
@@ -80,6 +81,9 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
         />
         <div className="text-body text-[var(--color-ink)]">
           <Markdown>{message.text}</Markdown>
+          {message.actions && message.actions.length > 0 ? (
+            <MessageActions actions={message.actions} mode={mode} />
+          ) : null}
           {canceled ? (
             <p className="mt-1.5 text-caption text-[var(--color-ink-soft)]">Respuesta cancelada</p>
           ) : null}
