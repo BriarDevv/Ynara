@@ -771,7 +771,7 @@ async def test_integration_user_no_memory_no_context_block(db_session: Any) -> N
 # ===========================================================================
 #
 # El enqueue de ``consolidate_turn`` se movio de ``route()`` al endpoint
-# (``_run_chat_turn`` en ``app.api.v1.chat``), DESPUES del ``session.commit()``,
+# (``ChatService.run_turn`` en ``app.services.chat``), DESPUES del ``session.commit()``,
 # para blindar a M10 contra un race enqueue-vs-commit cuando escriba FKs a
 # ``sessions.id`` (decision M10 Ola 0). El router ya NO importa ``consolidate_turn``
 # ni llama ``.delay()`` bajo NINGUN modo. La cobertura del encolado por modo
@@ -783,21 +783,21 @@ async def test_integration_user_no_memory_no_context_block(db_session: Any) -> N
 def test_router_module_no_longer_imports_consolidate_turn() -> None:
     """``route()`` ya no encola: el modulo router NO expone ``consolidate_turn``.
 
-    Guardia contra una regresion del refactor M10 Ola 0: si alguien re-introduce
-    el enqueue en ``route()`` (re-importando ``consolidate_turn`` en el modulo del
-    router), este test falla. El binding canonico del enqueue es ahora
-    ``app.api.v1.chat.consolidate_turn`` (sede unica, post-commit).
+    Guardia contra una regresion del refactor M10 Ola 0 (+ Ola 2): si alguien
+    re-introduce el enqueue en ``route()`` (re-importando ``consolidate_turn`` en el
+    modulo del router LLM), este test falla. El binding canonico del enqueue es ahora
+    ``app.services.chat.consolidate_turn`` (lo usa ``ChatService.run_turn``, sede unica).
     """
-    from app.api.v1 import chat as chat_mod
     from app.llm import router as router_mod
+    from app.services import chat as chat_svc
 
-    # El router NO tiene binding a consolidate_turn (no lo importa).
+    # El router LLM NO tiene binding a consolidate_turn (no lo importa).
     assert not hasattr(router_mod, "consolidate_turn"), (
-        "route() no debe importar consolidate_turn: el enqueue se movio al endpoint (M10 Ola 0)"
+        "route() no debe importar consolidate_turn: el enqueue vive en ChatService (M10 Ola 0)"
     )
-    # El endpoint SI lo tiene: es la sede unica del enqueue post-commit.
-    assert hasattr(chat_mod, "consolidate_turn"), (
-        "el enqueue debe vivir en app.api.v1.chat (sede unica, post-commit)"
+    # El ChatService SI lo tiene: es la sede unica del enqueue post-commit.
+    assert hasattr(chat_svc, "consolidate_turn"), (
+        "el enqueue debe vivir en app.services.chat (sede unica, post-commit)"
     )
 
 

@@ -11,10 +11,10 @@ Reglas (M8 Ola 1 + Ola 2; enqueue movido en M10 Ola 0):
 - Qwen (agent) lee memoria y puede llamar tools (calendar/reminder/memory).
   ``writes_memory=True``: el turno SE consolida en el worker Celery (no
   bloqueante, decision #2 ADR-010).
-- ``route()`` ya NO encola: el ``consolidate_turn.delay()`` vive en el endpoint
-  (``_run_chat_turn``), DESPUES del ``session.commit()`` (M10 Ola 0). El router
+- ``route()`` ya NO encola: el ``consolidate_turn.delay()`` vive en el service
+  (``ChatService.run_turn``), DESPUES del ``session.commit()`` (M10 Ola 0). El router
   solo ensambla contexto + tool loop y devuelve la respuesta; la decision de
-  consolidar (``writes_memory`` + turno no-degradado) se evalua en el endpoint.
+  consolidar (``writes_memory`` + turno no-degradado) se evalua en el service.
 - El router nunca acepta inputs sin sanear: ``request.mode`` es un ``Mode``
   validado por Pydantic; el ``session_id`` se trata como string opaco DENTRO del
   router (no lo parsea ni lo usa como FK), pero AGUAS ARRIBA es el
@@ -68,8 +68,8 @@ Decisiones de diseno documentadas (M8 Ola 1 + Ola 2):
     un deploy roto sigue siendo ruidoso.
 
 (d) Encolado de consolidacion (Ola 2; movido en M10 Ola 0). El
-    ``consolidate_turn.delay()`` ya NO vive en ``route()``: se movio al endpoint
-    (``_run_chat_turn`` en ``app.api.v1.chat``), DESPUES del ``session.commit()``,
+    ``consolidate_turn.delay()`` ya NO vive en ``route()``: se movio al service
+    (``ChatService.run_turn`` en ``app.services.chat``), DESPUES del ``session.commit()``,
     para que la ``ChatSession`` este persistida antes de que el worker Celery
     (otro proceso) procese el turno. El enqueue sigue siendo no-bloqueante y
     condicionado a ``writes_memory`` (Qwen=True, Gemma=False) + turno no-degradado;
@@ -249,11 +249,11 @@ async def route(
             text=_FALLBACK_TEXT, actions=[], session_id=session_id, finish_reason="degraded"
         )
 
-    # NO se encola consolidacion aca (M10 Ola 0): el enqueue se movio al endpoint
-    # (``_run_chat_turn`` en ``app.api.v1.chat``), DESPUES del ``session.commit()``,
+    # NO se encola consolidacion aca (M10 Ola 0): el enqueue se movio al service
+    # (``ChatService.run_turn`` en ``app.services.chat``), DESPUES del ``session.commit()``,
     # para garantizar que la ``ChatSession`` ya este persistida antes de que el
     # worker Celery (otro proceso) lea el turno. ``route()`` ya no encola NADA: la
-    # condicion (``writes_memory`` + turno no-degradado) se replica en el endpoint.
+    # condicion (``writes_memory`` + turno no-degradado) se replica en el service.
     return ChatResponse(
         text=final_text, actions=actions, session_id=session_id, finish_reason=finish_reason
     )

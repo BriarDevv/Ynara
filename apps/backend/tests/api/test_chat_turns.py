@@ -1,7 +1,7 @@
 """Tests E2E de la persistencia de turnos en ``/v1/chat`` (issue #209).
 
 Todos ``integration`` (el endpoint commitea contra la DB de tests). Verifican que
-``_run_chat_turn`` persiste los 2 turnos (user seq=0 / model seq=1) cifrados en el
+``ChatService.run_turn`` persiste los 2 turnos (user seq=0 / model seq=1) cifrados en el
 MISMO commit que la ``ChatSession``, y que NO los persiste si el turno DEGRADO.
 
 Mismo andamiaje que ``test_chat.py``: ``ASGITransport`` + override de ``get_db`` y
@@ -210,7 +210,7 @@ async def test_chat_degraded_persists_no_turns(db_session: AsyncSession) -> None
 
     client = await _client(db_session, llm_client=fake)
     try:
-        with patch("app.api.v1.chat.consolidate_turn") as mock_task:
+        with patch("app.services.chat.consolidate_turn") as mock_task:
             mock_task.delay = MagicMock()
             async with client:
                 resp = await client.post(

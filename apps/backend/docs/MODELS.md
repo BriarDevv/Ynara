@@ -236,7 +236,7 @@ Aun siendo operativa, el `content` viaja **cifrado AES-256-GCM per-user** (regla
 #4: cero PII en claro en la DB) — exactamente como `semantic_memory.content` /
 `episodic_memory.summary`. El cifrado lo hace el store
 (`app/memory/conversation_turns.py`), no el modelo. Se escribe en `/v1/chat` y
-`/v1/chat/stream` (vía `_run_chat_turn`), en la **misma** transacción que la
+`/v1/chat/stream` (vía `ChatService.run_turn`), en la **misma** transacción que la
 `ChatSession` (turnos + sesión atómicos); no se persiste si el turno degradó.
 
 | Columna | Tipo | Notas |

@@ -10,8 +10,8 @@ clientes Fake, sin red ni Redis:
 - ``get_llm_client`` / ``get_embedder`` / ``get_reranker`` se overridean con
   Fakes; el ``FakeLlmClient`` se programa con ``CompletionResult`` para que
   ``route()`` responda determinista.
-- ``app.api.v1.chat.consolidate_turn`` se parchea (Qwen encola post-commit; no
-  hay Redis). El enqueue se movio de ``route()`` al endpoint en M10 Ola 0.
+- ``app.services.chat.consolidate_turn`` se parchea (Qwen encola post-commit; no
+  hay Redis). El enqueue vive en ``ChatService`` (movido de ``route()`` en M10 Ola 0).
 
 Limpieza: el endpoint commitea, asi que el rollback del fixture NO alcanza para
 los datos persistidos. Cada test borra el ``User`` que sembro al final
@@ -218,9 +218,9 @@ async def test_happy_path_qwen_productividad_with_actions(db_session: AsyncSessi
 
     client = await _client(db_session, llm_client=fake)
     try:
-        # Patch target M10 Ola 0: el enqueue se movio de route() al endpoint, asi
-        # que el binding real ahora es ``app.api.v1.chat.consolidate_turn``.
-        with patch("app.api.v1.chat.consolidate_turn") as mock_task:
+        # Patch target: el enqueue vive en ChatService (movido de route() en M10 Ola 0),
+        # asi que el binding real ahora es ``app.services.chat.consolidate_turn``.
+        with patch("app.services.chat.consolidate_turn") as mock_task:
             mock_task.delay = MagicMock()
             async with client:
                 resp = await client.post(
@@ -280,7 +280,7 @@ async def test_enqueue_failure_does_not_break_turn(db_session: AsyncSession) -> 
 
     client = await _client(db_session, llm_client=fake)
     try:
-        with patch("app.api.v1.chat.consolidate_turn") as mock_task:
+        with patch("app.services.chat.consolidate_turn") as mock_task:
             mock_task.delay = MagicMock(side_effect=RuntimeError("broker down"))
             async with client:
                 resp = await client.post(
@@ -357,7 +357,7 @@ async def test_chat_degraded_response_persists_no_turns(db_session: AsyncSession
 
     client = await _client(db_session, llm_client=fake)
     try:
-        with patch("app.api.v1.chat.consolidate_turn") as mock_task:
+        with patch("app.services.chat.consolidate_turn") as mock_task:
             mock_task.delay = MagicMock()
             async with client:
                 resp = await client.post(
