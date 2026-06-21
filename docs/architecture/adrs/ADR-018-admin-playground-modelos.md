@@ -48,7 +48,7 @@ procesos). Este ADR resuelve la primera; la segunda se difiere.
 
 ### D1 — Fase 1: playground aislado (este ADR)
 
-Dos endpoints aditivos en `app/api/v1/admin.py`, gateados con `CurrentAdmin`:
+Dos endpoints aditivos en `app/api/v1/admin/playground.py`, gateados con `CurrentAdmin`:
 
 1. **`GET /v1/admin/serving`** — estado read-only del serving: backend
    (`fake`/`vllm`), `is_real`, salud agregada, y por modelo `served_name`,

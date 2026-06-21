@@ -346,8 +346,10 @@ una inexistente (sin oráculo de existencia ajena). Todas las read surfaces son
 
 ## /v1/admin
 
-Panel admin interno: 6 GET de **métricas read-only** del dashboard. Contrato +
-decisiones en el docstring de [`../app/api/v1/admin.py`](../app/api/v1/admin.py).
+Panel admin interno (subpaquete [`../app/api/v1/admin/`](../app/api/v1/admin/)): 6 GET de
+**métricas read-only** del dashboard. Contrato + decisiones en
+[`metrics.py`](../app/api/v1/admin/metrics.py) + el service
+[`admin_metrics.py`](../app/services/admin_metrics.py).
 
 Invariantes transversales:
 
@@ -383,8 +385,9 @@ Invariantes transversales:
 ### Playground admin (F1 ADR-018)
 
 Inventario de serving read-only + chat de prueba aislado. **Sin** `range`. Contrato +
-lógica del handler en el docstring de [`../app/api/v1/admin.py`](../app/api/v1/admin.py)
-(sección "Playground admin"). Privacidad (regla #4): el serving **nunca** expone
+lógica del handler en el docstring de
+[`../app/api/v1/admin/playground.py`](../app/api/v1/admin/playground.py). Privacidad
+(regla #4): el serving **nunca** expone
 `base_url` ni connection strings; el playground **no persiste nada** (sin `DbSession`) y
 **nunca** ecoa el payload crudo de un `LlmError` (el `detail` del error es solo
 `type(exc).__name__`).

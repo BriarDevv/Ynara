@@ -21,7 +21,7 @@ import pytest
 from httpx import ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1 import admin as admin_module
+from app.api.v1.admin import connectivity as conn_module
 from app.core.deps import get_db
 from app.core.security import create_access_token
 from app.main import app
@@ -93,7 +93,7 @@ async def test_connectivity_admin_degrades_without_tailscale(
     async def _fake_probe(*_args: object, **_kwargs: object) -> TailscaleStatus:
         return TailscaleStatus(up=False, detail="not_installed")
 
-    monkeypatch.setattr(admin_module, "_probe_tailscale", _fake_probe)
+    monkeypatch.setattr(conn_module, "_probe_tailscale", _fake_probe)
     admin = await _seed_user(db_session, is_admin=True)
     client = await _client(db_session)
     try:
@@ -115,7 +115,7 @@ async def test_connectivity_builds_targets_when_tailnet_up(
     async def _fake_probe(*_args: object, **_kwargs: object) -> TailscaleStatus:
         return TailscaleStatus(up=True, hostname="lonchos", tailnet_ip="100.64.0.1", detail="up")
 
-    monkeypatch.setattr(admin_module, "_probe_tailscale", _fake_probe)
+    monkeypatch.setattr(conn_module, "_probe_tailscale", _fake_probe)
     admin = await _seed_user(db_session, is_admin=True)
     client = await _client(db_session)
     try:
