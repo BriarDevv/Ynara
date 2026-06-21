@@ -43,6 +43,12 @@ async def worker_session(settings: Settings) -> AsyncIterator[AsyncSession]:
     (``create_async_engine(NullPool)`` + ``async_sessionmaker`` + ``commit`` +
     ``dispose`` en ``finally``). El cuerpo del worker hace su trabajo dentro del
     ``async with`` y NO commitea: el commit lo da este context manager al salir.
+
+    Limitación conocida (SIGALRM): si Celery dispara ``SoftTimeLimitExceeded``
+    (``task_soft_time_limit``), la señal puede interrumpir el ``finally`` antes del
+    ``dispose()``. Es aceptable: ``NullPool`` no mantiene un pool que drenar (cada
+    task abre y cierra su única conexión), y Postgres reclama la conexión huérfana al
+    detectar el cierre del socket. No hay fuga de pool por este camino.
     """
     engine = create_async_engine(normalize_db_url(settings.database_url), poolclass=NullPool)
     try:
