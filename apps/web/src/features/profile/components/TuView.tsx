@@ -434,8 +434,8 @@ export function TuView() {
         <SettingsGroup label="Privacidad">
           <SettingsRow
             first
-            title="On-prem · tus datos no salen del perímetro"
-            sub="Tus charlas y tu memoria viven en servidores propios. Nada se manda a terceros."
+            title="Privacidad · tu memoria es tuya"
+            sub="Tu memoria está cifrada y la podés exportar cuando quieras. Nada se manda a IA de terceros."
           />
         </SettingsGroup>
 
