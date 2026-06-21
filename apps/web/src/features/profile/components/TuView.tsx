@@ -174,6 +174,10 @@ export function TuView() {
   }
 
   async function handleRetentionChange(value: RetentionValue) {
+    // Guard de pending: con un PATCH en vuelo, ignoramos un segundo cambio — si
+    // no, dos cambios rápidos generan rollbacks que se pisan (uno con un
+    // `previous` ya stale) y el revert dejaría de ser confiable.
+    if (updateMe.isPending) return;
     // Optimista con revert: mostramos el valor elegido ya, pero si el server lo
     // rechaza volvemos al previo — si no, el chip quedaba mostrando una
     // retención que el backend no aceptó (UI mentirosa sobre un control de
