@@ -1,6 +1,8 @@
 "use client";
 
 import { SuggestionCard } from "@/components/ui/SuggestionCard";
+import { useStartChat } from "@/features/chat/useStartChat";
+import { useActiveMode } from "@/hooks/useActiveMode";
 import { useSuggestions } from "../api";
 import { SuggestionsSkeleton } from "./SuggestionsSkeleton";
 
@@ -12,6 +14,8 @@ import { SuggestionsSkeleton } from "./SuggestionsSkeleton";
  */
 export function SuggestionsSection() {
   const { data, isPending, isError, refetch, isFetching } = useSuggestions();
+  const startChat = useStartChat();
+  const activeMode = useActiveMode();
 
   if (isError) {
     return (
@@ -49,6 +53,7 @@ export function SuggestionsSection() {
               title={suggestion.title}
               subtitle={suggestion.why}
               staggerIndex={index}
+              onSelect={() => startChat(suggestion.mode ?? activeMode, suggestion.title)}
             />
           ))}
         </ul>

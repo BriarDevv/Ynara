@@ -49,6 +49,24 @@ describe("SuggestionCard", () => {
       expect(screen.getByText("Pausá 10 min")).toBeInTheDocument();
       expect(accentOf(container)?.style.backgroundColor).toBe("var(--color-border-strong)");
     });
+
+    it("sin onSelect la fila NO es un botón", () => {
+      renderDisplay({ modeId: "productividad", title: "Bloque de foco", staggerIndex: 0 });
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    });
+
+    it("con onSelect la fila es un botón clickeable (Hoy→Chat)", async () => {
+      const user = userEvent.setup();
+      const onSelect = vi.fn();
+      renderDisplay({
+        modeId: "productividad",
+        title: "Bloqueá 90 min de foco",
+        staggerIndex: 0,
+        onSelect,
+      });
+      await user.click(screen.getByRole("button", { name: /bloqueá 90 min de foco/i }));
+      expect(onSelect).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("variante accionable (con onClick)", () => {
