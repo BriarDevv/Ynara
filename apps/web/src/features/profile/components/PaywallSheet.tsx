@@ -14,7 +14,9 @@ import { YnaraOrb } from "@/components/ui/YnaraOrb";
 
 const BENEFITS = [
   "Memoria sin límite",
-  "Avisos proactivos",
+  // La proactividad base es gratis (Ynara se adelanta a lo del día); Premium
+  // suma anticipaciones ilimitadas y más adelantadas.
+  "Avisos proactivos ilimitados",
   "Modos avanzados",
   "Soporte prioritario",
 ] as const;

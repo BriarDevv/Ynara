@@ -111,7 +111,10 @@ export function AvisosView() {
           </section>
         )}
 
-        {/* Nota Premium */}
+        {/* Nota Premium — la proactividad base es gratis (estos avisos son
+            tuyos); Premium suma anticipaciones ilimitadas y más adelantadas.
+            Antes decía "los avisos proactivos son parte de Premium", que
+            contradecía la pantalla que justamente los muestra. */}
         <footer
           className="flex items-center justify-center gap-2 pt-2 text-caption text-[var(--color-ink-soft)]"
           data-hero-reveal
@@ -122,7 +125,7 @@ export function AvisosView() {
             className="h-1.5 w-1.5 shrink-0 rounded-full"
             style={{ backgroundColor: "var(--color-ink-faint)" }}
           />
-          Los avisos proactivos son parte de Premium
+          Premium suma anticipaciones ilimitadas.
         </footer>
       </HeroReveal>
     </div>
