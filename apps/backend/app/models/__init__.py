@@ -10,7 +10,6 @@ from app.models.audit import AuditLog
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
 from app.models.conversation_turn import ConversationTurn
 from app.models.memory import (
-    EMBEDDING_DIM,
     EpisodicMemory,
     ProceduralMemory,
     SemanticMemory,
@@ -19,7 +18,6 @@ from app.models.session import ChatSession
 from app.models.user import User
 
 __all__ = [
-    "EMBEDDING_DIM",
     "AdminAudit",
     "AuditLog",
     "Base",
