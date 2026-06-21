@@ -126,8 +126,8 @@ def _client(db_session: AsyncSession, *, llm_client: FakeLlmClient) -> httpx.Asy
 
 
 def _patch_settings(settings: Settings) -> Iterator[None]:
-    """Patchea ``get_settings`` en admin.py para controlar ``_wants_real_llm``."""
-    return patch("app.api.v1.admin.get_settings", return_value=settings)
+    """Patchea ``get_settings`` en el módulo playground para controlar ``_wants_real_llm``."""
+    return patch("app.api.v1.admin.playground.get_settings", return_value=settings)
 
 
 # ---------------------------------------------------------------------------
