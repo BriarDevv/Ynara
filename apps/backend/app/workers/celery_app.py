@@ -24,8 +24,6 @@ from celery import Celery
 from app.core.config import get_settings
 from app.memory.config import MemoryConfigError, load_decay_config, load_retention_config
 
-settings = get_settings()
-
 # Cadencia del decay procedural (M8 Ola 3, ADR-007 D1). Se lee del loader de
 # ``ynara.config.json[memory]`` (#211) en vez de importarlo de
 # ``app.workflows.decay`` para evitar el ciclo de import (ese modulo importa
@@ -55,10 +53,14 @@ try:
 except MemoryConfigError:
     _EPISODIC_RETENTION_INTERVAL_DAYS = _EPISODIC_RETENTION_INTERVAL_DAYS_FALLBACK
 
+# El singleton de Celery se construye al importar (lo necesitan worker y beat).
+# get_settings() (lru_cache) se llama inline en los args en vez de capturar un
+# `settings` a nivel de módulo (convención del repo: no instanciar Settings global);
+# las dos llamadas devuelven el mismo objeto cacheado.
 celery_app = Celery(
     "ynara",
-    broker=settings.celery_broker_url,
-    backend=settings.celery_result_backend,
+    broker=get_settings().celery_broker_url,
+    backend=get_settings().celery_result_backend,
 )
 
 celery_app.conf.update(

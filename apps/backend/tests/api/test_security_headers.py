@@ -9,12 +9,13 @@ Cubre:
   ``Referrer-Policy``) presentes con su valor exacto en cualquier environment.
 - HSTS AUSENTE cuando ``environment != "production"``.
 - HSTS PRESENTE (max-age >= 1 año + includeSubDomains) cuando production,
-  parcheando ``app.main.settings.environment``.
+  parcheando ``app.main.get_settings`` (el middleware lo lee por request).
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -45,7 +46,7 @@ async def test_base_security_headers_present() -> None:
 
 async def test_hsts_absent_outside_production(monkeypatch: pytest.MonkeyPatch) -> None:
     """En environment != production NO se emite ``Strict-Transport-Security``."""
-    monkeypatch.setattr(main.settings, "environment", "development")
+    monkeypatch.setattr(main, "get_settings", lambda: SimpleNamespace(environment="development"))
 
     async for client in _client():
         resp = await client.get(_HEALTH_URL)
@@ -58,7 +59,7 @@ async def test_hsts_absent_outside_production(monkeypatch: pytest.MonkeyPatch) -
 
 async def test_hsts_present_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
     """En production se emite HSTS con max-age >= 1 año + includeSubDomains."""
-    monkeypatch.setattr(main.settings, "environment", "production")
+    monkeypatch.setattr(main, "get_settings", lambda: SimpleNamespace(environment="production"))
 
     async for client in _client():
         resp = await client.get(_HEALTH_URL)
