@@ -26,7 +26,6 @@ from pydantic import ValidationError
 
 from app.schemas.memory import (
     EpisodicMemoryCreate,
-    MemorySettingsUpdate,
     ProceduralMemoryUpsert,
     SemanticMemoryCreate,
     SemanticMemoryUpdate,
@@ -165,26 +164,6 @@ class TestProceduralMemoryUpsert:
     def test_key_over_120_chars_rejected(self) -> None:
         with pytest.raises(ValidationError):
             ProceduralMemoryUpsert(key="x" * 121, value={})
-
-
-# ---------- Settings ----------
-
-
-class TestMemorySettingsUpdate:
-    @pytest.mark.parametrize("days", [29, 366, 1000])
-    def test_retention_sensitive_out_of_range_rejected(self, days: int) -> None:
-        """ADR-007 D2: retention_sensitive_days configurable en 30-365."""
-        with pytest.raises(ValidationError):
-            MemorySettingsUpdate(retention_sensitive_days=days)
-
-    @pytest.mark.parametrize("days", [30, 180, 365])
-    def test_retention_sensitive_within_range_accepted(self, days: int) -> None:
-        m = MemorySettingsUpdate(retention_sensitive_days=days)
-        assert m.retention_sensitive_days == days
-
-    def test_empty_update_accepted(self) -> None:
-        m = MemorySettingsUpdate()
-        assert m.retention_sensitive_days is None
 
 
 # ---------- Cross-schema invariants ----------

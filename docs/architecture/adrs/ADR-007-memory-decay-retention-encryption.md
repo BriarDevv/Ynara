@@ -43,7 +43,7 @@ Las tres tocan campos concretos que van a aparecer en la migración Alembic inic
 - Cuando el modo activo es `bienestar`, el worker de consolidación setea `is_sensitive = true` en la entrada generada.
 - **Retention por flag**:
   - Default (productividad, estudio, vida, memoria): **12 meses**.
-  - `is_sensitive = true`: **180 días** default (≈6 meses), configurable por usuario via `PATCH /v1/memory/settings`. Rango aceptado: **30-365 días** (≈1-12 meses, donde 1 mes = 30 días). El código (constraint `users.retention_sensitive_days BETWEEN 30 AND 365`) usa días; la narrativa de meses es aproximada para comunicación al usuario.
+  - `is_sensitive = true`: **180 días** default (≈6 meses), configurable por usuario via `PATCH /v1/users/me` (campo `retention_sensitive_days`; el endpoint dedicado `/v1/memory/settings` quedó fuera del surface — la retención vive en el perfil del usuario). Rango aceptado: **30-365 días** (≈1-12 meses, donde 1 mes = 30 días). El código (constraint `users.retention_sensitive_days BETWEEN 30 AND 365`) usa días; la narrativa de meses es aproximada para comunicación al usuario.
 - `is_sensitive = true` también gatilla:
   - Audit log con flag `sensitive=true` para queries diferenciadas (regla del repo: audit log de 24 meses sobre toda operación de memoria).
   - `GET /v1/memory/export` separa las entradas sensibles en un JSON anidado distinto, para que el export sea inspecionable sin mezclar registros emocionales con el resto.

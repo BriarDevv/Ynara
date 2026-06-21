@@ -67,7 +67,9 @@ El usuario puede:
   ningún prefetch o crawler toque la superficie destructiva.
   Script equivalente: `scripts/reset-memory.sh`.
 - **Pausar.** Activar modo "no escribas memoria" temporalmente.
-  *(pendiente — endpoint `PATCH /v1/memory/settings` no implementado aún.)*
+  *(pendiente — feature futura con su propia columna en `users` + un endpoint
+  dedicado `PATCH /v1/memory/settings`; es distinto de la retención sensible, que
+  se configura por `PATCH /v1/users/me`.)*
 - **Exportar.** `GET /v1/memory/export` devuelve JSON estructurado
   con todo. Script: `scripts/export-user-data.sh`.
 
@@ -120,7 +122,7 @@ ADR-007 D1 (los de arriba), así un config viejo no rompe el job (#211).
 ### Retention de memoria episódica
 
 Default: 12 meses. Modo **Bienestar**: 6 meses (configurable
-1-12 meses por usuario via `PATCH /v1/memory/settings` — pendiente). Flag
+1-12 meses por usuario via `PATCH /v1/users/me`, campo `retention_sensitive_days`). Flag
 `is_sensitive=true` gatilla audit log diferenciado y export anidado.
 
 ### Encriptación a nivel campo

@@ -171,13 +171,13 @@
         "retention_sensitive_min_days": {
           "type": "integer",
           "minimum": 1,
-          "description": "Minimo configurable (dias) de la retention sensible via PATCH /v1/memory/settings. Default 30 (ADR-007 D2)."
+          "description": "Minimo configurable (dias) de la retention sensible via PATCH /v1/users/me (retention_sensitive_days). Default 30 (ADR-007 D2)."
         },
         "retention_sensitive_max_days": {
           "type": "integer",
           "minimum": 1,
           "maximum": 365,
-          "description": "Maximo configurable (dias) de la retention sensible. Cap duro de ADR-007 D2 (<=365). Default 365."
+          "description": "Maximo configurable (dias) de la retention sensible via PATCH /v1/users/me (retention_sensitive_days). Cap duro de ADR-007 D2 (<=365). Default 365."
         },
         "episodic_retention_interval_days": {
           "type": "integer",
