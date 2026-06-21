@@ -110,7 +110,9 @@ async def test_connectivity_admin_degrades_without_tailscale(
 async def test_connectivity_builds_targets_when_tailnet_up(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Con el tailnet arriba, arma las 2 URLs (Ollama /v1 + Open WebUI) con el IP del tailnet."""
+    """Con el tailnet arriba, arma las 4 URLs (panel admin + app web + Ollama /v1 +
+    Open WebUI) con el IP del tailnet, con el panel y la web primero (lo que usa un
+    invitado)."""
 
     async def _fake_probe(*_args: object, **_kwargs: object) -> TailscaleStatus:
         return TailscaleStatus(up=True, hostname="lonchos", tailnet_ip="100.64.0.1", detail="up")
@@ -125,10 +127,13 @@ async def test_connectivity_builds_targets_when_tailnet_up(
         data = ConnectivityOut.model_validate(resp.json())
         assert data.tailscale.up is True
         assert data.tailscale.tailnet_ip == "100.64.0.1"
-        assert len(data.targets) == 2
-        api_target = next(t for t in data.targets if t.port == 11434)
-        chat_target = next(t for t in data.targets if t.port == 3001)
-        assert api_target.url == "http://100.64.0.1:11434/v1"
-        assert chat_target.url == "http://100.64.0.1:3001"
+        assert len(data.targets) == 4
+        # Panel admin y app web van primero: son las superficies que usa el invitado.
+        assert [t.port for t in data.targets] == [3002, 3000, 11434, 3001]
+        by_port = {t.port: t for t in data.targets}
+        assert by_port[3002].url == "http://100.64.0.1:3002"
+        assert by_port[3000].url == "http://100.64.0.1:3000"
+        assert by_port[11434].url == "http://100.64.0.1:11434/v1"
+        assert by_port[3001].url == "http://100.64.0.1:3001"
     finally:
         app.dependency_overrides.clear()
