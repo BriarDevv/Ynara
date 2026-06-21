@@ -102,10 +102,12 @@ export function CheckinSheet({ open, onClose, onDone }: Props) {
                         }
                   }
                 >
-                  {/* Diamante visual de estado */}
+                  {/* Diamante visual de estado. transition de color, no `all`
+                      (que animaba width/height = reflow; regla del repo). El
+                      cambio de tamaño es instantáneo. */}
                   <span
                     aria-hidden
-                    className="inline-block rotate-45 transition-all duration-[var(--duration-base)]"
+                    className="inline-block rotate-45 transition-[background-color] duration-[var(--duration-base)]"
                     style={{
                       width: selected ? 16 : 12,
                       height: selected ? 16 : 12,
