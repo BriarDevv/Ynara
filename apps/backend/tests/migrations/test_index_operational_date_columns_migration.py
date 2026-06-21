@@ -25,9 +25,7 @@ from alembic.config import Config
 from alembic import command
 
 _BACKEND = Path(__file__).resolve().parents[2]
-_MIGRATION = (
-    _BACKEND / "alembic" / "versions" / "20260620_2200_index_operational_date_columns.py"
-)
+_MIGRATION = _BACKEND / "alembic" / "versions" / "20260620_2200_index_operational_date_columns.py"
 
 _NEW_REVISION = "d1c2b3a49e87"
 _PREV_REVISION = "f3a9c1d27e84"  # add_is_admin_and_admin_audit (head previo)
