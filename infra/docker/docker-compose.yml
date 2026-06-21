@@ -50,6 +50,34 @@ services:
       retries: 3
       start_period: 45s
 
+  beat:
+    image: ${DOCKER_REGISTRY}/ynara-backend:latest
+    container_name: ynara-beat
+    restart: unless-stopped
+    # Scheduler de los jobs periódicos definidos en celery_app.beat_schedule
+    # (decay_procedural, purge_audit_log, purge_episodic_memory). Va en un
+    # servicio APARTE del worker a propósito: con --concurrency=2, meter --beat
+    # dentro del worker emitiría cada job una vez por proceso (jobs duplicados).
+    # Un único proceso beat garantiza una sola emisión por schedule. SIN beat,
+    # los tres jobs no corren nunca: episodios vencidos no se purgan, el
+    # procedural no decae (ADR-007 D1) y el audit_log crece sin límite.
+    command: >
+      uv run celery -A app.workers.celery_app beat
+      --loglevel=info --schedule /app/celerybeat/celerybeat-schedule
+    env_file:
+      - ../../apps/backend/.env
+    depends_on:
+      - redis
+    networks:
+      - ynara
+    # Schedule persistente entre reinicios: los intervalos largos (audit 30d) no
+    # deben reiniciar su contador en cada restart. El dir /app/celerybeat lo crea
+    # el Dockerfile con owner appuser, así un volumen NUEVO hereda ese owner. Si
+    # actualizás desde un volumen viejo root-owned, recrealo (docker volume rm)
+    # para que beat (no-root) pueda escribir.
+    volumes:
+      - celerybeat-data:/app/celerybeat
+
   redis:
     image: redis:7-alpine
     container_name: ynara-redis
@@ -87,6 +115,7 @@ services:
 
 volumes:
   redis-data:
+  celerybeat-data:
 
 networks:
   ynara:
