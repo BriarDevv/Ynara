@@ -26,8 +26,6 @@ from app.core.token_store import RedisTokenStore
 from app.llm.clients.factory import build_llm_clients
 from app.llm.config import load_llm_config
 
-settings = get_settings()
-
 # Error tracking: no-op si no hay SENTRY_DSN. Antes de crear la app para
 # capturar errores de startup. El before_send limpia PII (regla #4).
 init_sentry()
@@ -56,8 +54,9 @@ class SecurityHeadersMiddleware:
     (2) cubre cualquier respuesta normal (2xx-4xx, incluidos 401/404/409/422/429).
 
     Los 3 headers base van siempre; ``Strict-Transport-Security`` solo cuando
-    ``settings.environment == "production"``. El environment se lee en cada request
-    (módulo-global ``settings``) para que los tests lo parcheen sin recrear la app.
+    ``get_settings().environment == "production"``. El environment se lee en cada
+    request vía ``get_settings()`` (lru_cache, O(1)): NO se captura un Settings a
+    nivel de módulo (convención del repo); los tests parchean ``main.get_settings``.
 
     Limitación conocida y ACEPTADA: un 500 NO MANEJADO lo genera el
     ``ServerErrorMiddleware`` de Starlette, que está POR FUERA de los
@@ -82,7 +81,7 @@ class SecurityHeadersMiddleware:
                 headers = MutableHeaders(scope=message)
                 for header, value in _BASE_SECURITY_HEADERS.items():
                     headers[header] = value
-                if settings.environment == "production":
+                if get_settings().environment == "production":
                     headers["Strict-Transport-Security"] = _HSTS_HEADER_VALUE
             await send(message)
 
@@ -109,6 +108,7 @@ async def lifespan(app: FastAPI):
     (``app.state.token_store``) que la blocklist + rate-limit consumen vía deps.
     ``health.check_redis`` reusa este mismo cliente (no abre uno por probe).
     """
+    settings = get_settings()
     # Guard anti-prod (PRIMERA línea): si NO es producción y el DATABASE_URL
     # apunta a una DB de prod conocida (Supabase) sin opt-in explícito, abortar
     # el arranque ANTES de construir cualquier cliente o tocar la DB. No se
@@ -163,14 +163,14 @@ app = FastAPI(
     version=__version__,
     description="API del asistente personal Ynara.",
     lifespan=lifespan,
-    docs_url="/docs" if settings.environment != "production" else None,
+    docs_url="/docs" if get_settings().environment != "production" else None,
     redoc_url=None,
 )
 
 # CORS: en producción solo los dominios de web/mobile.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=get_settings().cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
