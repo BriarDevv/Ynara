@@ -29,11 +29,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-# ``config.py`` vive en apps/backend/app/memory/; la raiz del repo esta 4
-# niveles arriba (memory -> app -> backend -> apps -> repo root). Mismo
-# calculo que ``app/llm/config.py`` (ambos cuelgan de apps/backend/app/<pkg>/).
-_REPO_ROOT = Path(__file__).resolve().parents[4]
-_CONFIG_PATH = _REPO_ROOT / "ynara.config.json"
+from app.core.paths import resolve_config_path
 
 
 class MemoryConfigError(RuntimeError):
@@ -241,9 +237,9 @@ def load_retention_config(*, config_path: Path | None = None) -> RetentionConfig
 
 @lru_cache(maxsize=1)
 def _load_cached_decay() -> DecayConfig:
-    return _build_decay_config(_read_config_file(_CONFIG_PATH))
+    return _build_decay_config(_read_config_file(resolve_config_path()))
 
 
 @lru_cache(maxsize=1)
 def _load_cached_retention() -> RetentionConfig:
-    return _build_retention_config(_read_config_file(_CONFIG_PATH))
+    return _build_retention_config(_read_config_file(resolve_config_path()))
