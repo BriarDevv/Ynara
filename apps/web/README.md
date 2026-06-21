@@ -49,5 +49,20 @@ pnpm typecheck      # tsc --noEmit
 
 Copiar `.env.example` a `.env.local` y completar.
 
+### Mocks (MSW) y dev contra el backend real
+
+`NEXT_PUBLIC_ENABLE_MOCKS` es **flag-driven con default ON** (mismo patrón que
+`apps/admin`). Sin `.env.local`, `pnpm dev` levanta con MSW sirviendo los
+endpoints fake (offline-first). Para apuntar al backend real:
+
+```sh
+# apps/web/.env.local
+NEXT_PUBLIC_ENABLE_MOCKS=false
+NEXT_PUBLIC_API_URL=http://localhost:8080
+```
+
+En `production` los mocks están **siempre off** sin importar el flag
+(hard-gate por `NODE_ENV`).
+
 > **Regla #5**: prohibido usar `@supabase/supabase-js` desde acá.
 > Todo dato pasa por la API de FastAPI.

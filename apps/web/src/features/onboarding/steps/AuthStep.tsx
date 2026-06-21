@@ -2,22 +2,20 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
+import { type AuthSession, logIn, signUp } from "@ynara/core/features/auth";
 import { useState } from "react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import type { z } from "zod";
 import { Button } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/TextField";
-import { ApiError, api } from "@/lib/api";
+// Importar desde `@/lib/api` corre el side-effect que configura el cliente HTTP
+// de core (base URL + token provider) antes de la primera llamada signUp/logIn.
+import { ApiError } from "@/lib/api";
 import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
 import { AUTH_STEP_COPY } from "../constants";
 import { useOnboardingNav } from "../hooks/useOnboardingNav";
-import {
-  type ApiErrorBody,
-  AuthResponseSchema,
-  LoginRequestSchema,
-  SignupRequestSchema,
-} from "../schemas";
+import { type ApiErrorBody, LoginRequestSchema, SignupRequestSchema } from "../schemas";
 import { useOnboardingStore } from "../store";
 
 type AuthMode = "signup" | "login";
@@ -49,13 +47,14 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
     mode: "onSubmit",
   });
 
+  // 2-step real contra el backend: signUp = register THEN token (core).
+  // register devuelve el UserOut (sin token); token() devuelve access_token.
+  // El refresh_token que devuelve token() se ignora por ahora (ver issue de
+  // refresh wiring): AuthSession solo expone { userId, token }.
   const mutation = useMutation({
-    mutationFn: async (values: SignupValues) => {
-      const raw = await api.post<unknown>("/v1/auth/signup", values);
-      return AuthResponseSchema.parse(raw);
-    },
-    onSuccess: (response) => {
-      setAuth({ userId: response.userId, token: response.token, mode: "signup" });
+    mutationFn: (values: SignupValues): Promise<AuthSession> => signUp(values),
+    onSuccess: (session) => {
+      setAuth({ userId: session.userId, token: session.token, mode: "signup" });
       next();
     },
     onError: (error) => bindServerError(error, form.setError),
@@ -161,13 +160,12 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
     mode: "onSubmit",
   });
 
+  // logIn de core = token() + me() (para resolver el userId). Devuelve la
+  // AuthSession lista para el draft store; el refresh_token se ignora por ahora.
   const mutation = useMutation({
-    mutationFn: async (values: LoginValues) => {
-      const raw = await api.post<unknown>("/v1/auth/login", values);
-      return AuthResponseSchema.parse(raw);
-    },
-    onSuccess: (response) => {
-      setAuth({ userId: response.userId, token: response.token, mode: "login" });
+    mutationFn: (values: LoginValues): Promise<AuthSession> => logIn(values),
+    onSuccess: (session) => {
+      setAuth({ userId: session.userId, token: session.token, mode: "login" });
       next();
     },
     onError: (error) => bindServerError(error, form.setError),
@@ -258,6 +256,11 @@ function AuthModeSwitchLink({ mode, onChange }: { mode: AuthMode; onChange: () =
  * coincide con un `field` del ApiErrorBody. Si es un error sin field,
  * va al campo `password` como fallback (la decisión de UX es no exponer
  * "este email no existe" para no enumerar).
+ *
+ * El backend real responde FastAPI-style: el 409 de `/register` (email ya
+ * registrado) y el 401 uniforme de `/token` traen `{ detail: string }` sin
+ * `field`, así que caen al fallback a `password` — que es justamente lo que
+ * queremos para no enumerar cuentas.
  */
 type SetErrorFn = (name: "email" | "password", value: { message: string }) => void;
 

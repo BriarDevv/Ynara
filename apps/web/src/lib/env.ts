@@ -6,9 +6,12 @@ import { z } from "zod";
  */
 const ClientEnvSchema = z.object({
   NEXT_PUBLIC_API_URL: z.string().url().default("http://localhost:8080"),
+  // Default ON: la web desarrolla offline-first sobre fixtures (MSW). Para
+  // apuntar al backend real se opta por salir con NEXT_PUBLIC_ENABLE_MOCKS=false
+  // (más NEXT_PUBLIC_API_URL al FastAPI) en .env.local. Mismo patrón que admin.
   NEXT_PUBLIC_ENABLE_MOCKS: z
     .enum(["true", "false"])
-    .default("false")
+    .default("true")
     .transform((v) => v === "true"),
 });
 
@@ -36,12 +39,15 @@ export const env: ClientEnv = parsed.data;
 /**
  * True si los mocks de MSW deben prenderse en este runtime.
  *
+ * **Flag-driven con default ON** (mismo patrón que apps/admin): los mocks se
+ * controlan exclusivamente con `NEXT_PUBLIC_ENABLE_MOCKS`, que default-ea a
+ * `true` en el schema. Resultado: `pnpm dev` sin `.env.local` sigue mockeando
+ * (offline-first), y se apunta al backend real opt-out con
+ * `NEXT_PUBLIC_ENABLE_MOCKS=false`.
+ *
  * **Hard-gate por NODE_ENV**: en `production` los mocks SIEMPRE están off
  * sin importar el flag, para evitar accidentes que filtren MSW al bundle
- * o expongan handlers de auth fake en el ambiente real. Si necesitás
- * activar mocks en un build no-dev (preview/staging), usar
- * `NEXT_PUBLIC_ENABLE_MOCKS=true` con `NODE_ENV !== "production"`.
+ * o expongan handlers de auth fake en el ambiente real.
  */
 export const shouldEnableMocks =
-  process.env.NODE_ENV !== "production" &&
-  (process.env.NODE_ENV === "development" || env.NEXT_PUBLIC_ENABLE_MOCKS);
+  process.env.NODE_ENV !== "production" && env.NEXT_PUBLIC_ENABLE_MOCKS;
