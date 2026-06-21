@@ -1,15 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mockeamos todos los hooks que TuView consume, para aislar la vista de la
-// infraestructura de red y TanStack Query (patrón de smoke test del proyecto).
+// Mock mutable de useUpdateMe (vi.hoisted) para poder variar mutateAsync por
+// test (p. ej. rechazar el PATCH y verificar el revert de la retención).
+const updateMe = vi.hoisted(() => ({
+  mutateAsync: vi.fn(),
+  isPending: false,
+  reset: vi.fn(),
+}));
 vi.mock("@/features/profile/api", () => ({
-  useUpdateMe: () => ({
-    mutateAsync: vi.fn(),
-    isPending: false,
-    reset: vi.fn(),
-  }),
+  useUpdateMe: () => updateMe,
 }));
 
 vi.mock("@/features/memory/api", () => ({
@@ -111,6 +112,12 @@ function renderTuView() {
 }
 
 describe("TuView — smoke", () => {
+  beforeEach(() => {
+    // Reset entre tests: por defecto el PATCH resuelve (los tests que quieren
+    // fallo lo sobrescriben).
+    updateMe.mutateAsync = vi.fn().mockResolvedValue({ display_name: "Mateo" });
+  });
+
   it("renderiza el nombre del usuario como heading principal", () => {
     renderTuView();
     expect(screen.getByRole("heading", { level: 1, name: "Mateo" })).toBeInTheDocument();
@@ -164,5 +171,23 @@ describe("TuView — smoke", () => {
   it("muestra el botón de exportar memoria", () => {
     renderTuView();
     expect(screen.getByRole("button", { name: /exportar mi memoria/i })).toBeInTheDocument();
+  });
+
+  it("revierte la retención al valor previo si el PATCH falla", async () => {
+    updateMe.mutateAsync = vi.fn().mockRejectedValue(new Error("boom"));
+    renderTuView();
+    // Default: "1 año" (365) seleccionado.
+    expect(screen.getByRole("radio", { name: /1 año/i })).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(screen.getByRole("radio", { name: /30 días/i }));
+
+    // El server rechaza → vuelve a 365, no queda en 30 (no miente sobre la retención).
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: /1 año/i })).toHaveAttribute("aria-checked", "true"),
+    );
+    expect(screen.getByRole("radio", { name: /30 días/i })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
   });
 });
