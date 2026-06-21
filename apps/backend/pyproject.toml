@@ -23,7 +23,6 @@ dependencies = [
     "pgvector>=0.3.0",
     "celery[redis]>=5.4.0",
     "redis>=5.0.0",
-    "authlib>=1.3.0",
     # JWT con PyJWT (no python-jose: sin mantenimiento desde 2021 + CVE-2024-33664
     # `denial of service` por claim `jwt` anidado; Ynara solo usa HS256 simétrico, así
     # que `pyjwt` pelado alcanza —el extra [crypto] solo hace falta para RS*/ES*/EdDSA).
@@ -33,7 +32,6 @@ dependencies = [
     # con bcrypt 4.x y no se usaba, así que se saca.
     "bcrypt>=4.1.0",
     "httpx>=0.27.0",
-    "boto3>=1.35.0",
     "sentry-sdk[fastapi]>=2.0.0",
 ]
 
