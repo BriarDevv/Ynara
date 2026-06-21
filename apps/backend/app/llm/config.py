@@ -26,11 +26,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import ServingEndpoint, Settings, get_settings
-
-# ``config.py`` vive en apps/backend/app/llm/; la raiz del repo esta 4
-# niveles arriba (llm -> app -> backend -> apps -> repo root).
-_REPO_ROOT = Path(__file__).resolve().parents[4]
-_CONFIG_PATH = _REPO_ROOT / "ynara.config.json"
+from app.core.paths import resolve_config_path
 
 
 class LlmConfigError(RuntimeError):
@@ -231,10 +227,10 @@ def load_llm_config(
     if config_path is None and settings is None:
         return _load_cached()
     resolved_settings = settings if settings is not None else get_settings()
-    resolved_path = config_path if config_path is not None else _CONFIG_PATH
+    resolved_path = config_path if config_path is not None else resolve_config_path()
     return _build_runtime_config(_read_config_file(resolved_path), resolved_settings)
 
 
 @lru_cache(maxsize=1)
 def _load_cached() -> LlmRuntimeConfig:
-    return _build_runtime_config(_read_config_file(_CONFIG_PATH), get_settings())
+    return _build_runtime_config(_read_config_file(resolve_config_path()), get_settings())
