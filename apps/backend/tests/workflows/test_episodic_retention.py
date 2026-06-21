@@ -32,11 +32,12 @@ class TestPurgeEpisodicTaskWrapper:
             patch(
                 "app.workflows.episodic_retention._async_purge_episodic", new_callable=AsyncMock
             ) as mock_async,
-            patch("app.workflows.episodic_retention.logger.exception") as mock_log,
+            patch("app.workflows.episodic_retention.logger.error") as mock_log,
         ):
             mock_async.side_effect = RuntimeError("DB caida")
             assert purge_episodic_memory() is None
             # El fallo se loguea (observabilidad): atrapa que alguien remueva el log.
+            # logger.error (NO .exception): regla #4, sin traceback con posible PII.
             mock_log.assert_called_once()
 
     def test_does_not_propagate_if_asyncio_run_raises(self) -> None:

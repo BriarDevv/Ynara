@@ -306,13 +306,15 @@ def consolidate_turn(
             session_id,
             applied,
         )
-    except Exception:
+    except Exception as exc:
         # Regla: el worker NUNCA muere por un fallo de consolidacion.
-        # Log tecnico sin datos de usuario (regla #4).
-        logger.exception(
-            "consolidate_turn: fallo al consolidar user=%s session=%s (sin datos de usuario)",
+        # regla #4: logger.error (NO logger.exception): el traceback / str(exc) podria
+        # arrastrar contenido de usuario a los logs. Se loguea solo el TIPO de excepcion.
+        logger.error(
+            "consolidate_turn: fallo al consolidar user=%s session=%s: %s (sin datos de usuario)",
             user_id,
             session_id,
+            type(exc).__name__,
         )
 
 
@@ -591,11 +593,13 @@ def consolidate_session(
             session_id,
             created,
         )
-    except Exception:
+    except Exception as exc:
         # Regla: el worker NUNCA muere por un fallo de consolidacion episodica.
-        # Log tecnico sin datos de usuario (regla #4).
-        logger.exception(
-            "consolidate_session: fallo al consolidar user=%s session=%s (sin datos de usuario)",
+        # regla #4: logger.error (NO logger.exception): el traceback / str(exc) podria
+        # arrastrar contenido de usuario a los logs. Se loguea solo el TIPO de excepcion.
+        logger.error(
+            "consolidate_session: fallo user=%s session=%s: %s (sin datos de usuario)",
             user_id,
             session_id,
+            type(exc).__name__,
         )
