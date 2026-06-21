@@ -15,6 +15,16 @@ type Props = {
   activeMode: ModeId;
 };
 
+/** Default del campo fecha/hora: ahora redondeado a la hora siguiente, en hora
+ *  local (datetime-local interpreta el string como local). Se recomputa en cada
+ *  apertura para que un segundo evento no nazca con la hora del primero. */
+function defaultStartAt(): string {
+  const d = new Date();
+  d.setMinutes(0, 0, 0);
+  d.setHours(d.getHours() + 1);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 /**
  * FAB redondo "+" fijo en la esquina inferior derecha + Sheet de creación
  * rápida de eventos (título + fecha/hora + duración + modo).
@@ -25,24 +35,25 @@ type Props = {
 export function EventFab({ fillVar, activeMode }: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [startAt, setStartAt] = useState(() => {
-    // Valor inicial: ahora redondeado a la hora siguiente
-    const d = new Date();
-    d.setMinutes(0, 0, 0);
-    d.setHours(d.getHours() + 1);
-    // datetime-local interpreta el string como hora LOCAL; compensamos el
-    // offset antes de serializar para no correr la hora por timezone.
-    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  });
+  const [startAt, setStartAt] = useState(defaultStartAt);
   const [durationMin, setDurationMin] = useState("60");
   const [modeId, setModeId] = useState<ModeId>(activeMode);
-  const [error, setError] = useState<string | null>(null);
+  // Errores por campo (aria-invalid + describedby vía TextField) separados del
+  // error de red, que sí es global.
+  const [titleError, setTitleError] = useState<string | null>(null);
+  const [durationError, setDurationError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { mutateAsync, isPending } = useCreateEvent();
   const titleRef = useRef<HTMLInputElement>(null);
 
   function handleOpen() {
-    setError(null);
+    // Recomputar la fecha/hora por defecto en cada apertura (si no, el segundo
+    // evento nace con la hora calculada al montar la pantalla).
+    setStartAt(defaultStartAt());
+    setTitleError(null);
+    setDurationError(null);
+    setSubmitError(null);
     setOpen(true);
   }
 
@@ -52,17 +63,19 @@ export function EventFab({ fillVar, activeMode }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setTitleError(null);
+    setDurationError(null);
+    setSubmitError(null);
     if (!title.trim()) {
-      setError("El título es obligatorio.");
+      setTitleError("El título es obligatorio.");
       titleRef.current?.focus();
       return;
     }
     const dur = Number(durationMin);
     if (!Number.isFinite(dur) || dur <= 0) {
-      setError("La duración debe ser un número positivo.");
+      setDurationError("La duración debe ser un número positivo.");
       return;
     }
-    setError(null);
     try {
       await mutateAsync({
         title: title.trim(),
@@ -70,13 +83,14 @@ export function EventFab({ fillVar, activeMode }: Props) {
         duration_min: dur,
         mode: modeId,
       });
-      // Limpiar y cerrar
+      // Limpiar y cerrar (incluido startAt, recomputado fresco).
       setTitle("");
+      setStartAt(defaultStartAt());
       setDurationMin("60");
       setModeId(activeMode);
       setOpen(false);
     } catch {
-      setError("No pudimos crear el evento. Intentá de nuevo.");
+      setSubmitError("No pudimos crear el evento. Intentá de nuevo.");
     }
   }
 
@@ -103,7 +117,11 @@ export function EventFab({ fillVar, activeMode }: Props) {
             label="Título"
             placeholder="Ej: Reunión con cátedra"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (titleError) setTitleError(null);
+            }}
+            error={titleError ?? undefined}
             required
             autoFocus
           />
@@ -122,7 +140,11 @@ export function EventFab({ fillVar, activeMode }: Props) {
             min="1"
             step="5"
             value={durationMin}
-            onChange={(e) => setDurationMin(e.target.value)}
+            onChange={(e) => {
+              setDurationMin(e.target.value);
+              if (durationError) setDurationError(null);
+            }}
+            error={durationError ?? undefined}
             required
           />
 
@@ -159,9 +181,11 @@ export function EventFab({ fillVar, activeMode }: Props) {
             </div>
           </fieldset>
 
-          {error ? (
+          {/* Error global solo para el fallo de red; los de validación van por
+              campo (aria-invalid + describedby en el TextField). */}
+          {submitError ? (
             <p role="alert" className="text-body-sm text-[var(--color-error)]">
-              {error}
+              {submitError}
             </p>
           ) : null}
 
