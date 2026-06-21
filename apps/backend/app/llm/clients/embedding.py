@@ -20,6 +20,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import httpx
 
+from app.core.constants import EMBEDDING_DIM
 from app.llm.clients._http_status import raise_for_status
 from app.llm.errors import LlmError, LlmTimeoutError, LlmUnavailableError
 from app.llm.schemas import ModelHealth
@@ -27,11 +28,16 @@ from app.llm.schemas import ModelHealth
 _EMBEDDINGS_PATH = "/embeddings"
 _MODELS_PATH = "/models"
 
-# bge-m3 dense, ADR-008. Constante local a propósito (no se importa de
-# models.memory): la capa de clientes LLM no debe arrastrar SQLAlchemy/los
-# modelos sagrados al importarse (ni sus tests). El valor 1024 es estable hasta
-# un ADR nuevo; si cambia, cambia en ambos lados con su gate sagrado.
-EMBEDDING_DIM = 1024
+# bge-m3 dense, ADR-008. ``EMBEDDING_DIM`` ahora es la fuente única de verdad de
+# ``app/core/constants.py`` (sin deps de SQLAlchemy, para que esta capa LLM la
+# importe sin arrastrar los modelos sagrados). Se re-exporta acá vía import para
+# no romper ``from app.llm.clients.embedding import EMBEDDING_DIM``.
+__all__ = [
+    "EMBEDDING_DIM",
+    "EmbeddingClient",
+    "FakeEmbeddingClient",
+    "VllmEmbeddingClient",
+]
 
 
 @runtime_checkable
