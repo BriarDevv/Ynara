@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, CheckConstraint, Integer, String, text
+from sqlalchemy import Boolean, CheckConstraint, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
@@ -37,6 +37,11 @@ class User(UUIDPKMixin, TimestampMixin, Base):
             "retention_sensitive_days BETWEEN 30 AND 365",
             name="retention_sensitive_days_range",
         ),
+        # created_at viene del TimestampMixin (compartido con tablas SAGRADAS): el
+        # índice se declara acá, a nivel User, para NO indexar created_at en las 3
+        # capas de memoria (eso requeriría gate regla #3). El panel admin filtra/agrupa
+        # por users.created_at (signups, growth) — sin índice son full scans a escala.
+        Index("ix_users_created_at", "created_at"),
     )
 
     email: Mapped[str | None] = mapped_column(String(254), unique=True, nullable=True)
