@@ -26,7 +26,7 @@ describe("PaywallSheet — smoke", () => {
   it("muestra los 4 beneficios", () => {
     render(<PaywallSheet open onClose={vi.fn()} />);
     expect(screen.getByText("Memoria sin límite")).toBeInTheDocument();
-    expect(screen.getByText("Avisos proactivos")).toBeInTheDocument();
+    expect(screen.getByText("Avisos proactivos ilimitados")).toBeInTheDocument();
     expect(screen.getByText("Modos avanzados")).toBeInTheDocument();
     expect(screen.getByText("Soporte prioritario")).toBeInTheDocument();
   });

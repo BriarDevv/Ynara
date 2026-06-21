@@ -91,7 +91,7 @@ describe("AvisosView", () => {
 
   it("muestra la nota de Premium al pie", () => {
     render(<AvisosView />);
-    expect(screen.getByText("Los avisos proactivos son parte de Premium")).toBeInTheDocument();
+    expect(screen.getByText(/premium suma anticipaciones ilimitadas/i)).toBeInTheDocument();
   });
 
   it("la sección activa tiene aria-live='polite'", () => {
