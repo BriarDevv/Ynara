@@ -122,6 +122,36 @@ def test_dev_allows_localhost_cors_and_empty_master_key() -> None:
 
 
 # ---------------------------------------------------------------------------
+# JWT_ALGORITHM allowlist (fail-fast: solo HMAC, anti algorithm-confusion)
+# ---------------------------------------------------------------------------
+
+
+def test_default_jwt_algorithm_is_hs256() -> None:
+    """Sin override, el algoritmo por default es HS256."""
+    assert _settings().jwt_algorithm == "HS256"
+
+
+@pytest.mark.parametrize("alg", ["HS256", "HS384", "HS512"])
+def test_jwt_algorithm_accepts_hmac(alg: str) -> None:
+    """Los tres algoritmos HMAC permitidos bootean OK."""
+    assert _settings(JWT_ALGORITHM=alg).jwt_algorithm == alg
+
+
+def test_jwt_algorithm_rejects_none() -> None:
+    """``JWT_ALGORITHM=none`` rompe el boot: evita el bypass de firma de PyJWT."""
+    with pytest.raises(ValueError, match=r"(?i)algorithm"):
+        _settings(JWT_ALGORITHM="none")
+
+
+@pytest.mark.parametrize("alg", ["RS256", "ES256", "HS999", ""])
+def test_jwt_algorithm_rejects_non_hmac(alg: str) -> None:
+    """Asimétricos (RS*/ES*) y cualquier valor fuera del set rompen el boot
+    (anti algorithm-confusion CVE-2022-39227)."""
+    with pytest.raises(ValueError, match=r"(?i)algorithm"):
+        _settings(JWT_ALGORITHM=alg)
+
+
+# ---------------------------------------------------------------------------
 # CORS_ORIGINS por env var (CSV human-friendly, mismo patrón que TRUSTED_PROXY_IPS)
 # ---------------------------------------------------------------------------
 

@@ -112,7 +112,13 @@ class Settings(BaseSettings):
 
     # Auth
     jwt_secret: str = Field(..., alias="JWT_SECRET")
-    jwt_algorithm: str = Field("HS256", alias="JWT_ALGORITHM")
+    # Allowlist de algoritmos HMAC (fail-fast en boot, no `str` libre): Ynara firma
+    # con secret simétrico, así que solo HS* es válido. Un `str` libre permitía
+    # `JWT_ALGORITHM=none` (bypass total de firma en PyJWT) o un asimétrico (RS*/ES*)
+    # con secret corto, que dispara el patrón de algorithm-confusion CVE-2022-39227.
+    # El `Literal` hace que un valor fuera del set rompa el arranque (mismo estilo
+    # que `llm_backend`), cerrando el vector sin depender de validación en `verify_token`.
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = Field("HS256", alias="JWT_ALGORITHM")
     jwt_expire_minutes: int = Field(10080, alias="JWT_EXPIRE_MINUTES")
     # TTL del refresh token. Mayor que el access (30 dias por default). Se usa
     # el MISMO secret/alg que el access; el claim `type` separa los dominios.
