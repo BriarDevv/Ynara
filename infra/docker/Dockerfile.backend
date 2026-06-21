@@ -62,9 +62,12 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://localhost:8080/v1/health || exit 1
 
-# Producción: gunicorn + uvicorn workers
+# Producción: gunicorn + uvicorn workers.
+# 2 workers (no 4): el circuit breaker del LLM es per-proceso y la caja on-prem
+# tiene una sola GPU (ADR-014/ADR-020) -> más workers = split-brain del breaker
+# sin beneficio (el cuello de botella es el serving, no los workers HTTP async).
 CMD ["uv", "run", "gunicorn", "app.main:app", \
      "--worker-class", "uvicorn.workers.UvicornWorker", \
-     "--workers", "4", \
+     "--workers", "2", \
      "--bind", "0.0.0.0:8080", \
      "--access-logfile", "-"]

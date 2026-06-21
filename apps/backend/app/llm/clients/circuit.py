@@ -19,6 +19,10 @@ prueba a la vez (flag ``_probe_in_flight``): como ``allow()`` es sincrono,
 entre coroutines de asyncio que comparten el breaker no hay carrera (nada se
 intercala en medio del metodo). NO es thread-safe (sin lock): el modelo de
 uso es asyncio en 1-2 procesos, no threads.
+
+El estado del breaker es per-proceso (uno por worker de gunicorn). La cota de
+despliegue de 1-2 workers que lo hace correcto (sin breaker distribuido) esta
+fijada en ADR-020 (se apoya en ADR-014: una sola GPU on-prem).
 """
 
 from __future__ import annotations
