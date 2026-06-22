@@ -21,6 +21,7 @@ from app.core.ratelimit import (
     _memory_search_counter_key,
     _refresh_counter_key,
     _sessions_counter_key,
+    _tasks_counter_key,
     check_chat_rate_limit,
     check_login_rate_limit,
     check_memory_export_rate_limit,
@@ -28,6 +29,7 @@ from app.core.ratelimit import (
     check_refresh_rate_limit,
     check_register_rate_limit,
     check_sessions_rate_limit,
+    check_tasks_rate_limit,
     register_login_failure,
     reset_login_rate_limit,
 )
@@ -42,6 +44,7 @@ _CHAT_MAX = 2
 _EXPORT_MAX = 2
 _SEARCH_MAX = 2
 _SESSIONS_MAX = 3
+_TASKS_MAX = 3
 
 
 def _settings() -> Settings:
@@ -65,6 +68,8 @@ def _settings() -> Settings:
         MEMORY_SEARCH_WINDOW_SECONDS=60,
         SESSIONS_MAX_REQUESTS=_SESSIONS_MAX,
         SESSIONS_WINDOW_SECONDS=60,
+        TASKS_MAX_REQUESTS=_TASKS_MAX,
+        TASKS_WINDOW_SECONDS=60,
     )
 
 
@@ -259,6 +264,37 @@ async def test_sessions_bucket_isolation_by_user() -> None:
     assert await check_sessions_rate_limit(store, user_id=b) is True
 
 
+# ---------- tasks rate-limit (dominio TAREAS, Fase D1) ----------
+
+
+async def test_tasks_rate_limit_by_user() -> None:
+    """Permite hasta el max; el (max+1)-ésimo se rechaza. Bucket por user_id.
+
+    Espejo de ``test_sessions_rate_limit_by_user`` / ``test_events_*``: ejercita el
+    ciclo incr-hasta-threshold del bucket de tareas (las 2 rutas list/patch lo comparten).
+    Sin esto, una regresión en la lógica del bucket (prefijo equivocado o campo de config
+    incorrecto) pasaría inadvertida.
+    """
+    store = InMemoryTokenStore()
+    user_id = "user-uuid-1"
+    # Debajo del threshold: permite (retorna True).
+    for _ in range(_TASKS_MAX):
+        assert await check_tasks_rate_limit(store, user_id=user_id) is True
+    # Al llegar al threshold: rechaza (retorna False).
+    assert await check_tasks_rate_limit(store, user_id=user_id) is False
+
+
+async def test_tasks_bucket_isolation_by_user() -> None:
+    """Dos user_id distintos no comparten contador (aislamiento por usuario)."""
+    store = InMemoryTokenStore()
+    a, b = "user-a", "user-b"
+    for _ in range(_TASKS_MAX):
+        await check_tasks_rate_limit(store, user_id=a)
+    # 'a' está bloqueado; 'b' (otro user) sigue permitido.
+    assert await check_tasks_rate_limit(store, user_id=a) is False
+    assert await check_tasks_rate_limit(store, user_id=b) is True
+
+
 async def test_fail_open_when_store_degrades() -> None:
     """Si el store degrada (incr_with_ttl => 0), los check_* nuevos PERMITEN (fail-open).
 
@@ -267,12 +303,15 @@ async def test_fail_open_when_store_degrades() -> None:
     """
     store = RedisTokenStore(_BoomRedisClient())
     # Muchos más golpes que el threshold: igual permite porque el contador es 0.
-    for _ in range(_REFRESH_MAX + _CHAT_MAX + _EXPORT_MAX + _SEARCH_MAX + _SESSIONS_MAX + 5):
+    for _ in range(
+        _REFRESH_MAX + _CHAT_MAX + _EXPORT_MAX + _SEARCH_MAX + _SESSIONS_MAX + _TASKS_MAX + 5
+    ):
         assert await check_refresh_rate_limit(store, ip="1.2.3.4", sub="s") is True
         assert await check_chat_rate_limit(store, user_id="u") is True
         assert await check_memory_export_rate_limit(store, user_id="u") is True
         assert await check_memory_search_rate_limit(store, user_id="u") is True
         assert await check_sessions_rate_limit(store, user_id="u") is True
+        assert await check_tasks_rate_limit(store, user_id="u") is True
 
 
 def test_user_id_buckets_keep_raw_uuid() -> None:
@@ -287,3 +326,4 @@ def test_user_id_buckets_keep_raw_uuid() -> None:
     assert user_id in _memory_search_counter_key(user_id)
     assert user_id in _refresh_counter_key("1.2.3.4", user_id)
     assert user_id in _sessions_counter_key(user_id)
+    assert user_id in _tasks_counter_key(user_id)
