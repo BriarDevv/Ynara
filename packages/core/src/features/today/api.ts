@@ -12,16 +12,34 @@ import {
   type TasksResponse,
   TasksResponseSchema,
 } from "@ynara/shared-schemas";
-import { api } from "../../api";
+import { ApiError, api } from "../../api";
 import { qk } from "../../query-keys";
 
 /**
  * Hooks de data de "Hoy", compartidos web + mobile (ADR-012). Validación Zod
  * en cliente: un contrato roto se ve en dev.
  *
- * PROVISIONAL: hoy corren contra mocks (no hay backend de tareas todavía —
- * `/v1/tasks`, `/v1/suggestions`, `/v1/recap`).
+ * `/v1/tasks` ya existe en el backend (Tanda 1). `/v1/suggestions` y
+ * `/v1/recap` NO están implementados todavía (decisión de producto, roadmap
+ * D2/F); sus hooks degradan limpio ante un 404 para que Hoy renderice sin
+ * bloqueos mientras esos endpoints no existan.
  */
+
+/**
+ * Helper de degradación graceful para endpoints no implementados aún.
+ * Convierte un 404 (endpoint inexistente por diseño) en el valor `fallback`
+ * en vez de propagar error. Otros errores (5xx, red, 401…) siguen propagando
+ * para que react-query los trate como error real y el usuario pueda reintentar.
+ */
+async function notImplementedOr<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await promise;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return fallback;
+    throw err;
+  }
+}
+
 export function useTasks() {
   return useQuery({
     queryKey: qk.today.tasks(),
@@ -35,20 +53,24 @@ export function useTasks() {
 export function useSuggestions() {
   return useQuery({
     queryKey: qk.today.suggestions(),
-    queryFn: async (): Promise<Suggestion[]> => {
-      const raw = await api.get<unknown>("/v1/suggestions");
-      return SuggestionsResponseSchema.parse(raw).items;
-    },
+    queryFn: (): Promise<Suggestion[]> =>
+      notImplementedOr(
+        api
+          .get<unknown>("/v1/suggestions")
+          .then((raw) => SuggestionsResponseSchema.parse(raw).items),
+        [],
+      ),
   });
 }
 
 export function useRecap() {
   return useQuery({
     queryKey: qk.today.recap(),
-    queryFn: async (): Promise<Recap> => {
-      const raw = await api.get<unknown>("/v1/recap");
-      return RecapSchema.parse(raw);
-    },
+    queryFn: (): Promise<Recap | undefined> =>
+      notImplementedOr(
+        api.get<unknown>("/v1/recap").then((raw) => RecapSchema.parse(raw)),
+        undefined,
+      ),
   });
 }
 

@@ -62,11 +62,15 @@ export type UserUpdate = z.infer<typeof UserUpdateSchema>;
  * Respuesta de `PATCH /v1/users/me` (y `GET /v1/auth/me`): `UserOut`. **Nunca**
  * incluye `password_hash`. `retention_sensitive_days` va como entero pelado (la
  * respuesta refleja el valor guardado; el rango lo garantiza el backend).
+ *
+ * `display_name` es nullable: el modelo Pydantic (`User.display_name: str | None`)
+ * puede devolver `null` cuando el usuario todavía no completó el paso de nombre
+ * (ej. registro efímero sin onboarding). "Pydantic gana, Zod sigue."
  */
 export const UserOutSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
-  display_name: z.string(),
+  display_name: z.string().nullable(),
   onboarding_completed: z.boolean(),
   retention_sensitive_days: z.number().int(),
   created_at: z.string().datetime({ offset: true }),

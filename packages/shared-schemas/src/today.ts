@@ -6,13 +6,11 @@ import { ModeSchema } from "./modes";
  * Contrato del dashboard **Hoy** (build-plan Fase E): prioridades del día,
  * sugerencias proactivas y recap del día.
  *
- * **PROVISIONAL — todavía no hay backend.** A diferencia de memoria (endpoints
- * reales), el dominio Hoy se construye *mock-first*: estos schemas son el
- * contrato tipado contra el que corre el handler MSW, y la fuente de verdad
- * cuando el backend exista. Track backend (FRONTEND-APP-BUILD-PLAN §4):
- *  - `Task` model + CRUD (`/v1/tasks`) → conecta las prioridades. *(gate regla #1)*
- *  - Sugerencias y recap dependen del **LLM real** (se generan a partir de
- *    memoria + tareas + agenda), así que llegan más tarde.
+ * Estado actual de los endpoints (junio 2026):
+ *  - `/v1/tasks` → **operativo** (backend real, Tanda 1).
+ *  - `/v1/suggestions` → **pendiente** (requiere LLM real + agenda; roadmap D2/F).
+ *  - `/v1/recap` → **pendiente** (requiere LLM real; roadmap F). Hasta que
+ *    existan, los hooks degradan a resultado vacío ante 404 (no error visible).
  *
  * Snake_case y `datetime({ offset: true })` para espejar la convención Pydantic
  * del resto del backend (FastAPI), de modo que al cablear el endpoint real el
