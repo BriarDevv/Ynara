@@ -250,6 +250,64 @@ async def test_route_agent_mode_enables_thinking() -> None:
 
 
 # ---------------------------------------------------------------------------
+# UNIT: preambulo de fecha/hora actual en el system (gap E2E)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_route_injects_datetime_preamble_in_system() -> None:
+    """``route()`` antepone el preambulo de fecha/hora actual al system prompt.
+
+    Cierra el gap E2E: sin esto el modelo no podia resolver "mañana"/"el lunes" al
+    agendar. Se parchea ``current_now`` a una fecha fija para verificar el string
+    determinista que llega al complete().
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.llm import router as router_mod
+    from app.llm.context import MemoryContext
+    from app.llm.tools.registry import default_registry
+
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_result(_result(text="ok", finish_reason="stop", model_name="gemma4"))
+
+    empty_ctx = MemoryContext(
+        semantic_store=None,
+        episodic_store=None,
+        procedural_store=None,
+        _default_reg=default_registry(),
+        _memory_reg=None,
+    )
+    fixed = datetime(2026, 7, 22, 18, 30, tzinfo=ZoneInfo("America/Argentina/Buenos_Aires"))
+
+    original = router_mod.build_memory_context
+    router_mod.build_memory_context = lambda **_kw: empty_ctx
+    try:
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(router_mod, "current_now", lambda: fixed)
+            await route(
+                ChatRequest(text="agendame gym mañana 18hs", mode=Mode.VIDA, session_id="s-dt"),
+                session=MagicMock(),
+                user_id=uuid.uuid4(),
+                llm_client=fake,
+                embedder=FakeEmbeddingClient(),
+                reranker=FakeReranker(),
+                config=_cfg(),
+            )
+    finally:
+        router_mod.build_memory_context = original
+
+    system_msg = fake.complete_calls[0]["messages"][0]
+    assert system_msg.role == "system"
+    # El preambulo va al inicio del system (ancla la fecha antes del resto).
+    assert system_msg.content.startswith("Fecha y hora actual: ")
+    # 2026-07-22 cae miércoles (el dia se deriva con weekday(), no se hardcodea).
+    assert "miércoles 22 de julio de 2026, 18:30 (hora de Argentina)" in system_msg.content
+    assert "resolver fechas relativas" in system_msg.content
+
+
+# ---------------------------------------------------------------------------
 # UNIT: overflow / errores permanentes -> fallback (sin DB)
 # ---------------------------------------------------------------------------
 

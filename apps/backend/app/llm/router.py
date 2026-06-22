@@ -94,6 +94,7 @@ from app.llm.context import (
     render_context_block,
 )
 from app.llm.errors import LlmError, ModelNotServedError
+from app.llm.prompts.datetime_context import build_now_preamble, current_now
 from app.llm.prompts.loader import load_prompt
 from app.llm.schemas import ChatMessage, ChatRequest, ChatResponse
 from app.llm.tool_loop import run_tool_loop
@@ -202,12 +203,20 @@ async def route(
     budget = context_budget(max_model_len=max_model_len, system_prompt=system_prompt)
     context_block = await render_context_block(mem_ctx, query=request.text, budget_tokens=budget)
 
-    # Concatenar el bloque al system prompt en un STRING NUEVO (decision #6: no
-    # mutar el prompt cacheado). Si el bloque esta vacio, el prompt queda igual.
+    # Preambulo de fecha/hora actual (timezone-aware, huso de la app). Cierra el gap
+    # E2E: sin esto el modelo NO podia resolver fechas relativas ("mañana", "el
+    # lunes") al agendar. Se construye por-run con current_now() (lee el reloj una
+    # sola vez aca); NO se cachea porque cambia cada minuto.
+    now_preamble = build_now_preamble(current_now())
+
+    # Concatenar preambulo + bloque de memoria al system prompt en un STRING NUEVO
+    # (decision #6: no mutar el prompt cacheado). El preambulo va al inicio para que
+    # el modelo ancle las fechas relativas antes de leer el resto del system. Si el
+    # bloque de memoria esta vacio, solo se antepone el preambulo.
     if context_block:
-        final_system = f"{system_prompt}\n\n{context_block}"
+        final_system = f"{now_preamble}\n\n{system_prompt}\n\n{context_block}"
     else:
-        final_system = system_prompt
+        final_system = f"{now_preamble}\n\n{system_prompt}"
 
     specs = mem_ctx.tool_specs(mode_cfg.tools_enabled)
 

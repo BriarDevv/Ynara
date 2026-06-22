@@ -234,6 +234,45 @@ class TestAsyncAgentPassUnit:
         assert len(fake_store.create_calls) == 1
         assert fake_store.create_calls[0].title == "Dentista"
 
+    async def test_system_prompt_includes_datetime_preamble(self) -> None:
+        """El system de la pasada antepone el preámbulo de fecha/hora actual (gap E2E).
+
+        Sin esto el agente no podía resolver "mañana"/"el lunes" y pedía la fecha en
+        vez de agendar. Se parchea ``current_now`` a una fecha fija y se inspecciona el
+        ``system`` que el FakeLlmClient recibió en ``complete_calls``.
+        """
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        client = _make_llm_with_create_event(title="Gym")
+        session = MagicMock(spec=AsyncSession)
+        fake_store = _FakeCalendarStore()
+        fixed = datetime(2026, 7, 22, 18, 30, tzinfo=ZoneInfo("America/Argentina/Buenos_Aires"))
+
+        with (
+            patch("app.workflows.agent_pass.CalendarEventStore", return_value=fake_store),
+            patch("app.workflows.agent_pass.current_now", return_value=fixed),
+        ):
+            await _async_agent_pass(
+                user_id=USER_ID,
+                session_id=SESSION_ID,
+                user_msg="agendame gym mañana 18hs",
+                model_response="dale, lo anoto",
+                mode=MODE_WITH_CALENDAR,
+                llm_client=client,
+                session=session,
+            )
+
+        # El primer complete recibió el system con el preámbulo de fecha al inicio.
+        system_msg = client.complete_calls[0]["messages"][0]
+        assert system_msg.role == "system"
+        assert system_msg.content.startswith("Fecha y hora actual: ")
+        # 2026-07-22 cae miércoles (el día se deriva con weekday(), no se hardcodea).
+        assert "miércoles 22 de julio de 2026, 18:30 (hora de Argentina)" in system_msg.content
+        assert "resolver fechas relativas" in system_msg.content
+        # El cuerpo estático sigue presente (no se perdió al anteponer el preámbulo).
+        assert "ACCIONAR" in system_msg.content
+
     async def test_no_tool_call_means_zero_actions(self) -> None:
         """Si el modelo no llama ninguna tool (nada para agendar), 0 acciones."""
         client = FakeLlmClient(served_models=frozenset({"qwen"}))
