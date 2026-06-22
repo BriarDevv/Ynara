@@ -57,6 +57,7 @@ from app.core.config import Settings, get_settings
 from app.llm.clients.base import LLMClient
 from app.llm.clients.factory import build_llm_client
 from app.llm.config import load_llm_config
+from app.llm.prompts.datetime_context import build_now_preamble, current_now
 from app.llm.schemas import ChatMessage
 from app.llm.tool_loop import run_tool_loop
 from app.llm.tools.calendar import calendar_registry
@@ -79,12 +80,15 @@ _AGENT_TOOL_BUILDERS: dict[str, Callable[[AsyncSession, UUID], ToolRegistry]] = 
     "task": lambda session, user_id: task_registry(TaskStore(session, user_id)),
 }
 
-# System prompt de la pasada del agente. NO es el prompt conversacional del modo
-# (ese lo usa gemma para hablar): este instruye a qwen a OBSERVAR lo conversado y
-# ACCIONAR las tools si corresponde, sin charlar. Estático (no depende del usuario).
+# Cuerpo ESTÁTICO del system prompt de la pasada del agente. NO es el prompt
+# conversacional del modo (ese lo usa gemma para hablar): este instruye a qwen a
+# OBSERVAR lo conversado y ACCIONAR las tools si corresponde, sin charlar. No depende
+# del usuario. El system REAL que llega al modelo se arma por-run en
+# ``_build_agent_pass_system`` anteponiendo el preámbulo de fecha/hora actual (para
+# resolver "mañana", "el lunes", etc.); por eso esto es el cuerpo, no el system final.
 # S105: NO es un secreto — es el system prompt del agente (el nombre contiene
 # "SYSTEM" y dispara el falso positivo de hardcoded-password).
-_AGENT_PASS_SYSTEM = (
+_AGENT_PASS_SYSTEM_BODY = (
     "Sos el agente de Ynara que trabaja por detrás de la conversación. "  # noqa: S105
     "Recibís un turno ya conversado (mensaje del usuario + respuesta del asistente). "
     "Tu tarea es ACCIONAR lo que se haya acordado o pedido usando las tools disponibles: "
@@ -120,6 +124,18 @@ def _build_turn_message(user_msg: str, model_response: str) -> str:
     NO se loguea (es contenido del usuario, regla #4): solo viaja al LLM on-prem.
     """
     return f"Usuario: {user_msg}\nAsistente: {model_response}"
+
+
+def _build_agent_pass_system() -> str:
+    """Arma el system prompt REAL de la pasada: preámbulo de fecha/hora + cuerpo.
+
+    Se construye POR-RUN (no como constante estática) porque antepone el preámbulo de
+    fecha/hora actual (``current_now()`` lee el reloj acá una sola vez). Sin esto, el
+    agente NO podía resolver "mañana"/"el lunes" y pedía la fecha en vez de agendar
+    (gap E2E). El huso es el de la app (Argentina), el mismo que usa el router.
+    """
+    now_preamble = build_now_preamble(current_now())
+    return f"{now_preamble}\n\n{_AGENT_PASS_SYSTEM_BODY}"
 
 
 def _build_agent_registry(
@@ -169,7 +185,7 @@ async def _run_agent_pass_in_db(
     specs = agent_reg.specs_for(enabled_namespaces)
 
     messages = [
-        ChatMessage(role="system", content=_AGENT_PASS_SYSTEM),
+        ChatMessage(role="system", content=_build_agent_pass_system()),
         ChatMessage(role="user", content=_build_turn_message(user_msg, model_response)),
     ]
 
