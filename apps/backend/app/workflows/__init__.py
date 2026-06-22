@@ -13,8 +13,19 @@ inexistente; pero ``find_related_module`` importa primero el paquete
 imports el worker arrancaba con el registro vacío y rechazaba cada task encolada
 (``Received unregistered task 'workflows.consolidate_turn'``). Los módulos se
 re-exportan vía ``__all__`` para que el linter no los marque como no usados (F401).
+
+⚠️ AL AGREGAR UN MÓDULO DE TASK NUEVO: sumalo a este import (y a ``__all__``), si no
+el worker NO registra sus tasks (el chat las encola y se pierden como
+``Received unregistered task``). El autodiscovery NO descubre módulos sueltos del
+paquete por sí solo. Cubierto por ``tests/workers/test_task_registration.py``.
 """
 
-from app.workflows import audit_retention, consolidation, decay, episodic_retention
+from app.workflows import (
+    agent_pass,
+    audit_retention,
+    consolidation,
+    decay,
+    episodic_retention,
+)
 
-__all__ = ["audit_retention", "consolidation", "decay", "episodic_retention"]
+__all__ = ["agent_pass", "audit_retention", "consolidation", "decay", "episodic_retention"]
