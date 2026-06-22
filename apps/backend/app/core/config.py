@@ -180,6 +180,12 @@ class Settings(BaseSettings):
     # fail-OPEN si Redis cae.
     events_max_requests: int = Field(120, alias="EVENTS_MAX_REQUESTS")
     events_window_seconds: int = Field(60, alias="EVENTS_WINDOW_SECONDS")
+    # Rate-limit de /v1/tasks (dominio TAREAS, Fase D1), por user_id. UN bucket
+    # compartido por las 2 rutas (list/patch): default amplio para cubrir el uso
+    # interactivo del dashboard "Hoy" y solo cortar scripting abusivo. Mismo criterio
+    # que el bucket de events. fail-open si Redis cae.
+    tasks_max_requests: int = Field(120, alias="TASKS_MAX_REQUESTS")
+    tasks_window_seconds: int = Field(60, alias="TASKS_WINDOW_SECONDS")
 
     # Reverse-proxy / IP real del cliente (issue #151). El rate-limit anti-fuerza-bruta
     # cuenta por IP; detrás de Cloudflare Tunnel el peer que ve uvicorn es el conector
