@@ -27,8 +27,9 @@ from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
 from app.llm.config import ModeConfig
 from app.llm.schemas import ToolSpec
+from app.llm.tools.agent_registry import build_chat_tool_registry
 from app.llm.tools.memory import memory_registry
-from app.llm.tools.registry import ToolRegistry, default_registry
+from app.llm.tools.registry import ToolRegistry
 from app.memory.episodic import EpisodicMemoryStore
 from app.memory.procedural import ProceduralMemoryStore
 from app.memory.semantic import SemanticMemoryStore
@@ -110,7 +111,14 @@ class MemoryContext:
         semantic_store: Store semantico, o None si 'semantic' no esta en layers.
         episodic_store: Store episodico, o None si 'episodic' no esta en layers.
         procedural_store: Store procedural, o None si 'procedural' no esta en layers.
-        _default_reg: Registry con calendar + reminder (siempre presente).
+        _default_reg: Registry de tools del chat de produccion para el modo activo
+            (ADR-022). A diferencia del playground (``default_registry()``, cero
+            efecto): trae las tools de agente REALES (``calendar``/``task``) de los
+            namespaces que el modo habilita en ``tools_enabled`` (escriben de verdad,
+            atomicas con el commit del turno) MAS los stubs ``not_wired`` de
+            ``reminder`` si esta habilitado (sin backend real todavia). Gateado
+            estrictamente por modo: para los modos gemma (``tools_enabled=[]``) queda
+            vacio. Lo arma ``build_chat_tool_registry``.
         _memory_reg: Registry con memory tools, o None si no procede.
     """
 
@@ -123,10 +131,15 @@ class MemoryContext:
     def tool_specs(self, tools_enabled: list[str]) -> list[ToolSpec]:
         """ToolSpec para el modelo, segun los namespaces habilitados.
 
-        Combina default_registry + memory_registry si 'memory' esta en
-        tools_enabled Y existe un semantic_store (decision de diseno: si
-        memory esta en tools_enabled pero no hay semantic_store, no tiene
-        sentido exponer memory.search al modelo).
+        Combina ``_default_reg`` (las tools del chat para el modo, ver el atributo) +
+        memory_registry si 'memory' esta en tools_enabled Y existe un semantic_store
+        (decision de diseno: si memory esta en tools_enabled pero no hay semantic_store,
+        no tiene sentido exponer memory.search al modelo).
+
+        ``specs_for(tools_enabled)`` filtra por namespace: como ``_default_reg`` ya se
+        construyo gateado por el MISMO ``tools_enabled``, solo expone las tools cuyos
+        namespaces el modo habilita (no hace falta tocar este metodo: el filtro es
+        idempotente respecto del gating del registry).
 
         Args:
             tools_enabled: Lista de namespaces habilitados para el modo activo.
@@ -173,6 +186,14 @@ def build_memory_context(
     El memory_registry se construye SOLO si hay un semantic_store (las 4 memory
     tools se ligan al SemanticMemoryStore; sin el, no tiene sentido construirlo).
 
+    ``_default_reg`` (ADR-022): se arma con ``build_chat_tool_registry(session,
+    user_id, mode_cfg.tools_enabled)`` — las tools de agente REALES (``calendar`` /
+    ``task``) de los namespaces que el modo habilita (escriben de verdad en el turno,
+    atomicas con el commit) MAS los stubs ``not_wired`` de ``reminder`` si esta
+    habilitado. Reemplaza el ``default_registry()`` cero-efecto que se usaba antes (ese
+    sigue intacto para el playground observado, ADR-019). Gateado estrictamente por
+    modo: un modo gemma (``tools_enabled=[]``) obtiene un registry vacio.
+
     Args:
         session: AsyncSession de la request actual.
         user_id: UUID del usuario (liga la key de cifrado en los stores).
@@ -204,7 +225,7 @@ def build_memory_context(
         semantic_store=semantic_store,
         episodic_store=episodic_store,
         procedural_store=procedural_store,
-        _default_reg=default_registry(),
+        _default_reg=build_chat_tool_registry(session, user_id, mode_cfg.tools_enabled),
         _memory_reg=mem_reg,
     )
 

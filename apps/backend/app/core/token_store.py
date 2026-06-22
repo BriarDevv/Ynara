@@ -54,8 +54,8 @@ _ROTATED_GRACE_PREFIX = "auth:rotated_grace:"
 # contador no expira nunca. El script lo hace en un único round-trip indivisible
 # y NO usa ``EXPIRE NX`` (que exige Redis SERVER >= 7); funciona desde Redis 2.6.
 _INCR_WITH_TTL_LUA = (
-    'local c = redis.call("INCR", KEYS[1])\n'
-    'if c == 1 then redis.call("EXPIRE", KEYS[1], ARGV[1]) end\n'
+    'local c = redis.call("INCRBY", KEYS[1], ARGV[2])\n'
+    'if c == tonumber(ARGV[2]) then redis.call("EXPIRE", KEYS[1], ARGV[1]) end\n'
     "return c"
 )
 
@@ -137,8 +137,14 @@ class TokenStore(Protocol):
         ...
 
     # --- Primitivas genéricas (rate-limit) ---
-    async def incr_with_ttl(self, key: str, *, ttl_seconds: int) -> int:
-        """INCR atómico; setea TTL solo si la key nace (primer incr). Devuelve el contador."""
+    async def incr_with_ttl(self, key: str, *, ttl_seconds: int, amount: int = 1) -> int:
+        """INCRBY atómico; setea TTL solo si la key nace. Devuelve el contador.
+
+        ``amount`` (default 1) permite cargar varios "puntos" de presupuesto en una sola
+        operación (p.ej. la amplificación de escrituras de un turno de chat con tools). El
+        EXPIRE se setea SOLO cuando la key nace (el contador devuelto == ``amount``), igual
+        que con el incr de a 1: la ventana fija no se renueva en cada carga.
+        """
         ...
 
     async def set_flag(self, key: str, *, ttl_seconds: int) -> None:
@@ -283,12 +289,13 @@ class RedisTokenStore:
         return (jti_revoked, family_revoked)
 
     # --- Primitivas genéricas ---
-    async def incr_with_ttl(self, key: str, *, ttl_seconds: int) -> int:
+    async def incr_with_ttl(self, key: str, *, ttl_seconds: int, amount: int = 1) -> int:
         try:
-            # INCR + EXPIRE atómico vía Lua (ver _INCR_WITH_TTL_LUA): el EXPIRE
-            # corre solo en el primer incr (fixed-window) y la key SIEMPRE nace con
-            # TTL (no queda huérfana si el proceso muere entre INCR y EXPIRE).
-            count = await self._redis.eval(_INCR_WITH_TTL_LUA, 1, key, ttl_seconds)
+            # INCRBY + EXPIRE atómico vía Lua (ver _INCR_WITH_TTL_LUA): el EXPIRE
+            # corre solo cuando la key nace (contador == amount, fixed-window) y la key
+            # SIEMPRE nace con TTL (no queda huérfana si el proceso muere entre INCRBY y
+            # EXPIRE). ``amount`` carga varios puntos de presupuesto de una.
+            count = await self._redis.eval(_INCR_WITH_TTL_LUA, 1, key, ttl_seconds, amount)
             return int(count)
         except Exception as exc:  # fail-open: cualquier fallo de Redis no rompe.
             _report_degraded("incr_with_ttl", exc)
@@ -397,10 +404,10 @@ class InMemoryTokenStore:
         return (jti_revoked, family_revoked)
 
     # --- Primitivas genéricas ---
-    async def incr_with_ttl(self, key: str, *, ttl_seconds: int) -> int:
+    async def incr_with_ttl(self, key: str, *, ttl_seconds: int, amount: int = 1) -> int:
         self._purge_expired()
         is_new = key not in self._counters
-        self._counters[key] = self._counters.get(key, 0) + 1
+        self._counters[key] = self._counters.get(key, 0) + amount
         if is_new and ttl_seconds > 0:
             self._counter_expiry[key] = self._now() + ttl_seconds
         return self._counters[key]

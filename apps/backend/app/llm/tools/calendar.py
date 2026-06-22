@@ -35,13 +35,15 @@ lo que ve el modelo. Los errores de validacion vuelven como dict estructurado
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated
+from zoneinfo import ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from app.calendar.store import CalendarEventStore
 from app.enums import Mode
 from app.llm.tools.base import (
+    AGENT_LIST_RESULT_LIMIT,
     IsoDatetime,
     first_validation_error,
     not_wired_result,
@@ -192,6 +194,31 @@ class _AgentCreateEventArgs(BaseModel):
         default=None, max_length=50
     )
 
+    @field_validator("time_zone", mode="before")
+    @classmethod
+    def _check_time_zone_iana(cls, v: object) -> object:
+        # Validación IANA: cuando time_zone no es None, se intenta construir el
+        # ZoneInfo correspondiente. ZoneInfoNotFoundError indica que el string no es
+        # un identificador válido (p.ej. "UTC+3" o cualquier string arbitrario).
+        # ``PydanticCustomError`` (no ``ValueError`` pelado): el ``execute`` atrapa el
+        # ``ValidationError`` y lo pasa por ``first_validation_error`` (que solo usa
+        # ``loc``/``type``, nunca el valor — regla #4). Mismo patrón que
+        # ``_check_window_order`` en ``_AgentListEventsArgs``.
+        if v is not None:
+            try:
+                from zoneinfo import ZoneInfo
+
+                ZoneInfo(str(v))
+            except (ZoneInfoNotFoundError, KeyError):
+                # ``from None`` (B904): corta el encadenamiento para que el traceback NO
+                # arrastre el valor inválido del usuario (regla #4). El ctx del custom error
+                # solo lleva loc/type, nunca el string original.
+                raise PydanticCustomError(
+                    "invalid_time_zone",
+                    "time_zone debe ser un identificador IANA válido.",
+                ) from None
+        return v
+
     @model_validator(mode="after")
     def _check_recurrence_time_zone(self) -> _AgentCreateEventArgs:
         # Misma sede que ``EventCreate`` / el router de eventos: recurrencia no vacía
@@ -299,7 +326,11 @@ class AgentListEventsTool:
         except ValidationError as exc:
             return tool_error("invalid_arguments", first_validation_error(exc))
 
-        events = await self._store.list_events(validated.from_dt, validated.to_dt)
+        # Cap acotado (``AGENT_LIST_RESULT_LIMIT``): el resultado se inyecta en el context
+        # del LLM, así que no se vuelca una ventana de tiempo gigante completa.
+        events = await self._store.list_events(
+            validated.from_dt, validated.to_dt, limit=AGENT_LIST_RESULT_LIMIT
+        )
         return {"events": events}
 
 

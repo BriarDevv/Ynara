@@ -158,6 +158,88 @@ async def test_qwen_1_vuelta_con_tool_call() -> None:
 
 
 @pytest.mark.asyncio
+async def test_tool_call_luego_stop_vacio_fuerza_confirmacion() -> None:
+    """Gotcha qwen real (medido en E2E): tras EJECUTAR una tool, el modelo corta con
+    finish_reason terminal ('stop') y content VACIO. El loop NO debe devolver el
+    fallback generico (lee como error aunque la accion SI ocurrio): fuerza UNA completion
+    final SIN tools para que el modelo confirme lo accionado. El finish_reason real de la
+    forzada reemplaza al terminal-vacio."""
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+
+    tc = _make_tool_call("calendar.create_event", "tc-x")
+    # 1) tool call (no terminal) -> se ejecuta la tool
+    fake.queue_result(_make_result(text="", finish_reason="tool_calls", tool_calls=[tc]))
+    # 2) corte terminal 'stop' con content VACIO (el gotcha)
+    fake.queue_result(_make_result(text="", finish_reason="stop"))
+    # 3) completion forzada SIN tools: el modelo confirma en lenguaje natural
+    fake.queue_result(_make_result(text="Listo, te agende Gimnasio.", finish_reason="stop"))
+
+    reg = ToolRegistry()
+
+    class FakeTool:
+        name = "calendar.create_event"
+        namespace = "calendar"
+        description = "crea un evento"
+
+        @property
+        def parameters(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        async def execute(self, arguments: dict) -> dict:
+            return {"id": "ev-9", "status": "confirmed"}
+
+    reg.register(FakeTool())  # type: ignore[arg-type]
+
+    spec = ToolSpec(
+        name="calendar.create_event",
+        description="crea un evento",
+        parameters={"type": "object", "properties": {}},
+    )
+
+    text, actions, finish_reason = await run_tool_loop(
+        llm_client=fake,
+        served_name="qwen",
+        messages=_messages(),
+        specs=[spec],
+        registries=(reg, None),
+        fallback_text="FALLBACK-no-deberia-verse",
+    )
+
+    # La accion se ejecuto y NO se cae al fallback: el usuario ve la confirmacion forzada.
+    assert text == "Listo, te agende Gimnasio."
+    assert finish_reason == "stop"
+    assert len(actions) == 1
+    assert actions[0]["result"] == {"id": "ev-9", "status": "confirmed"}
+    # 3 llamadas: tool_call + stop-vacio + forzada-sin-tools.
+    assert len(fake.complete_calls) == 3
+    # La 3ra (forzada) va SIN tools.
+    assert fake.complete_calls[2]["tools"] is None
+
+
+@pytest.mark.asyncio
+async def test_stop_vacio_sin_acciones_no_fuerza_y_cae_a_fallback() -> None:
+    """Sin acciones ejecutadas, una respuesta normal vacia NO dispara la forzada: cae al
+    fallback (no se gasta una inferencia extra en un turno conversacional legitimo vacio).
+    El gate de la forzada es ``actions``, no ``not last_text`` a secas."""
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+    fake.queue_result(_make_result(text="", finish_reason="stop"))
+
+    text, actions, finish_reason = await run_tool_loop(
+        llm_client=fake,
+        served_name="qwen",
+        messages=_messages(),
+        specs=[],
+        registries=_empty_registries(),
+        fallback_text="fallback",
+    )
+
+    assert text == "fallback"
+    assert actions == []
+    assert finish_reason == "stop"
+    assert len(fake.complete_calls) == 1  # NO hay forzada
+
+
+@pytest.mark.asyncio
 async def test_qwen_2_vueltas_con_tool_call() -> None:
     """Qwen: vuelta 1 tool call, vuelta 2 otra tool call, vuelta 3 stop."""
     fake = FakeLlmClient(served_models=frozenset({"qwen"}))
@@ -268,7 +350,9 @@ async def test_guard_max_iteraciones_fuerza_respuesta_final() -> None:
 
     # NO el fallback: la completion forzada produjo una respuesta real.
     assert text == "Listo, lo anoté en tu memoria."
-    assert finish_reason == "max_iterations"
+    # La completion forzada devolvió texto con finish_reason "stop": se usa ese
+    # finish_reason real, no el sentinel "max_iterations" (FIX 3 — telemetría honesta).
+    assert finish_reason == "stop"
     # 5 tool calls ejecutadas en el loop + 1 completion forzada al final = 6 complete().
     assert len(actions) == MAX_TOOL_ITERATIONS
     assert len(fake.complete_calls) == MAX_TOOL_ITERATIONS + 1
@@ -748,3 +832,77 @@ def test_registry_has_en_registry_vacio() -> None:
     """has() devuelve False en un registry vacio."""
     reg = ToolRegistry()
     assert reg.has("cualquier.cosa") is False
+
+
+# ---------------------------------------------------------------------------
+# Tests: FIX 3 — finish_reason de la completion forzada
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_guard_forzada_con_texto_usa_finish_reason_real() -> None:
+    """La completion forzada con texto usa su finish_reason real, no 'max_iterations'.
+
+    FIX 3 (telemetria): cuando el guard se agota y la completion forzada (tools=None)
+    produce texto, el finish_reason retornado es el de esa completion (p.ej. 'stop' o
+    'length'). El sentinel 'max_iterations' se reserva para cuando la forzada TAMBIEN
+    vuelve vacia (sin texto util).
+    """
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+
+    tc = _make_tool_call("calendar.create_event", "tc-x")
+    for _i in range(MAX_TOOL_ITERATIONS):
+        fake.queue_result(_make_result(text="", finish_reason="tool_calls", tool_calls=[tc]))
+    # La completion forzada devuelve texto con finish_reason "length" (truncado).
+    fake.queue_result(_make_result(text="Respuesta truncada.", finish_reason="length"))
+
+    reg, spec = _looping_registry_and_spec()
+
+    text, actions, finish_reason = await run_tool_loop(
+        llm_client=fake,
+        served_name="qwen",
+        messages=_messages(),
+        specs=[spec],
+        registries=(reg, None),
+        max_iterations=MAX_TOOL_ITERATIONS,
+        fallback_text="no pude completar la tarea",
+    )
+
+    assert text == "Respuesta truncada."
+    # finish_reason de la forzada, no el sentinel (FIX 3).
+    assert finish_reason == "length"
+    assert len(actions) == MAX_TOOL_ITERATIONS
+    assert len(fake.complete_calls) == MAX_TOOL_ITERATIONS + 1
+
+
+@pytest.mark.asyncio
+async def test_guard_forzada_vacia_mantiene_sentinel_max_iterations() -> None:
+    """Si la completion forzada vuelve vacia, finish_reason sigue siendo 'max_iterations'.
+
+    Complemento del test anterior: cuando la forzada no produce texto (cae al
+    fallback_text), el sentinel 'max_iterations' se preserva intacto.
+    """
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+
+    tc = _make_tool_call("calendar.create_event", "tc-x")
+    for _i in range(MAX_TOOL_ITERATIONS):
+        fake.queue_result(_make_result(text="", finish_reason="tool_calls", tool_calls=[tc]))
+    # La completion forzada vuelve vacia -> sentinel se mantiene.
+    fake.queue_result(_make_result(text="", finish_reason="stop"))
+
+    reg, spec = _looping_registry_and_spec()
+
+    text, actions, finish_reason = await run_tool_loop(
+        llm_client=fake,
+        served_name="qwen",
+        messages=_messages(),
+        specs=[spec],
+        registries=(reg, None),
+        max_iterations=MAX_TOOL_ITERATIONS,
+        fallback_text="fallback sentinel",
+    )
+
+    assert text == "fallback sentinel"
+    # Forzada vacia: el sentinel 'max_iterations' se preserva (FIX 3).
+    assert finish_reason == "max_iterations"
+    assert len(fake.complete_calls) == MAX_TOOL_ITERATIONS + 1

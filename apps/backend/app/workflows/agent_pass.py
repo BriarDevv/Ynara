@@ -1,6 +1,16 @@
 """Pasada ASÍNCRONA del agente qwen sobre el turno conversado (Fase E, ADR-021;
 MULTI-TOOL desde Fase D1).
 
+⚠️ DORMANT (ADR-022): bajo la config de modos actual NADIE encola esta task. El
+tool-loop SÍNCRONO del chat de producción (``ChatService.run_turn`` →
+``app/llm/context.py`` con ``build_chat_tool_registry``) ahora ejecuta las tools de
+agente (``calendar``/``task``) al instante, atómicas con el commit del turno, así que
+``ChatService`` ya NO encola ``agent_turn_pass`` (seguir haciéndolo dispararía qwen DOS
+veces por turno). La task se MANTIENE registrada (``app/workflows/__init__.py`` +
+``tests/workers/test_task_registration.py``) y funcional: queda reservada para una
+futura pasada de agente en modos gemma (donde el modelo conversacional NO razona tool
+calls inline y conviene una pasada qwen por detrás). NO borrarla.
+
 "qwen por detrás de gemma": el usuario conversa con el modelo conversacional
 (respuesta rápida en streaming); ESTA task corre por detrás, async, y a partir de
 lo conversado **acciona las tools del agente** que el modo habilita: hoy **agenda
@@ -8,14 +18,16 @@ eventos** (``calendar``) y **crea tareas/pendientes** (``task``); en fases futur
 más namespaces. Espejo EXACTO de ``consolidate_turn``
 (``app/workflows/consolidation.py``):
 
-1. Solo encolada cuando el modo habilita ALGUNA tool de agente accionable
-   (``calendar`` o ``task``) en ``tools_enabled``. El caller
-   (``ChatService._enqueue_agent_pass``) ya filtra; esta task RE-CHEQUEA el gate de
-   forma defensiva (un payload viejo / cambio de config entre enqueue y run no debe
-   accionar en un modo que ya no habilita esas tools).
-2. NUNCA en el path de respuesta: ``ChatService.run_turn`` encola con ``.delay()``
-   DESPUÉS del commit; el efecto (escribir ``calendar_events`` / ``tasks``) ocurre
-   acá, en el worker Celery, async.
+1. Gate config-driven: solo acciona si el modo habilita ALGUNA tool de agente
+   accionable (``calendar`` o ``task``) en ``tools_enabled``. ``_async_agent_pass``
+   RE-CHEQUEA el gate de forma defensiva (un payload viejo / cambio de config entre
+   un eventual enqueue y el run no debe accionar en un modo que ya no habilita esas
+   tools). NOTA (ADR-022): bajo la config de modos actual NADIE encola esta task —
+   ``ChatService`` ya NO lo hace (las tools corren síncronas en el chat). El gate sigue
+   acá para cuando se reactive (modos gemma).
+2. Pensada para correr FUERA del path de respuesta (worker Celery, async). HOY está
+   dormant (sin encolador). Si se reactiva, el efecto (escribir ``calendar_events`` /
+   ``tasks``) ocurriría acá, en el worker, async.
 3. Responsabilidad ÚNICA: tools/acciones (calendar + task). NO toca memoria — eso es
    ``consolidate_turn``, una task separada gateada por ``writes_memory`` (ADR-021
    D3: memoria y tools se operan/escalan/reintentan por separado).
@@ -34,7 +46,10 @@ más namespaces. Espejo EXACTO de ``consolidate_turn``
 
 DISEÑO MULTI-TOOL (Opción A, escalable): en vez de hardcodear UN registry de
 calendar, ``_AGENT_TOOL_BUILDERS`` mapea ``namespace -> builder(session, user_id) ->
-ToolRegistry``. La pasada construye SOLO los registries de los namespaces que el modo
+ToolRegistry``. Ese mapping y ``_build_agent_registry`` viven ahora en el hogar
+canónico ``app/llm/tools/agent_registry.py`` (capa ``llm.tools``, para que el chat de
+producción los reuse sin importar workflows); acá se IMPORTAN, con el mismo
+comportamiento. La pasada construye SOLO los registries de los namespaces que el modo
 habilita (la intersección de ``_AGENT_TOOL_BUILDERS`` con ``mode_cfg.tools_enabled``)
 y los combina en UN ``ToolRegistry`` (las tools no colisionan: ``calendar.*`` vs
 ``task.*``). ``specs_for(enabled)`` filtra por namespace → si un modo tiene
@@ -47,12 +62,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.calendar.store import CalendarEventStore
 from app.core.config import Settings, get_settings
 from app.llm.clients.base import LLMClient
 from app.llm.clients.factory import build_llm_client
@@ -60,25 +73,19 @@ from app.llm.config import load_llm_config
 from app.llm.prompts.datetime_context import build_now_preamble, current_now
 from app.llm.schemas import ChatMessage
 from app.llm.tool_loop import run_tool_loop
-from app.llm.tools.calendar import calendar_registry
-from app.llm.tools.registry import ToolRegistry
-from app.llm.tools.task import task_registry
-from app.tasks.store import TaskStore
+
+# ``_AGENT_TOOL_BUILDERS`` / ``_build_agent_registry`` viven ahora en el hogar canónico
+# (``app/llm/tools/agent_registry.py``, capa ``llm.tools``): el chat de producción los
+# reusa sin importar este módulo de workflows (capa equivocada + riesgo de ciclo
+# Celery↔router). Acá se IMPORTAN: la pasada async los sigue usando con el mismo
+# comportamiento que cuando se definían localmente.
+from app.llm.tools.agent_registry import _AGENT_TOOL_BUILDERS, _build_agent_registry
 from app.workers.celery_app import celery_app
 from app.workflows._engine import worker_session
 
 logger = logging.getLogger(__name__)
 
-# Mapping ``namespace -> builder(session, user_id) -> ToolRegistry`` de las tools de
-# agente accionables (con efecto real). La pasada construye SOLO los registries de los
-# namespaces que el modo habilita (la intersección con ``mode_cfg.tools_enabled``) y
-# los combina en uno. Diseño escalable: agregar una tool de agente nueva es agregar
-# una entrada acá + el namespace al ``tools_enabled`` del modo en ``ynara.config.json``.
-# El orden del dict define el orden de las specs en el prompt (determinista).
-_AGENT_TOOL_BUILDERS: dict[str, Callable[[AsyncSession, UUID], ToolRegistry]] = {
-    "calendar": lambda session, user_id: calendar_registry(CalendarEventStore(session, user_id)),
-    "task": lambda session, user_id: task_registry(TaskStore(session, user_id)),
-}
+__all__ = ["_AGENT_TOOL_BUILDERS", "_build_agent_registry", "agent_turn_pass"]
 
 # Cuerpo ESTÁTICO del system prompt de la pasada del agente. NO es el prompt
 # conversacional del modo (ese lo usa gemma para hablar): este instruye a qwen a
@@ -136,29 +143,6 @@ def _build_agent_pass_system() -> str:
     """
     now_preamble = build_now_preamble(current_now())
     return f"{now_preamble}\n\n{_AGENT_PASS_SYSTEM_BODY}"
-
-
-def _build_agent_registry(
-    session: AsyncSession, user_id: UUID, enabled_namespaces: list[str]
-) -> ToolRegistry:
-    """Combina las tools de agente de los namespaces habilitados en UN ``ToolRegistry``.
-
-    Opción A del diseño multi-tool: construye SOLO los registries de
-    ``_AGENT_TOOL_BUILDERS`` cuyo namespace está en ``enabled_namespaces`` (la
-    intersección con ``mode_cfg.tools_enabled``) y los fusiona en uno solo registrando
-    todas las tools (``calendar.*`` y ``task.*`` no colisionan). ``registries`` del
-    loop sigue siendo ``(reg, None)`` (no se toca ``run_tool_loop``).
-
-    El orden de iteración es el de ``_AGENT_TOOL_BUILDERS`` (determinista), filtrado por
-    los habilitados, así el prompt es reproducible.
-    """
-    combined = ToolRegistry()
-    enabled = set(enabled_namespaces)
-    for namespace, builder in _AGENT_TOOL_BUILDERS.items():
-        if namespace in enabled:
-            for tool in builder(session, user_id).tools():
-                combined.register(tool)
-    return combined
 
 
 async def _run_agent_pass_in_db(

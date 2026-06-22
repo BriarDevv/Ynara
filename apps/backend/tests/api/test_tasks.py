@@ -36,6 +36,8 @@ from app.enums import TaskStatus
 from app.main import app
 from app.models.task import Task
 from app.models.user import User
+from app.schemas.task import TaskCreate
+from app.tasks.store import TaskStore
 
 pytestmark = pytest.mark.integration
 
@@ -309,3 +311,93 @@ async def test_patch_task_invalid_body_422(
         assert resp.status_code == 422
     finally:
         app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# 6. Idempotencia: FIX 2 — duration_min es parte de la clave de dedup
+# ---------------------------------------------------------------------------
+
+
+async def test_create_task_dedup_includes_duration_min(db_session: AsyncSession) -> None:
+    """FIX 2: un retry con duration_min distinto NO devuelve la primera tarea.
+
+    Antes del fix, ``_find_duplicate`` usaba solo ``(user_id, title, scheduled_at)``,
+    así que un retry con ``duration_min`` diferente devolvía silenciosamente la primera
+    tarea (corrupción silenciosa). Con el fix, la clave incluye ``duration_min`` y el
+    segundo create inserta una fila nueva.
+    """
+    user = await _seed_user(db_session)
+    store = TaskStore(db_session, user.id)
+
+    payload_30 = TaskCreate(
+        title="Dentista",
+        scheduled_at=datetime.fromisoformat("2026-06-22T10:00:00+00:00"),
+        duration_min=30,
+    )
+    payload_60 = TaskCreate(
+        title="Dentista",
+        scheduled_at=datetime.fromisoformat("2026-06-22T10:00:00+00:00"),
+        duration_min=60,
+    )
+
+    result_30 = await store.create_task(payload_30)
+    result_60 = await store.create_task(payload_60)
+
+    # Deben ser dos tareas distintas (diferente id).
+    assert result_30["id"] != result_60["id"]
+    assert result_30["duration_min"] == 30
+    assert result_60["duration_min"] == 60
+
+
+async def test_create_task_dedup_same_duration_min_returns_existing(
+    db_session: AsyncSession,
+) -> None:
+    """FIX 2 (caso positivo): mismo (title, scheduled_at, duration_min) → devuelve existente.
+
+    La idempotencia ante reintentos con la misma tupla sigue funcionando: un retry con
+    TODOS los campos iguales devuelve la tarea original (sin duplicar).
+    """
+    user = await _seed_user(db_session)
+    store = TaskStore(db_session, user.id)
+
+    payload = TaskCreate(
+        title="Dentista",
+        scheduled_at=datetime.fromisoformat("2026-06-22T10:00:00+00:00"),
+        duration_min=45,
+    )
+
+    result_1 = await store.create_task(payload)
+    result_2 = await store.create_task(payload)
+
+    # Misma tupla → misma tarea (idempotencia preservada).
+    assert result_1["id"] == result_2["id"]
+
+
+async def test_create_task_dedup_null_duration_min_is_part_of_key(
+    db_session: AsyncSession,
+) -> None:
+    """FIX 2 (NULL): duration_min NULL vs. un valor concreto son claves distintas.
+
+    Una tarea sin duración y una con duración=30 y el mismo título/horario NO deben
+    deduplicarse (son tareas semánticamente diferentes).
+    """
+    user = await _seed_user(db_session)
+    store = TaskStore(db_session, user.id)
+
+    payload_null = TaskCreate(
+        title="Reunión",
+        scheduled_at=datetime.fromisoformat("2026-06-22T14:00:00+00:00"),
+        duration_min=None,
+    )
+    payload_30 = TaskCreate(
+        title="Reunión",
+        scheduled_at=datetime.fromisoformat("2026-06-22T14:00:00+00:00"),
+        duration_min=30,
+    )
+
+    result_null = await store.create_task(payload_null)
+    result_30 = await store.create_task(payload_30)
+
+    assert result_null["id"] != result_30["id"]
+    assert result_null["duration_min"] is None
+    assert result_30["duration_min"] == 30

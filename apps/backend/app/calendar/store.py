@@ -97,12 +97,20 @@ class CalendarEventStore:
         await self._session.refresh(event)
         return self._to_result(event)
 
-    async def list_events(self, from_dt: datetime, to_dt: datetime) -> list[dict[str, object]]:
+    async def list_events(
+        self, from_dt: datetime, to_dt: datetime, *, limit: int | None = None
+    ) -> list[dict[str, object]]:
         """Lista los eventos del usuario que arrancan en ``[from_dt, to_dt)``.
 
         Filtra por ``user_id`` **y** la ventana de tiempo sobre ``start_at``,
         ordenado por ``start_at`` ASC (el más próximo primero, igual que
         ``GET /v1/events``). Read-only (no muta nada).
+
+        ``limit`` es un tope opcional de filas. ``None`` (default) preserva el
+        comportamiento del CRUD HTTP (sin tope). La superficie del agente
+        (``AgentListEventsTool``) pasa un cap acotado (``AGENT_LIST_RESULT_LIMIT``) para no
+        volcar miles de eventos (ventana de tiempo ancha) al context window del LLM ni al
+        payload del turno.
 
         Returns:
             Lista de dicts serializables (``CalendarEventOut``), uno por evento.
@@ -116,6 +124,8 @@ class CalendarEventStore:
             )
             .order_by(CalendarEvent.start_at.asc())
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         rows = list((await self._session.execute(stmt)).scalars().all())
         return [self._to_result(row) for row in rows]
 

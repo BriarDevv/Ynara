@@ -39,6 +39,15 @@ class ToolRegistry:
         """True si el ``name`` esta registrado en este registry."""
         return name in self._tools
 
+    def get_tool(self, name: str) -> Tool | None:
+        """Devuelve la tool registrada bajo ``name``, o ``None`` si no existe.
+
+        Accessor PÚBLICO para inspección (p.ej. discriminar una tool real de su stub por
+        tipo) sin tocar el dict privado ``_tools``: mantiene estable el contrato aunque la
+        representación interna del registry cambie.
+        """
+        return self._tools.get(name)
+
     def tools(self) -> list[Tool]:
         """Lista las tools registradas, en orden de inserción (determinista).
 

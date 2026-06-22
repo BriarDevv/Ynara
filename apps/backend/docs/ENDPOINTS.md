@@ -135,6 +135,13 @@ Dos endpoints: uno no-streaming (JSON) y uno SSE. Contrato + justificación en
       Gemma nunca ejecutan tools). El Pydantic es `actions = []`, no opcional.
     - `Action = { id, name, arguments, result }` — `result` es el resultado
       ejecutado de la tool (o `{ error: { code, message } }`).
+    - **Tools de agente REALES (ADR-022)**: en `productividad`, las tools
+      `calendar.create_event` / `task.create_task` se ejecutan **síncronas en el turno**
+      y ESCRIBEN de verdad (`calendar_events` / `tasks`), atómicas con el commit del
+      turno; su `result` trae el recurso creado (`id` presente), NO `not_wired`. El
+      modelo puede confirmar la acción en `text` ("listo, te agendé..."). `reminder.*`
+      sigue siendo stub `not_wired` (sin backend real). Los modos gemma
+      (`tools_enabled=[]`) no exponen ni ejecutan tools.
 - **POST** `/v1/chat/stream` (SSE, `text/event-stream`):
   - Mismo request. Eventos con nombre: `token` `{ delta }`, `done`
     `{ session_id, actions, finish_reason }`, `error` `{ code, message }`.

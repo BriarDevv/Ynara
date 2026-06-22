@@ -2,7 +2,15 @@
 
 ## Estado
 
-Propuesto
+Propuesto — **parcialmente superseded por [ADR-022](./ADR-022-tools-sincronos-en-chat.md)**
+
+> ADR-022 mueve la EJECUCIÓN de las tools de agente (`calendar`/`task`) del path
+> ASÍNCRONO descrito acá al tool-loop SÍNCRONO del chat de producción, para la config
+> de modos actual (las tools corren en el turno, atómicas con su commit, y el modelo
+> confirma la acción en su respuesta). La pieza de **memoria** de este ADR
+> (`consolidate_turn`, gateada por `writes_memory`) sigue vigente y async. La task
+> `agent_turn_pass` queda **dormant** (registrada pero sin encolador), reservada para
+> una futura pasada de agente en modos gemma.
 
 <!-- Autonomía dada por @BriarDevv (CODEOWNER) el 2026-06-22 ("hacete vos una hoja
      de ruta, lo que hagas que sea la mejor práctica y lo más escalable posible,

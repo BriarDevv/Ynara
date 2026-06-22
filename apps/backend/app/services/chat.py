@@ -25,6 +25,26 @@ inesperado antes del commit, ``get_db()`` hace rollback y nada se persiste (ni s
 encola: el enqueue es lo último). El ``commit`` queda JUNTO al enqueue (no en el
 endpoint) porque el enqueue-post-commit es un invariante de dominio: separarlos
 rompería la garantía de "encolar solo después de persistir".
+
+Tools SÍNCRONAS en el turno (ADR-022): las tools de agente (``calendar``/``task``) ya
+NO se accionan async por detrás. ``route()`` corre el tool-loop de producción con el
+registry REAL (``build_chat_tool_registry`` vía ``build_memory_context``): las tool
+calls que el modelo emita ESCRIBEN dentro de ``route()`` sobre ESTA misma sesión, y el
+``session.commit()`` de abajo las persiste atómicas con el turno (un solo commit). Por
+eso ``run_turn`` ya NO encola ``agent_turn_pass`` (seguir haciéndolo dispararía qwen
+DOS veces por turno; ver ADR-022). La consolidación de MEMORIA sí sigue async
+(``_enqueue_consolidation``, gateada por ``writes_memory``): no cambia.
+
+SAVEPOINT en turnos degradados (fix de la consecuencia negativa de ADR-022): ``route()``
+nunca propaga el ``LlmError`` (devuelve ``finish_reason='degraded'``), pero una tool pudo
+haber flusheado un ``calendar_event`` / ``task`` ANTES de que el LLM degradara (en esa o
+en una iteración posterior del tool-loop). Para no commitear un evento/tarea fantasma sin
+un turno de conversación que lo confirme, ``run_turn`` envuelve ``route()`` en un
+``begin_nested()`` (SAVEPOINT): en un turno degradado se hace ``rollback()`` del nested
+(descarta SOLO las escrituras de tools; la ``ChatSession`` queda afuera y sobrevive como
+ancla), y en el camino feliz se libera el SAVEPOINT y el commit único persiste todo
+atómico. Cubre TODOS los puntos donde ``route()`` captura un ``LlmError`` (no solo "una
+iteración posterior"), eliminando el desajuste DB-tiene-evento / turnos-vacíos.
 """
 
 from __future__ import annotations
@@ -45,21 +65,9 @@ from app.memory.conversation_turns import ConversationTurnStore
 from app.models.session import ChatSession
 from app.schemas.chat import ChatHttpRequest
 from app.schemas.conversation_turn import ConversationTurnCreate
-from app.workflows.agent_pass import _AGENT_TOOL_BUILDERS, agent_turn_pass
 from app.workflows.consolidation import consolidate_turn
 
 logger = logging.getLogger(__name__)
-
-# Namespaces de tools de agente accionables que justifican encolar ``agent_turn_pass``.
-# Es la MISMA fuente que usa la pasada (las claves de ``_AGENT_TOOL_BUILDERS`` en
-# ``app/workflows/agent_pass.py``): se importa el dict y se derivan sus keys, en vez de
-# espejar la tupla a mano —así un namespace nuevo agregado a ``_AGENT_TOOL_BUILDERS`` (p.ej.
-# una tool de agente futura) entra automáticamente al gate del enqueue y no queda mudo
-# (el turno llegaba al worker pero el gate del caller ya cortaba). El gate del enqueue es
-# "encolar si el modo habilita CUALQUIERA de estas" (un modo con solo ``task`` también
-# dispara la pasada); el re-check defensivo de ``_async_agent_pass`` filtra por la misma
-# intersección (defensa-en-profundidad del ADR-021: caller + re-check).
-_AGENT_TURN_TOOLS = tuple(_AGENT_TOOL_BUILDERS)
 
 
 class ChatService:
@@ -94,9 +102,15 @@ class ChatService:
         crudo (sin armar el wire) mantiene ese ensamblado en los endpoints; el
         ``chat_session`` ya lo tiene el endpoint (lo resolvió antes de llamar acá).
 
-        Orden: ``route()`` → persistir turnos → ``commit`` → enqueue post-commit (ver
-        el docstring del módulo). El ``chat_session`` llega YA resuelto y flusheado por
-        el router (su ``id`` está asignado).
+        Orden: ``route()`` → persistir turnos → ``commit`` → enqueue de consolidación
+        post-commit (ver el docstring del módulo). El ``chat_session`` llega YA resuelto
+        y flusheado por el router (su ``id`` está asignado).
+
+        Tools SÍNCRONAS (ADR-022): las tool calls de agente (``calendar``/``task``) que
+        el modelo emita se EJECUTAN dentro de ``route()`` (tool-loop de producción con el
+        registry real) sobre esta misma sesión, y el ``commit`` de abajo las persiste
+        atómicas con el turno. Por eso NO se encola ``agent_turn_pass``: el efecto ya
+        ocurrió y el modelo pudo confirmarlo en su respuesta ("listo, te agendé...").
 
         Returns:
             El ``ChatResponse`` crudo del router. NO arma ``ChatHttpResponse`` ni SSE.
@@ -111,6 +125,19 @@ class ChatService:
 
         # Router LLM. NUNCA propaga errores del LLM (captura overflow / error permanente
         # y devuelve fallback), por eso es seguro commitear después.
+        #
+        # SAVEPOINT alrededor de route() (ADR-022, fix del commit de tool degradado): las
+        # tools de agente (``calendar``/``task``) hacen ``flush`` dentro de ``route()`` sobre
+        # ESTA sesión. Si el turno DEGRADA (``route()`` capturó un ``LlmError`` en CUALQUIER
+        # punto, incluida una iteración posterior del tool-loop después de que una tool ya
+        # flusheó), no queremos commitear un evento/tarea fantasma sin un turno de
+        # conversación que lo confirme. El savepoint acota las escrituras de las tools: en un
+        # turno degradado se hace ``rollback()`` del nested para descartar SOLO esas
+        # escrituras (la ``ChatSession`` flusheada por el router queda fuera del savepoint y
+        # sobrevive como ancla de la sesión). En el camino feliz el savepoint se libera con
+        # ``commit()`` del nested (no commitea a disco; solo libera el SAVEPOINT) y el commit
+        # único de abajo persiste todo atómico.
+        savepoint = await self._session.begin_nested()
         resp = await route(
             domain_req,
             session=self._session,
@@ -119,6 +146,14 @@ class ChatService:
             embedder=self._embedder,
             reranker=self._reranker,
         )
+        if resp.finish_reason == "degraded":
+            # Turno degradado: descartar las escrituras de tools flusheadas dentro del
+            # savepoint (evita el evento/tarea fantasma sin turno que lo confirme).
+            await savepoint.rollback()
+        else:
+            # Camino feliz: liberar el SAVEPOINT (no es un commit a disco). El commit único
+            # de abajo persiste las escrituras de tools + el turno atómicos.
+            await savepoint.commit()
 
         # Persistir los 2 turnos (user + modelo) ANTES del commit, en la MISMA
         # transacción que la ChatSession: turnos + sesión son atómicos por el commit único.
@@ -133,13 +168,13 @@ class ChatService:
         # Enqueue de consolidación DESPUÉS del commit (M10 Ola 0): garantiza que la
         # ChatSession ya esté persistida antes de que el worker Celery (otro proceso) lea
         # el turno. .delay() es no-bloqueante y fail-open (ver _enqueue_consolidation).
+        #
+        # NO se encola ``agent_turn_pass`` (ADR-022): las tools de agente
+        # (``calendar``/``task``) ya se ejecutaron SÍNCRONAS dentro de ``route()`` (el
+        # tool-loop de producción usa el registry real vía ``build_chat_tool_registry``)
+        # y se commitearon atómicas con el turno arriba. Seguir encolando la pasada async
+        # dispararía qwen DOS veces por turno. La consolidación de memoria SÍ sigue async.
         await self._enqueue_consolidation(chat_session, body=body, resp=resp)
-
-        # Enqueue de la pasada async del agente (Fase E, ADR-021): "qwen por detrás".
-        # MISMO contrato post-commit + fail-open que la consolidación, pero gateado por
-        # tools_enabled (calendar) en vez de writes_memory. Task SEPARADA (ADR-021 D3):
-        # tools y memoria se escalan/reintentan independientemente.
-        await self._enqueue_agent_pass(chat_session, body=body, resp=resp)
 
         return resp
 
@@ -212,57 +247,3 @@ class ChatService:
             )
         except Exception as exc:  # best-effort: el broker caído NO rompe el turno.
             logger.warning("consolidate_turn enqueue failed: %s", type(exc).__name__)
-
-    async def _enqueue_agent_pass(
-        self, chat_session: ChatSession, *, body: ChatHttpRequest, resp: ChatResponse
-    ) -> None:
-        """Encola ``agent_turn_pass`` DESPUÉS del commit (Fase E, ADR-021), best-effort.
-
-        Espejo EXACTO de ``_enqueue_consolidation``, salvo el GATE: encola SOLO si el
-        modo habilita ALGUNA tool de agente accionable (``calendar`` o ``task``) en
-        ``tools_enabled`` (ADR-021 D2/D5: config-driven, no hardcode) y el turno NO
-        degradó. Un modo sin ninguna de esas tools NO encola la pasada (un modo gemma
-        conversacional no acciona). ``'max_iterations'`` NO es degradado y SÍ acciona. La
-        task es SEPARADA de la consolidación (ADR-021 D3): una falla de tools no afecta
-        la memoria, y viceversa.
-
-        El gate honesto es "encolar si el modo habilita CUALQUIER tool de agente
-        accionable" (``_AGENT_TURN_TOOLS``), así un modo con SOLO ``task`` (sin
-        ``calendar``) también dispara la pasada. Se mantiene el espejo con el re-check
-        defensivo de ``_async_agent_pass`` (que filtra por la misma intersección).
-
-        Snapshot de primitivos (como la consolidación): todos los valores que viajan al
-        ``.delay()`` son primitivos / Pydantic (``str(self._user_id)``,
-        ``str(chat_session.id)`` —PK ya materializada—, ``body.text``,
-        ``body.mode.value``, ``resp.text``), NO atributos ORM expirables post-commit, así
-        no hay lazy-load tras el commit.
-
-        Fail-open (doctrina del stack): ``.delay()`` publica al broker Redis SÍNCRONO; si
-        Redis está caído tira ``OperationalError`` / ``ConnectionError`` / errores de
-        kombu. El turno YA está commiteado: un fallo del enqueue NO debe devolver 500. La
-        pasada es eventual, así que perder un enqueue es degradación aceptable. Capturamos
-        AMPLIO (``Exception``) y logueamos SOLO ``type(exc).__name__`` (regla #4).
-        """
-        # ``.modes.get`` + chequeo de None (espejo del gate en ``_async_agent_pass``):
-        # ``body.mode`` ya es un ``Mode`` válido, pero un modo del enum sin entrada en
-        # ``ynara.config.json`` daría KeyError con acceso directo al dict. El KeyError lo
-        # taparía el ``except Exception`` de abajo (fail-open), pero logueando ``KeyError``
-        # en vez del fallo real del enqueue: oscurece el diagnóstico. Con ``.get`` el modo
-        # desconocido es un no-op limpio (igual que un modo sin tools de agente habilitadas).
-        mode_cfg = load_llm_config().modes.get(body.mode.value)
-        if (
-            mode_cfg is None
-            or not any(ns in mode_cfg.tools_enabled for ns in _AGENT_TURN_TOOLS)
-            or resp.finish_reason == "degraded"
-        ):
-            return
-        try:
-            agent_turn_pass.delay(
-                user_id=str(self._user_id),
-                session_id=str(chat_session.id),
-                user_msg=body.text,
-                model_response=resp.text,
-                mode=body.mode.value,
-            )
-        except Exception as exc:  # best-effort: el broker caído NO rompe el turno.
-            logger.warning("agent_turn_pass enqueue failed: %s", type(exc).__name__)

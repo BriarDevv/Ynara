@@ -110,7 +110,7 @@ class TestAsyncAgentPassTaskUnit:
         session = MagicMock(spec=AsyncSession)
         fake_store = _FakeTaskStore()
 
-        with patch("app.workflows.agent_pass.TaskStore", return_value=fake_store):
+        with patch("app.tasks.store.TaskStore", return_value=fake_store):
             result = await _async_agent_pass(
                 user_id=USER_ID,
                 session_id=SESSION_ID,
@@ -151,8 +151,8 @@ class TestAsyncAgentPassTaskUnit:
         fake_store = _FakeTaskStore()
 
         with (
-            patch("app.workflows.agent_pass.TaskStore", return_value=fake_store),
-            patch("app.workflows.agent_pass.CalendarEventStore"),
+            patch("app.tasks.store.TaskStore", return_value=fake_store),
+            patch("app.calendar.store.CalendarEventStore"),
         ):
             await _async_agent_pass(
                 user_id=USER_ID,
@@ -247,24 +247,21 @@ async def test_integration_idempotent_on_retry(db_session: AsyncSession) -> None
 
 
 # ===========================================================================
-# Invariante de sincronización caller <-> pasada (ADR-021, defensa-en-profundidad)
+# Hogar canónico de ``_AGENT_TOOL_BUILDERS`` (ADR-022): re-export desde agent_pass
 # ===========================================================================
 
 
-def test_enqueue_gate_matches_agent_tool_builders() -> None:
-    """``_AGENT_TURN_TOOLS`` (gate del enqueue en ``ChatService``) == claves de
-    ``_AGENT_TOOL_BUILDERS`` (la pasada).
+def test_agent_tool_builders_reexported_from_agent_pass() -> None:
+    """``_AGENT_TOOL_BUILDERS`` se re-exporta desde ``agent_pass`` y es el MISMO objeto
+    que el del hogar canónico (``app.llm.tools.agent_registry``).
 
-    El gate del caller (``ChatService._enqueue_agent_pass``) y el re-check defensivo de
-    la pasada (``_async_agent_pass``) deben mirar el MISMO conjunto de namespaces de
-    tools de agente accionables. Si se desalinean, un namespace nuevo agregado a
-    ``_AGENT_TOOL_BUILDERS`` sin actualizar el gate haría que el enqueue no ocurra para
-    ese namespace (el turno llega al worker pero el gate del caller ya cortó). Hoy
-    ``_AGENT_TURN_TOOLS`` se DERIVA de ``_AGENT_TOOL_BUILDERS`` (no se espeja a mano),
-    así que no pueden driftear; este test LOCKEA esa garantía y rompe CI si alguien
-    re-introduce el mirror manual y lo desalinea.
+    ADR-022 movió el mapping a la capa ``llm.tools`` (para que el chat de producción lo
+    reuse sin importar workflows). ``agent_pass`` lo re-importa para que la pasada async
+    (dormant) lo siga usando con el mismo comportamiento. Este test LOCKEA que el
+    re-export apunta al canónico (no a una copia divergente).
     """
-    from app.services.chat import _AGENT_TURN_TOOLS
-    from app.workflows.agent_pass import _AGENT_TOOL_BUILDERS
+    from app.llm.tools.agent_registry import _AGENT_TOOL_BUILDERS as canonical
+    from app.workflows.agent_pass import _AGENT_TOOL_BUILDERS as reexported
 
-    assert set(_AGENT_TURN_TOOLS) == set(_AGENT_TOOL_BUILDERS.keys())
+    assert reexported is canonical
+    assert set(canonical.keys()) == {"calendar", "task"}

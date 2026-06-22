@@ -20,16 +20,15 @@ Operaciones:
   caller HTTP traduce el ``None`` a un 404 sin oráculo).
 
 IDEMPOTENCIA (ADR-021, invariante de la pasada async): ``create_task`` deduplica por
-la tupla natural ``(user_id, title, scheduled_at)``. Si ya existe una tarea del
-usuario con esos valores, se devuelve la existente en vez de INSERTAR otra. Esto
-vuelve la tool idempotente ante un reintento de Celery (la pasada del agente vuelve
-a correr el mismo turno → vuelve a emitir el mismo ``task.create_task`` → no crea la
-tarea dos veces). El dedupe es la tupla "semánticamente el mismo to-do conversado";
-dos to-dos legítimamente idénticos (mismo título y horario) colapsan en uno, que es
-el comportamiento deseado para un re-anuncio del mismo pendiente. ``scheduled_at``
-puede ser ``NULL``: el dedupe usa ``IS NULL`` cuando no hay horario (en SQL
-``NULL = NULL`` es ``NULL``, no ``TRUE``, así que sin esto dos tareas sin horario no
-deduplicarían).
+la tupla natural ``(user_id, title, scheduled_at, duration_min)``. Si ya existe una
+tarea del usuario con esos cuatro valores, se devuelve la existente en vez de
+INSERTAR otra. Esto vuelve la tool idempotente ante un reintento de Celery (la pasada
+del agente vuelve a correr el mismo turno → vuelve a emitir el mismo
+``task.create_task`` → no crea la tarea dos veces). La tupla incluye ``duration_min``
+(espejando ``CalendarEventStore``) para evitar que un retry con duración distinta
+devuelva silenciosamente la primera tarea (corrupción silenciosa). Ambos campos
+nullable usan ``IS NULL`` cuando son ``None`` (en SQL ``NULL = NULL`` es ``NULL``,
+no ``TRUE``, así que sin esto las tareas sin horario/duración no deduplicarían).
 
 Solo hace ``flush`` (NO ``commit``): el commit lo da el caller (el ``worker_session``
 de la pasada async al salir del bloque, el router HTTP, o el fixture en tests), en la
@@ -67,9 +66,12 @@ class TaskStore:
         del payload).
 
         IDEMPOTENCIA: si ya existe una tarea del usuario con la misma tupla natural
-        ``(title, scheduled_at)``, se devuelve ESA tarea (sin INSERTAR otra). Así un
-        reintento de la pasada async del agente no crea el mismo to-do dos veces
-        (ADR-021). Solo hace ``flush``: el commit lo da el caller.
+        ``(title, scheduled_at, duration_min)``, se devuelve ESA tarea (sin INSERTAR
+        otra). Así un reintento de la pasada async del agente no crea el mismo to-do
+        dos veces (ADR-021). La tupla incluye ``duration_min`` (espejando
+        ``CalendarEventStore._find_duplicate``) para evitar que un retry con duración
+        distinta devuelva silenciosamente la primera tarea. Solo hace ``flush``: el
+        commit lo da el caller.
 
         Returns:
             Dict serializable (JSON-safe) de la tarea: ``id`` + los campos del wire
@@ -78,6 +80,7 @@ class TaskStore:
         existing = await self._find_duplicate(
             title=payload.title,
             scheduled_at=payload.scheduled_at,
+            duration_min=payload.duration_min,
         )
         if existing is not None:
             return self._to_result(existing)
@@ -94,13 +97,18 @@ class TaskStore:
         await self._session.refresh(task)
         return self._to_result(task)
 
-    async def list_tasks(self) -> list[dict[str, object]]:
-        """Lista TODAS las tareas del usuario, pending primero y luego por horario ASC.
+    async def list_tasks(self, *, limit: int | None = None) -> list[dict[str, object]]:
+        """Lista las tareas del usuario, pending primero y luego por horario ASC.
 
         Filtra por ``user_id`` (aislamiento). Orden sensato para el dashboard "Hoy":
         las pendientes arriba (lo que falta hacer), y dentro de cada grupo por
         ``scheduled_at`` ASC (la próxima primero; las sin horario al final, porque
         ``NULL`` ordena último con ``nulls_last``). Read-only (no muta nada).
+
+        ``limit`` es un tope opcional de filas. ``None`` (default) preserva el
+        comportamiento del CRUD HTTP (sin tope). La superficie del agente
+        (``AgentListTasksTool``) pasa un cap acotado (``AGENT_LIST_RESULT_LIMIT``) para no
+        volcar miles de tareas al context window del LLM ni al payload del turno.
 
         Returns:
             Lista de dicts serializables (``TaskOut``), una por tarea.
@@ -115,6 +123,8 @@ class TaskStore:
                 Task.scheduled_at.asc().nulls_last(),
             )
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
         rows = list((await self._session.execute(stmt)).scalars().all())
         return [self._to_result(row) for row in rows]
 
@@ -147,17 +157,21 @@ class TaskStore:
         stmt = select(Task).where(Task.id == task_id, Task.user_id == self._user_id)
         return (await self._session.execute(stmt)).scalars().first()
 
-    async def _find_duplicate(self, *, title: str, scheduled_at: object) -> Task | None:
+    async def _find_duplicate(
+        self, *, title: str, scheduled_at: object, duration_min: object
+    ) -> Task | None:
         """Devuelve una tarea del usuario con la misma tupla natural, o ``None``.
 
-        La tupla ``(user_id, title, scheduled_at)`` identifica "el mismo to-do
-        conversado": el dedupe que vuelve idempotente a ``create_task`` ante un
-        reintento de la pasada async (ADR-021). Filtra por ``self._user_id``
+        La tupla ``(user_id, title, scheduled_at, duration_min)`` identifica "el
+        mismo to-do conversado": el dedupe que vuelve idempotente a ``create_task``
+        ante un reintento de la pasada async (ADR-021). Filtra por ``self._user_id``
         (aislamiento estructural): jamás matchea la tarea de otro usuario.
 
-        ``scheduled_at`` es nullable: cuando es ``None`` se compara con ``IS NULL``
+        Ambos campos son nullable: cuando son ``None`` se compara con ``IS NULL``
         (en SQL ``NULL = NULL`` da ``NULL``, no ``TRUE``, así que sin esta rama dos
-        tareas sin horario nunca deduplicarían).
+        tareas con el mismo campo NULL nunca deduplicarían). Mismo patrón que
+        ``CalendarEventStore._find_duplicate`` que incluye ``duration_min`` en su
+        clave de dedup.
         """
         stmt = select(Task).where(
             Task.user_id == self._user_id,
@@ -167,6 +181,10 @@ class TaskStore:
             stmt = stmt.where(Task.scheduled_at.is_(None))
         else:
             stmt = stmt.where(Task.scheduled_at == scheduled_at)
+        if duration_min is None:
+            stmt = stmt.where(Task.duration_min.is_(None))
+        else:
+            stmt = stmt.where(Task.duration_min == duration_min)
         return (await self._session.execute(stmt)).scalars().first()
 
     @staticmethod

@@ -64,7 +64,7 @@ from app.core.deps import (
     get_llm_client,
     get_reranker,
 )
-from app.core.ratelimit import check_chat_rate_limit
+from app.core.ratelimit import charge_chat_tool_writes, check_chat_rate_limit
 from app.llm.clients.base import LLMClient
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
@@ -88,20 +88,69 @@ EmbedderDep = Annotated[EmbeddingClient, Depends(get_embedder)]
 RerankerDep = Annotated[Reranker, Depends(get_reranker)]
 
 
+# Tope de ítems de una lista (``events`` / ``tasks``) que viaja en el ``result`` de una
+# action hacia el browser. El tool-loop ya acota lo que ve el MODELO (ver
+# ``AGENT_LIST_RESULT_LIMIT`` en ``app/llm/tools``), pero el wire del cliente repite el cap
+# como defensa en profundidad: ni una respuesta enorme ni un cambio futuro en el límite del
+# loop inflan el payload del browser. El front (``MessageActions``) hoy no renderiza el
+# contenido de la lista; el cap evita mandar toda la agenda igual.
+_CLIENT_RESULT_LIST_LIMIT = 50
+
+# Claves de ``result`` cuyo valor es una lista acotable antes de mandarla al cliente.
+_RESULT_LIST_KEYS = ("events", "tasks")
+
+
+def _sanitize_result(result: object) -> dict[str, Any]:
+    """Minimiza el ``result`` crudo de una tool antes de mandarlo al cliente (defensa en prof.).
+
+    Mantiene el CONTRATO del wire (``result`` sigue trayendo el dict del dominio: el front lo
+    consumirá a futuro, ver el TODO en ``MessageActions.tsx``) pero recorta las dos fugas
+    concretas que la review marcó:
+
+    - ``echo`` de un stub ``not_wired``: es el ``arguments`` del usuario reflejado tal cual
+      (``not_wired_result`` lo mete en ``echo``). El front no lo usa; se descarta para no
+      reenviar el input derivado del usuario en el payload del stub.
+    - listas sin tope (``events`` / ``tasks`` de ``list_*``): se truncan a
+      ``_CLIENT_RESULT_LIST_LIMIT`` ítems, así un usuario con miles de filas no infla el
+      payload del browser aunque el límite del loop cambie.
+
+    El resto del ``result`` (evento/tarea creados, ``error`` estructurado) pasa sin tocar.
+    """
+    if not isinstance(result, dict):
+        return result if isinstance(result, dict) else {}
+    sanitized = dict(result)
+    # Stub not_wired: no reenviar el echo de los args del usuario.
+    if sanitized.get("status") == "not_wired":
+        sanitized.pop("echo", None)
+    # Listas acotadas: cap defensivo del payload del cliente.
+    for key in _RESULT_LIST_KEYS:
+        value = sanitized.get(key)
+        if isinstance(value, list) and len(value) > _CLIENT_RESULT_LIST_LIMIT:
+            sanitized[key] = value[:_CLIENT_RESULT_LIST_LIMIT]
+    return sanitized
+
+
 def _to_http_actions(raw: list[dict]) -> list[Action]:
-    """Convierte las actions crudas de ``route()`` en ``Action`` del wire.
+    """Convierte las actions crudas de ``route()`` en ``Action`` del wire (sanitizadas).
 
     El tool loop produce dicts ``{'id', 'name', 'arguments', 'result'}``; validamos cada
     item contra ``Action`` y descartamos los malformados (no se filtra basura al cliente).
     Conversion DEFENSIVA: un dict que no valide no debe tumbar toda la respuesta.
+
+    Minimización del payload del cliente (defensa en profundidad, sin romper el contrato):
+    el ``result`` pasa por ``_sanitize_result`` (descarta el ``echo`` del stub + acota listas
+    grandes). ``arguments`` se mantiene (el contrato wire documentado lo lleva y el front lo
+    consumirá), pero ya no es un vector de fuga ilimitado porque los args de las tools reales
+    están acotados en sus schemas (``max_length`` en ``calendar.py`` / ``task.py``).
     """
     actions: list[Action] = []
     for item in raw:
         try:
-            actions.append(Action.model_validate(item))
+            validated = Action.model_validate(item)
         except ValidationError:
             # Action malformada: se descarta silenciosamente (no se expone basura).
             continue
+        actions.append(validated.model_copy(update={"result": _sanitize_result(validated.result)}))
     return actions
 
 
@@ -139,6 +188,11 @@ async def chat(
         session, user_id, llm_client=llm_client, embedder=embedder, reranker=reranker
     )
     resp = await service.run_turn(chat_session, body)
+    # Cargar la presión de escrituras de tools al bucket del chat (amplificación de
+    # escritura): cada action ejecutada suma 1 punto extra a la ventana del usuario, así un
+    # turno que dispara muchas tools agota la ventana antes. Post-turno y best-effort: NO
+    # rechaza ESTE turno (ya pasó el gate); afecta los siguientes.
+    await charge_chat_tool_writes(store, user_id=str(user_id), writes=len(resp.actions))
     return ChatHttpResponse(
         text=resp.text,
         actions=_to_http_actions(resp.actions),
@@ -223,6 +277,10 @@ async def chat_stream(
         session, user_id, llm_client=llm_client, embedder=embedder, reranker=reranker
     )
     resp = await service.run_turn(chat_session, body)
+
+    # Cargar la presión de escrituras de tools al bucket del chat (misma amplificación que
+    # /chat): cada action ejecutada suma 1 punto extra a la ventana. Post-turno, best-effort.
+    await charge_chat_tool_writes(store, user_id=str(user_id), writes=len(resp.actions))
 
     # (2) SNAPSHOT de primitivos puros ANTES del generator. NUNCA se pasa chat_session ni
     #     atributos ORM al closure (evita lazy-load post-commit).

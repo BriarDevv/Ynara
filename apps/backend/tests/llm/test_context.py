@@ -613,6 +613,96 @@ def test_build_memory_context_memoria_all_layers() -> None:
     assert ctx.registries[1] is not None
 
 
+# ---------------------------------------------------------------------------
+# UNIT: _default_reg trae las tools REALES del chat segun el modo (ADR-022)
+# ---------------------------------------------------------------------------
+
+
+def _build_ctx_for_tools(tools_enabled: list[str]) -> MemoryContext:
+    """Construye un MemoryContext con un mode_cfg que habilita ``tools_enabled``.
+
+    Usa MagicMock para session/embedder/reranker (no toca DB): solo nos importa qué
+    tools terminan en ``_default_reg`` (lo arma ``build_chat_tool_registry``, gateado por
+    ``mode_cfg.tools_enabled``). El ``memory_layers`` se deja vacío para no instanciar
+    stores reales (irrelevante para este assert).
+    """
+    from unittest.mock import MagicMock
+
+    mode_cfg = ModeConfig(
+        name="probe",
+        model="qwen-3.5-9b",
+        memory_layers=[],
+        tools_enabled=tools_enabled,
+        tone="neutro-eficaz",
+    )
+    return build_memory_context(
+        session=MagicMock(),
+        user_id=uuid.uuid4(),
+        embedder=MagicMock(),
+        reranker=MagicMock(),
+        mode_cfg=mode_cfg,
+    )
+
+
+def test_default_reg_productividad_has_real_calendar_and_reminder_stub() -> None:
+    """En productividad (calendar/reminder/task), ``_default_reg`` tiene la calendar tool
+    REAL (con efecto) y reminder como STUB not_wired (ADR-022).
+
+    - ``calendar.create_event`` debe ser ``AgentCreateEventTool`` (real, escribe), NO el
+      stub ``CreateEventTool``.
+    - ``reminder.set`` debe ser el stub ``SetReminderTool`` (no hay backend real).
+    """
+    from app.llm.tools.calendar import AgentCreateEventTool
+    from app.llm.tools.reminder import SetReminderTool
+    from app.llm.tools.task import AgentCreateTaskTool
+
+    ctx = _build_ctx_for_tools(["calendar", "reminder", "task"])
+    reg = ctx.registries[0]
+
+    # Las 3 tools de agente están registradas (API pública ``has()`` / ``get_tool()``, NO el
+    # dict privado ``_tools``): así el test no se acopla a la representación interna del
+    # registry.
+    assert reg.has("calendar.create_event")
+    assert reg.has("task.create_task")
+    assert reg.has("reminder.set")
+
+    # calendar.create_event y task.create_task son las tools REALES (escriben), no los stubs.
+    assert isinstance(reg.get_tool("calendar.create_event"), AgentCreateEventTool)
+    assert isinstance(reg.get_tool("task.create_task"), AgentCreateTaskTool)
+
+    # reminder sigue siendo stub not_wired (sin backend real).
+    assert isinstance(reg.get_tool("reminder.set"), SetReminderTool)
+
+    # Las specs hacia el modelo exponen los 3 namespaces habilitados.
+    specs = ctx.tool_specs(["calendar", "reminder", "task"])
+    namespaces = {s.name.split(".")[0] for s in specs}
+    assert {"calendar", "reminder", "task"} <= namespaces
+
+
+def test_default_reg_gemma_mode_is_empty() -> None:
+    """En un modo gemma (``tools_enabled=[]``) el ``_default_reg`` queda vacío (ADR-022)."""
+    ctx = _build_ctx_for_tools([])
+    reg = ctx.registries[0]
+    assert reg.tools() == []
+    assert ctx.tool_specs([]) == []
+
+
+def test_default_reg_memoria_mode_has_no_calendar_or_task() -> None:
+    """En 'memoria' (``tools_enabled=[memory]``) no hay calendar/task/reminder en el reg.
+
+    El namespace ``memory`` lo maneja ``_memory_reg`` aparte; ``_default_reg`` (las tools
+    de agente del chat) no debe traer ninguna tool porque ``memory`` no está en
+    ``_AGENT_TOOL_BUILDERS`` ni es ``reminder``.
+    """
+    ctx = _build_ctx_for_tools(["memory"])
+    reg = ctx.registries[0]
+    assert reg.tools() == []
+    # No hay calendar/task tools registradas.
+    assert not reg.has("calendar.create_event")
+    assert not reg.has("task.create_task")
+    assert not reg.has("reminder.set")
+
+
 # ===========================================================================
 # INTEGRATION
 # ===========================================================================
