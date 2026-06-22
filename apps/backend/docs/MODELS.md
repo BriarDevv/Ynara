@@ -39,6 +39,7 @@ schemas Pydantic.
 | `AuditOperation` | `audit_operation_enum` | read, write, update, delete | `audit_log.operation` |
 | `TurnRole` | `turn_role_enum` | user, model | `conversation_turns.role` (dueño, único consumidor) |
 | `EventStatus` | `event_status_enum` | confirmed, tentative, cancelled | `calendar_events.status` (dueño, único consumidor) |
+| `TaskStatus` | `task_status_enum` | pending, done | `tasks.status` (dueño, único consumidor) |
 
 ## Tablas sagradas 🔴
 
@@ -327,6 +328,40 @@ array de texto y se devuelve tal cual.
 - `ix_calendar_events_user_id` (btree, por `user_id`) — queries por usuario + cascade-delete.
 - `ix_calendar_events_start_at` (btree, por `start_at`) — orden/filtro por inicio del listado.
 
+### tasks
+
+**OPERATIVA**, no sagrada (sin 🔴): tareas/prioridades del día del usuario que el
+dashboard "Hoy" de la web consume vía `/v1/tasks` (dominio TAREAS, Fase D1, espejo de
+Agenda/ADR-018). El **alta la hace el agente** qwen por detrás de la conversación
+(`task.create_task`, igual que agenda eventos), no un `POST` manual; el CRUD HTTP
+expone solo `GET` (listar) + `PATCH` (togglear estado). El shape espeja
+`packages/shared-schemas/src/today.ts` (`TaskSchema`: "Pydantic gana, Zod sigue").
+Modelo en `app/models/task.py` (`UUIDPKMixin` + `TimestampMixin`). Agregada en la
+migración `20260622_1400_tasks_table`.
+
+A diferencia de `calendar_events` (donde `start_at`/`duration_min` son NOT NULL),
+`scheduled_at` y `duration_min` son **NULLABLE**: una prioridad puede no tener horario
+fijo (el front los declara `.nullable()`). El fin del bloque (cuando hay horario) es
+derivado (`scheduled_at + duration_min`). No hay invariante entre campos (a diferencia
+de Agenda).
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | `gen_random_uuid()` |
+| `user_id` | UUID FK → users.id, ON DELETE CASCADE | indexed btree |
+| `title` | VARCHAR NOT NULL | Título de la tarea (min 1 en el schema) |
+| `status` | `task_status_enum` NOT NULL | pending / done. Arranca `pending`; el `PATCH` lo togglea (el check del front) |
+| `scheduled_at` | TIMESTAMPTZ | Hora agendada (instante con offset), **nullable** (`null` si la tarea no tiene horario) |
+| `duration_min` | INTEGER | Duración estimada en minutos (> 0 en el schema), **nullable** |
+| `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
+
+**Índices**:
+- `ix_tasks_user_id` (btree, por `user_id`) — queries por usuario + cascade-delete.
+
+**Idempotencia** (Fase D1 / ADR-021): `TaskStore.create_task` deduplica por la tupla
+natural `(user_id, title, scheduled_at)` (con `IS NULL` cuando no hay horario), así un
+retry de la pasada async del agente no crea el mismo to-do dos veces.
+
 ## Migración inicial
 
 Mergeada. La migración inicial vive en `apps/backend/alembic/versions/`
@@ -347,9 +382,11 @@ llevando el total a **7 tablas** (#209). La migración siguiente,
 `20260615_0200_drop_redundant_conversation_turns_indexes`, reemplaza
 los 3 índices parciales de `conversation_turns` por el único índice compuesto
 `(user_id, session_id, seq)`. La migración `20260622_1200_calendar_events_table`
-(**HEAD**) agrega el enum `event_status_enum` + la tabla operativa
+agrega el enum `event_status_enum` + la tabla operativa
 `calendar_events` (FK a `users`, dominio Agenda ADR-018), llevando el total a
-**9 tablas** (con `admin_audit`).
+**9 tablas** (con `admin_audit`). La migración `20260622_1400_tasks_table`
+(**HEAD**) agrega el enum `task_status_enum` + la tabla operativa `tasks` (FK a
+`users`, dominio TAREAS Fase D1), llevando el total a **10 tablas**.
 
 Ver [`docs/MIGRATIONS.md`](./MIGRATIONS.md) para la cadena completa y la política.
 

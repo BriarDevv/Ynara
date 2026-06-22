@@ -19,20 +19,27 @@
 ## Tools disponibles
 
 > **Estado**: `reminder.*` son stubs (esqueleto sin integración externa real).
-> `calendar.*` está **implementado de verdad** en la **pasada asíncrona del agente**
-> (Fase E, ADR-021): escribe/lee la tabla `calendar_events` vía `CalendarEventStore`.
+> `calendar.*` y `task.*` están **implementados de verdad** en la **pasada asíncrona
+> del agente** (Fase E/D1, ADR-021): `calendar.*` escribe/lee `calendar_events` vía
+> `CalendarEventStore`; `task.*` escribe/lee `tasks` vía `TaskStore`.
 > `memory.*` está **implementado** (M7, mergeado).
 >
-> **Dos superficies, dos registries** (mismo patrón que `memory.*`):
-> - `default_registry()` trae los `calendar.*` como **stubs `not_wired`** (cero efecto):
->   los consume el **playground observado** (ADR-019 D2, invariante de no-efecto).
-> - `calendar_registry(store)` trae los `calendar.*` **reales** (con efecto), ligados
->   a `(session, user_id)`: los consume SOLO la pasada async del agente
->   (`app/workflows/agent_pass.py`). El `user_id` nunca viaja como argumento (el store
->   ya lo tiene; `extra='forbid'` lo impide), igual que la memoria.
+> **Dos superficies, dos registries** (mismo patrón para `calendar.*` / `task.*` /
+> `memory.*`):
+> - `default_registry()` trae los `calendar.*` / `task.*` como **stubs `not_wired`**
+>   (cero efecto): los consume el **playground observado** (ADR-019 D2, invariante de
+>   no-efecto).
+> - `calendar_registry(store)` / `task_registry(store)` traen los tools **reales** (con
+>   efecto), ligados a `(session, user_id)`: los consume SOLO la pasada async del agente
+>   (`app/workflows/agent_pass.py`), que arma un registry **combinado** con los
+>   namespaces que el modo habilita en `tools_enabled` (diseño multi-tool escalable). El
+>   `user_id` nunca viaja como argumento (el store ya lo tiene; `extra='forbid'` lo
+>   impide), igual que la memoria.
 >
-> Las clases reales son `AgentCreateEventTool` / `AgentListEventsTool` (stateful);
-> los stubs `CreateEventTool` / `ListEventsTool` se conservan para el playground.
+> Las clases reales son `AgentCreateEventTool` / `AgentListEventsTool` /
+> `AgentCreateTaskTool` / `AgentListTasksTool` (stateful); los stubs
+> `CreateEventTool` / `ListEventsTool` / `CreateTaskTool` / `ListTasksTool` se conservan
+> para el playground.
 
 ### calendar.create_event
 
@@ -79,6 +86,45 @@
   `[from_dt, to_dt)`, ordenados por `start_at` ASC. Devuelve `{ "events": [...] }`
   (eventos serializados, sin metadata interna). El stub del `default_registry()` sigue
   devolviendo `not_wired`.
+
+### task.create_task
+
+- **Descripción**: crear una tarea o pendiente del usuario (la prioridad del día).
+- **Parámetros (tool real, espejan `TaskCreate`)**:
+  - `title: str` (no vacío, máx 200 — cota LLM-fed)
+  - `scheduled_at: datetime | None` (ISO 8601 con timezone; rechaza epoch numérico; opcional)
+  - `duration_min: int | None` (entero positivo, máx 43200 — cota LLM-fed; opcional)
+- **Habilitada en modos**: productividad (los modos con `task` en `tools_enabled`).
+- **Ejemplo**:
+  ```json
+  {
+    "tool": "task.create_task",
+    "args": {
+      "title": "Comprar pan",
+      "scheduled_at": "2026-05-20T18:00:00-03:00",
+      "duration_min": 15
+    }
+  }
+  ```
+- **Efecto (tool real)**: INSERTA en `tasks` (status `pending`), atado al `user_id` del
+  store. **Idempotente**: deduplica por la tupla natural `(user_id, title,
+  scheduled_at)` (con `IS NULL` si no hay horario) → un reintento de la pasada async NO
+  crea el to-do dos veces. Devuelve la tarea serializada (`id` + campos del wire, sin
+  `user_id`/timestamps).
+- **Errores**: `invalid_arguments` (args malformados: título vacío o > 200,
+  `duration_min` no positivo o > 43200, fecha no-ISO/epoch, `user_id` u otro extra).
+- **Stub (playground observado)**: la versión del `default_registry()` valida args y
+  devuelve `not_wired` (cero efecto). Sus params son `title`/`due` (shape de observación
+  pura).
+
+### task.list_tasks
+
+- **Descripción**: listar las tareas/pendientes del usuario.
+- **Parámetros**: ninguno (lista todas).
+- **Habilitada en modos**: productividad.
+- **Efecto (tool real)**: lee `tasks` del usuario (pending primero, luego por
+  `scheduled_at` ASC). Devuelve `{ "tasks": [...] }` (tareas serializadas, sin metadata
+  interna). El stub del `default_registry()` sigue devolviendo `not_wired`.
 
 ### reminder.set
 

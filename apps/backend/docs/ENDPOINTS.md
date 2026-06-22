@@ -396,6 +396,50 @@ Invariantes transversales:
   Redis cae. El check corre **antes** de tocar la DB.
 - Modos: todos.
 
+## /v1/tasks
+
+CRUD del dominio **TAREAS** (Fase D1, espejo de Agenda/ADR-018). El dashboard "Hoy"
+de la web ya consume estos endpoints (`packages/core/src/features/today/api.ts`); el
+contrato del wire vive en `packages/shared-schemas/src/today.ts` y lo espejan los
+schemas `app/schemas/task.py` ("Pydantic gana, Zod sigue"). El **alta la hace el
+agente** qwen por detrás de la conversación (`task.create_task`, ver TOOLS.md), no un
+`POST` manual; por eso el CRUD HTTP expone solo `GET` (listar) + `PATCH` (togglear
+estado). Contrato + decisiones en el docstring de
+[`../app/api/v1/tasks.py`](../app/api/v1/tasks.py).
+
+Invariantes transversales:
+
+- **Aislamiento por `user_id` del JWT**: el listado trae solo las tareas del user;
+  un `PATCH` de una tarea inexistente **o** de otro usuario da el **mismo** 404 (sin
+  oráculo de existencia ajena).
+- `TaskOut` **no** expone `user_id` / `created_at` / `updated_at` (el contrato del
+  front no los declara); el fin del bloque (cuando hay horario) es derivado
+  (`scheduled_at + duration_min`). `scheduled_at` / `duration_min` son nullable.
+
+- **GET** `/v1/tasks` — lista las tareas del usuario, **pending primero** y luego por
+  `scheduled_at` **ASC** (las sin horario al final del grupo pending).
+  - Request: ninguno (el `user_id` sale del JWT).
+  - Response 200: `TasksResponse = { "items": TaskOut[], "total": N }` donde
+    `TaskOut = { id, title, status, scheduled_at, duration_min }`. `total` es el conteo
+    **completo** de tareas del user. `TasksResponse` vive en
+    `app/schemas/task_api.py` (no sagrado, espeja `TasksResponseSchema` del front).
+- **PATCH** `/v1/tasks/{task_id}` — togglea el `status` de una tarea del usuario.
+  - Path param: `task_id: UUID`.
+  - Body: `TaskPatch = { status: "pending" | "done" }` (`status` requerido, `extra: forbid`). El front manda el estado **opuesto** al actual (el toggle del check).
+  - Response 200: `TaskOut` de la tarea actualizada (el objeto **solo**, no el envelope `items`/`total`).
+  - Response 404: tarea inexistente **o** de otro usuario — **mismo** 404 (status + `detail: "tarea no encontrada"`), sin oráculo de existencia ajena.
+  - Response 422: validación (`status` faltante / fuera del enum / campo extra).
+- Response 401 (todas las rutas): sin token / token inválido (`get_current_user`).
+- Response 429 (todas las rutas): supera el rate-limit por `user_id` —
+  `detail: "demasiados intentos, intente mas tarde"` (neutro) + header
+  `Retry-After` == `TASKS_WINDOW_SECONDS`.
+- Permisos: **usuario autenticado** (solo sobre sus propias tareas).
+- Rate limit: por `user_id` (del JWT), **un solo bucket** compartido por las 2 rutas
+  (`list`/`patch`), `TASKS_MAX_REQUESTS` (120) por `TASKS_WINDOW_SECONDS` (60s); 429 con
+  `Retry-After` al cruzar el techo. fail-open si Redis cae. El check corre **antes** de
+  tocar la DB.
+- Modos: todos.
+
 ## /v1/admin
 
 Panel admin interno (subpaquete [`../app/api/v1/admin/`](../app/api/v1/admin/)): 6 GET de
