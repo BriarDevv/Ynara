@@ -7,7 +7,7 @@
     "productividad": {
       "model": "qwen-3.5-9b",
       "memory_layers": ["semantic", "episodic"],
-      "tools_enabled": ["calendar", "reminder", "memory"],
+      "tools_enabled": ["calendar", "reminder", "memory", "task"],
       "tone": "neutro-eficaz"
     },
     "estudio": {

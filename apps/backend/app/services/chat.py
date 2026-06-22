@@ -45,10 +45,21 @@ from app.memory.conversation_turns import ConversationTurnStore
 from app.models.session import ChatSession
 from app.schemas.chat import ChatHttpRequest
 from app.schemas.conversation_turn import ConversationTurnCreate
-from app.workflows.agent_pass import agent_turn_pass
+from app.workflows.agent_pass import _AGENT_TOOL_BUILDERS, agent_turn_pass
 from app.workflows.consolidation import consolidate_turn
 
 logger = logging.getLogger(__name__)
+
+# Namespaces de tools de agente accionables que justifican encolar ``agent_turn_pass``.
+# Es la MISMA fuente que usa la pasada (las claves de ``_AGENT_TOOL_BUILDERS`` en
+# ``app/workflows/agent_pass.py``): se importa el dict y se derivan sus keys, en vez de
+# espejar la tupla a mano —así un namespace nuevo agregado a ``_AGENT_TOOL_BUILDERS`` (p.ej.
+# una tool de agente futura) entra automáticamente al gate del enqueue y no queda mudo
+# (el turno llegaba al worker pero el gate del caller ya cortaba). El gate del enqueue es
+# "encolar si el modo habilita CUALQUIERA de estas" (un modo con solo ``task`` también
+# dispara la pasada); el re-check defensivo de ``_async_agent_pass`` filtra por la misma
+# intersección (defensa-en-profundidad del ADR-021: caller + re-check).
+_AGENT_TURN_TOOLS = tuple(_AGENT_TOOL_BUILDERS)
 
 
 class ChatService:
@@ -208,11 +219,17 @@ class ChatService:
         """Encola ``agent_turn_pass`` DESPUÉS del commit (Fase E, ADR-021), best-effort.
 
         Espejo EXACTO de ``_enqueue_consolidation``, salvo el GATE: encola SOLO si el
-        modo habilita ``calendar`` en ``tools_enabled`` (ADR-021 D2/D5: config-driven,
-        no hardcode) y el turno NO degradó. Un modo sin calendar en ``tools_enabled``
-        NO encola la pasada (un modo gemma conversacional no agenda). ``'max_iterations'``
-        NO es degradado y SÍ acciona. La task es SEPARADA de la consolidación (ADR-021
-        D3): una falla de tools no afecta la memoria, y viceversa.
+        modo habilita ALGUNA tool de agente accionable (``calendar`` o ``task``) en
+        ``tools_enabled`` (ADR-021 D2/D5: config-driven, no hardcode) y el turno NO
+        degradó. Un modo sin ninguna de esas tools NO encola la pasada (un modo gemma
+        conversacional no acciona). ``'max_iterations'`` NO es degradado y SÍ acciona. La
+        task es SEPARADA de la consolidación (ADR-021 D3): una falla de tools no afecta
+        la memoria, y viceversa.
+
+        El gate honesto es "encolar si el modo habilita CUALQUIER tool de agente
+        accionable" (``_AGENT_TURN_TOOLS``), así un modo con SOLO ``task`` (sin
+        ``calendar``) también dispara la pasada. Se mantiene el espejo con el re-check
+        defensivo de ``_async_agent_pass`` (que filtra por la misma intersección).
 
         Snapshot de primitivos (como la consolidación): todos los valores que viajan al
         ``.delay()`` son primitivos / Pydantic (``str(self._user_id)``,
@@ -231,11 +248,11 @@ class ChatService:
         # ``ynara.config.json`` daría KeyError con acceso directo al dict. El KeyError lo
         # taparía el ``except Exception`` de abajo (fail-open), pero logueando ``KeyError``
         # en vez del fallo real del enqueue: oscurece el diagnóstico. Con ``.get`` el modo
-        # desconocido es un no-op limpio (igual que un modo sin calendar habilitado).
+        # desconocido es un no-op limpio (igual que un modo sin tools de agente habilitadas).
         mode_cfg = load_llm_config().modes.get(body.mode.value)
         if (
             mode_cfg is None
-            or "calendar" not in mode_cfg.tools_enabled
+            or not any(ns in mode_cfg.tools_enabled for ns in _AGENT_TURN_TOOLS)
             or resp.finish_reason == "degraded"
         ):
             return

@@ -18,6 +18,7 @@ from app.llm.schemas import ToolSpec
 from app.llm.tools.base import Tool, to_spec, tool_error
 from app.llm.tools.calendar import CreateEventTool, ListEventsTool
 from app.llm.tools.reminder import ListRemindersTool, SetReminderTool
+from app.llm.tools.task import CreateTaskTool, ListTasksTool
 
 
 class ToolRegistry:
@@ -37,6 +38,15 @@ class ToolRegistry:
     def has(self, name: str) -> bool:
         """True si el ``name`` esta registrado en este registry."""
         return name in self._tools
+
+    def tools(self) -> list[Tool]:
+        """Lista las tools registradas, en orden de inserción (determinista).
+
+        La usa la pasada del agente (``agent_pass._build_agent_registry``) para fusionar
+        varios registries por-namespace en uno solo: toma las tools de cada registry y
+        las re-registra en el combinado.
+        """
+        return list(self._tools.values())
 
     def specs_for(self, enabled_namespaces: list[str]) -> list[ToolSpec]:
         """``ToolSpec`` de las tools cuyo namespace este habilitado.
@@ -65,10 +75,12 @@ class ToolRegistry:
 
 
 def default_registry() -> ToolRegistry:
-    """Registry por defecto: calendar + reminder (NO memory).
+    """Registry por defecto: calendar + reminder + task (NO memory).
 
     Memory es M7 (tabla sagrada, regla #3) y se registra aparte vía
-    ``memory_registry()``. Aca solo van las 4 tools stub de M6.
+    ``memory_registry()``. Aca solo van los stubs sin efecto del playground observado
+    (ADR-019 D2): los reales viven en ``calendar_registry()`` / ``task_registry()`` y
+    los arma la pasada asíncrona del agente.
     """
     return ToolRegistry(
         [
@@ -76,5 +88,7 @@ def default_registry() -> ToolRegistry:
             ListEventsTool(),
             SetReminderTool(),
             ListRemindersTool(),
+            CreateTaskTool(),
+            ListTasksTool(),
         ]
     )
