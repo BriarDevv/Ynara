@@ -115,3 +115,19 @@ class EventStatus(StrEnum):
     CONFIRMED = "confirmed"
     TENTATIVE = "tentative"
     CANCELLED = "cancelled"
+
+
+class TaskStatus(StrEnum):
+    """Estado de una tarea/prioridad del día. Ver
+    ``packages/shared-schemas/src/today.ts`` (``TaskStatusSchema``) y el dominio
+    TAREAS (Fase D1, espejo de Agenda/ADR-018).
+
+    Tipo PG ``task_status_enum`` — dueño: ``Task.status`` en
+    ``app/models/task.py`` (único consumidor por ahora, pero la migración lo crea
+    explícitamente con ``create_type=False`` en la columna, mismo patrón que
+    ``event_status_enum``). ``pending`` es el estado inicial que fija el server al
+    crear; el ``PATCH`` togglea entre ``pending`` y ``done`` (el check del front).
+    """
+
+    PENDING = "pending"
+    DONE = "done"
