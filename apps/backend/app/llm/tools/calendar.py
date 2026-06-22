@@ -1,20 +1,45 @@
-"""Tools del namespace ``calendar`` (M6).
+"""Tools del namespace ``calendar`` (M6 stubs + Fase E real, ADR-021).
 
-``CreateEventTool`` (``calendar.create_event``) y ``ListEventsTool``
-(``calendar.list_events``). Validan sus argumentos con un modelo Pydantic v2
-strict y devuelven un resultado STUB honesto: todavia no hay backend real de
-calendario cableado. Los errores de validacion vuelven como dict
-estructurado (``tool_error``), nunca como excepcion.
+DOS familias en este módulo, una por superficie:
+
+1. STUBS sin efecto (``CreateEventTool`` / ``ListEventsTool``): los del
+   ``default_registry()`` (M6). Validan args y devuelven ``not_wired``. Los usa
+   el **playground observado** (ADR-019 D2: invariante de no-efecto — el operador
+   ve al agente decidir tools a CERO efecto). Se quedan tal cual: cambiarlos
+   rompería esa invariante (y su test guardián).
+
+2. TOOLS REALES stateful (``AgentCreateEventTool`` / ``AgentListEventsTool``,
+   Fase E ADR-021): reciben un ``CalendarEventStore`` ligado a ``(session,
+   user_id)`` y ESCRIBEN/LEEN ``calendar_events`` de verdad. Espejan EXACTAMENTE
+   el patrón de las memory tools reales (``MemoryUpdateTool`` etc.): el store
+   viaja por closure de constructor, el ``user_id`` NUNCA como argumento (igual
+   que la memoria; ``extra='forbid'`` lo impide). Las consume SOLO la **pasada
+   asíncrona del agente** vía ``calendar_registry(store)``, no el default.
+
+Ambas familias comparten ``name``/``namespace`` (``calendar.create_event`` /
+``calendar.list_events``): el modelo ve el mismo contrato; lo que cambia es si la
+tool tiene efecto, decidido por QUÉ registry se arma (default observado vs
+calendar real), igual que memory.* (stub en default, real en memory_registry).
+
+Args reales que espejan ``EventCreate`` (``app/schemas/calendar_event.py``):
+``title`` / ``start_at`` / ``duration_min`` (+ ``mode`` / ``location`` /
+``time_zone`` / ``recurrence`` opcionales). La invariante ADR-018
+(``recurrence`` ⇒ ``time_zone``) se reusa del schema de dominio (un solo lugar).
 
 El JSON Schema OpenAI de cada tool se deriva del propio modelo Pydantic
 (``tool_schema``), asi hay una sola fuente de verdad para validacion y para
-lo que ve el modelo.
+lo que ve el modelo. Los errores de validacion vuelven como dict estructurado
+(``tool_error``), nunca como excepcion.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from typing import TYPE_CHECKING, Annotated
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from app.calendar.store import CalendarEventStore
+from app.enums import Mode
 from app.llm.tools.base import (
     IsoDatetime,
     first_validation_error,
@@ -22,6 +47,14 @@ from app.llm.tools.base import (
     tool_error,
     tool_schema,
 )
+from app.schemas.calendar_event import EventCreate, _validate_recurrence_needs_time_zone
+
+if TYPE_CHECKING:
+    # Import perezoso en runtime (ver ``calendar_registry``): ``registry.py`` importa
+    # ESTE módulo para los stubs del ``default_registry()``, así que importar
+    # ``ToolRegistry`` a nivel de módulo cerraría un ciclo de import. La anotación de
+    # tipo se resuelve solo en type-checking (no en runtime).
+    from app.llm.tools.registry import ToolRegistry
 
 _NAMESPACE = "calendar"
 _DETAIL = "calendar backend pendiente"
@@ -99,3 +132,161 @@ class ListEventsTool:
         except ValidationError as exc:
             return tool_error("invalid_arguments", first_validation_error(exc))
         return not_wired_result(self.name, validated.model_dump(mode="json"), detail=_DETAIL)
+
+
+# ===========================================================================
+# Tools REALES con efecto (Fase E, ADR-021) — escriben/leen calendar_events
+# ===========================================================================
+#
+# Stateful: reciben un ``CalendarEventStore`` ligado a ``(session, user_id)`` por
+# closure de constructor (mismo patrón que ``MemoryUpdateTool(store)``). El
+# ``user_id`` NUNCA viaja como argumento (el store ya lo tiene; ``extra='forbid'``
+# lo bloquea). Las consume SOLO ``calendar_registry(store)`` (la pasada async del
+# agente), no ``default_registry()`` (que sigue con los stubs no-op del playground).
+
+
+class _AgentCreateEventArgs(BaseModel):
+    """Argumentos REALES de ``calendar.create_event`` — espejan ``EventCreate``.
+
+    Mismo contrato de dominio que ``POST /v1/events`` (``app/schemas/calendar_event.py``):
+    ``title`` no vacío + ``start_at`` (ISO 8601, vía ``IsoDatetime`` que rechaza
+    epoch numérico) + ``duration_min`` entero positivo, con ``mode`` / ``location`` /
+    ``time_zone`` / ``recurrence`` opcionales. ``status`` NO se acepta (lo fija el
+    store en ``confirmed``). La invariante ADR-018 (``recurrence`` ⇒ ``time_zone``)
+    se valida con la MISMA función del schema de dominio (un solo lugar).
+
+    ``extra='forbid'``: ``user_id`` (u otro campo) NO puede inyectarse por argumento
+    (el store ya está ligado al ``user_id``; pasarlo permitiría agendar para otro
+    usuario). Un extra desconocido es ``invalid_arguments``.
+
+    ``strict=False`` (MISMO patrón que ``EventCreate`` / ``ChatHttpRequest``, ver
+    ``_WIRE_REQUEST_CONFIG`` en ``app/schemas/calendar_event.py``): las tool calls
+    llegan como JSON, así que ``mode`` viaja como string (``"productividad"``) y debe
+    coercionarse a ``Mode``. Con ``strict=True`` un string no es instancia de ``Mode``
+    y fallaría. El epoch numérico en ``start_at`` SIGUE rechazándose porque
+    ``IsoDatetime`` usa un ``BeforeValidator`` que exige string ISO / datetime nativo
+    (independiente de ``strict``). ``Field(gt=0)`` mantiene ``duration_min`` positivo.
+    """
+
+    model_config = ConfigDict(strict=False, extra="forbid")
+
+    title: Annotated[str, Field(min_length=1)]
+    start_at: IsoDatetime
+    duration_min: Annotated[int, Field(gt=0)]
+    mode: Mode | None = None
+    location: str | None = None
+    time_zone: str | None = None
+    recurrence: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _check_recurrence_time_zone(self) -> _AgentCreateEventArgs:
+        # Misma sede que ``EventCreate`` / el router de eventos: recurrencia no vacía
+        # exige ``time_zone`` (ADR-018). Reusar la función evita duplicar la regla.
+        _validate_recurrence_needs_time_zone(self.recurrence, self.time_zone)
+        return self
+
+
+class _AgentListEventsArgs(BaseModel):
+    """Argumentos REALES de ``calendar.list_events`` (ventana ``[from_dt, to_dt)``)."""
+
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    from_dt: IsoDatetime
+    to_dt: IsoDatetime
+
+
+class AgentCreateEventTool:
+    """Agenda un evento REAL en ``calendar_events`` (Fase E, ADR-021).
+
+    La pasada asíncrona del agente (qwen por detrás de la conversación) llama esta
+    tool para agendar lo conversado. Escribe vía ``CalendarEventStore`` (ligado al
+    ``user_id`` real): aislamiento estructural + idempotencia (un retry de Celery no
+    duplica el evento; ver ``CalendarEventStore.create_event``).
+
+    El resultado es un dict serializable (``id`` + campos del evento), NO el ORM:
+    el modelo / el caller ven el evento creado sin metadata interna (``user_id`` /
+    timestamps no se filtran, mismo contrato que ``CalendarEventOut``).
+    """
+
+    name = f"{_NAMESPACE}.create_event"
+    namespace = _NAMESPACE
+    description = "Agenda un evento en el calendario del usuario."
+
+    def __init__(self, store: CalendarEventStore) -> None:
+        self._store = store
+
+    @property
+    def parameters(self) -> dict[str, object]:
+        return tool_schema(_AgentCreateEventArgs)
+
+    async def execute(self, arguments: dict[str, object]) -> dict[str, object]:
+        try:
+            validated = _AgentCreateEventArgs.model_validate(arguments)
+        except ValidationError as exc:
+            return tool_error("invalid_arguments", first_validation_error(exc))
+
+        # Construir el ``EventCreate`` de dominio desde los args validados. Reusa el
+        # schema canónico (un solo contrato): el store escribe lo mismo que el CRUD HTTP.
+        payload = EventCreate(
+            title=validated.title,
+            start_at=validated.start_at,
+            duration_min=validated.duration_min,
+            mode=validated.mode,
+            location=validated.location,
+            time_zone=validated.time_zone,
+            recurrence=validated.recurrence,
+        )
+        return await self._store.create_event(payload)
+
+
+class AgentListEventsTool:
+    """Lista eventos REALES del usuario en una ventana de tiempo (Fase E, ADR-021).
+
+    Read-only sobre ``calendar_events`` vía ``CalendarEventStore`` (ligado al
+    ``user_id`` real). Devuelve ``{"events": [...]}`` con los eventos serializados
+    (sin metadata interna), para que el agente sepa qué ya está agendado antes de
+    agendar (evita pisar / duplicar).
+    """
+
+    name = f"{_NAMESPACE}.list_events"
+    namespace = _NAMESPACE
+    description = "Lista eventos del calendario en una ventana de tiempo."
+
+    def __init__(self, store: CalendarEventStore) -> None:
+        self._store = store
+
+    @property
+    def parameters(self) -> dict[str, object]:
+        return tool_schema(_AgentListEventsArgs)
+
+    async def execute(self, arguments: dict[str, object]) -> dict[str, object]:
+        try:
+            validated = _AgentListEventsArgs.model_validate(arguments)
+        except ValidationError as exc:
+            return tool_error("invalid_arguments", first_validation_error(exc))
+
+        events = await self._store.list_events(validated.from_dt, validated.to_dt)
+        return {"events": events}
+
+
+def calendar_registry(store: CalendarEventStore) -> ToolRegistry:
+    """Registry con las 2 calendar tools REALES ligadas a ``store`` (Fase E, ADR-021).
+
+    Espejo de ``memory_registry(store)``: NO toca ``default_registry()`` (que sigue
+    con los stubs no-op del playground observado). Se construye aparte y se combina
+    para la pasada asíncrona del agente cuando el modo habilita ``calendar`` en
+    ``tools_enabled``.
+
+    ``ToolRegistry`` se importa acá adentro (no a nivel de módulo): ``registry.py``
+    importa ESTE módulo para los stubs del ``default_registry()``, así que un import
+    top-level cerraría un ciclo. Cuando se llama a ``calendar_registry`` el ciclo ya
+    está resuelto (ambos módulos cargados).
+    """
+    from app.llm.tools.registry import ToolRegistry
+
+    return ToolRegistry(
+        [
+            AgentCreateEventTool(store),
+            AgentListEventsTool(store),
+        ]
+    )
