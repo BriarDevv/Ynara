@@ -100,3 +100,18 @@ class TurnRole(StrEnum):
 
     USER = "user"
     MODEL = "model"
+
+
+class EventStatus(StrEnum):
+    """Estado de un evento de agenda. Ver ``packages/shared-schemas/src/agenda.ts``
+    y ADR-018.
+
+    Tipo PG ``event_status_enum`` — dueño: ``CalendarEvent.status`` en
+    ``app/models/calendar_event.py`` (único consumidor por ahora,
+    ``create_type=True``). ``confirmed`` es el estado inicial; ``tentative`` =
+    sin confirmar; ``cancelled`` se muestra tachado (el front no lo borra).
+    """
+
+    CONFIRMED = "confirmed"
+    TENTATIVE = "tentative"
+    CANCELLED = "cancelled"
