@@ -37,6 +37,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic_core import PydanticCustomError
 
 from app.calendar.store import CalendarEventStore
 from app.enums import Mode
@@ -170,13 +171,26 @@ class _AgentCreateEventArgs(BaseModel):
 
     model_config = ConfigDict(strict=False, extra="forbid")
 
-    title: Annotated[str, Field(min_length=1)]
+    # Cotas superiores LLM-fed (defensa en profundidad): estos args los llena qwen,
+    # así que se ACOTAN para que un título de 50KB, una duración absurda o una lista de
+    # recurrencia gigante no lleguen al store / la DB. ``EventCreate`` (el dominio de
+    # #402) NO lleva estos caps (su contrato es el del front, "Pydantic gana"); el cap
+    # vive SOLO en la superficie del agente, que es la no confiable.
+    title: Annotated[str, Field(min_length=1, max_length=200)]
     start_at: IsoDatetime
-    duration_min: Annotated[int, Field(gt=0)]
+    # 43200 = un mes en minutos (30 días * 24h * 60min): cota razonable para un único
+    # bloque de evento; sigue ``gt=0`` (entero positivo, mismo piso que ``EventCreate``).
+    duration_min: Annotated[int, Field(gt=0, le=43200)]
     mode: Mode | None = None
-    location: str | None = None
-    time_zone: str | None = None
-    recurrence: list[str] | None = None
+    # Eventos de día completo (cumpleaños / feriados): el agente puede agendarlos.
+    # Default ``False``, mismo piso que ``EventCreate.all_day``.
+    all_day: bool = False
+    location: Annotated[str, Field(max_length=500)] | None = None
+    time_zone: Annotated[str, Field(max_length=64)] | None = None
+    # Lista de reglas RRULE acotada: como máximo 50 ítems, cada uno ≤ 500 chars.
+    recurrence: list[Annotated[str, Field(max_length=500)]] | None = Field(
+        default=None, max_length=50
+    )
 
     @model_validator(mode="after")
     def _check_recurrence_time_zone(self) -> _AgentCreateEventArgs:
@@ -187,12 +201,31 @@ class _AgentCreateEventArgs(BaseModel):
 
 
 class _AgentListEventsArgs(BaseModel):
-    """Argumentos REALES de ``calendar.list_events`` (ventana ``[from_dt, to_dt)``)."""
+    """Argumentos REALES de ``calendar.list_events`` (ventana ``[from_dt, to_dt)``).
+
+    La ventana debe ser no vacía: ``from_dt < to_dt``. Como estos args los llena el
+    LLM, una ventana invertida (o de ancho cero) se rechaza acá en vez de delegar al
+    store una consulta sin sentido.
+    """
 
     model_config = ConfigDict(strict=True, extra="forbid")
 
     from_dt: IsoDatetime
     to_dt: IsoDatetime
+
+    @model_validator(mode="after")
+    def _check_window_order(self) -> _AgentListEventsArgs:
+        # ``PydanticCustomError`` (no ``ValueError`` pelado): el ``execute`` atrapa el
+        # ``ValidationError`` y lo pasa por ``first_validation_error`` (que solo usa
+        # ``loc``/``type``, nunca el valor — regla #4). Usar el custom error mantiene un
+        # ``type`` estable y serializable (mismo patrón que ``_validate_recurrence_*``),
+        # así no hay datos del usuario ni objetos no serializables en el ``ctx``.
+        if self.from_dt >= self.to_dt:
+            raise PydanticCustomError(
+                "from_dt_after_to_dt",
+                "from_dt debe ser anterior a to_dt.",
+            )
+        return self
 
 
 class AgentCreateEventTool:
@@ -232,6 +265,7 @@ class AgentCreateEventTool:
             start_at=validated.start_at,
             duration_min=validated.duration_min,
             mode=validated.mode,
+            all_day=validated.all_day,
             location=validated.location,
             time_zone=validated.time_zone,
             recurrence=validated.recurrence,

@@ -101,6 +101,36 @@ class TestAgentCreateEvent:
         assert payload.mode is None
         assert payload.location is None
 
+    async def test_all_day_event_is_created(self) -> None:
+        # El agente puede agendar eventos de día completo (cumpleaños / feriados):
+        # ``all_day=true`` se propaga al ``EventCreate`` que recibe el store.
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {
+                "title": "Cumpleaños",
+                "start_at": _VALID_START,
+                "duration_min": 1440,
+                "all_day": True,
+            }
+        )
+
+        assert "error" not in result
+        payload = store.create_calls[0]
+        assert payload.all_day is True
+
+    async def test_all_day_defaults_false(self) -> None:
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {"title": "Normal", "start_at": _VALID_START, "duration_min": 30}
+        )
+
+        assert "error" not in result
+        assert store.create_calls[0].all_day is False
+
     async def test_mode_string_is_accepted(self) -> None:
         store = FakeCalendarStore()
         tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
@@ -211,6 +241,108 @@ class TestAgentCreateEvent:
         assert "error" not in result
         assert store.create_calls[0].recurrence == ["RRULE:FREQ=WEEKLY"]
 
+    async def test_title_over_max_length_rejected(self) -> None:
+        # Cota LLM-fed: title ≤ 200. Un título de 50KB no debe llegar al store.
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {"title": "x" * 201, "start_at": _VALID_START, "duration_min": 30}
+        )
+
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert not store.create_calls
+
+    async def test_location_over_max_length_rejected(self) -> None:
+        # Cota LLM-fed: location ≤ 500.
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {
+                "title": "x",
+                "start_at": _VALID_START,
+                "duration_min": 30,
+                "location": "y" * 501,
+            }
+        )
+
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert not store.create_calls
+
+    async def test_time_zone_over_max_length_rejected(self) -> None:
+        # Cota LLM-fed: time_zone ≤ 64.
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {
+                "title": "x",
+                "start_at": _VALID_START,
+                "duration_min": 30,
+                "time_zone": "z" * 65,
+            }
+        )
+
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert not store.create_calls
+
+    async def test_duration_over_max_rejected(self) -> None:
+        # Cota LLM-fed: duration_min ≤ 43200 (un mes en minutos). Evita una duración absurda.
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute({"title": "x", "start_at": _VALID_START, "duration_min": 43201})
+
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert not store.create_calls
+
+    async def test_duration_at_max_ok(self) -> None:
+        # El borde superior (43200) sigue siendo válido.
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute({"title": "x", "start_at": _VALID_START, "duration_min": 43200})
+
+        assert "error" not in result
+        assert store.create_calls[0].duration_min == 43200
+
+    async def test_recurrence_over_max_items_rejected(self) -> None:
+        # Cota LLM-fed: recurrence ≤ 50 ítems. Una lista gigante no debe llegar a la DB.
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {
+                "title": "x",
+                "start_at": _VALID_START,
+                "duration_min": 30,
+                "recurrence": ["RRULE:FREQ=DAILY"] * 51,
+                "time_zone": "America/Argentina/Buenos_Aires",
+            }
+        )
+
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert not store.create_calls
+
+    async def test_recurrence_item_over_max_length_rejected(self) -> None:
+        # Cota LLM-fed: cada ítem de recurrence ≤ 500 chars.
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {
+                "title": "x",
+                "start_at": _VALID_START,
+                "duration_min": 30,
+                "recurrence": ["R" * 501],
+                "time_zone": "America/Argentina/Buenos_Aires",
+            }
+        )
+
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert not store.create_calls
+
     async def test_error_message_does_not_leak_user_value(self) -> None:
         # regla #4: el mensaje no vuelca el valor recibido del usuario.
         store = FakeCalendarStore()
@@ -255,6 +387,26 @@ class TestAgentListEvents:
         result = await tool.execute({"from_dt": _VALID_START, "to_dt": _VALID_END, "user_id": "x"})
 
         assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+
+    async def test_from_dt_after_to_dt_rejected(self) -> None:
+        # Ventana invertida: from_dt > to_dt -> invalid_arguments, no llega al store.
+        store = FakeCalendarStore()
+        tool = AgentListEventsTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute({"from_dt": _VALID_END, "to_dt": _VALID_START})
+
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert not store.list_calls
+
+    async def test_from_dt_equals_to_dt_rejected(self) -> None:
+        # Ventana de ancho cero: from_dt == to_dt -> invalid_arguments.
+        store = FakeCalendarStore()
+        tool = AgentListEventsTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute({"from_dt": _VALID_START, "to_dt": _VALID_START})
+
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert not store.list_calls
 
 
 # ---------------------------------------------------------------------------
