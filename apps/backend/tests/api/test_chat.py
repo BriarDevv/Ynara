@@ -219,9 +219,15 @@ async def test_happy_path_qwen_productividad_with_actions(db_session: AsyncSessi
     client = await _client(db_session, llm_client=fake)
     try:
         # Patch target: el enqueue vive en ChatService (movido de route() en M10 Ola 0),
-        # asi que el binding real ahora es ``app.services.chat.consolidate_turn``.
-        with patch("app.services.chat.consolidate_turn") as mock_task:
+        # asi que el binding real ahora es ``app.services.chat.consolidate_turn``. El modo
+        # productividad ademas encola la pasada del agente (calendar en tools_enabled,
+        # Fase E ADR-021): se parchea ``agent_turn_pass`` para no discar al broker real.
+        with (
+            patch("app.services.chat.consolidate_turn") as mock_task,
+            patch("app.services.chat.agent_turn_pass") as mock_agent,
+        ):
             mock_task.delay = MagicMock()
+            mock_agent.delay = MagicMock()
             async with client:
                 resp = await client.post(
                     "/v1/chat",
@@ -239,6 +245,8 @@ async def test_happy_path_qwen_productividad_with_actions(db_session: AsyncSessi
         assert action["arguments"] == {"query": "reuniones"}
         # Qwen escribe memoria -> se encolo la consolidacion (post-commit).
         mock_task.delay.assert_called_once()
+        # productividad habilita calendar -> tambien se encolo la pasada del agente.
+        mock_agent.delay.assert_called_once()
         # Los kwargs replican EXACTO los que pasaba route(): todos str. El
         # session_id es el de la ChatSession ya devuelta/persistida -> el enqueue
         # ocurrio DESPUES del commit (la fila existe cuando se encola).
@@ -280,8 +288,14 @@ async def test_enqueue_failure_does_not_break_turn(db_session: AsyncSession) -> 
 
     client = await _client(db_session, llm_client=fake)
     try:
-        with patch("app.services.chat.consolidate_turn") as mock_task:
+        # Ambos enqueues fallan (broker caido): ni la consolidacion ni la pasada del
+        # agente deben tumbar el turno (fail-open en ambos, Fase E ADR-021).
+        with (
+            patch("app.services.chat.consolidate_turn") as mock_task,
+            patch("app.services.chat.agent_turn_pass") as mock_agent,
+        ):
             mock_task.delay = MagicMock(side_effect=RuntimeError("broker down"))
+            mock_agent.delay = MagicMock(side_effect=RuntimeError("broker down"))
             async with client:
                 resp = await client.post(
                     "/v1/chat",
@@ -294,11 +308,89 @@ async def test_enqueue_failure_does_not_break_turn(db_session: AsyncSession) -> 
         body = resp.json()
         assert body["text"] == "Listo, lo agende."
         assert body["finish_reason"] == "stop"
-        # Se intento encolar (y fallo): el path fail-open se ejercito.
+        # Se intento encolar (y fallo): el path fail-open se ejercito en ambos.
         mock_task.delay.assert_called_once()
+        mock_agent.delay.assert_called_once()
         # La ChatSession quedo persistida pese al fallo del enqueue (commit previo).
         persisted = await db_session.get(ChatSession, uuid.UUID(body["session_id"]))
         assert persisted is not None
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+# ---------------------------------------------------------------------------
+# Enqueue de la pasada del agente (Fase E, ADR-021): gateado por tools_enabled
+# ---------------------------------------------------------------------------
+
+
+async def test_agent_pass_enqueued_for_calendar_mode(db_session: AsyncSession) -> None:
+    """Un modo con 'calendar' en tools_enabled (productividad) encola ``agent_turn_pass``.
+
+    Verifica el GATE y los kwargs del enqueue post-commit (mismo contrato que la
+    consolidacion): todos str, ``session_id`` el de la ChatSession ya persistida.
+    """
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+    fake.queue_result(_completion(text="dale, lo agendo.", finish_reason="stop", model_name="qwen"))
+
+    client = await _client(db_session, llm_client=fake)
+    try:
+        with (
+            patch("app.services.chat.consolidate_turn") as mock_cons,
+            patch("app.services.chat.agent_turn_pass") as mock_agent,
+        ):
+            mock_cons.delay = MagicMock()
+            mock_agent.delay = MagicMock()
+            async with client:
+                resp = await client.post(
+                    "/v1/chat",
+                    json={"text": "agenda dentista mañana 10am", "mode": "productividad"},
+                    headers=_bearer(user.id),
+                )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        mock_agent.delay.assert_called_once()
+        call_kwargs = mock_agent.delay.call_args.kwargs
+        assert call_kwargs == {
+            "user_id": str(user.id),
+            "session_id": body["session_id"],
+            "user_msg": "agenda dentista mañana 10am",
+            "model_response": "dale, lo agendo.",
+            "mode": "productividad",
+        }
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+async def test_agent_pass_not_enqueued_for_non_calendar_mode(db_session: AsyncSession) -> None:
+    """Un modo SIN 'calendar' en tools_enabled (vida, gemma) NO encola ``agent_turn_pass``."""
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_result(
+        _completion(text="todo bien por aca.", finish_reason="stop", model_name="gemma4")
+    )
+
+    client = await _client(db_session, llm_client=fake)
+    try:
+        with (
+            patch("app.services.chat.consolidate_turn") as mock_cons,
+            patch("app.services.chat.agent_turn_pass") as mock_agent,
+        ):
+            mock_cons.delay = MagicMock()
+            mock_agent.delay = MagicMock()
+            async with client:
+                resp = await client.post(
+                    "/v1/chat",
+                    json={"text": "hola, como va", "mode": "vida"},
+                    headers=_bearer(user.id),
+                )
+
+        assert resp.status_code == 200
+        # vida no habilita calendar -> la pasada del agente NO se encola.
+        mock_agent.delay.assert_not_called()
     finally:
         app.dependency_overrides.clear()
         await _delete_user(db_session, user.id)
