@@ -19,6 +19,7 @@ from app.models.base import Base, TimestampMixin, UUIDPKMixin
 if TYPE_CHECKING:
     from app.models.admin_audit import AdminAudit
     from app.models.audit import AuditLog
+    from app.models.calendar_event import CalendarEvent
     from app.models.memory import EpisodicMemory, ProceduralMemory, SemanticMemory
     from app.models.session import ChatSession
 
@@ -59,6 +60,9 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     retention_sensitive_days: Mapped[int] = mapped_column(Integer, nullable=False, default=180)
 
     sessions: Mapped[list[ChatSession]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    events: Mapped[list[CalendarEvent]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
     semantic_memories: Mapped[list[SemanticMemory]] = relationship(
