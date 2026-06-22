@@ -892,7 +892,7 @@ async def test_guard_forzada_vacia_mantiene_sentinel_max_iterations() -> None:
 
     reg, spec = _looping_registry_and_spec()
 
-    text, actions, finish_reason = await run_tool_loop(
+    text, _actions, finish_reason = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),

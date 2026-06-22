@@ -329,9 +329,7 @@ class TestAgentCreateEvent:
         store = FakeCalendarStore()
         tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
 
-        result = await tool.execute(
-            {"title": "x", "start_at": _VALID_START, "duration_min": 30}
-        )
+        result = await tool.execute({"title": "x", "start_at": _VALID_START, "duration_min": 30})
 
         assert "error" not in result
         assert store.create_calls[0].time_zone is None
