@@ -45,6 +45,7 @@ from app.memory.conversation_turns import ConversationTurnStore
 from app.models.session import ChatSession
 from app.schemas.chat import ChatHttpRequest
 from app.schemas.conversation_turn import ConversationTurnCreate
+from app.workflows.agent_pass import agent_turn_pass
 from app.workflows.consolidation import consolidate_turn
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,12 @@ class ChatService:
         # el turno. .delay() es no-bloqueante y fail-open (ver _enqueue_consolidation).
         await self._enqueue_consolidation(chat_session, body=body, resp=resp)
 
+        # Enqueue de la pasada async del agente (Fase E, ADR-021): "qwen por detrás".
+        # MISMO contrato post-commit + fail-open que la consolidación, pero gateado por
+        # tools_enabled (calendar) en vez de writes_memory. Task SEPARADA (ADR-021 D3):
+        # tools y memoria se escalan/reintentan independientemente.
+        await self._enqueue_agent_pass(chat_session, body=body, resp=resp)
+
         return resp
 
     async def _persist_turns(
@@ -194,3 +201,51 @@ class ChatService:
             )
         except Exception as exc:  # best-effort: el broker caído NO rompe el turno.
             logger.warning("consolidate_turn enqueue failed: %s", type(exc).__name__)
+
+    async def _enqueue_agent_pass(
+        self, chat_session: ChatSession, *, body: ChatHttpRequest, resp: ChatResponse
+    ) -> None:
+        """Encola ``agent_turn_pass`` DESPUÉS del commit (Fase E, ADR-021), best-effort.
+
+        Espejo EXACTO de ``_enqueue_consolidation``, salvo el GATE: encola SOLO si el
+        modo habilita ``calendar`` en ``tools_enabled`` (ADR-021 D2/D5: config-driven,
+        no hardcode) y el turno NO degradó. Un modo sin calendar en ``tools_enabled``
+        NO encola la pasada (un modo gemma conversacional no agenda). ``'max_iterations'``
+        NO es degradado y SÍ acciona. La task es SEPARADA de la consolidación (ADR-021
+        D3): una falla de tools no afecta la memoria, y viceversa.
+
+        Snapshot de primitivos (como la consolidación): todos los valores que viajan al
+        ``.delay()`` son primitivos / Pydantic (``str(self._user_id)``,
+        ``str(chat_session.id)`` —PK ya materializada—, ``body.text``,
+        ``body.mode.value``, ``resp.text``), NO atributos ORM expirables post-commit, así
+        no hay lazy-load tras el commit.
+
+        Fail-open (doctrina del stack): ``.delay()`` publica al broker Redis SÍNCRONO; si
+        Redis está caído tira ``OperationalError`` / ``ConnectionError`` / errores de
+        kombu. El turno YA está commiteado: un fallo del enqueue NO debe devolver 500. La
+        pasada es eventual, así que perder un enqueue es degradación aceptable. Capturamos
+        AMPLIO (``Exception``) y logueamos SOLO ``type(exc).__name__`` (regla #4).
+        """
+        # ``.modes.get`` + chequeo de None (espejo del gate en ``_async_agent_pass``):
+        # ``body.mode`` ya es un ``Mode`` válido, pero un modo del enum sin entrada en
+        # ``ynara.config.json`` daría KeyError con acceso directo al dict. El KeyError lo
+        # taparía el ``except Exception`` de abajo (fail-open), pero logueando ``KeyError``
+        # en vez del fallo real del enqueue: oscurece el diagnóstico. Con ``.get`` el modo
+        # desconocido es un no-op limpio (igual que un modo sin calendar habilitado).
+        mode_cfg = load_llm_config().modes.get(body.mode.value)
+        if (
+            mode_cfg is None
+            or "calendar" not in mode_cfg.tools_enabled
+            or resp.finish_reason == "degraded"
+        ):
+            return
+        try:
+            agent_turn_pass.delay(
+                user_id=str(self._user_id),
+                session_id=str(chat_session.id),
+                user_msg=body.text,
+                model_response=resp.text,
+                mode=body.mode.value,
+            )
+        except Exception as exc:  # best-effort: el broker caído NO rompe el turno.
+            logger.warning("agent_turn_pass enqueue failed: %s", type(exc).__name__)
