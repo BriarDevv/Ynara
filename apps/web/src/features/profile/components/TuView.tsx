@@ -166,7 +166,9 @@ export function TuView() {
     setNameError(null);
     try {
       const updated = await updateMe.mutateAsync({ display_name: result.data });
-      setDisplayName(updated.display_name);
+      // display_name puede ser null si el backend aún no lo guardó; el
+      // fallback vacío evita propagar null al store (setDisplayName: string).
+      setDisplayName(updated.display_name ?? "");
       setToast({ message: "Nombre guardado.", variant: "success" });
     } catch {
       setToast({ message: "No se pudo guardar el nombre. Intentá de nuevo.", variant: "error" });
