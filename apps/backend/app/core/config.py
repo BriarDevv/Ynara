@@ -174,6 +174,12 @@ class Settings(BaseSettings):
     # polling legitimo y solo cortar scripting abusivo. fail-OPEN si Redis cae.
     sessions_max_requests: int = Field(120, alias="SESSIONS_MAX_REQUESTS")
     sessions_window_seconds: int = Field(60, alias="SESSIONS_WINDOW_SECONDS")
+    # Rate-limit de /v1/events (dominio Agenda, ADR-018), por user_id. UN bucket
+    # compartido por las 4 rutas (list/create/patch/delete): default amplio para
+    # cubrir el uso interactivo de la agenda y solo cortar scripting abusivo.
+    # fail-OPEN si Redis cae.
+    events_max_requests: int = Field(120, alias="EVENTS_MAX_REQUESTS")
+    events_window_seconds: int = Field(60, alias="EVENTS_WINDOW_SECONDS")
 
     # Reverse-proxy / IP real del cliente (issue #151). El rate-limit anti-fuerza-bruta
     # cuenta por IP; detrás de Cloudflare Tunnel el peer que ve uvicorn es el conector
