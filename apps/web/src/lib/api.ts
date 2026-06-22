@@ -8,7 +8,26 @@ import { env } from "./env";
 // (todo call-site importa `api`/`applyAuthHeader` desde acá).
 configureApi({
   baseUrl: env.NEXT_PUBLIC_API_URL,
-  getToken: () => useUserStore.getState().token,
+  getToken: () => {
+    const fromStore = useUserStore.getState().token;
+    if (fromStore) return fromStore;
+    // Fallback anti-race de hidratación: en un reload DURO, una query autenticada
+    // (p.ej. GET /v1/tasks en /hoy) puede dispararse ANTES de que zustand rehidrate
+    // el token desde localStorage, devolviendo un 401 espurio que rompe la pantalla.
+    // El token SÍ está persistido bajo "ynara.user" (ver createUserStore), así que lo
+    // leemos directo como red de seguridad solo cuando el store todavía está en null.
+    // El store sigue siendo la fuente de verdad; esto cubre únicamente la ventana de
+    // hidratación. SSR-safe (no toca window en el server) y a prueba de JSON corrupto.
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem("ynara.user");
+      if (!raw) return null;
+      const token = (JSON.parse(raw) as { state?: { token?: string | null } })?.state?.token;
+      return token ?? null;
+    } catch {
+      return null;
+    }
+  },
 });
 
 export { ApiError, api, applyAuthHeader } from "@ynara/core/api";

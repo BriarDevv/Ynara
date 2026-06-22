@@ -52,10 +52,13 @@ describe("useCompleteOnboarding", () => {
     await waitFor(() => expect(result.current.isCelebrating).toBe(true));
     // Contrato real: PATCH /v1/users/me con SOLO los campos que UserUpdate acepta
     // (snake_case, extra='forbid'). mood/interestedModes/a11y NO viajan al backend.
-    expect(patch).toHaveBeenCalledWith("/v1/users/me", {
-      display_name: "Mateo",
-      onboarding_completed: true,
-    });
+    expect(patch).toHaveBeenCalledWith(
+      "/v1/users/me",
+      { display_name: "Mateo", onboarding_completed: true },
+      // Fix mocks-off: el token del draft viaja EXPLÍCITO en el PATCH (durante el
+      // onboarding el cliente no adjunta el Bearer solo); sin esto el backend real da 401.
+      { headers: { Authorization: "Bearer t1" } },
+    );
     expect(useUserStore.getState().onboardingCompleted).toBe(true);
     expect(useUserStore.getState().isEphemeral).toBe(true);
     expect(result.current.error).toBeNull();
@@ -85,9 +88,10 @@ describe("useCompleteOnboarding", () => {
     await waitFor(() => expect(result.current.error).toMatch(/sesión inválida/i));
     expect(useUserStore.getState().onboardingCompleted).toBe(false);
     expect(result.current.isCelebrating).toBe(false);
-    // Documenta el gap del audit: el guard de auth vive en onSuccess, así que
-    // el PATCH igual corre antes de detectar la sesión inválida.
-    expect(patch).toHaveBeenCalledTimes(1);
+    // Fix mocks-off: el guard de auth ahora corre ANTES del PATCH (en la mutationFn),
+    // así que sin token en el draft NO se manda el request (evita el 401 espurio contra
+    // el backend real). Antes el guard vivía solo en onSuccess y el PATCH corría igual.
+    expect(patch).not.toHaveBeenCalled();
   });
 
   it("ApiError: mapea body.detail al mensaje de error y no completa", async () => {
