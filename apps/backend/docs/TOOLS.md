@@ -18,39 +18,67 @@
 
 ## Tools disponibles
 
-> **Estado**: `calendar.*` y `reminder.*` son stubs (esqueleto sin integración externa real). `memory.*` está **implementado** (M7, mergeado). Las tools `memory.*` **no están en `default_registry()`**: se construyen con `memory_registry(semantic_store)` y el router (M8) las combina por modo cuando la memoria está habilitada.
+> **Estado**: `reminder.*` son stubs (esqueleto sin integración externa real).
+> `calendar.*` está **implementado de verdad** en la **pasada asíncrona del agente**
+> (Fase E, ADR-021): escribe/lee la tabla `calendar_events` vía `CalendarEventStore`.
+> `memory.*` está **implementado** (M7, mergeado).
+>
+> **Dos superficies, dos registries** (mismo patrón que `memory.*`):
+> - `default_registry()` trae los `calendar.*` como **stubs `not_wired`** (cero efecto):
+>   los consume el **playground observado** (ADR-019 D2, invariante de no-efecto).
+> - `calendar_registry(store)` trae los `calendar.*` **reales** (con efecto), ligados
+>   a `(session, user_id)`: los consume SOLO la pasada async del agente
+>   (`app/workflows/agent_pass.py`). El `user_id` nunca viaja como argumento (el store
+>   ya lo tiene; `extra='forbid'` lo impide), igual que la memoria.
+>
+> Las clases reales son `AgentCreateEventTool` / `AgentListEventsTool` (stateful);
+> los stubs `CreateEventTool` / `ListEventsTool` se conservan para el playground.
 
 ### calendar.create_event
 
 - **Descripción**: agendar un evento en el calendario del usuario.
-- **Parámetros**:
-  - `title: str`
-  - `start: datetime` (ISO 8601, con timezone)
-  - `end: datetime`
-  - `attendees: list[str] | None` (emails)
-- **Habilitada en modos**: productividad.
+- **Parámetros (tool real, espejan `EventCreate`)**:
+  - `title: str` (no vacío)
+  - `start_at: datetime` (ISO 8601 con timezone; rechaza epoch numérico)
+  - `duration_min: int` (entero positivo; el fin del bloque es derivado)
+  - `mode: str | None` (uno de los modos; opcional)
+  - `location: str | None`
+  - `time_zone: str | None`
+  - `recurrence: list[str] | None` (RRULE; si no vacía, exige `time_zone` — ADR-018)
+- **Habilitada en modos**: productividad (los modos con `calendar` en `tools_enabled`).
 - **Ejemplo**:
   ```json
   {
     "tool": "calendar.create_event",
     "args": {
       "title": "Tomar café con Carla",
-      "start": "2026-05-20T15:00:00-03:00",
-      "end": "2026-05-20T16:00:00-03:00"
+      "start_at": "2026-05-20T15:00:00-03:00",
+      "duration_min": 60
     }
   }
   ```
-- **Estado**: stub. El único error emitido hoy es `invalid_arguments` (argumentos
-  malformados, p.ej. fecha que no es ISO 8601). No hay integración real con un
-  calendario todavía.
+- **Efecto (tool real)**: INSERTA en `calendar_events` (status `confirmed`), atado al
+  `user_id` del store. **Idempotente**: deduplica por la tupla natural
+  `(user_id, title, start_at, duration_min)` → un reintento de la pasada async NO
+  agenda el evento dos veces. Devuelve el evento serializado (`id` + campos del wire,
+  sin `user_id`/timestamps).
+- **Errores**: `invalid_arguments` (args malformados: título vacío, `duration_min` no
+  positivo, fecha no-ISO/epoch, `user_id` u otro extra, `recurrence` sin `time_zone`).
+- **Stub (playground observado)**: la versión del `default_registry()` valida args y
+  devuelve `not_wired` (cero efecto). Sus params son `start`/`end`/`attendees` (shape
+  histórico M6, observación pura).
 
 ### calendar.list_events
 
 - **Descripción**: listar eventos en una ventana de tiempo.
 - **Parámetros**:
-  - `from_dt: datetime`
+  - `from_dt: datetime` (ISO 8601)
   - `to_dt: datetime`
 - **Habilitada en modos**: productividad.
+- **Efecto (tool real)**: lee `calendar_events` del usuario que arrancan en
+  `[from_dt, to_dt)`, ordenados por `start_at` ASC. Devuelve `{ "events": [...] }`
+  (eventos serializados, sin metadata interna). El stub del `default_registry()` sigue
+  devolviendo `not_wired`.
 
 ### reminder.set
 
