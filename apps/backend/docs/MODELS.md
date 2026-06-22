@@ -38,6 +38,7 @@ schemas Pydantic.
 | `LlmModel` | `llm_model_enum` | gemma, qwen | `audit_log.origin_model` |
 | `AuditOperation` | `audit_operation_enum` | read, write, update, delete | `audit_log.operation` |
 | `TurnRole` | `turn_role_enum` | user, model | `conversation_turns.role` (dueño, único consumidor) |
+| `EventStatus` | `event_status_enum` | confirmed, tentative, cancelled | `calendar_events.status` (dueño, único consumidor) |
 
 ## Tablas sagradas 🔴
 
@@ -288,6 +289,44 @@ con el atributo reservado de la declarative base de SQLAlchemy.
 **Índice**:
 - `ix_admin_audit_admin_id` (btree, por `admin_id`) — queries por admin + cascade-delete.
 
+### calendar_events
+
+**OPERATIVA**, no sagrada (sin 🔴): eventos de agenda del usuario que web + mobile
+consumen vía `/v1/events` (dominio Agenda, ADR-018). Modelo canónico
+iCalendar/RFC 5545 aterrizado al stack: `start_at` (instante con offset) +
+`duration_min` (el fin es **derivado**, una sola fuente de verdad como `Task`), más
+los campos de calendario v2 (`time_zone` / `all_day` / `recurrence`) para soportar
+huso real, día completo y recurrencia. El shape espeja
+`packages/shared-schemas/src/agenda.ts` ("Pydantic gana, Zod sigue"). Modelo en
+`app/models/calendar_event.py` (`UUIDPKMixin` + `TimestampMixin`). Agregada en la
+migración `20260622_1200_calendar_events_table`.
+
+**Invariante (ADR-018, `recurrenceNeedsTimeZone` en `agenda.ts`)**: un evento con
+`recurrence` no vacía DEBE traer `time_zone` (si no el recurrente se corre en los
+cambios de DST). Se enforcea en los schemas Pydantic (`EventCreate` /
+`CalendarEventOut`) y en el router sobre el estado mergeado de un `PATCH`, **no** a
+nivel DB. No se expande recurrencia server-side (fase posterior): se guarda como
+array de texto y se devuelve tal cual.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | `gen_random_uuid()` |
+| `user_id` | UUID FK → users.id, ON DELETE CASCADE | indexed btree |
+| `title` | VARCHAR NOT NULL | Título del bloque (min 1 en el schema) |
+| `start_at` | TIMESTAMPTZ NOT NULL | Inicio del bloque (instante con offset). Indexed (el front ordena/filtra por inicio) |
+| `duration_min` | INTEGER NOT NULL | Duración en minutos (> 0 en el schema). El fin es derivado (`start_at + duration_min`); > 1440 cruza días (multi-día) |
+| `mode` | `mode_enum` | Modo al que pertenece (tint), nullable si es transversal. Reusa `mode_enum` (`create_type=False`) |
+| `status` | `event_status_enum` NOT NULL | confirmed / tentative / cancelled. Arranca `confirmed` |
+| `location` | VARCHAR | Nota / lugar opcional (subtítulo del bloque), nullable |
+| `time_zone` | VARCHAR | Huso IANA del wall-clock, nullable. **Requerido** si hay `recurrence` (invariante de schema, no de DB) |
+| `all_day` | BOOLEAN NOT NULL DEFAULT false | Día completo (fecha sin hora) |
+| `recurrence` | TEXT[] | Líneas RFC 5545 (`RRULE`/`RDATE`/`EXDATE`), nullable. `null`/`[]` = evento único |
+| `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
+
+**Índices**:
+- `ix_calendar_events_user_id` (btree, por `user_id`) — queries por usuario + cascade-delete.
+- `ix_calendar_events_start_at` (btree, por `start_at`) — orden/filtro por inicio del listado.
+
 ## Migración inicial
 
 Mergeada. La migración inicial vive en `apps/backend/alembic/versions/`
@@ -305,9 +344,12 @@ e incluye:
 La migración `20260614_1700_conversation_turns_table` agrega el enum
 `turn_role_enum` + la tabla `conversation_turns` (FKs a `users` y `sessions`),
 llevando el total a **7 tablas** (#209). La migración siguiente,
-`20260615_0200_drop_redundant_conversation_turns_indexes` (**HEAD**), reemplaza
+`20260615_0200_drop_redundant_conversation_turns_indexes`, reemplaza
 los 3 índices parciales de `conversation_turns` por el único índice compuesto
-`(user_id, session_id, seq)`.
+`(user_id, session_id, seq)`. La migración `20260622_1200_calendar_events_table`
+(**HEAD**) agrega el enum `event_status_enum` + la tabla operativa
+`calendar_events` (FK a `users`, dominio Agenda ADR-018), llevando el total a
+**9 tablas** (con `admin_audit`).
 
 Ver [`docs/MIGRATIONS.md`](./MIGRATIONS.md) para la cadena completa y la política.
 
