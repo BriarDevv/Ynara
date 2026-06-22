@@ -80,10 +80,22 @@ export function useCompleteOnboarding(): Returns & {
       // client-side. Traducimos camelCase→snake_case y mandamos SOLO lo que
       // `UserUpdate` acepta (extra='forbid' rechazaría cualquier campo de más).
       // La response `UserOut` no se consume: `onSuccess` sigue con el draft local.
-      await api.patch<UserOut>("/v1/users/me", {
-        display_name: parsed.data.displayName,
-        onboarding_completed: true,
-      });
+      //
+      // AUTH (fix mocks-off): durante el onboarding el token vive en el draft
+      // (`d.authedToken`), NO en `useUserStore`, y el cliente HTTP NO adjunta el
+      // Bearer solo (perímetro documentado en core/auth/api.ts; `setAuth` recién
+      // corre en `onSuccess`, DESPUÉS de este PATCH). Por eso pasamos el token
+      // EXPLÍCITO acá, igual que `me(token)`: sin esto el backend real devuelve 401
+      // (con mocks on no se notaba porque el handler MSW no valida auth). Guard
+      // antes del PATCH para fallar con mensaje claro si el draft perdió la sesión.
+      if (!d.authedToken) {
+        throw new Error("Sesión inválida. Volvé a empezar el onboarding.");
+      }
+      await api.patch<UserOut>(
+        "/v1/users/me",
+        { display_name: parsed.data.displayName, onboarding_completed: true },
+        { headers: { Authorization: `Bearer ${d.authedToken}` } },
+      );
       return parsed.data;
     },
     onSuccess: (data) => {

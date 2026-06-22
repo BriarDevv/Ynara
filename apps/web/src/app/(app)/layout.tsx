@@ -20,9 +20,22 @@ import { useUserStore } from "@/stores/user";
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const onboardingCompleted = useUserStore((s) => s.onboardingCompleted);
+  const [hydrated, setHydrated] = useState(false);
   const [checked, setChecked] = useState(false);
 
+  // Esperar a que zustand REHIDRATE desde localStorage antes de evaluar el guard.
+  // En un reload DURO el store arranca en initialState (`onboardingCompleted=false`)
+  // y la persistencia rehidrata async; sin esperarla, el guard redirige a
+  // `/onboarding` por error a un user que SÍ está onboardeado (race de hidratación,
+  // mismo que afectaba al token en `lib/api.ts`). `hasHydrated()` cubre el caso ya
+  // hidratado (nav cliente); `onFinishHydration` el reload en frío.
   useEffect(() => {
+    setHydrated(useUserStore.persist.hasHydrated());
+    return useUserStore.persist.onFinishHydration(() => setHydrated(true));
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
     if (!onboardingCompleted) {
       router.replace("/onboarding");
       return;
@@ -32,7 +45,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     // diferencia de un cleanup de unmount que se dispara en el doble-render).
     useOnboardingResumeStore.getState().setResuming(false);
     setChecked(true);
-  }, [onboardingCompleted, router]);
+  }, [hydrated, onboardingCompleted, router]);
 
   if (!checked) {
     return (

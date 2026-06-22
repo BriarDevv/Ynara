@@ -2,6 +2,13 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+// Side-effect import: corre `configureApi` (instala baseUrl + getToken del cliente
+// HTTP de @ynara/core) en TODA ruta, ANTES de cualquier request. Sin esto, una ruta
+// que solo importa hooks de @ynara/core (p.ej. /hoy → useTasks importa el `api` de
+// core, no `@/lib/api`) se carga con el cliente SIN configurar y las requests salen
+// sin Authorization (getToken default = () => null) → 401 en un load/reload directo.
+// El onboarding/chat/memoria ya lo importaban transitivamente; /hoy y otras no.
+import "@/lib/api";
 import { shouldEnableMocks } from "@/lib/env";
 import { applyA11yClasses, useA11yStore } from "@/stores/a11y";
 import { applyThemeClass, useThemeStore } from "@/stores/theme";
