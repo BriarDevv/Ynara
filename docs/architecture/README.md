@@ -36,9 +36,13 @@ Acá vive el "porqué" detrás de las decisiones técnicas del proyecto.
 | 017 | App de administración interna (apps/admin): observabilidad y control plane | Aceptado |
 | 018 | Playground de modelos en el panel admin (control plane, fase 1) | Aceptado |
 | 019 | Playground agente observado (tool-loop sin efectos) — refina ADR-018 | Aceptado |
+| 020 | Circuit breaker per-proceso — cota de despliegue 1-2 workers | Aceptado |
+| 021 | Pasada asíncrona del agente qwen (memoria + tools por detrás de gemma) — refina ADR-019 | Propuesto |
 
-> Hay 19 ADRs lógicos (ADR-001..019, sin huecos): el ADR-016 era un
-> segundo ADR-012 duplicado y se renumeró para garantizar números únicos.
+> Nota de numeración: hay un ADR-018 "lógico" duplicado en archivos
+> (`ADR-018-admin-playground-modelos` y `ADR-018-calendar-event-model`); el
+> ADR-016 era un segundo ADR-012 renumerado. La numeración de archivos puede
+> tener colisiones históricas; esta tabla es la fuente de lectura.
 
 ## Cómo crear un ADR nuevo
 
