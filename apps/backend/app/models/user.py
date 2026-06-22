@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from app.models.calendar_event import CalendarEvent
     from app.models.memory import EpisodicMemory, ProceduralMemory, SemanticMemory
     from app.models.session import ChatSession
+    from app.models.task import Task
 
 
 class User(UUIDPKMixin, TimestampMixin, Base):
@@ -65,6 +66,7 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     events: Mapped[list[CalendarEvent]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    tasks: Mapped[list[Task]] = relationship(back_populates="user", cascade="all, delete-orphan")
     semantic_memories: Mapped[list[SemanticMemory]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
