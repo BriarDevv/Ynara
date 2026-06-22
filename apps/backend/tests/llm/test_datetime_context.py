@@ -37,7 +37,10 @@ def test_build_now_preamble_exact_string() -> None:
 
     assert result == (
         "Fecha y hora actual: miércoles 22 de julio de 2026, 18:30 (hora de Argentina). "
-        "Usala para resolver fechas relativas como 'mañana', 'el lunes', 'en 2 horas'."
+        "Usala para resolver fechas relativas como 'mañana', 'el lunes', 'en 2 horas'. "
+        "Cuando agendes eventos o tareas, expresá las fechas (start_at / scheduled_at) en "
+        "hora local de Argentina con el offset -03:00 (formato ISO 8601, "
+        "p.ej. 2026-01-15T09:30:00-03:00); no uses 'Z' ni otro huso."
     )
 
 

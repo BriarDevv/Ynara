@@ -92,8 +92,16 @@ def build_now_preamble(now: datetime) -> str:
     """
     weekday = _WEEKDAYS_ES[now.weekday()]
     month = _MONTHS_ES[now.month]
+    # Nudge de huso (gotcha MEDIDO en E2E: qwen a veces emite la hora local con sufijo
+    # 'Z' (UTC), corriendo el evento 3hs). Argentina es UTC-03:00 fijo (sin DST desde
+    # 2009), así que se instruye expresar las fechas accionadas con ese offset explícito
+    # para que el store guarde el instante absoluto correcto sin importar si el modelo
+    # adjunta o no la zona.
     return (
         f"Fecha y hora actual: {weekday} {now.day} de {month} de {now.year}, "
         f"{now.hour:02d}:{now.minute:02d} (hora de Argentina). "
-        "Usala para resolver fechas relativas como 'mañana', 'el lunes', 'en 2 horas'."
+        "Usala para resolver fechas relativas como 'mañana', 'el lunes', 'en 2 horas'. "
+        "Cuando agendes eventos o tareas, expresá las fechas (start_at / scheduled_at) en "
+        "hora local de Argentina con el offset -03:00 (formato ISO 8601, "
+        "p.ej. 2026-01-15T09:30:00-03:00); no uses 'Z' ni otro huso."
     )
