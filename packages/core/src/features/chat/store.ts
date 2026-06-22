@@ -113,9 +113,35 @@ const initialState: ChatState = {
   streamStatus: "idle",
 };
 
-/** UUID SSR-safe: solo se llama desde handlers de cliente, nunca en render. */
+/**
+ * UUID SSR-safe: solo se llama desde handlers de cliente, nunca en render.
+ *
+ * Usa `crypto.randomUUID` cuando está disponible, pero cae a un v4 armado con
+ * `crypto.getRandomValues` cuando NO lo está: `randomUUID` solo existe en
+ * *secure contexts* (https:// o localhost), así que sobre `http://` por una IP de
+ * LAN/Tailscale (ej. el amigo entrando por `100.x.x.x:3000`) sería `undefined` y
+ * el chat rompería al crear sesión. `getRandomValues` sí está en contextos
+ * no-seguros, así que el fallback mantiene el chat funcional en ese escenario.
+ */
 function newId(): string {
-  return crypto.randomUUID();
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  // `byte` del forEach es `number` (no `number | undefined`), así esto no choca con
+  // `noUncheckedIndexedAccess`. v4: version (0100) en el byte 6; variant (10) en el 8.
+  const hex: string[] = [];
+  bytes.forEach((byte, i) => {
+    let b = byte;
+    if (i === 6) b = (b & 0x0f) | 0x40;
+    if (i === 8) b = (b & 0x3f) | 0x80;
+    hex.push(b.toString(16).padStart(2, "0"));
+  });
+  return (
+    `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}` +
+    `-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`
+  );
 }
 
 /**
