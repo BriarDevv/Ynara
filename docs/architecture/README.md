@@ -37,7 +37,8 @@ Acá vive el "porqué" detrás de las decisiones técnicas del proyecto.
 | 018 | Playground de modelos en el panel admin (control plane, fase 1) | Aceptado |
 | 019 | Playground agente observado (tool-loop sin efectos) — refina ADR-018 | Aceptado |
 | 020 | Circuit breaker per-proceso — cota de despliegue 1-2 workers | Aceptado |
-| 021 | Pasada asíncrona del agente qwen (memoria + tools por detrás de gemma) — refina ADR-019 | Propuesto |
+| 021 | Pasada asíncrona del agente qwen (memoria + tools por detrás de gemma) — refina ADR-019 | Propuesto — parcialmente superseded por ADR-022 |
+| 022 | Tools de agente síncronas en el chat de producción (calendar/task) — supersede parcial de ADR-021 | Aceptado |
 
 > Nota de numeración: hay un ADR-018 "lógico" duplicado en archivos
 > (`ADR-018-admin-playground-modelos` y `ADR-018-calendar-event-model`); el

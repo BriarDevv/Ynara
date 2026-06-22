@@ -30,6 +30,15 @@ MAX_TOOL_ITERATIONS: int = 5
 # calls) sin cambiar el camino feliz, donde un turno trae pocas calls.
 MAX_CALLS_PER_TURN: int = 8
 
+# Tope de bytes del JSON de UN resultado de tool antes de inyectarlo en el historial de
+# mensajes del LLM. Defensa en profundidad sobre el cap por-tool (las list tools ya acotan
+# filas con ``AGENT_LIST_RESULT_LIMIT``): cualquier resultado anormalmente grande (una tool
+# futura sin cap, o un dict patologico) NO inunda el context window. Si se excede, el
+# resultado real se reemplaza por un ``tool_error`` estructurado (el modelo ve "el resultado
+# era demasiado grande", no el payload). El cap es generoso (32KB) para no truncar listas
+# legitimas dentro del ``AGENT_LIST_RESULT_LIMIT``.
+TOOL_RESULT_MAX_BYTES: int = 32_768
+
 # finish_reason que indica que el loop debe terminar (con o sin tool_calls).
 _TERMINAL_REASONS = frozenset({"stop", "length", "degraded"})
 
@@ -162,37 +171,52 @@ async def run_tool_loop(
                     "result": tool_result,
                 }
             )
+            # Cap de bytes ANTES de inyectar al historial del LLM (defensa en profundidad):
+            # un resultado anormalmente grande NO inunda el context window. Si excede el
+            # tope, el modelo recibe un ``tool_error`` (no el payload gigante).
+            content = json.dumps(tool_result, ensure_ascii=False)
+            if len(content.encode("utf-8")) > TOOL_RESULT_MAX_BYTES:
+                too_large = tool_error(
+                    "result_too_large", f"resultado de {tool_call.name} demasiado grande"
+                )
+                content = json.dumps(too_large, ensure_ascii=False)
             messages.append(
                 ChatMessage(
                     role="tool",
                     tool_call_id=tool_call.id,
                     name=tool_call.name,
-                    content=json.dumps(tool_result, ensure_ascii=False),
+                    content=content,
                 )
             )
     else:
-        # Guard agotado sin converger. finish_reason se marca 'max_iterations'
-        # (sentinel honesto, no un 'stop' real del modelo). El modelo NO produjo una
-        # respuesta final en lenguaje natural: tipicamente loopeo llamando tools (p.ej.
-        # qwen reintentando un stub como memory.add). Si la ultima iteracion no dejo
-        # texto, forzamos UNA completion final SIN tools: sin tools que llamar, el
-        # modelo le responde al usuario en lenguaje natural en vez de seguir
-        # tool-calleando, asi el usuario ve una respuesta real en vez del fallback
-        # generico (que lee como un error aunque las tools SI se ejecutaron). Si esa
-        # completion tambien vuelve vacia, se cae al fallback_text de abajo (no empeora
-        # el caso previo). Cualquier LlmError de esta llamada propaga al caller (route),
-        # igual que las del loop: route lo captura y degrada.
+        # Guard agotado sin converger: el modelo nunca produjo una respuesta final en
+        # lenguaje natural (tipicamente loopeo llamando tools, p.ej. qwen reintentando un
+        # stub). Se marca el sentinel 'max_iterations' (honesto, no un 'stop' real). El
+        # rescate del texto vacio se hace abajo, COMPARTIDO con el corte temprano.
         last_finish_reason = "max_iterations"
-        if not last_text:
-            forced = await llm_client.complete(
-                model=served_name,
-                messages=messages,
-                tools=None,
-                thinking=thinking,
-            )
-            # ``last_text`` es "" acá (la guarda ``if not last_text`` lo garantiza); si la
-            # forzada también vuelve vacía, el ``final_text`` de abajo cae al fallback.
-            last_text = forced.text
+
+    # Rescate de respuesta vacia tras accionar tools (gotcha MEDIDO con qwen real): el
+    # modelo puede cortar con finish_reason terminal ('stop') y content VACIO DESPUES de
+    # ejecutar una tool (p.ej. agendar) — o agotar el guard. En ambos casos hay acciones
+    # ejecutadas pero NO una confirmacion en lenguaje natural, y el usuario veria el
+    # fallback generico (lee como error aunque la accion SI ocurrio). Forzamos UNA
+    # completion final SIN tools (un unico shot, sin tools que llamar -> no loopea) para
+    # que el modelo confirme lo accionado. Si la forzada vuelve con texto, su
+    # finish_reason real reemplaza al terminal-vacio / al sentinel 'max_iterations'
+    # (telemetria honesta); si vuelve vacia, cae al fallback de abajo (no empeora el caso
+    # previo). Cualquier LlmError de esta llamada propaga al caller (route), que degrada.
+    # Se gatea en ``actions`` (no en ``not last_text`` a secas) para no forzar una segunda
+    # vuelta ante una respuesta conversacional normal que legitimamente vino vacia.
+    if not last_text and actions:
+        forced = await llm_client.complete(
+            model=served_name,
+            messages=messages,
+            tools=None,
+            thinking=thinking,
+        )
+        last_text = forced.text
+        if last_text:
+            last_finish_reason = forced.finish_reason
 
     final_text = last_text if last_text else fallback_text
     return final_text, actions, last_finish_reason

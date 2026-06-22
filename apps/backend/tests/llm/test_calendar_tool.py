@@ -54,8 +54,10 @@ class FakeCalendarStore:
         self.create_calls.append(payload)
         return self._create_result
 
-    async def list_events(self, from_dt: datetime, to_dt: datetime) -> list[dict[str, object]]:
-        self.list_calls.append({"from_dt": from_dt, "to_dt": to_dt})
+    async def list_events(
+        self, from_dt: datetime, to_dt: datetime, *, limit: int | None = None
+    ) -> list[dict[str, object]]:
+        self.list_calls.append({"from_dt": from_dt, "to_dt": to_dt, "limit": limit})
         return self._list_result
 
 
@@ -287,6 +289,89 @@ class TestAgentCreateEvent:
         assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
         assert not store.create_calls
 
+    async def test_invalid_iana_time_zone_rejected(self) -> None:
+        # FIX 1: time_zone debe ser un identificador IANA real, no cualquier string.
+        # "UTC+3" / "horario de verano" / etc. no son identificadores IANA válidos.
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {
+                "title": "x",
+                "start_at": _VALID_START,
+                "duration_min": 30,
+                "time_zone": "UTC+3",
+            }
+        )
+
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert not store.create_calls
+
+    async def test_valid_iana_time_zone_accepted(self) -> None:
+        # FIX 1: identificadores IANA reales deben seguir siendo aceptados.
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {
+                "title": "x",
+                "start_at": _VALID_START,
+                "duration_min": 30,
+                "time_zone": "America/Argentina/Buenos_Aires",
+            }
+        )
+
+        assert "error" not in result
+        assert store.create_calls[0].time_zone == "America/Argentina/Buenos_Aires"
+
+    async def test_time_zone_none_is_accepted(self) -> None:
+        # FIX 1: time_zone=None (ausente) sigue siendo válido (campo opcional).
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {"title": "x", "start_at": _VALID_START, "duration_min": 30}
+        )
+
+        assert "error" not in result
+        assert store.create_calls[0].time_zone is None
+
+    async def test_recurrence_with_valid_iana_time_zone_ok(self) -> None:
+        # FIX 1 + invariante ADR-018: recurrence con time_zone IANA válido pasa ambas
+        # validaciones (field_validator + model_validator de recurrencia).
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {
+                "title": "Recurrente",
+                "start_at": _VALID_START,
+                "duration_min": 30,
+                "recurrence": ["RRULE:FREQ=WEEKLY"],
+                "time_zone": "Europe/Madrid",
+            }
+        )
+
+        assert "error" not in result
+        assert store.create_calls[0].time_zone == "Europe/Madrid"
+
+    async def test_error_message_does_not_leak_invalid_time_zone_value(self) -> None:
+        # regla #4: el mensaje de invalid_time_zone no vuelca el valor del usuario.
+        store = FakeCalendarStore()
+        tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
+
+        result = await tool.execute(
+            {
+                "title": "x",
+                "start_at": _VALID_START,
+                "duration_min": 30,
+                "time_zone": "zona-secreta-del-usuario",
+            }
+        )
+
+        assert result["error"]["code"] == "invalid_arguments"  # type: ignore[index]
+        assert "zona-secreta-del-usuario" not in result["error"]["message"]  # type: ignore[index]
+
     async def test_duration_over_max_rejected(self) -> None:
         # Cota LLM-fed: duration_min ≤ 43200 (un mes en minutos). Evita una duración absurda.
         store = FakeCalendarStore()
@@ -371,6 +456,10 @@ class TestAgentListEvents:
         assert "error" not in result
         assert result == {"events": [{"id": "ev-1"}, {"id": "ev-2"}]}
         assert len(store.list_calls) == 1
+        # La tool del agente acota el listado (cap defensivo del context window).
+        from app.llm.tools.base import AGENT_LIST_RESULT_LIMIT
+
+        assert store.list_calls[0]["limit"] == AGENT_LIST_RESULT_LIMIT
 
     async def test_missing_to_dt_returns_invalid_arguments(self) -> None:
         store = FakeCalendarStore()

@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING, Annotated
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.llm.tools.base import (
+    AGENT_LIST_RESULT_LIMIT,
     IsoDatetime,
     first_validation_error,
     not_wired_result,
@@ -246,7 +247,9 @@ class AgentListTasksTool:
         except ValidationError as exc:
             return tool_error("invalid_arguments", first_validation_error(exc))
 
-        tasks = await self._store.list_tasks()
+        # Cap acotado (``AGENT_LIST_RESULT_LIMIT``): el resultado se inyecta en el context
+        # del LLM, así que no se vuelcan miles de tareas en un solo turno.
+        tasks = await self._store.list_tasks(limit=AGENT_LIST_RESULT_LIMIT)
         return {"tasks": tasks}
 
 

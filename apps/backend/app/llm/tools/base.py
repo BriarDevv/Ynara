@@ -52,6 +52,15 @@ def _coerce_iso_datetime(value: object) -> object:
 # ``IsoDatetime``: datetime de tool call — solo string ISO 8601 (o datetime nativo).
 IsoDatetime = Annotated[datetime, BeforeValidator(_coerce_iso_datetime)]
 
+# Tope de filas que una tool de listado del agente (``calendar.list_events`` /
+# ``task.list_tasks``) devuelve al tool-loop. Defensa en profundidad (lección de la review
+# de las tools síncronas): el resultado de la tool se inyecta en el historial de mensajes
+# del LLM (``json.dumps`` en ``tool_loop``), así que un usuario con miles de eventos/tareas
+# inundaría el context window con un solo turno (vector de costo + de inyección de strings
+# controladas por el usuario). El cap acota ese fan-out; el CRUD HTTP NO lo usa (su contrato
+# es la lista completa). 50 es un techo holgado para "qué tengo agendado/pendiente".
+AGENT_LIST_RESULT_LIMIT: int = 50
+
 
 @runtime_checkable
 class Tool(Protocol):

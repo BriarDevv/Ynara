@@ -248,6 +248,32 @@ async def check_chat_rate_limit(store: TokenStore, *, user_id: str) -> bool:
     return count <= settings.chat_max_requests
 
 
+async def charge_chat_tool_writes(store: TokenStore, *, user_id: str, writes: int) -> None:
+    """Carga la presión de escrituras de tools de un turno al MISMO bucket del chat.
+
+    El freno de ``check_chat_rate_limit`` cuenta 1 por request, pero un turno con tools
+    puede ejecutar hasta ``MAX_TOOL_ITERATIONS * MAX_CALLS_PER_TURN`` (=40) escrituras a DB
+    en una sola request (amplificación de escritura). Para que el rate-limit refleje esa
+    presión real, DESPUÉS del turno se cargan ``writes`` puntos EXTRA al bucket por usuario
+    (cada action ejecutada = 1 punto más, además del +1 que ya contó la request). Así un
+    atacante que maximice tool calls agota su ventana mucho antes que con el conteo por-turno
+    crudo: la carga acumulada empuja ``check_chat_rate_limit`` del siguiente turno por encima
+    del techo.
+
+    Best-effort y post-turno: se llama DESPUÉS de responder (no bloquea ni rechaza ESTE
+    turno, que ya pasó el gate); la carga afecta los turnos siguientes de la ventana. ``writes
+    <= 0`` => no-op (un turno conversacional sin tools no carga nada extra). fail-open
+    heredado de ``incr_with_ttl`` (Redis caído => 0, sin freno).
+    """
+    if writes <= 0:
+        return
+    await store.incr_with_ttl(
+        _chat_counter_key(user_id),
+        ttl_seconds=get_settings().chat_window_seconds,
+        amount=writes,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Memory export (por user_id — del CurrentUser autenticado)
 # ---------------------------------------------------------------------------

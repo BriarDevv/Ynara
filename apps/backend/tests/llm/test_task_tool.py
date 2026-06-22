@@ -46,13 +46,15 @@ class FakeTaskStore:
         self._list_result = list_result or []
         self.create_calls: list[TaskCreate] = []
         self.list_calls: int = 0
+        self.list_limits: list[int | None] = []
 
     async def create_task(self, payload: TaskCreate) -> dict[str, object]:
         self.create_calls.append(payload)
         return self._create_result
 
-    async def list_tasks(self) -> list[dict[str, object]]:
+    async def list_tasks(self, *, limit: int | None = None) -> list[dict[str, object]]:
         self.list_calls += 1
+        self.list_limits.append(limit)
         return self._list_result
 
 
@@ -212,6 +214,10 @@ class TestAgentListTasks:
         assert "error" not in result
         assert result == {"tasks": [{"id": "t-1"}, {"id": "t-2"}]}
         assert store.list_calls == 1
+        # La tool del agente acota el listado (cap defensivo del context window).
+        from app.llm.tools.base import AGENT_LIST_RESULT_LIMIT
+
+        assert store.list_limits == [AGENT_LIST_RESULT_LIMIT]
 
     async def test_extra_arg_rejected(self) -> None:
         store = FakeTaskStore()

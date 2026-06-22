@@ -299,15 +299,19 @@ async def test_redis_incr_with_ttl_key_nace_con_ttl() -> None:
     """
 
     class _LuaRedis:
-        """Modela el script INCR+EXPIRE atómico: EXPIRE solo en el primer incr."""
+        """Modela el script INCRBY+EXPIRE atómico: EXPIRE solo cuando la key nace."""
 
         def __init__(self) -> None:
             self.counters: dict[str, int] = {}
             self.ttls: dict[str, int] = {}
 
-        async def eval(self, _script: str, _numkeys: int, key: str, ttl: int) -> int:
-            self.counters[key] = self.counters.get(key, 0) + 1
-            if self.counters[key] == 1:
+        async def eval(
+            self, _script: str, _numkeys: int, key: str, ttl: int, amount: int = 1
+        ) -> int:
+            self.counters[key] = self.counters.get(key, 0) + int(amount)
+            # La key nace cuando el contador iguala al amount cargado (mismo c == ARGV[2]
+            # del Lua): solo ahí corre EXPIRE (fixed-window, no se reinicia).
+            if self.counters[key] == int(amount):
                 self.ttls[key] = int(ttl)
             return self.counters[key]
 
@@ -318,6 +322,10 @@ async def test_redis_incr_with_ttl_key_nace_con_ttl() -> None:
     assert redis.ttls["k"] == 900
     # Segundo incr: NO reinicia el TTL (fixed-window preservado).
     assert await store.incr_with_ttl("k", ttl_seconds=900) == 2
+    assert redis.ttls["k"] == 900
+    # Carga de varios puntos de una (amplificación de escritura del chat): suma ``amount``
+    # y NO reinicia el TTL (la key ya existía).
+    assert await store.incr_with_ttl("k", ttl_seconds=900, amount=5) == 7
     assert redis.ttls["k"] == 900
 
 

@@ -41,9 +41,12 @@ def test_all_expected_tasks_registered() -> None:
 
 
 def test_agent_turn_pass_registered() -> None:
-    """Específico de la Fase E/D1: la pasada async del agente DEBE estar registrada.
+    """La pasada async del agente DEBE seguir registrada aunque esté DORMANT (ADR-022).
 
-    El productor (``ChatService._enqueue_agent_pass``) encola ``workflows.agent_turn_pass``;
-    sin el registro, el auto-agendado/auto-tareas del agente nunca corre en deploy.
+    Bajo la config de modos actual nadie la encola (el chat ejecuta las tools síncronas),
+    pero la task se mantiene registrada y funcional para una futura pasada de agente en
+    modos gemma. Si dejara de registrarse y luego se reactivara el encolador, el worker
+    rechazaría cada turno como ``Received unregistered task``. Este test lockea el
+    registro (fuera de scope borrarla en este PR).
     """
     assert "workflows.agent_turn_pass" in celery_app.tasks

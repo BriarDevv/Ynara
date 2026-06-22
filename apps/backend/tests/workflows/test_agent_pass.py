@@ -218,7 +218,7 @@ class TestAsyncAgentPassUnit:
         session = MagicMock(spec=AsyncSession)
         fake_store = _FakeCalendarStore()
 
-        with patch("app.workflows.agent_pass.CalendarEventStore", return_value=fake_store):
+        with patch("app.calendar.store.CalendarEventStore", return_value=fake_store):
             result = await _async_agent_pass(
                 user_id=USER_ID,
                 session_id=SESSION_ID,
@@ -250,7 +250,7 @@ class TestAsyncAgentPassUnit:
         fixed = datetime(2026, 7, 22, 18, 30, tzinfo=ZoneInfo("America/Argentina/Buenos_Aires"))
 
         with (
-            patch("app.workflows.agent_pass.CalendarEventStore", return_value=fake_store),
+            patch("app.calendar.store.CalendarEventStore", return_value=fake_store),
             patch("app.workflows.agent_pass.current_now", return_value=fixed),
         ):
             await _async_agent_pass(
@@ -289,7 +289,7 @@ class TestAsyncAgentPassUnit:
         session = MagicMock(spec=AsyncSession)
         fake_store = _FakeCalendarStore()
 
-        with patch("app.workflows.agent_pass.CalendarEventStore", return_value=fake_store):
+        with patch("app.calendar.store.CalendarEventStore", return_value=fake_store):
             result = await _async_agent_pass(
                 user_id=USER_ID,
                 session_id=SESSION_ID,

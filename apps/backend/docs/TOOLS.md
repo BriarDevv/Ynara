@@ -19,22 +19,30 @@
 ## Tools disponibles
 
 > **Estado**: `reminder.*` son stubs (esqueleto sin integración externa real).
-> `calendar.*` y `task.*` están **implementados de verdad** en la **pasada asíncrona
-> del agente** (Fase E/D1, ADR-021): `calendar.*` escribe/lee `calendar_events` vía
-> `CalendarEventStore`; `task.*` escribe/lee `tasks` vía `TaskStore`.
-> `memory.*` está **implementado** (M7, mergeado).
+> `calendar.*` y `task.*` están **implementados de verdad** y, desde **ADR-022**, se
+> ejecutan **SÍNCRONOS en el chat de producción** (modo `productividad`): cuando qwen
+> llama `calendar.create_event` / `task.create_task` durante un turno, la tool ESCRIBE
+> en `calendar_events` / `tasks` dentro del turno (atómico con su commit) y el modelo
+> confirma la acción en su respuesta. `memory.*` está **implementado** (M7, mergeado).
 >
-> **Dos superficies, dos registries** (mismo patrón para `calendar.*` / `task.*` /
+> **Tres superficies, tres registries** (mismo patrón para `calendar.*` / `task.*` /
 > `memory.*`):
 > - `default_registry()` trae los `calendar.*` / `task.*` como **stubs `not_wired`**
 >   (cero efecto): los consume el **playground observado** (ADR-019 D2, invariante de
->   no-efecto).
-> - `calendar_registry(store)` / `task_registry(store)` traen los tools **reales** (con
->   efecto), ligados a `(session, user_id)`: los consume SOLO la pasada async del agente
->   (`app/workflows/agent_pass.py`), que arma un registry **combinado** con los
->   namespaces que el modo habilita en `tools_enabled` (diseño multi-tool escalable). El
->   `user_id` nunca viaja como argumento (el store ya lo tiene; `extra='forbid'` lo
->   impide), igual que la memoria.
+>   no-efecto). **Intacto** (ADR-022 no lo toca).
+> - `build_chat_tool_registry(session, user_id, tools_enabled)`
+>   (`app/llm/tools/agent_registry.py`) es el del **chat de producción** (ADR-022): trae
+>   los `calendar.*` / `task.*` **reales** de los namespaces que el modo habilita en
+>   `tools_enabled`, MÁS los stubs `not_wired` de `reminder` si está habilitado (sigue
+>   sin backend real). Lo arma `build_memory_context` (`_default_reg`). Gateado
+>   estrictamente por modo: para los modos gemma (`tools_enabled=[]`) queda vacío.
+> - `calendar_registry(store)` / `task_registry(store)` / `_build_agent_registry(...)`
+>   son los tools **reales** que usa la **pasada async del agente**
+>   (`app/workflows/agent_pass.py`), hoy **dormant** (ADR-022 D5): registrada pero sin
+>   encolador, reservada para una futura pasada en modos gemma.
+>
+> En las tres superficies el `user_id` nunca viaja como argumento (el store ya lo tiene;
+> `extra='forbid'` lo impide), igual que la memoria.
 >
 > Las clases reales son `AgentCreateEventTool` / `AgentListEventsTool` /
 > `AgentCreateTaskTool` / `AgentListTasksTool` (stateful); los stubs
@@ -65,10 +73,11 @@
   }
   ```
 - **Efecto (tool real)**: INSERTA en `calendar_events` (status `confirmed`), atado al
-  `user_id` del store. **Idempotente**: deduplica por la tupla natural
-  `(user_id, title, start_at, duration_min)` → un reintento de la pasada async NO
-  agenda el evento dos veces. Devuelve el evento serializado (`id` + campos del wire,
-  sin `user_id`/timestamps).
+  `user_id` del store. Desde ADR-022 corre **síncrona en el chat** (productividad): la
+  escritura commitea atómica con el turno. **Idempotente**: deduplica por la tupla
+  natural `(user_id, title, start_at, duration_min)` → un reintento (loop o futura
+  pasada async) NO agenda el evento dos veces. Devuelve el evento serializado (`id` +
+  campos del wire, sin `user_id`/timestamps).
 - **Errores**: `invalid_arguments` (args malformados: título vacío, `duration_min` no
   positivo, fecha no-ISO/epoch, `user_id` u otro extra, `recurrence` sin `time_zone`).
 - **Stub (playground observado)**: la versión del `default_registry()` valida args y
@@ -107,10 +116,11 @@
   }
   ```
 - **Efecto (tool real)**: INSERTA en `tasks` (status `pending`), atado al `user_id` del
-  store. **Idempotente**: deduplica por la tupla natural `(user_id, title,
-  scheduled_at)` (con `IS NULL` si no hay horario) → un reintento de la pasada async NO
-  crea el to-do dos veces. Devuelve la tarea serializada (`id` + campos del wire, sin
-  `user_id`/timestamps).
+  store. Desde ADR-022 corre **síncrona en el chat** (productividad): la escritura
+  commitea atómica con el turno. **Idempotente**: deduplica por la tupla natural
+  `(user_id, title, scheduled_at)` (con `IS NULL` si no hay horario) → un reintento
+  (loop o futura pasada async) NO crea el to-do dos veces. Devuelve la tarea serializada
+  (`id` + campos del wire, sin `user_id`/timestamps).
 - **Errores**: `invalid_arguments` (args malformados: título vacío o > 200,
   `duration_min` no positivo o > 43200, fecha no-ISO/epoch, `user_id` u otro extra).
 - **Stub (playground observado)**: la versión del `default_registry()` valida args y
@@ -133,6 +143,11 @@
   - `text: str`
   - `when: datetime` (ISO 8601 con tz)
 - **Habilitada en modos**: productividad.
+- **Estado**: **stub `not_wired`** incluso en el chat de producción (ADR-022): a
+  diferencia de `calendar.*` / `task.*`, `reminder` no tiene backend real todavía (no
+  hay tabla `reminders` ni scheduler). El modelo VE la tool (sigue en `tools_enabled`)
+  pero llamarla no tiene efecto. Se "cablea" agregando su builder a
+  `_AGENT_TOOL_BUILDERS` cuando exista el store.
 
 ### reminder.list
 
@@ -141,6 +156,7 @@
   - `from_dt: datetime | None` (ISO 8601)
   - `to_dt: datetime | None`
 - **Habilitada en modos**: productividad.
+- **Estado**: **stub `not_wired`** (ver `reminder.set`).
 
 ### memory.add
 
