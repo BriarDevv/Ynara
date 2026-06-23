@@ -74,6 +74,10 @@ export function AgendaView() {
     });
   };
 
+  // Ancla la vista a "ahora". Vive en un handler (corre solo en el browser al
+  // interactuar), por eso `new Date()` acá no puede causar hydration mismatch.
+  const goToNow = () => setAnchor(new Date());
+
   // Etiqueta de la unidad navegable (para los aria-label de prev/next).
   const unitLabel = effectiveView === "dia" ? "Día" : effectiveView === "mes" ? "Mes" : "Semana";
 
@@ -115,7 +119,7 @@ export function AgendaView() {
               onChange={(v) => {
                 setView(v);
                 // Al cambiar a lista, volver a la semana actual
-                if (v === "lista") setAnchor(new Date());
+                if (v === "lista") goToNow();
               }}
             />
           </div>
@@ -133,7 +137,7 @@ export function AgendaView() {
               </button>
               <button
                 type="button"
-                onClick={() => setAnchor(new Date())}
+                onClick={goToNow}
                 disabled={onNow}
                 className={cn(
                   "text-button rounded-[var(--radius-pill)] px-4 py-2 text-[var(--color-ink-soft)] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-soft)] hover:text-[var(--color-ink)]",
