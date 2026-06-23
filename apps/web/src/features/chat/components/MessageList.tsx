@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ModeId } from "@/components/ui/modes";
 import type { ChatUiMessage } from "../store";
 import { useChatAutoScroll } from "../useChatAutoScroll";
@@ -14,8 +14,8 @@ import { TypingIndicator } from "./TypingIndicator";
  *
  * a11y del streaming: la respuesta del assistant NO se anuncia token a token.
  * En vez de un `aria-live` sobre toda la lista (que spameaba al lector con cada
- * delta), una región `sr-only role="status" aria-live="polite" aria-atomic`
- * dedicada anuncia el texto final UNA sola vez, cuando el mensaje cierra en
+ * delta), una región `sr-only` dedicada (`<output>`, role="status" nativo +
+ * aria-live="polite" aria-atomic) anuncia el texto final UNA sola vez, al cerrar en
  * "done". `aria-busy` sobre el scroller marca que el contenido se actualiza.
  * No se roba el foco al terminar (la región es pasiva, nadie llama `.focus()`).
  *
@@ -85,36 +85,28 @@ export function MessageList({ messages, mode, onRetry, isStreaming = false, onSe
   // Región viva dedicada: anuncia el texto del assistant UNA vez al cerrar en
   // "done". Al montar, adopta el historial ya presente sin anunciarlo (no
   // relee la última respuesta cada vez que abrís la conversación).
-  const [announced, setAnnounced] = useState("");
-  const announcedIdRef = useRef<string | null>(null);
-  const initializedRef = useRef(false);
-  const reannounceRaf = useRef(0);
-  useEffect(() => {
-    const done = lastDoneAssistant(messages);
-    if (!initializedRef.current) {
-      initializedRef.current = true;
-      announcedIdRef.current = done?.id ?? null;
-      return;
-    }
-    if (done && done.id !== announcedIdRef.current) {
-      announcedIdRef.current = done.id;
-      // Limpiar y re-setear en el próximo frame fuerza un cambio REAL del nodo
-      // de texto aunque dos respuestas seguidas sean idénticas: React hace
-      // bail-out si el string es igual y una región `aria-atomic` no re-anuncia
-      // un valor reasignado igual. El "" intermedio es invisible (región sr-only).
-      const { text } = done;
-      setAnnounced("");
-      if (reannounceRaf.current) cancelAnimationFrame(reannounceRaf.current);
-      reannounceRaf.current = requestAnimationFrame(() => setAnnounced(text));
-    }
-  }, [messages]);
-  // Cancela un re-anuncio pendiente al desmontar.
-  useEffect(
-    () => () => {
-      if (reannounceRaf.current) cancelAnimationFrame(reannounceRaf.current);
-    },
-    [],
-  );
+  //
+  // Ajuste de estado DURANTE el render (patrón oficial de React para "adjusting
+  // state when a prop changes"): comparamos el id del último "done" contra el
+  // que ya anunciamos y, si cambió, seteamos el nuevo anuncio en el mismo render
+  // (sin efecto → sin render extra con valor stale). El primer render adopta el
+  // historial presente sin anunciarlo (`initialDoneId` capturado una vez).
+  //
+  // Re-anuncio de texto idéntico: el lector de pantalla no re-lee un nodo
+  // `aria-atomic` cuyo string no cambió. En vez del viejo truco "" → rAF → text,
+  // un `key` que incrementa con cada nuevo "done" REMONTA el `<output>`: nodo
+  // nuevo ⇒ el lector lo anuncia aunque el texto sea igual al anterior. Sin
+  // efecto, sin rAF, sin render intermedio con la UI stale.
+  const [initialDoneId] = useState(() => lastDoneAssistant(messages)?.id ?? null);
+  const [announced, setAnnounced] = useState<{ id: string | null; text: string; key: number }>({
+    id: initialDoneId,
+    text: "",
+    key: 0,
+  });
+  const done = lastDoneAssistant(messages);
+  if (done && done.id !== announced.id) {
+    setAnnounced({ id: done.id, text: done.text, key: announced.key + 1 });
+  }
 
   if (messages.length === 0) {
     return <EmptyConversation mode={mode} onSend={onSend ?? (() => {})} />;
@@ -159,10 +151,12 @@ export function MessageList({ messages, mode, onRetry, isStreaming = false, onSe
       </div>
 
       {/* Región viva dedicada (visualmente oculta): el lector de pantalla
-          anuncia acá la respuesta final, una sola vez, al cerrar el stream. */}
-      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {announced}
-      </div>
+          anuncia acá la respuesta final, una sola vez, al cerrar el stream.
+          `<output>` aporta role="status" nativo (semántica más confiable que
+          role="status" manual); aria-live/atomic explícitos para garantizarlo. */}
+      <output key={announced.key} className="sr-only" aria-live="polite" aria-atomic="true">
+        {announced.text}
+      </output>
 
       <JumpToBottomButton visible={showJumpButton} onClick={jumpToBottom} />
     </div>

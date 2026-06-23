@@ -3,7 +3,7 @@
 import { Icon } from "@ynara/ui";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { MODE_BY_ID, MODES } from "@/components/ui/modes";
 import { YnaraWordmark } from "@/components/ui/YnaraWordmark";
 import { buildAnticipations } from "@/features/today/anticipations";
@@ -18,6 +18,26 @@ import { isNavItemActive, NAV_ITEMS } from "./nav-items";
 /** Total de anticipaciones canned (mock). Los pendientes = total − resueltos,
  *  y los resueltos viven en el store compartido (useAvisosStore). */
 const TOTAL_AVISOS = buildAnticipations().length;
+
+/** Opciones del switcher de tema. Estáticas → a module scope (no se rearman
+ *  por render ni rompen memo de hijos). */
+const THEME_OPTIONS = [
+  { value: "light", label: "Claro" },
+  { value: "dark", label: "Oscuro" },
+] as const;
+
+// Hidratación SSR-safe sin el ciclo extra useState+useEffect: el snapshot del
+// server es `false` y el del cliente `true`, así el primer render del cliente
+// matchea al server y luego React conmuta a `true`.
+const noopSubscribe = () => () => {};
+/** `true` sólo después de hidratar en el cliente; `false` en SSR. */
+function useHydrated(): boolean {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
+}
 
 /**
  * Navegación principal del app shell, en dos chrome por breakpoint
@@ -70,17 +90,11 @@ export function MobileTabBar() {
 function ThemeSwitch() {
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  const OPTIONS = [
-    { value: "light", label: "Claro" },
-    { value: "dark", label: "Oscuro" },
-  ] as const;
+  const mounted = useHydrated();
 
   return (
     <div className="mb-2 flex gap-1.5 px-1.5">
-      {OPTIONS.map((o) => {
+      {THEME_OPTIONS.map((o) => {
         const on = mounted && theme === o.value;
         return (
           <button
@@ -112,8 +126,7 @@ export function SidebarNav() {
   // mono-light cuando el tema es Noche. `mounted` evita el hydration mismatch
   // (el server siempre renderiza light, sin localStorage).
   const dark = useThemeStore((s) => s.theme === "dark");
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
   const wordmarkVariant = mounted && dark ? "mono-light" : "color";
 
   const activeMode = useActiveMode();
