@@ -28,16 +28,13 @@ export function OfflineBanner() {
   if (online) return null;
 
   return (
-    <div
-      role="status"
-      className="flex items-center gap-2.5 rounded-[var(--radius-md)] bg-[var(--color-bg-soft)] px-4 py-2.5"
-    >
+    <output className="flex items-center gap-2.5 rounded-[var(--radius-md)] bg-[var(--color-bg-soft)] px-4 py-2.5">
       <span aria-hidden className="shrink-0 text-[var(--color-ink-muted)]">
         <Icon name="conexion" size={18} />
       </span>
       <span className="text-body-sm text-[var(--color-ink-soft)]">
         Sin conexión · trabajando local
       </span>
-    </div>
+    </output>
   );
 }

@@ -66,9 +66,10 @@ export function OnboardingHeader({ total, current, onSkipAll, className }: Props
  *
  * Implementado con `HTMLDialogElement` + `showModal()`: el browser provee
  * focus trap, manejo de Escape y devolución de focus al elemento que tenía
- * focus antes de abrir (el botón "Saltar"). El click en el backdrop cierra
- * detectando que el target del evento es el propio `<dialog>` (no su
- * contenido interior).
+ * focus antes de abrir (el botón "Saltar"). El cierre por click en el backdrop
+ * vive en un `<button>` dedicado a pantalla completa (detrás del panel): al ser
+ * nativamente interactivo, el cierre por click queda emparejado con teclado
+ * (Enter/Espacio) sin necesidad de suprimir reglas de a11y.
  */
 function SkipConfirmDialog({
   onCancel,
@@ -88,19 +89,11 @@ function SkipConfirmDialog({
     };
   }, []);
 
-  const handleBackdropClick = (event: React.MouseEvent<HTMLDialogElement>) => {
-    // Si el click cayó directamente en el <dialog> (no en su contenido
-    // interior), es click en el backdrop → cerrar.
-    if (event.target === dialogRef.current) onCancel();
-  };
-
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape cierra vía onCancel; el click en el backdrop es enhancement de mouse, no la única vía de cierre.
     <dialog
       ref={dialogRef}
       aria-modal="true"
       aria-labelledby="skip-title"
-      onClick={handleBackdropClick}
       onCancel={(event) => {
         // Escape dispara `cancel` → prevenir el close default para que
         // React controle el unmount vía `confirmOpen`.
@@ -109,7 +102,20 @@ function SkipConfirmDialog({
       }}
       className="m-0 max-h-full max-w-full bg-transparent p-0 backdrop:bg-[var(--color-overlay)]"
     >
-      <div className="anim-fade-up flex w-full max-w-[420px] flex-col gap-4 rounded-[var(--radius-lg)] bg-[var(--color-bg)] p-6 shadow-lifted">
+      {/*
+        Backdrop dismissible como <button> a pantalla completa, detrás del panel
+        (`-z-10`). Es un enhancement de mouse, no la única vía de cierre: el
+        <dialog> nativo aporta Escape (vía onCancel) y abajo están los botones
+        "Volver"/"Saltar igual". `fixed inset-0` cubre el viewport sin depender
+        del contexto de posicionamiento del <dialog>.
+      */}
+      <button
+        type="button"
+        aria-label="Cerrar"
+        onClick={onCancel}
+        className="-z-10 fixed inset-0 cursor-default"
+      />
+      <div className="anim-fade-up relative flex w-full max-w-[420px] flex-col gap-4 rounded-[var(--radius-lg)] bg-[var(--color-bg)] p-6 shadow-lifted">
         <h2 id="skip-title" className="text-subtitle text-[var(--color-ink-deep)]">
           ¿Saltar el onboarding?
         </h2>

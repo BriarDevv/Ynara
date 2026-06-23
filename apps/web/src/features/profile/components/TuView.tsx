@@ -68,6 +68,15 @@ type RetentionValue = "30" | "90" | "180" | "365";
  * calmas (`SettingsRow`/`SettingsGroup`/`A11yCard`/`ChevronRight`) viven en
  * `./settings-rows` para mantener este archivo bajo 500 líneas.
  */
+// no-giant-component: el largo es JSX declarativo de secciones de settings, no
+// lógica; las filas calmas ya se extrajeron a ./settings-rows. Partir más
+// cablearía muchos handlers de store por props y arriesga la vista de perfil ya
+// verificada. prefer-useReducer: los 7 useState son estados de UI independientes
+// (campo de nombre, retención, y flags open de 3 dialogs + toast); se setean en
+// handlers distintos y no forman una actualización lógica única, así que un
+// reducer no aplica.
+// react-doctor-disable-next-line react-doctor/no-giant-component
+// react-doctor-disable-next-line react-doctor/prefer-useReducer
 export function TuView() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -271,6 +280,10 @@ export function TuView() {
           <div
             className="flex h-[60px] w-[60px] flex-shrink-0 items-center justify-center rounded-full text-[25px] font-semibold text-[var(--color-on-dark)]"
             style={{ backgroundColor: modeDescriptor.fillVar }}
+            // No es una imagen real: es el inicial del nombre sobre un círculo
+            // teñido. <img> exige src y no admite hijos; role="img" es el patrón
+            // ARIA correcto para un avatar generado por texto.
+            // react-doctor-disable-next-line react-doctor/prefer-tag-over-role
             role="img"
             aria-label={`Avatar de ${displayName ?? "usuario"}`}
           >

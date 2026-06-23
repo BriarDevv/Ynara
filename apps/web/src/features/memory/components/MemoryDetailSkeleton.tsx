@@ -2,9 +2,7 @@
 export function MemoryDetailSkeleton() {
   return (
     <div className="mx-auto flex w-full max-w-[680px] flex-col gap-8 px-6 pb-16 pt-6">
-      <span className="sr-only" role="status">
-        Cargando el recuerdo…
-      </span>
+      <output className="sr-only">Cargando el recuerdo…</output>
       <div aria-hidden className="flex flex-col gap-8">
         <span className="anim-pulse-soft h-7 w-24 rounded-[var(--radius-pill)] bg-[var(--color-bg-soft)]" />
         <div className="anim-pulse-soft flex flex-col gap-3">

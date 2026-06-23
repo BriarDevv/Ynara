@@ -6,9 +6,7 @@
 export function MemoryTimelineSkeleton({ rows = 5 }: { rows?: number }) {
   return (
     <div>
-      <span className="sr-only" role="status">
-        Cargando tu memoria…
-      </span>
+      <output className="sr-only">Cargando tu memoria…</output>
       <ul aria-hidden className="flex flex-col gap-3">
         {Array.from({ length: rows }, (_, i) => (
           <li

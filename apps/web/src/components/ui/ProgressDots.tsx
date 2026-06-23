@@ -31,6 +31,9 @@ export function ProgressDots({ total, current, className, ariaLabel = "Progreso"
   const dots = buildDots(total, current);
   return (
     <div
+      // No es una barra determinada: es un stepper de N dots con ancho/color por
+      // dot; <progress> no admite hijos estilizables y rompería el visual.
+      // react-doctor-disable-next-line react-doctor/prefer-tag-over-role
       role="progressbar"
       aria-label={ariaLabel}
       aria-valuemin={1}
