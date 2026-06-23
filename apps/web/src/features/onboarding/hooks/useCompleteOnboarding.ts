@@ -1,11 +1,12 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { UserOut } from "@ynara/shared-schemas";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import type { ModeId } from "@/components/ui/modes";
 import { ApiError, api } from "@/lib/api";
+import { qk } from "@/lib/queryKeys";
 import { useA11yStore } from "@/stores/a11y";
 import { useUserStore } from "@/stores/user";
 import { type ApiErrorBody, OnboardRequestSchema } from "../schemas";
@@ -49,6 +50,7 @@ export function useCompleteOnboarding(): Returns & {
   triggerOutroComplete: () => void;
 } {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [isCelebrating, setIsCelebrating] = useState(false);
 
@@ -115,6 +117,17 @@ export function useCompleteOnboarding(): Returns & {
       useUserStore.getState().setInterestedModes(data.interestedModes as ModeId[]);
       useUserStore.getState().completeOnboarding();
       useOnboardingStore.getState().reset();
+      // El perfil "me" vive en el user store (no hay query "me" en core), pero
+      // este onSuccess cruza el borde de identidad: limpiamos los caches por
+      // usuario (hoy/agenda/memoria/sesiones) para que las vistas a las que el
+      // user navega tras el outro pidan datos frescos en vez de mostrar cache de
+      // un estado previo. Invalidación por prefijo (TanStack matchea por inicio).
+      queryClient.invalidateQueries({ queryKey: qk.today.tasks() });
+      queryClient.invalidateQueries({ queryKey: qk.today.suggestions() });
+      queryClient.invalidateQueries({ queryKey: qk.today.recap() });
+      queryClient.invalidateQueries({ queryKey: qk.agenda.all() });
+      queryClient.invalidateQueries({ queryKey: qk.memory.all() });
+      queryClient.invalidateQueries({ queryKey: qk.sessions.all() });
       setIsCelebrating(true);
     },
     onError: (err) => {

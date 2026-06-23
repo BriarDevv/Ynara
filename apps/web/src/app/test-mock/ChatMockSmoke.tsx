@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ChatResponse } from "@ynara/shared-schemas";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { MODES, type ModeId } from "@/components/ui/modes";
 import type { ApiError } from "@/lib/api";
 import { sendChatMessage } from "@/lib/chat";
+import { qk } from "@/lib/queryKeys";
 
 /**
  * Smoke de `POST /v1/chat` (W1): manda un mensaje en el modo elegido y muestra
@@ -16,8 +17,13 @@ import { sendChatMessage } from "@/lib/chat";
  */
 export function ChatMockSmoke() {
   const [mode, setMode] = useState<ModeId>("productividad");
+  const queryClient = useQueryClient();
   const mutation = useMutation<ChatResponse, ApiError, ModeId>({
     mutationFn: (m) => sendChatMessage({ text: "Hola, esto es un smoke test", mode: m }),
+    // Mandar un mensaje puede crear/actualizar la sesión: refrescar el listado.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.sessions.all() });
+    },
   });
 
   return (
