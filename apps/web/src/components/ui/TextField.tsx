@@ -1,4 +1,4 @@
-import { forwardRef, type InputHTMLAttributes, useId } from "react";
+import { type InputHTMLAttributes, type Ref, useId } from "react";
 import { cn } from "@/lib/cn";
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "className"> & {
@@ -7,12 +7,11 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "className"> & {
   /** Mensaje de error inline. Si está presente, marca el campo como inválido. */
   error?: string;
   className?: string;
+  /** React 19: `ref` es un prop normal (sin forwardRef). */
+  ref?: Ref<HTMLInputElement>;
 };
 
-export const TextField = forwardRef<HTMLInputElement, Props>(function TextField(
-  { label, hint, error, id, className, ...rest },
-  ref,
-) {
+export function TextField({ label, hint, error, id, className, ref, ...rest }: Props) {
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   const hintId = hint ? `${fieldId}-hint` : undefined;
@@ -62,4 +61,4 @@ export const TextField = forwardRef<HTMLInputElement, Props>(function TextField(
       ) : null}
     </div>
   );
-});
+}
