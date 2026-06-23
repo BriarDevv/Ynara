@@ -18,7 +18,8 @@ export default async function MemoriaDetallePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ capa?: string }>;
 }) {
-  const { id } = await params;
-  const { capa } = await searchParams;
+  // `params` y `searchParams` son Promises independientes → resolverlas en
+  // paralelo en vez de en cascada (no hay dependencia entre una y otra).
+  const [{ id }, { capa }] = await Promise.all([params, searchParams]);
   return <MemoryDetailRoute memoryRef={id} rawLayer={capa} />;
 }
