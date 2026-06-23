@@ -111,6 +111,10 @@ class EpisodicMemory(UUIDPKMixin, TimestampMixin, Base):
             postgresql_using="hnsw",
             postgresql_ops={"summary_embedding": "vector_cosine_ops"},
         ),
+        # Lista de episódica reciente del panel admin (ORDER BY occurred_at DESC sin
+        # filtro de user_id): un btree sobre occurred_at evita el seq-scan + sort
+        # (migración 20260623_1200). El btree ascendente sirve el DESC por backward scan.
+        Index("ix_episodic_memory_occurred_at", "occurred_at"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
