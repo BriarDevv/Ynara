@@ -36,6 +36,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           default server-rendered (text-size-md, claro) y la preferencia
           del usuario. Sincronizados con stores/a11y.ts y stores/theme.ts.
         */}
+        {/* Script crítico inline anti-FOUC: DEBE correr síncrono antes del primer paint. next/script (afterInteractive/lazyOnload) corre tras hidratar → reintroduce el flash de tema. */}
+        {/* react-doctor/nextjs-no-native-script se apaga en doctor.config.js (no inline: chocaría con el biome-ignore de abajo, que debe quedar pegado al <script>). */}
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: snippet inline necesario para correr antes del primer paint y evitar FOUC; contenido es código propio en a11y-init.ts, no input del usuario. */}
         <script dangerouslySetInnerHTML={{ __html: a11yInitScript + themeInitScript }} />
       </head>

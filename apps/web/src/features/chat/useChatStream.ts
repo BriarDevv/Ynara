@@ -136,6 +136,10 @@ export function useChatStream(sessionId: string): UseChatStream {
 
         let stopped = false;
         while (!stopped) {
+          // El read es secuencial por diseño: cada `await reader.read()` devuelve
+          // el SIGUIENTE chunk del MISMO stream SSE (depende del cursor del read
+          // anterior). No son llamadas independientes; no se pueden paralelizar.
+          // react-doctor-disable-next-line react-doctor/async-await-in-loop
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
@@ -218,6 +222,11 @@ export function useChatStream(sessionId: string): UseChatStream {
   // ref que siempre apunta al último.
   const cancelRef = useRef(cancel);
   cancelRef.current = cancel;
+  // Deps `[]` a propósito: el effect solo debe correr al montar/desmontar. El
+  // cleanup lee `cancelRef.current` (latest-ref pattern), que SIEMPRE apunta al
+  // último `cancel`, así que no hay nodo stale; agregar `cancel` a deps re-correría
+  // el cleanup en cada render y cancelaría el stream en vuelo por error.
+  // react-doctor-disable-next-line react-doctor/exhaustive-deps
   useEffect(() => {
     return () => {
       cancelRef.current();

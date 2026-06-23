@@ -28,5 +28,9 @@ export function startViewTransition(update: () => void): void {
     return;
   }
 
+  // Util de bajo nivel (no es un render de React ni un hook): se invoca desde
+  // handlers con progressive enhancement. El componente <ViewTransition> de React
+  // no aplica a un helper plano que solo envuelve un callback imperativo.
+  // react-doctor-disable-next-line react-doctor/no-document-start-view-transition
   document.startViewTransition(update);
 }

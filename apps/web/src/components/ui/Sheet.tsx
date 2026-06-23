@@ -42,11 +42,15 @@ export function Sheet({
   const titleId = useId();
   const descId = useId();
 
-  // Sincroniza el estado nativo del <dialog> con la prop `open`.
+  // Sincroniza el estado nativo del <dialog> con la prop `open`. No es un handler
+  // fingido: el <dialog> nativo es un sistema externo imperativo (showModal/close)
+  // y `open` es declarativo del caller; no hay evento local que dispare esto, así
+  // que useEffect es la sincronización correcta.
   useEffect(() => {
     const node = dialogRef.current;
     if (!node) return;
     if (open && !node.open) node.showModal();
+    // react-doctor-disable-next-line react-doctor/no-event-handler
     else if (!open && node.open) node.close();
   }, [open]);
 
@@ -59,6 +63,11 @@ export function Sheet({
   }, []);
 
   return (
+    // El teclado ya cierra: Escape vía onCancel (nativo de showModal) + el botón
+    // "Cerrar" real. El onClick del <dialog> sólo detecta click en el backdrop
+    // (mouse), no es la única ni la primaria vía de cierre. Las reglas de
+    // react-doctor (click-events-have-key-events / no-noninteractive-element-interactions)
+    // se apagan en doctor.config.js (no inline: chocarían con el biome-ignore de abajo).
     // biome-ignore lint/a11y/useKeyWithClickEvents: Escape cierra vía onCancel; el click en el backdrop es enhancement de mouse, no la única vía de cierre.
     <dialog
       ref={dialogRef}
