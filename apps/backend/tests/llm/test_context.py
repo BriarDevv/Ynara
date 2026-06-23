@@ -37,7 +37,9 @@ from app.llm.context import (
     context_budget,
     estimate_tokens,
     render_context_block,
+    trim_history_to_budget,
 )
+from app.llm.schemas import ChatMessage
 from app.llm.tools.registry import ToolRegistry, default_registry
 from app.schemas.memory import EpisodicMemoryOut, ProceduralMemoryOut, SemanticMemoryOut
 
@@ -942,3 +944,52 @@ async def test_integration_procedural_filters_stale_and_orders_confidence(
 
     # alta debe aparecer antes que baja (confidence desc)
     assert result.index("pref.alta") < result.index("pref.baja")
+
+
+# ---------------------------------------------------------------------------
+# UNIT: trim_history_to_budget (historial multi-turno acotado a la ventana)
+# ---------------------------------------------------------------------------
+
+
+def _hist(n: int, length: int = 60) -> list[ChatMessage]:
+    """n mensajes alternando user/assistant, cada uno con ``length`` chars (costo estable)."""
+    return [
+        ChatMessage(role="user" if i % 2 == 0 else "assistant", content="x" * length)
+        for i in range(n)
+    ]
+
+
+def test_trim_history_keeps_all_when_budget_large() -> None:
+    """Ventana enorme -> se conserva TODO el historial, en el mismo orden cronológico."""
+    history = _hist(4)
+    result = trim_history_to_budget(
+        history, max_model_len=100_000, system_prompt="sys", current_user="hola"
+    )
+    assert result == history
+
+
+def test_trim_history_drops_oldest_keeps_recent_chronological() -> None:
+    """Ventana chica -> se conservan los MÁS RECIENTES (turnos completos), orden cronológico.
+
+    Cada msg cuesta 20 tokens (60 // 3). reserved = est("")=1 + est("")=1 + 512 = 514;
+    con max_model_len=564 el presupuesto es 50 -> entran 2 (40), el 3ro (60) no.
+    """
+    history = _hist(4, length=60)
+    result = trim_history_to_budget(
+        history, max_model_len=564, system_prompt="", current_user=""
+    )
+    assert result == history[2:]  # los últimos 2, en orden cronológico
+
+
+def test_trim_history_empty_returns_empty() -> None:
+    assert (
+        trim_history_to_budget([], max_model_len=100_000, system_prompt="s", current_user="u") == []
+    )
+
+
+def test_trim_history_zero_budget_returns_empty() -> None:
+    """Ventana más chica que la reserva -> presupuesto 0 -> sin historial (no desborda)."""
+    result = trim_history_to_budget(
+        _hist(3), max_model_len=100, system_prompt="s", current_user="u"
+    )
+    assert result == []

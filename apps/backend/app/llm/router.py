@@ -92,6 +92,7 @@ from app.llm.context import (
     build_memory_context,
     context_budget,
     render_context_block,
+    trim_history_to_budget,
 )
 from app.llm.errors import LlmError, ModelNotServedError
 from app.llm.prompts.datetime_context import build_now_preamble, current_now
@@ -140,6 +141,7 @@ async def route(
     llm_client: LLMClient,
     embedder: EmbeddingClient,
     reranker: Reranker,
+    history: list[ChatMessage] | None = None,
     config: LlmRuntimeConfig | None = None,
 ) -> ChatResponse:
     """Punto de entrada unico al LLM: ensambla contexto + tool loop y responde.
@@ -220,9 +222,24 @@ async def route(
 
     specs = mem_ctx.tool_specs(mode_cfg.tools_enabled)
 
-    # Historial desde cero: system + user actual (sin multi-turno; ver nota (b)).
+    # Historial multi-turno: los turnos previos de la sesión (user/assistant alternados)
+    # le dan continuidad a la conversación. Sin esto el modelo recibía SOLO el system + el
+    # mensaje actual y trataba cada turno como una persona nueva (nota (b), ahora resuelta).
+    # El caller (``ChatService.run_turn``) carga los turnos descifrados desde
+    # ``conversation_turns``; acá se recortan al presupuesto de la ventana (más recientes
+    # primero, turnos completos, orden cronológico) para no desbordar ``max_model_len`` —
+    # crítico en Gemma (ventana servida 8192). ``final_system`` ya incluye preámbulo +
+    # bloque de memoria, así que el recorte reserva ese tamaño + el mensaje actual + la
+    # completion. messages = [system, *historial_recortado, user_actual].
+    budgeted_history = trim_history_to_budget(
+        history or [],
+        max_model_len=max_model_len,
+        system_prompt=final_system,
+        current_user=request.text,
+    )
     messages = [
         ChatMessage(role="system", content=final_system),
+        *budgeted_history,
         ChatMessage(role="user", content=request.text),
     ]
 

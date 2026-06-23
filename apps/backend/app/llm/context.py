@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
 from app.llm.config import ModeConfig
-from app.llm.schemas import ToolSpec
+from app.llm.schemas import ChatMessage, ToolSpec
 from app.llm.tools.agent_registry import build_chat_tool_registry
 from app.llm.tools.memory import memory_registry
 from app.llm.tools.registry import ToolRegistry
@@ -93,6 +93,56 @@ def context_budget(*, max_model_len: int, system_prompt: str) -> int:
     """
     reserved = estimate_tokens(system_prompt) + COMPLETION_RESERVE_TOKENS
     return max(0, max_model_len - reserved)
+
+
+def trim_history_to_budget(
+    history: list[ChatMessage],
+    *,
+    max_model_len: int,
+    system_prompt: str,
+    current_user: str,
+) -> list[ChatMessage]:
+    """Recorta el historial multi-turno para que entre en la ventana del modelo.
+
+    El router arma ``messages = [system, *history, user_actual]``. El historial reciente
+    es lo que le da continuidad a la conversación (sin esto el modelo trata cada turno
+    como una persona nueva), pero NO puede desbordar ``max_model_len``. Se reserva el
+    espacio del system final (que ya incluye preámbulo de fecha + bloque de memoria), el
+    mensaje actual del usuario y la ``COMPLETION_RESERVE_TOKENS`` para la generación; lo
+    que queda es el presupuesto del historial.
+
+    Se conservan los turnos MÁS RECIENTES (se itera de atrás hacia adelante acumulando su
+    costo estimado y se corta al exceder el presupuesto), recortando TURNOS COMPLETOS (no
+    a mitad de mensaje), y se devuelve en orden CRONOLÓGICO (el orden que el modelo
+    espera). Estimación de tokens consistente con el resto del módulo (``estimate_tokens``,
+    ``len // 3``). Si el presupuesto es 0 o el historial está vacío, devuelve ``[]``.
+
+    Args:
+        history: Turnos previos como ``ChatMessage`` (user/assistant), en orden cronológico.
+        max_model_len: Ventana de contexto efectiva del modelo del modo.
+        system_prompt: System final (preámbulo + prompt del modo + bloque de memoria).
+        current_user: Texto del mensaje actual del usuario (entra después del historial).
+
+    Returns:
+        Sublista de ``history`` (orden cronológico) que entra en el presupuesto.
+    """
+    reserved = (
+        estimate_tokens(system_prompt) + estimate_tokens(current_user) + COMPLETION_RESERVE_TOKENS
+    )
+    budget = max(0, max_model_len - reserved)
+    if budget == 0 or not history:
+        return []
+
+    kept_reversed: list[ChatMessage] = []
+    used = 0
+    for msg in reversed(history):  # del más reciente al más viejo
+        cost = estimate_tokens(msg.content or "")
+        if used + cost > budget:
+            break
+        kept_reversed.append(msg)
+        used += cost
+    kept_reversed.reverse()  # volver a orden cronológico
+    return kept_reversed
 
 
 # ---------------------------------------------------------------------------
