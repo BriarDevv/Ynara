@@ -89,26 +89,28 @@ describe("MessageList — a11y del streaming (PR #9)", () => {
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("segunda"));
   });
 
-  it("dos respuestas IDÉNTICAS seguidas re-anuncian (clear-then-set)", async () => {
+  it("dos respuestas IDÉNTICAS seguidas re-anuncian (remonta el live-region)", async () => {
     // Turno 1 cierra con "igual".
     const s1 = [user, msg({ id: "a1", role: "assistant", status: "streaming", text: "" })];
     const { rerender } = render(<MessageList messages={s1} mode="vida" onRetry={noop} />);
     const d1 = [user, msg({ id: "a1", role: "assistant", status: "done", text: "igual" })];
     rerender(<MessageList messages={d1} mode="vida" onRetry={noop} />);
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("igual"));
+    const firstNode = screen.getByRole("status");
 
-    // Turno 2 con texto IDÉNTICO. El fix programa un rAF para re-setear el texto
-    // (pasando por "") y forzar un cambio REAL del nodo: sin él, setAnnounced
-    // ("igual") sería un no-op de React y la región atomic no re-anunciaría.
-    const rafSpy = vi.spyOn(window, "requestAnimationFrame");
+    // Turno 2 con texto IDÉNTICO. El live-region se REMONTA (key nueva por cada
+    // "done") para que el lector re-anuncie aunque el string no cambió: un nodo
+    // aria-live nuevo ⇒ nuevo anuncio, sin el viejo truco "" → rAF → text.
     const u2 = msg({ id: "u2", role: "user", status: "done", text: "x" });
     const s2 = [...d1, u2, msg({ id: "a2", role: "assistant", status: "streaming", text: "" })];
     rerender(<MessageList messages={s2} mode="vida" onRetry={noop} />);
     const d2 = [...d1, u2, msg({ id: "a2", role: "assistant", status: "done", text: "igual" })];
     rerender(<MessageList messages={d2} mode="vida" onRetry={noop} />);
 
-    expect(rafSpy).toHaveBeenCalled();
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("igual"));
+    // Re-anuncio = nodo remontado (no el mismo nodo con texto repetido, que el
+    // lector ignoraría por aria-atomic sin cambio de string).
+    expect(screen.getByRole("status")).not.toBe(firstNode);
   });
 
   it("un mensaje cancelado o con error NO se anuncia en la región viva", async () => {
