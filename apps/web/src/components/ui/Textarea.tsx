@@ -1,4 +1,4 @@
-import { forwardRef, type TextareaHTMLAttributes, useId } from "react";
+import { type Ref, type TextareaHTMLAttributes, useId } from "react";
 import { cn } from "@/lib/cn";
 
 type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "className"> & {
@@ -6,16 +6,15 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "className"> & {
   hint?: string;
   error?: string;
   className?: string;
+  /** React 19: `ref` es un prop normal (sin forwardRef). */
+  ref?: Ref<HTMLTextAreaElement>;
 };
 
 /**
  * Sibling de TextField. Mantener en sync — mismos tokens de padding /
  * border / hint para que un form mezclando ambos se lea coherente.
  */
-export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea(
-  { label, hint, error, id, className, rows = 4, ...rest },
-  ref,
-) {
+export function Textarea({ label, hint, error, id, className, rows = 4, ref, ...rest }: Props) {
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   const hintId = hint ? `${fieldId}-hint` : undefined;
@@ -55,4 +54,4 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea
       ) : null}
     </div>
   );
-});
+}
