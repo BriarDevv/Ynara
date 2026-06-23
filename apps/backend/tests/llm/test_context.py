@@ -975,9 +975,7 @@ def test_trim_history_drops_oldest_keeps_recent_chronological() -> None:
     con max_model_len=564 el presupuesto es 50 -> entran 2 (40), el 3ro (60) no.
     """
     history = _hist(4, length=60)
-    result = trim_history_to_budget(
-        history, max_model_len=564, system_prompt="", current_user=""
-    )
+    result = trim_history_to_budget(history, max_model_len=564, system_prompt="", current_user="")
     assert result == history[2:]  # los últimos 2, en orden cronológico
 
 
@@ -1012,7 +1010,7 @@ def test_trim_history_logs_debug_when_most_recent_exceeds_budget(
     with caplog.at_level(logging.DEBUG, logger="app.llm.context"):
         result = trim_history_to_budget(
             history,
-            max_model_len=600,   # reserva > budget tras descontar system + user + COMPLETION
+            max_model_len=600,  # reserva > budget tras descontar system + user + COMPLETION
             system_prompt="",
             current_user="",
         )
