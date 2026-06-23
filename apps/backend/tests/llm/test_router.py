@@ -307,6 +307,61 @@ async def test_route_injects_datetime_preamble_in_system() -> None:
     assert "resolver fechas relativas" in system_msg.content
 
 
+@pytest.mark.asyncio
+async def test_route_splices_history_between_system_and_user() -> None:
+    """``route()`` inserta el historial multi-turno entre el system y el mensaje actual.
+
+    Sin esto el modelo recibía solo [system, user_actual] y trataba cada turno como una
+    persona nueva (nota (b) del router, ahora resuelta). Se le pasa un historial y se
+    verifica que llega al complete() en orden cronológico, con roles correctos, ENTRE el
+    system y el user actual (que va último).
+    """
+    from app.llm import router as router_mod
+    from app.llm.context import MemoryContext
+    from app.llm.schemas import ChatMessage
+    from app.llm.tools.registry import default_registry
+
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_result(_result(text="Te llamás Mateo.", finish_reason="stop", model_name="gemma4"))
+
+    empty_ctx = MemoryContext(
+        semantic_store=None,
+        episodic_store=None,
+        procedural_store=None,
+        _default_reg=default_registry(),
+        _memory_reg=None,
+    )
+    history = [
+        ChatMessage(role="user", content="me llamo Mateo"),
+        ChatMessage(role="assistant", content="Hola Mateo, anotado."),
+    ]
+
+    original = router_mod.build_memory_context
+    router_mod.build_memory_context = lambda **_kw: empty_ctx
+    try:
+        await route(
+            ChatRequest(text="¿cómo me llamo?", mode=Mode.VIDA, session_id="s-hist"),
+            session=MagicMock(),
+            user_id=uuid.uuid4(),
+            llm_client=fake,
+            embedder=FakeEmbeddingClient(),
+            reranker=FakeReranker(),
+            history=history,
+            config=_cfg(),
+        )
+    finally:
+        router_mod.build_memory_context = original
+
+    messages = fake.complete_calls[0]["messages"]
+    assert messages[0].role == "system"
+    # Historial entre el system y el mensaje actual, en orden cronológico:
+    assert (messages[1].role, messages[1].content) == ("user", "me llamo Mateo")
+    assert (messages[2].role, messages[2].content) == ("assistant", "Hola Mateo, anotado.")
+    # El mensaje actual va ÚLTIMO:
+    assert (messages[-1].role, messages[-1].content) == ("user", "¿cómo me llamo?")
+    assert len(messages) == 4
+
+
 # ---------------------------------------------------------------------------
 # UNIT: overflow / errores permanentes -> fallback (sin DB)
 # ---------------------------------------------------------------------------

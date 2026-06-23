@@ -60,7 +60,7 @@ from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
 from app.llm.config import load_llm_config
 from app.llm.router import route
-from app.llm.schemas import ChatRequest, ChatResponse
+from app.llm.schemas import ChatMessage, ChatRequest, ChatResponse
 from app.memory.conversation_turns import ConversationTurnStore
 from app.models.session import ChatSession
 from app.schemas.chat import ChatHttpRequest
@@ -68,6 +68,15 @@ from app.schemas.conversation_turn import ConversationTurnCreate
 from app.workflows.consolidation import consolidate_turn
 
 logger = logging.getLogger(__name__)
+
+# Tope defensivo de cuántos turnos previos se cargan como historial. ``route()`` además
+# recorta por presupuesto de tokens (``trim_history_to_budget``): este cap solo acota
+# cuánto se trae de la DB y se descifra por turno (una sesión muy larga no descifra cientos
+# de filas para que el router descarte casi todas). 40 mensajes = ~20 intercambios.
+_HISTORY_MAX_MESSAGES = 40
+
+# Mapeo de rol de turno persistido -> rol del ``ChatMessage`` que espera el modelo.
+_TURN_ROLE_TO_CHAT = {TurnRole.USER: "user", TurnRole.MODEL: "assistant"}
 
 
 class ChatService:
@@ -137,6 +146,13 @@ class ChatService:
         # sobrevive como ancla de la sesión). En el camino feliz el savepoint se libera con
         # ``commit()`` del nested (no commitea a disco; solo libera el SAVEPOINT) y el commit
         # único de abajo persiste todo atómico.
+        # Historial multi-turno: turnos previos de ESTA sesión (descifrados) para darle
+        # continuidad conversacional al modelo. Sin esto el router armaba [system, user]
+        # desde cero y el modelo trataba cada turno como una persona nueva. Se carga ANTES
+        # del savepoint (es solo lectura) y route() lo recorta al presupuesto de la ventana.
+        # En el primer turno de la sesión la lista viene vacía.
+        history = await self._load_history(chat_session)
+
         savepoint = await self._session.begin_nested()
         resp = await route(
             domain_req,
@@ -145,6 +161,7 @@ class ChatService:
             llm_client=self._llm_client,
             embedder=self._embedder,
             reranker=self._reranker,
+            history=history,
         )
         if resp.finish_reason == "degraded":
             # Turno degradado: descartar las escrituras de tools flusheadas dentro del
@@ -177,6 +194,28 @@ class ChatService:
         await self._enqueue_consolidation(chat_session, body=body, resp=resp)
 
         return resp
+
+    async def _load_history(self, chat_session: ChatSession) -> list[ChatMessage]:
+        """Carga los turnos previos de la sesión como historial para el modelo.
+
+        Reusa ``ConversationTurnStore.list_for_session`` (descifra per-user, ORDER BY seq):
+        la MISMA fuente que persiste ``_persist_turns`` y que lee el worker episódico. En
+        el momento en que corre (antes de ``route()``) devuelve solo los turnos de
+        intercambios ANTERIORES — el turno actual se persiste DESPUÉS de ``route()``, así
+        que no se duplica el mensaje en curso.
+
+        Toma los últimos ``_HISTORY_MAX_MESSAGES`` en orden cronológico y mapea el rol
+        persistido (``TurnRole.USER``/``MODEL``) al rol que espera el modelo
+        (``user``/``assistant``). ``route()`` recorta además por presupuesto de tokens. En
+        el primer turno de la sesión devuelve ``[]`` (no hay turnos previos).
+        """
+        turns_store = ConversationTurnStore(self._session, self._user_id)
+        turns = await turns_store.list_for_session(chat_session.id)
+        recent = turns[-_HISTORY_MAX_MESSAGES:]
+        return [
+            ChatMessage(role=_TURN_ROLE_TO_CHAT[turn.role], content=turn.content)
+            for turn in recent
+        ]
 
     async def _persist_turns(
         self, chat_session: ChatSession, *, body: ChatHttpRequest, resp: ChatResponse
