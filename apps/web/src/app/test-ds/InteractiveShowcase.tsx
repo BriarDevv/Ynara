@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useReducer } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ChipGroup } from "@/components/ui/ChipGroup";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { ModeChip } from "@/components/ui/ModeChip";
-import { MODES } from "@/components/ui/modes";
+import { MODES, type ModeId } from "@/components/ui/modes";
 import { OptionCard } from "@/components/ui/OptionCard";
 import { ProgressDots } from "@/components/ui/ProgressDots";
 import { PromptChip } from "@/components/ui/PromptChip";
@@ -26,23 +26,127 @@ const TOAST_MESSAGE: Record<ToastVariant, string> = {
   error: "No pude conectar. Probá de nuevo.",
 };
 
-export function InteractiveShowcase() {
-  const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [bio, setBio] = useState("");
-  const [toggle1, setToggle1] = useState(true);
-  const [toggle2, setToggle2] = useState(false);
-  const [size, setSize] = useState<Size>("md");
-  const [step, setStep] = useState(0);
-  const [toastOpen, setToastOpen] = useState(false);
-  const [toastVariant, setToastVariant] = useState<ToastVariant>("success");
-  const [picked, setPicked] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+/**
+ * Estado agrupado del showcase. Antes eran 11 `useState` sueltos; al
+ * consolidarlos en un reducer, un cambio lógico (ej. abrir un toast setea
+ * `toastVariant` + `toastOpen`) no se reparte en renders separados.
+ */
+type ShowcaseState = {
+  selectedOption: string | null;
+  name: string;
+  bio: string;
+  toggle1: boolean;
+  toggle2: boolean;
+  size: Size;
+  step: number;
+  toastOpen: boolean;
+  toastVariant: ToastVariant;
+  picked: string | null;
+  sheetOpen: boolean;
+};
 
-  const showToast = (variant: ToastVariant) => {
-    setToastVariant(variant);
-    setToastOpen(true);
-  };
+const INITIAL_STATE: ShowcaseState = {
+  selectedOption: null,
+  name: "",
+  bio: "",
+  toggle1: true,
+  toggle2: false,
+  size: "md",
+  step: 0,
+  toastOpen: false,
+  toastVariant: "success",
+  picked: null,
+  sheetOpen: false,
+};
+
+type ShowcaseAction =
+  | { type: "toggleOption"; option: string }
+  | { type: "setName"; value: string }
+  | { type: "setBio"; value: string }
+  | { type: "setToggle1"; value: boolean }
+  | { type: "setToggle2"; value: boolean }
+  | { type: "setSize"; value: Size }
+  | { type: "prevStep" }
+  | { type: "nextStep" }
+  | { type: "showToast"; variant: ToastVariant }
+  | { type: "dismissToast" }
+  | { type: "pick"; value: string }
+  | { type: "openSheet" }
+  | { type: "closeSheet" };
+
+function reducer(state: ShowcaseState, action: ShowcaseAction): ShowcaseState {
+  switch (action.type) {
+    case "toggleOption":
+      return {
+        ...state,
+        selectedOption: state.selectedOption === action.option ? null : action.option,
+      };
+    case "setName":
+      return { ...state, name: action.value };
+    case "setBio":
+      return { ...state, bio: action.value };
+    case "setToggle1":
+      return { ...state, toggle1: action.value };
+    case "setToggle2":
+      return { ...state, toggle2: action.value };
+    case "setSize":
+      return { ...state, size: action.value };
+    case "prevStep":
+      return { ...state, step: Math.max(0, state.step - 1) };
+    case "nextStep":
+      return { ...state, step: Math.min(4, state.step + 1) };
+    case "showToast":
+      return { ...state, toastVariant: action.variant, toastOpen: true };
+    case "dismissToast":
+      return { ...state, toastOpen: false };
+    case "pick":
+      return { ...state, picked: action.value };
+    case "openSheet":
+      return { ...state, sheetOpen: true };
+    case "closeSheet":
+      return { ...state, sheetOpen: false };
+    default:
+      return state;
+  }
+}
+
+/**
+ * Slot `leading` del OptionCard extraído a su propio componente: así el JSX
+ * del ModeChip se construye dentro del render de este hijo y no como prop
+ * inline en el render del showcase (regla jsx-no-jsx-as-prop).
+ */
+function ModeLeading({ modeId }: { modeId: ModeId }) {
+  return <ModeChip modeId={modeId} size="sm" label=" " />;
+}
+
+/**
+ * OptionCard de un modo. El `leading` (JSX) se memoiza por `modeId` para no
+ * pasar un nodo nuevo en cada render (regla jsx-no-jsx-as-prop); como es un
+ * item de lista, el memo vive en este componente y no en el `.map` del padre.
+ */
+function ModeOptionCard({
+  mode,
+  selected,
+  onClick,
+}: {
+  mode: (typeof MODES)[number];
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const leading = useMemo(() => <ModeLeading modeId={mode.id} />, [mode.id]);
+  return (
+    <OptionCard
+      title={mode.label}
+      hint={mode.blurb}
+      leading={leading}
+      selected={selected}
+      onClick={onClick}
+    />
+  );
+}
+
+export function InteractiveShowcase() {
+  const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
 
   return (
     <div className="flex flex-col gap-16">
@@ -56,8 +160,8 @@ export function InteractiveShowcase() {
               key={opt}
               title={opt}
               hint={`Hint para ${opt.toLowerCase()}`}
-              selected={selectedOption === opt}
-              onClick={() => setSelectedOption(selectedOption === opt ? null : opt)}
+              selected={state.selectedOption === opt}
+              onClick={() => dispatch({ type: "toggleOption", option: opt })}
             />
           ))}
         </div>
@@ -69,13 +173,11 @@ export function InteractiveShowcase() {
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {MODES.slice(0, 4).map((mode) => (
-            <OptionCard
+            <ModeOptionCard
               key={mode.id}
-              title={mode.label}
-              hint={mode.blurb}
-              leading={<ModeChip modeId={mode.id} size="sm" label=" " />}
-              selected={selectedOption === mode.id}
-              onClick={() => setSelectedOption(selectedOption === mode.id ? null : mode.id)}
+              mode={mode}
+              selected={state.selectedOption === mode.id}
+              onClick={() => dispatch({ type: "toggleOption", option: mode.id })}
             />
           ))}
         </div>
@@ -87,8 +189,8 @@ export function InteractiveShowcase() {
           <TextField
             label="TU NOMBRE"
             placeholder="Ej. Mateo"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={state.name}
+            onChange={(e) => dispatch({ type: "setName", value: e.target.value })}
             hint="Lo uso solo cuando hablo con vos."
           />
           <TextField
@@ -102,10 +204,10 @@ export function InteractiveShowcase() {
           <Textarea
             label="¿ALGO MÁS?"
             placeholder="Contame en una línea"
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
+            value={state.bio}
+            onChange={(e) => dispatch({ type: "setBio", value: e.target.value })}
             maxLength={160}
-            hint={`${bio.length}/160`}
+            hint={`${state.bio.length}/160`}
           />
         </div>
       </section>
@@ -116,14 +218,14 @@ export function InteractiveShowcase() {
           <Toggle
             label="Contraste alto"
             hint="Bordes más marcados, texto más oscuro."
-            checked={toggle1}
-            onChange={setToggle1}
+            checked={state.toggle1}
+            onChange={(value) => dispatch({ type: "setToggle1", value })}
           />
           <Toggle
             label="Reducir animaciones"
             hint="Sigue la preferencia del sistema por default."
-            checked={toggle2}
-            onChange={setToggle2}
+            checked={state.toggle2}
+            onChange={(value) => dispatch({ type: "setToggle2", value })}
           />
           <ChipGroup
             label="TAMAÑO DE TEXTO"
@@ -132,8 +234,8 @@ export function InteractiveShowcase() {
               { value: "md", label: "Normal" },
               { value: "lg", label: "Grande" },
             ]}
-            value={size}
-            onChange={(v) => setSize(v as Size)}
+            value={state.size}
+            onChange={(v) => dispatch({ type: "setSize", value: v as Size })}
           />
         </div>
       </section>
@@ -141,12 +243,12 @@ export function InteractiveShowcase() {
       <section>
         <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">ProgressDots</h2>
         <div className="flex flex-col gap-4">
-          <ProgressDots total={5} current={step} />
+          <ProgressDots total={5} current={state.step} />
           <div className="flex gap-3">
-            <Button variant="secondary" onClick={() => setStep((s) => Math.max(0, s - 1))}>
+            <Button variant="secondary" onClick={() => dispatch({ type: "prevStep" })}>
               Atrás
             </Button>
-            <Button variant="primary" onClick={() => setStep((s) => Math.min(4, s + 1))}>
+            <Button variant="primary" onClick={() => dispatch({ type: "nextStep" })}>
               Siguiente
             </Button>
           </div>
@@ -210,12 +312,18 @@ export function InteractiveShowcase() {
         <div className="flex flex-wrap gap-2">
           {["¿Qué hago hoy?", "Resumime el día", "Explicame un tema", "Conectá estas ideas"].map(
             (prompt) => (
-              <PromptChip key={prompt} label={prompt} onClick={() => setPicked(prompt)} />
+              <PromptChip
+                key={prompt}
+                label={prompt}
+                onClick={() => dispatch({ type: "pick", value: prompt })}
+              />
             ),
           )}
         </div>
-        {picked ? (
-          <p className="text-body-sm mt-3 text-[var(--color-ink-soft)]">Elegiste: “{picked}”</p>
+        {state.picked ? (
+          <p className="text-body-sm mt-3 text-[var(--color-ink-soft)]">
+            Elegiste: “{state.picked}”
+          </p>
         ) : null}
       </section>
 
@@ -238,13 +346,22 @@ export function InteractiveShowcase() {
         <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">Toast</h2>
         <Card>
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="secondary" onClick={() => showToast("info")}>
+            <Button
+              variant="secondary"
+              onClick={() => dispatch({ type: "showToast", variant: "info" })}
+            >
               Info
             </Button>
-            <Button variant="primary" onClick={() => showToast("success")}>
+            <Button
+              variant="primary"
+              onClick={() => dispatch({ type: "showToast", variant: "success" })}
+            >
               Success
             </Button>
-            <Button variant="secondary" onClick={() => showToast("error")}>
+            <Button
+              variant="secondary"
+              onClick={() => dispatch({ type: "showToast", variant: "error" })}
+            >
               Error
             </Button>
             <p className="text-body-sm text-[var(--color-ink-soft)]">
@@ -253,10 +370,10 @@ export function InteractiveShowcase() {
           </div>
         </Card>
         <Toast
-          message={TOAST_MESSAGE[toastVariant]}
-          variant={toastVariant}
-          visible={toastOpen}
-          onDismiss={() => setToastOpen(false)}
+          message={TOAST_MESSAGE[state.toastVariant]}
+          variant={state.toastVariant}
+          visible={state.toastOpen}
+          onDismiss={() => dispatch({ type: "dismissToast" })}
         />
       </section>
 
@@ -266,7 +383,7 @@ export function InteractiveShowcase() {
         </h2>
         <Card>
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="primary" onClick={() => setSheetOpen(true)}>
+            <Button variant="primary" onClick={() => dispatch({ type: "openSheet" })}>
               Abrir sheet
             </Button>
             <p className="text-body-sm text-[var(--color-ink-soft)]">
@@ -275,23 +392,26 @@ export function InteractiveShowcase() {
           </div>
         </Card>
         <Sheet
-          open={sheetOpen}
-          onClose={() => setSheetOpen(false)}
+          open={state.sheetOpen}
+          onClose={() => dispatch({ type: "closeSheet" })}
           title="Cambiar modo"
           description="Elegí cómo te acompaña hoy."
         >
           <div className="flex flex-col gap-2">
             {MODES.map((mode) => (
-              <OptionCard
+              <ModeOptionCard
                 key={mode.id}
-                title={mode.label}
-                hint={mode.blurb}
-                leading={<ModeChip modeId={mode.id} size="sm" label=" " />}
-                selected={picked === mode.id}
-                onClick={() => setPicked(mode.id)}
+                mode={mode}
+                selected={state.picked === mode.id}
+                onClick={() => dispatch({ type: "pick", value: mode.id })}
               />
             ))}
-            <Button variant="ghost" fullWidth onClick={() => setSheetOpen(false)} className="mt-2">
+            <Button
+              variant="ghost"
+              fullWidth
+              onClick={() => dispatch({ type: "closeSheet" })}
+              className="mt-2"
+            >
               Cerrar
             </Button>
           </div>
