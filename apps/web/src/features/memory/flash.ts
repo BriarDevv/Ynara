@@ -4,7 +4,7 @@
  * que el acuse de "Recuerdo borrado." se siembra acá y lo levanta `MemoryView`
  * al aterrizar. La edición no navega, así que muestra su toast in-place.
  */
-export const MEMORY_FLASH_KEY = "ynara.memory.flash";
+const MEMORY_FLASH_KEY = "ynara.memory.flash";
 
 /** Siembra un mensaje flash para la próxima vista de memoria (no-op en SSR). */
 export function setMemoryFlash(message: string): void {

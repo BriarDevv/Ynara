@@ -128,7 +128,7 @@ function getSuggestions(): Suggestion[] {
  * `headline` y los `highlights` de lo que pasó. Cerrarlo de verdad (y
  * regenerarlo con el LLM) es la Fase H2 / backend.
  */
-export function buildRecap(now: Date): Recap {
+function buildRecap(now: Date): Recap {
   return {
     pending: true,
     date: now.toISOString(),

@@ -29,7 +29,7 @@ const apiUrl = (path: string) => `${env.NEXT_PUBLIC_API_URL}${path}`;
 // UUIDs estables: el detalle (`/v1/memory/{layer}/{ref}`) los reusa para
 // resolver una entrada puntual. No cambiar sin actualizar los links de prueba.
 const USER_ID = "0193f000-0000-7000-8000-000000000001";
-export const MEMORY_IDS = {
+const MEMORY_IDS = {
   semTesis: "0193f001-0000-7000-8000-000000000001",
   semJerga: "0193f001-0000-7000-8000-000000000002",
   semObjetivo: "0193f001-0000-7000-8000-000000000003",
