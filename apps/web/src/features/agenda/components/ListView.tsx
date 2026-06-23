@@ -18,6 +18,11 @@ type Grupo = {
   events: AgendaEvent[];
 };
 
+/** Hora local "HH:MM" de un Date (helper puro, sin estado). */
+function hhmm(d: Date): string {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 /** Agrupa los eventos de la semana en Hoy / Mañana / Esta semana. */
 function buildGroups(events: AgendaEvent[], now: Date): Grupo[] {
   const tomorrow = new Date(now);
@@ -65,8 +70,6 @@ type RowProps = {
 function EventRow({ event, now: _now, onEventClick }: RowProps) {
   const start = new Date(event.start_at);
   const end = new Date(start.getTime() + event.duration_min * 60_000);
-  const hhmm = (d: Date) =>
-    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   const range = `${hhmm(start)} – ${hhmm(end)}`;
 
   const tintVar = event.mode ? MODE_BY_ID[event.mode].tintVar : "var(--color-border-strong)";
