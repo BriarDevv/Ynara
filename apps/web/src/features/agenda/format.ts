@@ -87,8 +87,8 @@ export function eventsForDay(events: AgendaEvent[], day: Date): AgendaEvent[] {
 
 // ── Helpers de grilla horaria (DayView / WeekView) ──────────────────────────
 
-/** Hora decimal de un evento (ej. 10:30 → 10.5). */
-export function eventStartHour(event: AgendaEvent): number {
+/** Hora decimal de un evento (ej. 10:30 → 10.5). Helper interno del módulo. */
+function eventStartHour(event: AgendaEvent): number {
   const d = new Date(event.start_at);
   return d.getHours() + d.getMinutes() / 60;
 }

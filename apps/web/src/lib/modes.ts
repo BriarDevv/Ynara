@@ -4,7 +4,7 @@
  * **Fuente de verdad** de "qué modos existen" (IDs y metadata semántica:
  * model, memory layers, tools, tone) es el `ynara.config.json` raíz del
  * monorepo. Este archivo lo parsea con Zod en build/runtime y expone
- * `AVAILABLE_MODES` (orden de declaración) y `MODE_TONE`.
+ * `AVAILABLE_MODES` (orden de declaración).
  *
  * NO confundir con `@/components/ui/modes` — ese sólo expone datos
  * visuales (label, blurb, tintVar/fillVar) para componentes UI. Si en
@@ -34,8 +34,3 @@ const parsed = ConfigSchema.parse(config);
 
 /** IDs de modos definidos en `ynara.config.json`, en orden de declaración. */
 export const AVAILABLE_MODES: readonly Mode[] = Object.keys(parsed.modes) as Mode[];
-
-/** Tono declarado para cada modo (uso futuro: copy adaptativo). */
-export const MODE_TONE: Record<Mode, string> = Object.fromEntries(
-  Object.entries(parsed.modes).map(([id, def]) => [id, def.tone]),
-) as Record<Mode, string>;
