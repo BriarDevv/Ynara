@@ -78,6 +78,26 @@ export function A11yStep() {
     applyA11yClasses({ textSize, highContrast, motion: nextMotion });
   };
 
+  // Memoizado: StepFooter recibe JSX por prop; sin memo recibiría un nodo nuevo
+  // en cada render y se redibujaría aunque solo cambien otros campos del form.
+  // El memo va antes del early-return de `isCelebrating` por rules-of-hooks (no
+  // puede ir después); react-doctor lo flaggea pero la posición es obligada.
+  // react-doctor-disable-next-line react-doctor/rerender-memo-before-early-return
+  const customNext = useMemo(
+    () => (
+      <Button
+        type="button"
+        fullWidth
+        disabled={isPending}
+        onClick={complete}
+        className="sm:w-auto sm:min-w-[220px]"
+      >
+        {isPending ? "Guardando…" : "Listo"}
+      </Button>
+    ),
+    [isPending, complete],
+  );
+
   if (isCelebrating) {
     return <CelebrationOutro onComplete={triggerOutroComplete} />;
   }
@@ -87,22 +107,7 @@ export function A11yStep() {
       eyebrow="Paso 5 — Cómo se lee"
       title={copy.title}
       subtitle={copy.subtitle}
-      footer={
-        <StepFooter
-          onBack={back}
-          customNext={
-            <Button
-              type="button"
-              fullWidth
-              disabled={isPending}
-              onClick={complete}
-              className="sm:w-auto sm:min-w-[220px]"
-            >
-              {isPending ? "Guardando…" : "Listo"}
-            </Button>
-          }
-        />
-      }
+      footer={<StepFooter onBack={back} customNext={customNext} />}
     >
       <div className="flex flex-col gap-6">
         <ChipGroup

@@ -21,6 +21,14 @@ const ModesFormSchema = z.object({
 
 type ModesFormValues = z.infer<typeof ModesFormSchema>;
 
+// Estático (sin estado local): se construye una vez a nivel de módulo en vez de
+// recrearse cada render, así StepFooter (que recibe JSX por prop) no se redibuja.
+const MODES_NEXT_BUTTON = (
+  <Button type="submit" fullWidth form="modes-form" className="sm:w-auto sm:min-w-[220px]">
+    Seguir
+  </Button>
+);
+
 export function ModesStep() {
   const copy = STEP_COPY.modos;
   const { next, back } = useOnboardingNav("modos");
@@ -39,12 +47,17 @@ export function ModesStep() {
 
   // Si arrancamos con default sintético, escribirlo al store para que
   // el resto del flujo lo vea coherente. Sólo al montar.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pre-mark del default es one-shot al montar; no debe re-correr si draftModes/setInterestedModes cambian después.
+  //
+  // Leemos el draft fresco del store con getState() en vez de cerrar sobre
+  // `draftModes`: así la única dependencia es `setInterestedModes` (acción de
+  // zustand, identidad estable), y `[setInterestedModes]` queda honestamente
+  // exhaustivo sin re-correr ni pisar la selección posterior del usuario.
   useEffect(() => {
-    if (draftModes.length === 0) {
+    const { interestedModes } = useOnboardingStore.getState();
+    if (interestedModes.length === 0) {
       setInterestedModes([DEFAULT_MODE]);
     }
-  }, []);
+  }, [setInterestedModes]);
 
   const onSubmit: SubmitHandler<ModesFormValues> = (values) => {
     setInterestedModes(values.interestedModes);
@@ -56,21 +69,7 @@ export function ModesStep() {
       eyebrow="Paso 4 — Para qué te sirvo"
       title={copy.title}
       subtitle={copy.subtitle}
-      footer={
-        <StepFooter
-          onBack={back}
-          customNext={
-            <Button
-              type="submit"
-              fullWidth
-              form="modes-form"
-              className="sm:w-auto sm:min-w-[220px]"
-            >
-              Seguir
-            </Button>
-          }
-        />
-      }
+      footer={<StepFooter onBack={back} customNext={MODES_NEXT_BUTTON} />}
     >
       <form
         id="modes-form"
@@ -95,6 +94,11 @@ export function ModesStep() {
                       // Dot color del modo como leading — el chip completo con label
                       // duplicaba el title del card. Acá sólo necesitamos la pista
                       // visual de color (tint plano del modo).
+                      // Falso positivo: OptionCard NO está memoizado (re-renderiza
+                      // con el padre igual) y este span es per-item (depende de
+                      // descriptor.tintVar del .map): no se puede hoistear ni
+                      // envolver en useMemo (hooks no corren dentro del .map).
+                      // react-doctor-disable-next-line react-doctor/jsx-no-jsx-as-prop
                       leading={
                         <span
                           aria-hidden
