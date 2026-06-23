@@ -81,6 +81,12 @@ type Props = {
   className?: string;
 };
 
+// Componente atómico por diseño: es UN solo renderer Canvas2D + su ciclo de vida
+// (rAF/resize/cursor/visibility). El grueso es un useEffect imperativo cuyas
+// closures (draw/resize/loop/init/handlers) comparten ~12 `let` locales mutables;
+// partirlo en subcomponentes React obligaría a hilar ese estado mutable y
+// arriesgaría la animación. El JSX es chico; no hay secciones separables.
+// react-doctor-disable-next-line react-doctor/no-giant-component
 export function LivingField({
   variant,
   modeId = "productividad",
@@ -95,6 +101,12 @@ export function LivingField({
   const cfg = VARIANTS[variant];
   const dens = density ?? cfg.density;
 
+  // `stateRef` es un snapshot de geometría persistente A PROPÓSITO: el efecto lo
+  // LEE al montar (sembrar) y lo ESCRIBE en el cleanup (guardar para el próximo
+  // mount), así un cambio de tema/modo re-tiñe sin re-randomizar (ver JSDoc).
+  // Las deps reales son [cfg, modeId, dens, dark, reduced]; agregar el ref no
+  // haría nada (es estable) y "arreglarlo" rompería la continuidad cross-remount.
+  // react-doctor-disable-next-line react-doctor/exhaustive-deps
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;

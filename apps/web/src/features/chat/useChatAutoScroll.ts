@@ -97,7 +97,22 @@ export function useChatAutoScroll(
   // instantáneo); si te despegaste, ofrecé el botón en vez de arrastrarte.
   // `useLayoutEffect` (no `useEffect`): corre ANTES del paint, así el token
   // nuevo no se ve un frame en la posición vieja antes de bajar (sin jitter).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `growthKey` es el disparador intencional (crecimiento del contenido); `scrollerRef` es estable.
+  //
+  // Deps = `[growthKey]` a propósito. Acá los dos linters PIDEN cosas opuestas
+  // y no se pueden satisfacer a la vez:
+  //  - biome (`useExhaustiveDependencies`) considera que `growthKey` (un valor
+  //    `unknown` de scope externo cuya mutación no re-renderiza) no es una dep
+  //    válida y querría removerlo, y a la vez pide AGREGAR `scrollerRef.current`
+  //    → de ahí el `biome-ignore`, que debe quedar pegado al hook para surtir
+  //    efecto.
+  //  - react-doctor (`exhaustive-deps`) querría AGREGAR `scrollerRef`.
+  // No hay arreglo de código que contente a ambos sin romper el disparo por
+  // crecimiento: el effect DEBE leer `scrollerRef.current` para scrollear y
+  // DEBE re-correr con `growthKey`. El effect lee el ref fresco en cada corrida
+  // y no tiene cleanup que pueda leer un nodo stale, así que la advertencia de
+  // react-doctor es un falso positivo. Suprimimos ambas: react-doctor primero y
+  // la supresión de biome pegada al hook (orden requerido por biome).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `growthKey` es el disparador intencional (crecimiento del contenido); `scrollerRef` es estable y se lee fresco adentro.
   useLayoutEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -107,6 +122,7 @@ export function useChatAutoScroll(
     } else {
       setShowJumpButton(true);
     }
+    // react-doctor-disable-next-line react-doctor/exhaustive-deps
   }, [growthKey]);
 
   return { showJumpButton, jumpToBottom };

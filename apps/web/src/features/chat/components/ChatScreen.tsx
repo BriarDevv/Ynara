@@ -45,7 +45,11 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     if (typeof window === "undefined") return "";
     return new URLSearchParams(window.location.search).get("q") ?? "";
   });
+  // Limpieza de URL one-shot al montar: el prefill llega por NAVEGACIÓN (Hoy→Chat
+  // con `?q=`), no por una interacción local; pertenece a un effect de mount, no a
+  // un handler inexistente.
   useEffect(() => {
+    // react-doctor-disable-next-line react-doctor/no-event-handler
     if (initialText) window.history.replaceState(null, "", `/chat/${sessionId}`);
   }, [initialText, sessionId]);
 
