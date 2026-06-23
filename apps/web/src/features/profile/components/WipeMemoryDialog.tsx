@@ -48,21 +48,28 @@ export function WipeMemoryDialog({ open, onClose, onSuccess }: Props) {
   const executeResetRef = useRef(wipeExecute.reset);
   executeResetRef.current = wipeExecute.reset;
 
-  // Al abrir, trae el preview fresco; al cerrar, limpia el estado local.
+  // Al abrir, trae el preview fresco. El reset del estado local NO va acá: vive
+  // en `handleClose`, que corre en cada vía de cierre (botón Cancelar, backdrop,
+  // Escape, y el cierre por éxito del wipe). Sacar el reset del effect evita el
+  // render extra con estado stale entre commits (no-adjust/no-reset-state).
   useEffect(() => {
-    if (!open) {
-      setConfirmText("");
-      setPreview(null);
-      setConflictMessage(null);
-      previewResetRef.current();
-      executeResetRef.current();
-      return;
-    }
+    if (!open) return;
     previewMutateRef
       .current()
       .then(setPreview)
       .catch(() => {});
   }, [open]);
+
+  // Cierre con limpieza: resetea el estado local y las mutations para que la
+  // próxima apertura arranque limpia. Toda vía de cierre del Sheet pasa por acá.
+  function handleClose() {
+    setConfirmText("");
+    setPreview(null);
+    setConflictMessage(null);
+    previewResetRef.current();
+    executeResetRef.current();
+    onClose();
+  }
 
   const canConfirm = confirmText === CONFIRM_WORD && preview !== null && !wipeExecute.isPending;
 
@@ -75,7 +82,7 @@ export function WipeMemoryDialog({ open, onClose, onSuccess }: Props) {
         expected_episodic: preview.episodic,
         expected_procedural: preview.procedural,
       });
-      onClose();
+      handleClose();
       onSuccess?.();
     } catch (err) {
       // 409: los conteos cambiaron desde el preview; re-trae y avisa.
@@ -106,7 +113,7 @@ export function WipeMemoryDialog({ open, onClose, onSuccess }: Props) {
   return (
     <Sheet
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title="Borrar toda mi memoria"
       description="Esta acción es permanente e irreversible."
     >
@@ -169,7 +176,7 @@ export function WipeMemoryDialog({ open, onClose, onSuccess }: Props) {
           >
             {wipeExecute.isPending ? "Borrando…" : "Borrar para siempre"}
           </Button>
-          <Button variant="ghost" fullWidth onClick={onClose} disabled={wipeExecute.isPending}>
+          <Button variant="ghost" fullWidth onClick={handleClose} disabled={wipeExecute.isPending}>
             Cancelar
           </Button>
         </div>
