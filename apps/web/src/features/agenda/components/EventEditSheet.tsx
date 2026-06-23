@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useReducer, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { MODE_BY_ID, MODES, type ModeId } from "@/components/ui/modes";
 import { Sheet } from "@/components/ui/Sheet";
@@ -19,6 +19,36 @@ const STATUSES = [
   { value: "tentative", label: "Tentativo" },
   { value: "cancelled", label: "Cancelado" },
 ] as const;
+
+/** Campos editables del form, agrupados en un solo estado (useReducer). */
+type FormState = {
+  title: string;
+  startAt: string;
+  durationMin: string;
+  modeId: ModeId | null;
+  status: AgendaEvent["status"];
+  location: string;
+};
+
+/** Estado inicial derivado del evento. Como `EditForm` se remonta keyeado por
+ *  `event.id`, esto se recomputa fresco al cambiar de evento (sin staleness). */
+function initFormState(event: AgendaEvent): FormState {
+  return {
+    title: event.title,
+    startAt: toLocalInput(event.start_at),
+    durationMin: String(event.duration_min),
+    modeId: event.mode,
+    status: event.status,
+    location: event.location ?? "",
+  };
+}
+
+/** Patch parcial de un solo campo del form (un cambio por interacción). */
+type FormAction = { [K in keyof FormState]: { field: K; value: FormState[K] } }[keyof FormState];
+
+function formReducer(state: FormState, action: FormAction): FormState {
+  return { ...state, [action.field]: action.value };
+}
 
 type Props = {
   /** Evento en edición; `null` mantiene el sheet cerrado. */
@@ -41,12 +71,11 @@ export function EventEditSheet({ event, onClose }: Props) {
 }
 
 function EditForm({ event, onClose }: { event: AgendaEvent; onClose: () => void }) {
-  const [title, setTitle] = useState(event.title);
-  const [startAt, setStartAt] = useState(() => toLocalInput(event.start_at));
-  const [durationMin, setDurationMin] = useState(String(event.duration_min));
-  const [modeId, setModeId] = useState<ModeId | null>(event.mode);
-  const [status, setStatus] = useState<AgendaEvent["status"]>(event.status);
-  const [location, setLocation] = useState(event.location ?? "");
+  // Campos del form en un solo reducer (un cambio por interacción no abanica en
+  // renders separados). Derivado de `event` vía initializer; el remount keyeado
+  // por `event.id` en el padre lo recomputa fresco al cambiar de evento.
+  const [form, dispatch] = useReducer(formReducer, event, initFormState);
+  const { title, startAt, durationMin, modeId, status, location } = form;
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -96,7 +125,7 @@ function EditForm({ event, onClose }: { event: AgendaEvent; onClose: () => void 
       <TextField
         label="Título"
         value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        onChange={(e) => dispatch({ field: "title", value: e.target.value })}
         required
         autoFocus
       />
@@ -105,7 +134,7 @@ function EditForm({ event, onClose }: { event: AgendaEvent; onClose: () => void 
         label="Fecha y hora"
         type="datetime-local"
         value={startAt}
-        onChange={(e) => setStartAt(e.target.value)}
+        onChange={(e) => dispatch({ field: "startAt", value: e.target.value })}
         required
       />
 
@@ -115,14 +144,14 @@ function EditForm({ event, onClose }: { event: AgendaEvent; onClose: () => void 
         min="1"
         step="5"
         value={durationMin}
-        onChange={(e) => setDurationMin(e.target.value)}
+        onChange={(e) => dispatch({ field: "durationMin", value: e.target.value })}
         required
       />
 
       <TextField
         label="Lugar (opcional)"
         value={location}
-        onChange={(e) => setLocation(e.target.value)}
+        onChange={(e) => dispatch({ field: "location", value: e.target.value })}
       />
 
       {/* Selector de modo (incluye "Sin modo" para `null`) */}
@@ -132,7 +161,7 @@ function EditForm({ event, onClose }: { event: AgendaEvent; onClose: () => void 
           <button
             type="button"
             aria-pressed={modeId === null}
-            onClick={() => setModeId(null)}
+            onClick={() => dispatch({ field: "modeId", value: null })}
             className="text-caption rounded-[var(--radius-pill)] border px-3 py-1 transition-colors duration-[var(--duration-fast)]"
             style={
               modeId === null
@@ -149,7 +178,7 @@ function EditForm({ event, onClose }: { event: AgendaEvent; onClose: () => void 
                 key={m.id}
                 type="button"
                 aria-pressed={selected}
-                onClick={() => setModeId(m.id)}
+                onClick={() => dispatch({ field: "modeId", value: m.id })}
                 className="text-caption rounded-[var(--radius-pill)] border px-3 py-1 transition-colors duration-[var(--duration-fast)]"
                 style={
                   selected
@@ -179,7 +208,7 @@ function EditForm({ event, onClose }: { event: AgendaEvent; onClose: () => void 
                 key={s.value}
                 type="button"
                 aria-pressed={selected}
-                onClick={() => setStatus(s.value)}
+                onClick={() => dispatch({ field: "status", value: s.value })}
                 className="text-caption rounded-[var(--radius-pill)] border px-3 py-1 transition-colors duration-[var(--duration-fast)]"
                 style={
                   selected
