@@ -47,11 +47,17 @@ export function ChipGroup<T extends string>({
   className,
 }: Props<T>) {
   const groupId = useId();
-  const buttonsRef = useRef<Map<T, HTMLButtonElement>>(new Map());
+  // Lazy init: `new Map()` directo en useRef() se reconstruye y descarta en cada
+  // render. Sembramos null y creamos el Map una sola vez al primer acceso.
+  const buttonsRef = useRef<Map<T, HTMLButtonElement> | null>(null);
+  const getButtons = () => {
+    buttonsRef.current ??= new Map<T, HTMLButtonElement>();
+    return buttonsRef.current;
+  };
 
   const focusValue = (next: T) => {
     onChange(next);
-    requestAnimationFrame(() => buttonsRef.current.get(next)?.focus());
+    requestAnimationFrame(() => getButtons().get(next)?.focus());
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -95,6 +101,9 @@ export function ChipGroup<T extends string>({
       ) : null}
       <div
         role="radiogroup"
+        // tabIndex={-1}: el grupo es focusable sólo programáticamente (no entra
+        // al tab order); el roving tabIndex de los radios sigue manejando Tab.
+        tabIndex={-1}
         aria-labelledby={label ? `${groupId}-label` : undefined}
         aria-label={label ? undefined : ariaLabel}
         onKeyDown={handleKeyDown}
@@ -108,8 +117,8 @@ export function ChipGroup<T extends string>({
             <button
               key={opt.value}
               ref={(el) => {
-                if (el) buttonsRef.current.set(opt.value, el);
-                else buttonsRef.current.delete(opt.value);
+                if (el) getButtons().set(opt.value, el);
+                else getButtons().delete(opt.value);
               }}
               type="button"
               role="radio"

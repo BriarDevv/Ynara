@@ -15,6 +15,10 @@ const SUGGESTIONS = ["tesis", "brief de Õmi", "jerga técnica", "foco"] as cons
 
 const DEBOUNCE_MS = 250;
 
+// Ícono `leading` estable para los chips de sugerencia: idéntico en cada chip,
+// así que vive a nivel de módulo y no se reconstruye por render.
+const SUGGESTION_ICON = <Icon name="buscar" size={16} />;
+
 /**
  * Vista **Búsqueda** (wireframes 18/19 / build-plan C3). Input con debounce que
  * pega a `GET /v1/memory/search` (PROVISIONAL, mock por ahora) y resuelve los
@@ -79,8 +83,6 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
           <Icon name="buscar" size={20} className="shrink-0 text-[var(--color-ink-soft)]" />
           <input
             type="search"
-            // biome-ignore lint/a11y/noAutofocus: la búsqueda es el único propósito de la vista; el foco directo es el comportamiento esperado (como Spotlight).
-            autoFocus
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Buscá en tu memoria…"
@@ -100,11 +102,11 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
         </div>
 
         {/* Región viva: anuncia estado/resultados al lector de pantalla (el
-            contenido visual de abajo cambia sin avisar — M1). role="status"
-            ya implica aria-live=polite + aria-atomic; lo explicitamos. */}
-        <div role="status" aria-live="polite" className="sr-only">
+            contenido visual de abajo cambia sin avisar — M1). `<output>` ya
+            implica role=status + aria-live=polite + aria-atomic; lo explicitamos. */}
+        <output aria-live="polite" className="sr-only">
           {liveStatus}
-        </div>
+        </output>
 
         {!active ? (
           <section className="flex flex-col gap-3">
@@ -112,11 +114,7 @@ export function BuscarView({ initialQuery = "" }: { initialQuery?: string }) {
             <ul className="flex flex-wrap gap-2">
               {SUGGESTIONS.map((s) => (
                 <li key={s}>
-                  <PromptChip
-                    label={s}
-                    leading={<Icon name="buscar" size={16} />}
-                    onClick={() => setInput(s)}
-                  />
+                  <PromptChip label={s} leading={SUGGESTION_ICON} onClick={() => setInput(s)} />
                 </li>
               ))}
             </ul>
