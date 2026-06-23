@@ -33,10 +33,27 @@ export function Toast({
   duration = 3000,
   className,
 }: Props) {
-  // Mantiene el toast montado durante la salida para poder animarla; el padre
-  // controla `visible`, nosotros sólo demoramos el desmontaje 200ms.
-  const [rendered, setRendered] = useState(visible);
+  // `leaving` es el único estado pintado: marca que corre la animación de salida.
+  // `rendered` NO se copia a estado; se deriva en render como `visible || leaving`
+  // así el toast sigue montado mientras anima la salida (200ms) y se desmonta
+  // solo cuando `leaving` vuelve a false. Derivar evita la copia stale del prop.
   const [leaving, setLeaving] = useState(false);
+  const rendered = visible || leaving;
+  // El "previo de visible" sólo sirve para detectar el cambio del prop EN RENDER
+  // (patrón recomendado de React para "ajustar estado al cambiar un prop");
+  // nunca se pinta, así que va en un ref para no forzar un render extra.
+  const prevVisibleRef = useRef(visible);
+  if (visible !== prevVisibleRef.current) {
+    const wasRendered = prevVisibleRef.current || leaving;
+    prevVisibleRef.current = visible;
+    if (visible) {
+      // Entrada: cancelar cualquier salida en curso (rendered ya es true por `visible`).
+      setLeaving(false);
+    } else if (wasRendered) {
+      // Salida: arranca la animación out; el desmontaje lo demora el timer.
+      setLeaving(true);
+    }
+  }
 
   // Ref para que el auto-dismiss no dependa de la identidad de `onDismiss`: los
   // callers pasan arrows inline, y tenerlo en deps reiniciaría el timer en cada
@@ -50,20 +67,15 @@ export function Toast({
     return () => window.clearTimeout(id);
   }, [visible, duration]);
 
+  // Único efecto real: el timer que termina la salida tras EXIT_MS. Al apagar
+  // `leaving`, `rendered` (= visible || leaving) cae a false y el toast se
+  // desmonta. Si `visible` vuelve a true durante la salida, el ajuste-en-render
+  // pone leaving=false y el cleanup limpia este timeout.
   useEffect(() => {
-    if (visible) {
-      setRendered(true);
-      setLeaving(false);
-      return;
-    }
-    if (!rendered) return;
-    setLeaving(true);
-    const id = window.setTimeout(() => {
-      setRendered(false);
-      setLeaving(false);
-    }, EXIT_MS);
+    if (!leaving) return;
+    const id = window.setTimeout(() => setLeaving(false), EXIT_MS);
     return () => window.clearTimeout(id);
-  }, [visible, rendered]);
+  }, [leaving]);
 
   if (!rendered) return null;
 

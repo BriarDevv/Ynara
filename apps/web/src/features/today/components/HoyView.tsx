@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { HeroReveal } from "@/components/ui/HeroReveal";
 import { LivingField } from "@/components/ui/LivingField";
 import { Toast } from "@/components/ui/Toast";
@@ -14,6 +14,17 @@ import { OfflineBanner } from "./OfflineBanner";
 import { PrioritiesSection } from "./PrioritiesSection";
 import { RecapSection } from "./RecapSection";
 import { SuggestionsSection } from "./SuggestionsSection";
+
+// El flag de bienvenida sale de `window.location.search`, que no existe en SSR.
+// Leerlo vía useSyncExternalStore lo mantiene SSR-safe sin el render extra vacío
+// de un useState+useEffect de montaje: el snapshot de server es `false` (matchea
+// el HTML del server, sin hydration mismatch en `/hoy?welcome=true`) y el del
+// cliente lee el query param real. Sin suscripción: el valor es estático tras
+// montar (limpiamos la URL una sola vez, abajo).
+const noopSubscribe = () => () => {};
+const getWelcomeFromUrl = () =>
+  new URLSearchParams(window.location.search).get("welcome") === "true";
+const getWelcomeServerSnapshot = () => false;
 
 /**
  * Vista **Hoy** — la home real de la app (wireframe 06, build-plan Fase E):
@@ -30,14 +41,21 @@ export function HoyView() {
   const [now] = useState(() => new Date());
 
   // Toast de bienvenida tras el onboarding (`CelebrationOutro` navega a
-  // `/hoy?welcome=true`): una sola vez, limpiando el query param sin recargar.
-  // Usamos window.location en vez de useSearchParams para no forzar un Suspense
-  // boundary y mantener la página prerenderizable.
-  const [showWelcome, setShowWelcome] = useState(false);
+  // `/hoy?welcome=true`): una sola vez, leyendo el query param SSR-safe (sin
+  // useSearchParams para no forzar un Suspense boundary ni romper el prerender).
+  const welcomeFromUrl = useSyncExternalStore(
+    noopSubscribe,
+    getWelcomeFromUrl,
+    getWelcomeServerSnapshot,
+  );
+  // El dismiss del toast es estado local que pisa el flag de la URL.
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const showWelcome = welcomeFromUrl && !welcomeDismissed;
+
+  // Limpiar el query param sin recargar, una sola vez, recién en el browser.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("welcome") === "true") {
-      setShowWelcome(true);
       params.delete("welcome");
       const qs = params.toString();
       window.history.replaceState(null, "", qs ? `/hoy?${qs}` : "/hoy");
@@ -83,7 +101,7 @@ export function HoyView() {
         <Toast
           message="Listo, ya podés arrancar."
           visible={showWelcome}
-          onDismiss={() => setShowWelcome(false)}
+          onDismiss={() => setWelcomeDismissed(true)}
           variant="success"
         />
       </HeroReveal>

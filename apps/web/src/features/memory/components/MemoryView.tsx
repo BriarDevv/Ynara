@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChipGroup } from "@/components/ui/ChipGroup";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { LivingField } from "@/components/ui/LivingField";
@@ -20,6 +20,16 @@ const FILTER_OPTIONS: readonly { value: TimelineFilter; label: string }[] = [
   { value: "all", label: "Todo" },
   ...MEMORY_LAYERS.map((l) => ({ value: l.id, label: l.label })),
 ];
+
+const noopSubscribe = () => () => {};
+// El acuse flash es una lectura DESTRUCTIVA de sessionStorage (devuelve null en
+// SSR). Se levanta vía useSyncExternalStore para evitar el render extra vacío de
+// un useState+useEffect de montaje: el snapshot de server es null (matchea el
+// HTML del server → sin hydration mismatch) y el del cliente lee+borra la key
+// una sola vez. El `read` se cachea por instancia (ref) para que getSnapshot
+// sea estable y la lectura destructiva no se repita en cada render ni con el
+// doble-mount de StrictMode.
+const getFlashServerSnapshot = () => null;
 
 /**
  * Vista **Memoria** (timeline, wireframe 17 / build-plan C1). Conecta a
@@ -41,17 +51,24 @@ export function MemoryView() {
   const groups = useMemo(() => (data ? groupByBucket(data, now) : []), [data, now]);
 
   // Acuse de una acción de la vista de detalle que navegó hasta acá (p.ej.
-  // "Recuerdo borrado."), sembrado en sessionStorage. Lo consumimos una sola
-  // vez tras montar (lectura destructiva): el ref evita que el doble-mount de
-  // StrictMode en dev se coma la key, y el useEffect (vs. leer en el render)
-  // evita un mismatch de hidratación.
-  const [flash, setFlash] = useState<string | null>(null);
-  const flashChecked = useRef(false);
-  useEffect(() => {
-    if (flashChecked.current) return;
-    flashChecked.current = true;
-    setFlash(takeMemoryFlash());
-  }, []);
+  // "Recuerdo borrado."), sembrado en sessionStorage y consumido (lectura
+  // destructiva) una sola vez en el browser. `flashRead` cachea la lectura por
+  // instancia para que `getSnapshot` sea estable; el dismiss es estado local
+  // que pisa el acuse leído.
+  const flashRead = useRef<{ done: boolean; value: string | null }>({ done: false, value: null });
+  const getFlashSnapshot = () => {
+    if (!flashRead.current.done) {
+      flashRead.current = { done: true, value: takeMemoryFlash() };
+    }
+    return flashRead.current.value;
+  };
+  const flashMessage = useSyncExternalStore(
+    noopSubscribe,
+    getFlashSnapshot,
+    getFlashServerSnapshot,
+  );
+  const [flashDismissed, setFlashDismissed] = useState(false);
+  const flash = flashDismissed ? null : flashMessage;
 
   return (
     <div className="relative isolate flex min-h-full flex-col">
@@ -134,7 +151,7 @@ export function MemoryView() {
         message={flash ?? ""}
         visible={flash !== null}
         variant="success"
-        onDismiss={() => setFlash(null)}
+        onDismiss={() => setFlashDismissed(true)}
       />
     </div>
   );
