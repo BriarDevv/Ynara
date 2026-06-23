@@ -12,6 +12,14 @@ import { useOnboardingResumeStore } from "../resumeStore";
 import { NameFormSchema, type NameFormValues } from "../schemas";
 import { useOnboardingStore } from "../store";
 
+// Estático (sin estado local): se construye una vez a nivel de módulo en vez de
+// recrearse cada render, así StepFooter (que recibe JSX por prop) no se redibuja.
+const NAME_NEXT_BUTTON = (
+  <Button type="submit" fullWidth form="name-form" className="sm:w-auto sm:min-w-[220px]">
+    Seguir
+  </Button>
+);
+
 export function NameStep() {
   const copy = STEP_COPY.nombre;
   const { next, back } = useOnboardingNav("nombre");
@@ -38,16 +46,7 @@ export function NameStep() {
       eyebrow="Paso 2 — Tu nombre"
       title={copy.title}
       subtitle={copy.subtitle}
-      footer={
-        <StepFooter
-          onBack={resuming ? undefined : back}
-          customNext={
-            <Button type="submit" fullWidth form="name-form" className="sm:w-auto sm:min-w-[220px]">
-              Seguir
-            </Button>
-          }
-        />
-      }
+      footer={<StepFooter onBack={resuming ? undefined : back} customNext={NAME_NEXT_BUTTON} />}
     >
       <form
         id="name-form"

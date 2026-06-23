@@ -21,6 +21,14 @@ const MoodFormSchema = z.object({
 
 type MoodFormValues = z.infer<typeof MoodFormSchema>;
 
+// Estático (sin estado local): se construye una vez a nivel de módulo en vez de
+// recrearse cada render, así StepFooter (que recibe JSX por prop) no se redibuja.
+const MOOD_NEXT_BUTTON = (
+  <Button type="submit" fullWidth form="mood-form" className="sm:w-auto sm:min-w-[220px]">
+    Seguir
+  </Button>
+);
+
 export function MoodStep() {
   const copy = STEP_COPY.dia;
   const { next, back } = useOnboardingNav("dia");
@@ -47,16 +55,7 @@ export function MoodStep() {
       eyebrow="Paso 3 — Tu día"
       title={copy.title}
       subtitle={copy.subtitle}
-      footer={
-        <StepFooter
-          onBack={back}
-          customNext={
-            <Button type="submit" fullWidth form="mood-form" className="sm:w-auto sm:min-w-[220px]">
-              Seguir
-            </Button>
-          }
-        />
-      }
+      footer={<StepFooter onBack={back} customNext={MOOD_NEXT_BUTTON} />}
     >
       <form
         id="mood-form"
