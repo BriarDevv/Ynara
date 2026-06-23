@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { ChatScreen } from "@/features/chat/components/ChatScreen";
 import { useChatStore } from "@/features/chat/store";
 
@@ -17,19 +17,25 @@ import { useChatStore } from "@/features/chat/store";
  */
 export function ChatRoute({ sessionId }: { sessionId: string }) {
   const router = useRouter();
+  // Guard effect: reacciona al store de sesiones (zustand, vive en localStorage),
+  // no a un evento de UI; no hay handler donde mover esta lógica de redirect.
+  // react-doctor-disable-next-line react-doctor/no-event-handler
   const sessionExists = useChatStore((s) => Boolean(s.sessions[sessionId]));
-  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
     if (!sessionExists) {
+      // Guard client-only: el store de sesiones vive en localStorage (zustand);
+      // el server no sabe qué sesiones existen, un redirect SSR no aplica.
+      // react-doctor-disable-next-line react-doctor/nextjs-no-client-side-redirect
       router.replace("/hoy?notfound=chat");
-      return;
     }
-    setChecked(true);
   }, [sessionExists, router]);
 
-  // No renderizar la pantalla hasta validar (evita flash antes del redirect).
-  if (!checked) return null;
+  // El "checked" derivado de `sessionExists` reemplaza el antiguo estado +
+  // effect (que adjustaba estado tras cambiar el prop, forzando un render
+  // extra con UI stale). Si la sesión no existe → null mientras el effect
+  // dispara el redirect (evita flashear la pantalla antes de irse).
+  if (!sessionExists) return null;
 
   return <ChatScreen sessionId={sessionId} />;
 }

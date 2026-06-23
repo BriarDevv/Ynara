@@ -36,22 +36,30 @@ export function StepRouter({ step }: Props) {
   const router = useRouter();
   const lastProcessedStep = useRef<OnboardingStep | null>(null);
 
+  // El effect reacciona al slug de la URL (`step`, un route segment), no a un
+  // evento de UI: el disparador es la navegación de ruta, no hay handler donde
+  // mover esta lógica de guard.
   useEffect(() => {
     if (lastProcessedStep.current === step) return;
     lastProcessedStep.current = step;
 
     const storeStep = useOnboardingStore.getState().currentStep;
+    // react-doctor-disable-next-line react-doctor/no-event-handler
     const stepIndexFromUrl = STEP_INDEX[step];
     const storeStepIndex = STEP_INDEX[storeStep];
 
     // En resume (completar perfil ya autenticado), "nombre" es el piso: no se
     // puede volver a "auth" (signup/login no aplica y pisaría la sesión).
     if (useOnboardingResumeStore.getState().resuming && stepIndexFromUrl < STEP_INDEX.nombre) {
+      // Guard client-only: depende de `resuming` (zustand), inaccesible en SSR.
+      // react-doctor-disable-next-line react-doctor/nextjs-no-client-side-redirect
       router.replace("/onboarding/nombre");
       return;
     }
 
     if (stepIndexFromUrl > storeStepIndex) {
+      // Guard client-only: compara contra `currentStep` (zustand), inaccesible en SSR.
+      // react-doctor-disable-next-line react-doctor/nextjs-no-client-side-redirect
       router.replace(`/onboarding/${storeStep}`);
       return;
     }
