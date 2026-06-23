@@ -73,6 +73,10 @@ export function YnaraWordmark({ height = 22, variant = "color", className }: Pro
           artwork tiene su padding propio, así sus pies caen sobre la baseline
           del texto (y≈19.8) → símbolo y wordmark comparten la MISMA base. Va en
           un <g> (no <svg> anidado) para no duplicar el role=img del lockup. */}
+      {/* No es precisión decorativa: scale = 22/1012.54 = 0.021728 es la razón
+          que alinea los pies del símbolo con la baseline del texto; redondear a
+          1-2 decimales (0.02) descuadra el lockup ~8%. */}
+      {/* react-doctor-disable-next-line react-doctor/rendering-svg-precision */}
       <g transform="scale(0.021728)">
         <YnaraSymbol variant={SYMBOL_VARIANT[variant]} idPrefix={id} />
       </g>
