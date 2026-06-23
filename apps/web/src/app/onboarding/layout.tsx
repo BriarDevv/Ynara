@@ -33,6 +33,9 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
     // onboardingCompleted, así que no rebota (evita el salto extra por `/`).
     // Durante un resume (`resuming=true`) NO redirige: deja completar el perfil
     // y ver el outro; el flag se limpia al volver a la app ((app)/layout).
+    // Guard client-only: `completed` (zustand/localStorage) y `resuming` (zustand)
+    // no existen en el server; un redirect SSR no puede evaluar esta condición.
+    // react-doctor-disable-next-line react-doctor/nextjs-no-client-side-redirect
     if (completed && !resuming) router.replace("/hoy");
   }, [completed, resuming, router]);
 

@@ -20,6 +20,9 @@ export default function RootPage() {
   const completed = useUserStore((s) => s.onboardingCompleted);
 
   useEffect(() => {
+    // Guard de auth/onboarding: depende de estado client-only (zustand persistido
+    // en localStorage). Un redirect server-side no puede leer ese flag.
+    // react-doctor-disable-next-line react-doctor/nextjs-no-client-side-redirect
     router.replace(completed ? "/hoy" : "/onboarding");
   }, [completed, router]);
 
