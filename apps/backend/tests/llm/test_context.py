@@ -993,3 +993,54 @@ def test_trim_history_zero_budget_returns_empty() -> None:
         _hist(3), max_model_len=100, system_prompt="s", current_user="u"
     )
     assert result == []
+
+
+def test_trim_history_logs_debug_when_most_recent_exceeds_budget(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Si el mensaje más reciente solo ya excede el budget, se loguea a DEBUG con conteo.
+
+    Verifica el fix de FIX 3: el descarte silencioso ahora emite un log de nivel
+    DEBUG con el conteo de turnos descartados (NUNCA el contenido — regla #4).
+    """
+    import logging
+
+    # Un mensaje enorme que supera cualquier presupuesto razonable.
+    huge_msg = ChatMessage(role="user", content="x" * 10_000)
+    history = [huge_msg]
+
+    with caplog.at_level(logging.DEBUG, logger="app.llm.context"):
+        result = trim_history_to_budget(
+            history,
+            max_model_len=600,   # reserva > budget tras descontar system + user + COMPLETION
+            system_prompt="",
+            current_user="",
+        )
+
+    assert result == []
+    # Debe haber exactamente un mensaje de DEBUG con info de conteo.
+    debug_msgs = [r for r in caplog.records if r.levelname == "DEBUG" and "budget" in r.message]
+    assert len(debug_msgs) == 1
+    # El mensaje loguea conteos, no contenido (regla #4).
+    assert "budget=" in debug_msgs[0].message
+    assert "turnos_descartados=1" in debug_msgs[0].message
+    # NUNCA loguea el contenido del mensaje.
+    assert "x" * 20 not in debug_msgs[0].message
+
+
+def test_trim_history_no_log_when_some_fit(caplog: pytest.LogCaptureFixture) -> None:
+    """Cuando al menos un turno entra en el budget, NO se emite el log de descarte."""
+    import logging
+
+    history = _hist(4, length=60)  # 4 mensajes de tamaño normal
+
+    with caplog.at_level(logging.DEBUG, logger="app.llm.context"):
+        result = trim_history_to_budget(
+            history, max_model_len=100_000, system_prompt="", current_user=""
+        )
+
+    assert len(result) > 0
+    debug_discard = [
+        r for r in caplog.records if r.levelname == "DEBUG" and "descartado" in r.message
+    ]
+    assert debug_discard == []

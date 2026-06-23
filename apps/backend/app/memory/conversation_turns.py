@@ -21,8 +21,13 @@ Pipeline:
 - ``add``: cifra el plaintext con ``encrypt_for_user`` y hace ``flush`` (NO
   ``commit``): el commit lo da el endpoint (``ChatService.run_turn``) en la MISMA
   transacción que la ``ChatSession``, así turnos + sesión son atómicos.
-- ``list_for_session``: trae los turnos de una sesión ORDER BY ``seq`` y los
-  descifra in-process ANTES de construir el ``Out`` strict (que rechaza ``BYTEA``).
+- ``list_for_session``: trae TODOS los turnos de una sesión ORDER BY ``seq`` ASC
+  y los descifra in-process ANTES de construir el ``Out`` strict (que rechaza
+  ``BYTEA``). Lo usa el worker episódico que necesita el transcript completo.
+- ``list_recent_for_session``: variante eficiente para el historial del chat: trae
+  solo los últimos ``limit`` turnos (ORDER BY seq DESC LIMIT) y los devuelve en
+  orden cronológico. Para sesiones largas evita descifrar cientos de filas que el
+  router descartaría igual.
 - ``purge_session``: hard-delete de los turnos de una sesión (lo llama el worker
   tras consolidar). NO descifra: borrar el ``BYTEA`` no requiere leerlo en claro.
 """
@@ -85,11 +90,14 @@ class ConversationTurnStore:
         return (await self._session.execute(stmt)).scalar_one()
 
     async def list_for_session(self, session_id: UUID) -> list[ConversationTurnOut]:
-        """Lista los turnos de una sesión del usuario, ORDER BY ``seq`` ASC.
+        """Lista TODOS los turnos de una sesión del usuario, ORDER BY ``seq`` ASC.
 
         Filtra por ``user_id`` **y** ``session_id`` (aislamiento estructural): solo
         turnos del usuario del store. Descifra fila por fila ANTES de construir el
-        ``Out`` strict. Lo usa el worker episódico para reconstruir el transcript.
+        ``Out`` strict. Lo usa el worker episódico para reconstruir el transcript
+        completo de la sesión (necesita todos los turnos, no solo los últimos N).
+        Para el historial del chat de producción usar ``list_recent_for_session``
+        (más eficiente: solo descifra los turnos que el router va a usar).
         """
         stmt = (
             select(ConversationTurn)
@@ -100,6 +108,43 @@ class ConversationTurnStore:
             .order_by(ConversationTurn.seq.asc())
         )
         rows = list((await self._session.execute(stmt)).scalars().all())
+        return [
+            self._to_out(row, plaintext=decrypt_for_user(self._user_id, row.content))
+            for row in rows
+        ]
+
+    async def list_recent_for_session(
+        self, session_id: UUID, limit: int
+    ) -> list[ConversationTurnOut]:
+        """Lista los últimos ``limit`` turnos de una sesión, en orden cronológico.
+
+        Diseñado para el historial del chat (``ChatService._load_history``): hace
+        ``ORDER BY seq DESC LIMIT :limit`` a nivel DB (solo descifra las filas que
+        el router va a usar), luego invierte la lista para devolver orden
+        cronológico (ASC). Para sesiones largas —modo vida acumula turnos hasta
+        cerrar— evita descifrar cientos de filas que ``trim_history_to_budget``
+        descartaría de todas formas.
+
+        A diferencia de ``list_for_session`` (que trae el transcript completo para
+        el worker episódico), este método es intencionalmente acotado: solo devuelve
+        los últimos ``limit`` turnos contiguos más recientes.
+
+        Filtra por ``user_id`` **y** ``session_id`` (aislamiento estructural):
+        mismo patrón que el resto del store.
+        """
+        stmt = (
+            select(ConversationTurn)
+            .where(
+                ConversationTurn.user_id == self._user_id,
+                ConversationTurn.session_id == session_id,
+            )
+            .order_by(ConversationTurn.seq.desc())
+            .limit(limit)
+        )
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        # Descifrar e invertir: la DB devuelve los más recientes primero (DESC);
+        # el modelo espera orden cronológico (ASC) para entender la conversación.
+        rows.reverse()
         return [
             self._to_out(row, plaintext=decrypt_for_user(self._user_id, row.content))
             for row in rows

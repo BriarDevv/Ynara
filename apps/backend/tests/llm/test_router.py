@@ -134,9 +134,19 @@ async def test_route_uses_context_budget_for_render(monkeypatch: pytest.MonkeyPa
     cfg = _cfg()
     model_cfg = cfg.model_for_mode(Mode.VIDA.value)
     max_model_len = cfg.serving.max_model_len[model_cfg.key]
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.llm.prompts.datetime_context import build_now_preamble
     from app.llm.prompts.loader import load_prompt
 
-    expected = context_budget(max_model_len=max_model_len, system_prompt=load_prompt(Mode.VIDA))
+    # El budget reserva el preambulo de fecha + el prompt del modo (route() lo arma ANTES
+    # del budget para no sobre-asignar el bloque de memoria). Se fija current_now para que
+    # el preambulo sea determinista y el expected coincida con lo que recibe render.
+    fixed = datetime(2026, 7, 22, 18, 30, tzinfo=ZoneInfo("America/Argentina/Buenos_Aires"))
+    monkeypatch.setattr(router_mod, "current_now", lambda: fixed)
+    base_system = f"{build_now_preamble(fixed)}\n\n{load_prompt(Mode.VIDA)}"
+    expected = context_budget(max_model_len=max_model_len, system_prompt=base_system)
 
     try:
         await route(
