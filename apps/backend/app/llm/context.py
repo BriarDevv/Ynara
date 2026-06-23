@@ -18,6 +18,7 @@ Restricciones de diseno:
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from uuid import UUID
 
@@ -34,6 +35,8 @@ from app.memory.episodic import EpisodicMemoryStore
 from app.memory.procedural import ProceduralMemoryStore
 from app.memory.semantic import SemanticMemoryStore
 from app.schemas.memory import EpisodicMemoryOut, ProceduralMemoryOut, SemanticMemoryOut
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constantes
@@ -111,11 +114,21 @@ def trim_history_to_budget(
     mensaje actual del usuario y la ``COMPLETION_RESERVE_TOKENS`` para la generación; lo
     que queda es el presupuesto del historial.
 
-    Se conservan los turnos MÁS RECIENTES (se itera de atrás hacia adelante acumulando su
-    costo estimado y se corta al exceder el presupuesto), recortando TURNOS COMPLETOS (no
-    a mitad de mensaje), y se devuelve en orden CRONOLÓGICO (el orden que el modelo
-    espera). Estimación de tokens consistente con el resto del módulo (``estimate_tokens``,
-    ``len // 3``). Si el presupuesto es 0 o el historial está vacío, devuelve ``[]``.
+    El recorte es GREEDY desde el más reciente: se itera de atrás hacia adelante
+    acumulando el costo estimado de cada turno y se corta al exceder el presupuesto.
+    Esto conserva la ventana CONTIGUA más reciente que entra en el budget. Si un turno
+    antiguo es enorme, el algoritmo corta ahí y NO sigue agregando turnos más viejos:
+    es intencional — para el chat se quieren los turnos recientes contiguos, no un
+    conjunto fragmentado con huecos temporales. Los turnos se descartan completos
+    (nunca a mitad de mensaje) y el resultado se devuelve en orden CRONOLÓGICO (el
+    orden que el modelo espera). Estimación de tokens consistente con el resto del
+    módulo (``estimate_tokens``, ``len // 3``). Si el presupuesto es 0 o el historial
+    está vacío, devuelve ``[]``.
+
+    Si el mensaje MÁS RECIENTE solo ya excede el budget (historial no vacío pero
+    ningún turno entra), se loguea a DEBUG el conteo de turnos descartados y se
+    devuelve ``[]`` (el router prosigue sin historial, con posible pérdida de
+    continuidad — observable en logs sin exponer contenido, regla #4).
 
     Args:
         history: Turnos previos como ``ChatMessage`` (user/assistant), en orden cronológico.
@@ -141,6 +154,18 @@ def trim_history_to_budget(
             break
         kept_reversed.append(msg)
         used += cost
+
+    if not kept_reversed:
+        # El mensaje más reciente solo ya excede el budget: toda la continuidad se pierde.
+        # Solo se loguea el conteo, nunca el contenido (regla #4).
+        logger.debug(
+            "trim_history_to_budget: historial descartado (mensaje mas reciente excede budget=%d,"
+            " turnos_descartados=%d)",
+            budget,
+            len(history),
+        )
+        return []
+
     kept_reversed.reverse()  # volver a orden cronológico
     return kept_reversed
 

@@ -196,25 +196,36 @@ class ChatService:
         return resp
 
     async def _load_history(self, chat_session: ChatSession) -> list[ChatMessage]:
-        """Carga los turnos previos de la sesión como historial para el modelo.
+        """Carga los últimos turnos previos de la sesión como historial para el modelo.
 
-        Reusa ``ConversationTurnStore.list_for_session`` (descifra per-user, ORDER BY seq):
-        la MISMA fuente que persiste ``_persist_turns`` y que lee el worker episódico. En
-        el momento en que corre (antes de ``route()``) devuelve solo los turnos de
-        intercambios ANTERIORES — el turno actual se persiste DESPUÉS de ``route()``, así
-        que no se duplica el mensaje en curso.
+        Usa ``ConversationTurnStore.list_recent_for_session`` (acotado a nivel DB):
+        solo descifra los últimos ``_HISTORY_MAX_MESSAGES`` turnos en vez de traer
+        toda la sesión y cortar en Python — en sesiones largas (modo vida acumula
+        turnos hasta cerrar) esto evita descifrar cientos de filas al pedo.
 
-        Toma los últimos ``_HISTORY_MAX_MESSAGES`` en orden cronológico y mapea el rol
-        persistido (``TurnRole.USER``/``MODEL``) al rol que espera el modelo
-        (``user``/``assistant``). ``route()`` recorta además por presupuesto de tokens. En
-        el primer turno de la sesión devuelve ``[]`` (no hay turnos previos).
+        En el momento en que corre (antes de ``route()``) devuelve solo los turnos de
+        intercambios ANTERIORES — el turno actual se persiste DESPUÉS de ``route()``,
+        así que no se duplica el mensaje en curso.
+
+        Mapea el rol persistido (``TurnRole.USER``/``MODEL``) al rol que espera el
+        modelo (``user``/``assistant``). Rol desconocido cae a ``"assistant"`` como
+        fallback seguro (evita ``KeyError`` ante datos inesperados en la DB).
+        ``route()`` recorta además por presupuesto de tokens. En el primer turno de la
+        sesión devuelve ``[]`` (no hay turnos previos).
+
+        Limitación conocida: los turnos del modelo se re-inyectan como texto plano
+        (``content``), SIN ``tool_calls`` (que no se persisten en
+        ``conversation_turns``). Para Gemma (sin tools) es irrelevante. Para Qwen, un
+        turno histórico que llamó una tool se replica como mensaje assistant de texto:
+        el transcript Q→A queda coherente, pero no se replica el estado de tools
+        intermedio (las tool_calls ejecutadas ya tuvieron efecto en su turno original).
         """
         turns_store = ConversationTurnStore(self._session, self._user_id)
-        turns = await turns_store.list_for_session(chat_session.id)
-        recent = turns[-_HISTORY_MAX_MESSAGES:]
+        # list_recent_for_session hace LIMIT a nivel DB y devuelve en orden cronológico.
+        turns = await turns_store.list_recent_for_session(chat_session.id, _HISTORY_MAX_MESSAGES)
         return [
-            ChatMessage(role=_TURN_ROLE_TO_CHAT[turn.role], content=turn.content)
-            for turn in recent
+            ChatMessage(role=_TURN_ROLE_TO_CHAT.get(turn.role, "assistant"), content=turn.content)
+            for turn in turns
         ]
 
     async def _persist_turns(

@@ -196,6 +196,112 @@ class TestConversationTurnStoreIntegration:
 
 
 @pytest.mark.integration
+class TestListRecentForSession:
+    """Tests de ``list_recent_for_session`` — variante eficiente para el historial del chat.
+
+    Verifica que el LIMIT se aplica a nivel DB (solo llegan los últimos N), que el
+    resultado viene en orden cronológico (ASC), y que el aislamiento user_id+session_id
+    se respeta igual que en ``list_for_session``.
+    """
+
+    async def test_returns_last_n_in_asc_order(self, db_session: AsyncSession) -> None:
+        """Con limit=3 y 5 turnos sembrados, devuelve los 3 últimos en orden ASC."""
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        store = ConversationTurnStore(db_session, user.id)
+
+        # Sembrar 5 turnos en orden: seq 0..4
+        contents = ["msg0", "msg1", "msg2", "msg3", "msg4"]
+        for seq, content in enumerate(contents):
+            role = TurnRole.USER if seq % 2 == 0 else TurnRole.MODEL
+            await store.add(
+                ConversationTurnCreate(session_id=cs.id, role=role, content=content, seq=seq)
+            )
+
+        turns = await store.list_recent_for_session(cs.id, limit=3)
+
+        # Solo los últimos 3 (seq 2, 3, 4) en orden ASC.
+        assert len(turns) == 3
+        assert [t.seq for t in turns] == [2, 3, 4]
+        assert [t.content for t in turns] == ["msg2", "msg3", "msg4"]
+
+    async def test_returns_all_when_limit_exceeds_count(self, db_session: AsyncSession) -> None:
+        """Cuando limit > número de turnos, devuelve todos en orden ASC."""
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        store = ConversationTurnStore(db_session, user.id)
+
+        for seq in range(2):
+            await store.add(
+                ConversationTurnCreate(
+                    session_id=cs.id,
+                    role=TurnRole.USER if seq % 2 == 0 else TurnRole.MODEL,
+                    content=f"t{seq}",
+                    seq=seq,
+                )
+            )
+
+        turns = await store.list_recent_for_session(cs.id, limit=10)
+        assert len(turns) == 2
+        assert [t.seq for t in turns] == [0, 1]
+
+    async def test_empty_session_returns_empty_list(self, db_session: AsyncSession) -> None:
+        """Sesión sin turnos devuelve lista vacía."""
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        store = ConversationTurnStore(db_session, user.id)
+
+        turns = await store.list_recent_for_session(cs.id, limit=5)
+        assert turns == []
+
+    async def test_user_isolation_returns_only_own_turns(self, db_session: AsyncSession) -> None:
+        """No devuelve turnos de otra sesión del mismo usuario ni de otro usuario."""
+        user_a = await _seed_user(db_session)
+        user_b = await _seed_user(db_session)
+        cs_a = await _seed_session(db_session, user_id=user_a.id)
+        cs_b = await _seed_session(db_session, user_id=user_b.id)
+        store_a = ConversationTurnStore(db_session, user_a.id)
+        store_b = ConversationTurnStore(db_session, user_b.id)
+
+        for seq in range(3):
+            await store_a.add(
+                ConversationTurnCreate(
+                    session_id=cs_a.id, role=TurnRole.USER, content=f"a{seq}", seq=seq
+                )
+            )
+            await store_b.add(
+                ConversationTurnCreate(
+                    session_id=cs_b.id, role=TurnRole.USER, content=f"b{seq}", seq=seq
+                )
+            )
+
+        # A no ve la sesión de B y B no ve la de A.
+        assert await store_a.list_recent_for_session(cs_b.id, limit=10) == []
+        assert await store_b.list_recent_for_session(cs_a.id, limit=10) == []
+
+        # Cada uno ve solo sus propios turnos.
+        turns_a = await store_a.list_recent_for_session(cs_a.id, limit=2)
+        assert len(turns_a) == 2
+        assert all(t.content.startswith("a") for t in turns_a)
+
+    async def test_decrypts_content_correctly(self, db_session: AsyncSession) -> None:
+        """El contenido devuelto está descifrado (no BYTEA crudo)."""
+        user = await _seed_user(db_session)
+        cs = await _seed_session(db_session, user_id=user.id)
+        store = ConversationTurnStore(db_session, user.id)
+
+        plaintext = "mensaje secreto descifrado"
+        await store.add(
+            ConversationTurnCreate(session_id=cs.id, role=TurnRole.USER, content=plaintext, seq=0)
+        )
+
+        turns = await store.list_recent_for_session(cs.id, limit=5)
+        assert len(turns) == 1
+        assert isinstance(turns[0].content, str)
+        assert turns[0].content == plaintext
+
+
+@pytest.mark.integration
 class TestNextSeq:
     """Tests de ``next_seq`` — la lógica crítica anti-colisión del ``UNIQUE(session_id, seq)``.
 

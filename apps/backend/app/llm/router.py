@@ -46,9 +46,11 @@ Decisiones de diseno documentadas (M8 Ola 1 + Ola 2):
     semantic. La episodica sigue siendo trabajo aparte
     (``EpisodicMemory.session_id`` es FK NOT NULL a ``sessions.id``).
 
-(b) Sin historial multi-turno. ``route()`` arma ``messages`` desde cero
-    (system + user actual) en cada llamada. El historial vivo de la sesion es
-    M9 (``ChatSession`` persistida). Limitacion conocida de M8.
+(b) Historial multi-turno implementado. ``route()`` recibe el param
+    ``history`` (turnos previos descifrados, cargados por
+    ``ChatService._load_history``) y los inyecta en ``messages`` recortados
+    al presupuesto de tokens (``trim_history_to_budget``). Antes de M9 (nota
+    histórica) el router armaba solo ``[system, user_actual]`` — ya no aplica.
 
 (c) Captura de la familia ``LlmError`` con UNA excepcion. La llamada al modelo se
     envuelve en ``try/except``: ``route()`` degrada (``ChatResponse`` con
@@ -174,8 +176,8 @@ async def route(
         (a) ``session_id`` opaco dentro del router; aguas arriba es el
             ``ChatSession.id`` real y la consolidacion (M10 Ola 1) lo persiste
             como ``source_session_id`` en el ADD semantic.
-        (b) sin historial multi-turno: ``messages`` desde cero; historial
-            vivo = M9.
+        (b) historial multi-turno inyectado vía param ``history`` y recortado
+            al presupuesto de tokens por ``trim_history_to_budget``.
         (c) cualquier error de la familia ``LlmError`` (permanente O transitorio)
             -> ``ChatResponse`` degradado con fallback (no se propaga la excepcion).
     """
@@ -202,23 +204,28 @@ async def route(
         reranker=reranker,
         mode_cfg=mode_cfg,
     )
-    budget = context_budget(max_model_len=max_model_len, system_prompt=system_prompt)
-    context_block = await render_context_block(mem_ctx, query=request.text, budget_tokens=budget)
-
     # Preambulo de fecha/hora actual (timezone-aware, huso de la app). Cierra el gap
-    # E2E: sin esto el modelo NO podia resolver fechas relativas ("mañana", "el
-    # lunes") al agendar. Se construye por-run con current_now() (lee el reloj una
-    # sola vez aca); NO se cachea porque cambia cada minuto.
+    # E2E: sin esto el modelo NO podia resolver fechas relativas ("mañana", "el lunes")
+    # al agendar. Se construye por-run con current_now() (lee el reloj una sola vez aca);
+    # NO se cachea porque cambia cada minuto. Se arma ANTES del budget a proposito: el
+    # bloque de memoria debe dimensionarse reservando tambien los tokens del preambulo
+    # (si se calculaba el budget con el prompt pelado, el bloque quedaba sobre-asignado y
+    # final_system podia excederse de max_model_len).
     now_preamble = build_now_preamble(current_now())
 
-    # Concatenar preambulo + bloque de memoria al system prompt en un STRING NUEVO
-    # (decision #6: no mutar el prompt cacheado). El preambulo va al inicio para que
-    # el modelo ancle las fechas relativas antes de leer el resto del system. Si el
-    # bloque de memoria esta vacio, solo se antepone el preambulo.
+    # Base del system para el budget: preambulo + prompt del modo (STRING NUEVO; decision
+    # #6: no mutar el prompt cacheado). El bloque de memoria se dimensiona contra ESTA base
+    # (reserva el preambulo) y final_system se arma sobre la misma base. El preambulo va al
+    # inicio para que el modelo ancle las fechas relativas antes de leer el resto.
+    base_system = f"{now_preamble}\n\n{system_prompt}"
+    budget = context_budget(max_model_len=max_model_len, system_prompt=base_system)
+    context_block = await render_context_block(mem_ctx, query=request.text, budget_tokens=budget)
+
+    # Si el bloque de memoria esta vacio, final_system es solo la base (preambulo + prompt).
     if context_block:
-        final_system = f"{now_preamble}\n\n{system_prompt}\n\n{context_block}"
+        final_system = f"{base_system}\n\n{context_block}"
     else:
-        final_system = f"{now_preamble}\n\n{system_prompt}"
+        final_system = base_system
 
     specs = mem_ctx.tool_specs(mode_cfg.tools_enabled)
 
