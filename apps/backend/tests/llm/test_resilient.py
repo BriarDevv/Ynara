@@ -517,6 +517,64 @@ async def test_stream_all_breakers_open_best_effort() -> None:
     assert client.stream_calls
 
 
+async def test_stream_resolves_half_open_probe_so_complete_recovers() -> None:
+    """Regresion LLMC-001: un stream exitoso durante el recovery cierra la prueba.
+
+    Antes ``_pick_for_stream`` consumia la prueba (``allow()`` -> HALF_OPEN,
+    ``_probe_in_flight=True``) pero ``_stream`` nunca llamaba ``record_*``: el
+    breaker quedaba HALF_OPEN para siempre y ``complete`` salteaba al candidato
+    sano (``if not allow(): continue``) hasta reiniciar el proceso.
+    """
+    from app.llm.schemas import CompletionChunk
+
+    primary = _fake()
+    clock = _Clock()
+    factory = lambda: CircuitBreaker(  # noqa: E731
+        failure_threshold=1, recovery_timeout_s=30.0, clock=clock
+    )
+    primary.queue_error(LlmTimeoutError())  # 1er fallo abre el breaker
+    resilient = _resilient([primary], max_attempts=1, clock=clock, breaker_factory=factory)
+    degraded = await resilient.complete(model=_MODEL, messages=_messages())
+    assert degraded.finish_reason == "degraded"  # unico candidato, breaker OPEN
+
+    # entra en recovery: un STREAM exitoso debe cerrar la prueba HALF_OPEN.
+    clock.now = 30.0
+    primary.queue_chunks([CompletionChunk(delta_text="hola")])
+    chunks = [c async for c in resilient.stream(model=_MODEL, messages=_messages())]
+    assert "".join(c.delta_text for c in chunks) == "hola"
+    assert resilient._breakers[id(primary)].state is CircuitState.CLOSED  # no colgada
+
+    # CLAVE: el complete() siguiente vuelve a usar la primaria (no degrada).
+    primary.queue_result(_result("recuperado"))
+    recovered = await resilient.complete(model=_MODEL, messages=_messages())
+    assert recovered.text == "recuperado"
+    assert recovered.finish_reason == "stop"
+
+
+async def test_stream_failure_records_breaker_failure() -> None:
+    """Un stream que falla con error real marca el fallo en el breaker.
+
+    Antes ``_stream`` no tocaba el breaker: un stream que reventaba no contaba
+    para abrirlo. Con threshold=1, un unico stream fallido debe abrirlo y hacer
+    que el ``complete`` siguiente saltee al candidato y caiga al secundario.
+    """
+    primary = _fake()
+    secondary = _fake()
+    factory = lambda: CircuitBreaker(failure_threshold=1, recovery_timeout_s=999.0)  # noqa: E731
+    resilient = _resilient([primary, secondary], max_attempts=1, breaker_factory=factory)
+
+    primary.queue_stream_error(LlmTimeoutError())
+    with pytest.raises(LlmError):
+        async for _ in resilient.stream(model=_MODEL, messages=_messages()):
+            pass
+    assert resilient._breakers[id(primary)].state is CircuitState.OPEN
+
+    secondary.queue_result(_result("secundario"))
+    result = await resilient.complete(model=_MODEL, messages=_messages())
+    assert result.text == "secundario"
+    assert primary.complete_calls == []  # breaker abierto por el stream -> saltea
+
+
 def test_breaker_state_exposed() -> None:
     """Sanidad: el breaker arranca CLOSED para cada client del pool."""
     client = _fake()

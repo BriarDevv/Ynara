@@ -293,6 +293,12 @@ class ResilientClient:
         decide como degradar el streaming). El fallback on-prem completo
         solo aplica al modo no-streaming (``complete``).
 
+        El resultado del stream SI alimenta el breaker del candidato elegido
+        (``record_success`` al completar, ``record_failure`` ante un error real):
+        cierra la prueba HALF_OPEN que ``_pick_for_stream`` pudo haber consumido,
+        para que un candidato sano no quede demoteado en ``complete`` tras un
+        stream durante su ventana de recovery.
+
         ``thinking`` es passthrough puro hacia el cliente elegido (ADR-012 D4).
         """
         return self._stream(
@@ -317,16 +323,34 @@ class ResilientClient:
         timeout_s: float | None,
     ) -> AsyncIterator[CompletionChunk]:
         client = self._pick_for_stream(model)
-        async for chunk in client.stream(
-            model=model,
-            messages=messages,
-            tools=tools,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            thinking=thinking,
-            timeout_s=timeout_s,
-        ):
-            yield chunk
+        # El breaker del candidato elegido SIEMPRE se resuelve: ``_pick_for_stream``
+        # puede haber consumido una prueba HALF_OPEN (``allow()`` transiciona
+        # OPEN->HALF_OPEN y marca ``_probe_in_flight``). Si no la cerraramos, la
+        # prueba quedaria colgada para siempre y este candidato sano quedaria
+        # demoteado en ``complete()`` (``if not allow(): continue``) hasta el
+        # reinicio del proceso. Un stream exitoso cierra el breaker; uno que falla
+        # con un error real lo (re)abre, asi el streaming participa de la salud del
+        # breaker igual que ``complete``. Cancelacion / corte del consumidor
+        # (``CancelledError`` / ``GeneratorExit``, ambos ``BaseException``) NO son
+        # fallo de la instancia: ``except Exception`` no los atrapa, se propagan
+        # sin tocar el breaker.
+        breaker = self._breakers[id(client)]
+        try:
+            async for chunk in client.stream(
+                model=model,
+                messages=messages,
+                tools=tools,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                thinking=thinking,
+                timeout_s=timeout_s,
+            ):
+                yield chunk
+        except Exception:
+            breaker.record_failure()
+            raise
+        else:
+            breaker.record_success()
 
     def _pick_for_stream(self, model: str) -> LLMClient:
         """Primer candidato con el breaker cerrado.
