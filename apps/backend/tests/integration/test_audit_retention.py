@@ -122,3 +122,37 @@ async def test_purge_keeps_rows_within_retention(db_session: AsyncSession) -> No
     assert deleted == 0, "nada en o dentro de la ventana de retention se borra"
     assert await _audit_exists(db_session, just_inside.id) is True
     assert await _audit_exists(db_session, at_cutoff.id) is True
+
+
+# ---------------------------------------------------------------------------
+# 3. Batching (WW-01): el loop borra TODAS las vencidas, no solo un lote
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_purge_deletes_all_expired_in_batches(db_session: AsyncSession) -> None:
+    """WW-01: con ``batch_size`` chico, el loop borra TODAS las filas vencidas en lotes.
+
+    Antes era un único ``DELETE`` sin ``LIMIT`` (un backlog grande chocaba con el
+    ``task_time_limit`` de Celery y ROLLBACKEABA todo). Ahora ``delete_in_batches``
+    itera hasta agotar: con ``batch_size=2`` y 5 filas vencidas, las 5 se borran
+    (3 lotes: 2 + 2 + 1), y la reciente queda.
+    """
+    now = datetime.now(UTC)
+    user = await _seed_user(db_session)
+    old_ids = [
+        (
+            await _seed_audit_row(
+                db_session, user, created_at=now - timedelta(days=AUDIT_RETENTION_DAYS + 30)
+            )
+        ).id
+        for _ in range(5)
+    ]
+    recent = await _seed_audit_row(db_session, user, created_at=now - timedelta(days=10))
+
+    deleted = await _async_purge_audit(session=db_session, now=now, batch_size=2)
+
+    assert deleted == 5, "el loop por lotes borra TODAS las vencidas, no solo el primer lote"
+    for old_id in old_ids:
+        assert await _audit_exists(db_session, old_id) is False
+    assert await _audit_exists(db_session, recent.id) is True, "la reciente queda intacta"

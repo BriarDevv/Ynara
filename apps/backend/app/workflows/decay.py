@@ -42,8 +42,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete as sa_delete
-from sqlalchemy import func
+from sqlalchemy import and_, func
 from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,7 +50,7 @@ from app.core.config import Settings, get_settings
 from app.memory.config import DecayConfig, load_decay_config
 from app.models.memory import ProceduralMemory
 from app.workers.celery_app import celery_app
-from app.workflows._engine import worker_session
+from app.workflows._engine import DELETE_BATCH_SIZE, delete_in_batches, worker_session
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +102,7 @@ async def _async_decay(
     session: AsyncSession | None = None,
     settings: Settings | None = None,
     decay_config: DecayConfig | None = None,
+    batch_size: int = DELETE_BATCH_SIZE,
 ) -> DecayResult:
     """Nucleo async del decay procedural; retorna los conteos de cada paso.
 
@@ -137,7 +137,7 @@ async def _async_decay(
     decay_cutoff = now - timedelta(days=cfg.decay_interval_days)
     hard_delete_cutoff = now - timedelta(days=cfg.hard_delete_min_days)
 
-    async def _run(db: AsyncSession) -> DecayResult:
+    async def _run(db: AsyncSession, *, commit: bool) -> DecayResult:
         # (a) DECAY — confidence *= factor a las no reforzadas en el ultimo intervalo.
         # ``updated_at=func.now()``: el bulk UPDATE Core con
         # ``synchronize_session=False`` bypassa el ``onupdate`` del ORM
@@ -174,32 +174,34 @@ async def _async_decay(
         staled = stale_res.rowcount or 0
         await db.flush()
 
-        # (c) HARD DELETE — doble criterio: muy baja confianza Y muy vieja.
-        delete_stmt = (
-            sa_delete(ProceduralMemory)
-            .where(
+        # (c) HARD DELETE — doble criterio: muy baja confianza Y muy vieja. Por lotes
+        # (WW-01): commit por lote en prod para que un kill por time-limit preserve
+        # progreso. El primer commit del helper persiste también los UPDATE (a)/(b) ya
+        # flusheados (atómico con el primer lote del delete).
+        deleted = await delete_in_batches(
+            db,
+            ProceduralMemory,
+            and_(
                 ProceduralMemory.confidence < cfg.hard_delete_threshold,
                 ProceduralMemory.last_reinforced_at < hard_delete_cutoff,
-            )
-            .execution_options(synchronize_session=False)
+            ),
+            batch_size=batch_size,
+            commit=commit,
         )
-        delete_res = await db.execute(delete_stmt)
-        deleted = delete_res.rowcount or 0
-        await db.flush()
 
         return DecayResult(decayed=decayed, staled=staled, deleted=deleted)
 
     if session is not None:
         # Modo test: usar la sesion inyectada, NO commitear (rollback del fixture).
-        return await _run(session)
+        return await _run(session, commit=False)
 
-    # Modo produccion: engine NullPool efimero; worker_session commitea al salir
-    # del bloque y dispone el engine (decision #4 centralizada en _engine.py).
+    # Modo produccion: engine NullPool efimero; el helper commitea por lote (el commit
+    # final de worker_session queda no-op) y worker_session dispone el engine.
     # Binding ``_settings`` (NO ``cfg``): ``cfg`` es el DecayConfig que captura el
     # closure ``_run``; no pisarlo.
     _settings = settings or get_settings()
     async with worker_session(_settings) as db_session:
-        return await _run(db_session)
+        return await _run(db_session, commit=True)
 
 
 # ---------------------------------------------------------------------------
