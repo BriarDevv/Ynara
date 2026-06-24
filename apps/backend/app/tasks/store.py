@@ -97,7 +97,9 @@ class TaskStore:
         await self._session.refresh(task)
         return self._to_result(task)
 
-    async def list_tasks(self, *, limit: int | None = None) -> list[dict[str, object]]:
+    async def list_tasks(
+        self, *, limit: int | None = None, offset: int = 0
+    ) -> list[dict[str, object]]:
         """Lista las tareas del usuario, pending primero y luego por horario ASC.
 
         Filtra por ``user_id`` (aislamiento). Orden sensato para el dashboard "Hoy":
@@ -106,9 +108,12 @@ class TaskStore:
         ``NULL`` ordena último con ``nulls_last``). Read-only (no muta nada).
 
         ``limit`` es un tope opcional de filas. ``None`` (default) preserva el
-        comportamiento del CRUD HTTP (sin tope). La superficie del agente
-        (``AgentListTasksTool``) pasa un cap acotado (``AGENT_LIST_RESULT_LIMIT``) para no
-        volcar miles de tareas al context window del LLM ni al payload del turno.
+        comportamiento sin tope. La superficie del agente (``AgentListTasksTool``)
+        pasa un cap acotado (``AGENT_LIST_RESULT_LIMIT``) para no volcar miles de
+        tareas al context window del LLM; el CRUD HTTP (``GET /v1/tasks``) pasa el
+        ``limit``/``offset`` de la paginación (acota la query en el camino caliente
+        del dashboard). ``offset`` (default 0) saltea filas para paginar; con el
+        mismo orden estable de arriba, páginas sucesivas no se solapan.
 
         Returns:
             Lista de dicts serializables (``TaskOut``), una por tarea.
@@ -125,6 +130,8 @@ class TaskStore:
         )
         if limit is not None:
             stmt = stmt.limit(limit)
+        if offset:
+            stmt = stmt.offset(offset)
         rows = list((await self._session.execute(stmt)).scalars().all())
         return [self._to_result(row) for row in rows]
 

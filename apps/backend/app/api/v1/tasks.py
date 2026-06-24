@@ -41,9 +41,10 @@ Decisiones de diseño (mismas que ``events.py`` / ``sessions.py``, NO re-litigar
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from app.api.v1._http import too_many_requests
@@ -57,6 +58,14 @@ from app.tasks.store import TaskStore
 
 router = APIRouter()
 
+# Default + cap de la paginación de ``GET /v1/tasks``. El default es generoso
+# (no 50 como ``/sessions``) porque el dashboard "Hoy" renderiza la lista entera
+# del día, no una página navegable; el cap solo acota el caso patológico (la query
+# sin tope que era el bug API-002) sin truncar un uso realista. Igual exponemos
+# ``offset`` para que el cliente pueda paginar si alguna vez supera el cap.
+_LIMIT_DEFAULT = 100
+_LIMIT_MAX = 200
+
 # Detail ÚNICO del 404 del ``PATCH``: ajena e inexistente comparten exactamente este
 # mensaje (sin oráculo de existencia ajena).
 _NOT_FOUND_DETAIL = "tarea no encontrada"
@@ -67,23 +76,30 @@ async def list_tasks(
     session: DbSession,
     user_id: CurrentUser,
     store: TokenStoreDep,
+    limit: Annotated[int, Query(ge=1, le=_LIMIT_MAX)] = _LIMIT_DEFAULT,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> TasksResponse:
     """Lista las tareas del usuario, pending primero y luego por ``scheduled_at`` ASC.
 
     - AISLAMIENTO: ``WHERE user_id == current`` en el SELECT (vía ``TaskStore``) y en
-      el COUNT; solo las tareas del user, y ``total`` es el conteo COMPLETO del user.
+      el COUNT; solo las tareas del user, y ``total`` es el conteo COMPLETO del user
+      (no el largo de la página) para que el cliente pueda paginar.
     - Orden (decisión #2): pending arriba, luego por horario ASC (lo resuelve el store).
+    - Paginación (API-002): ``limit`` ∈ ``[1, 200]`` (default 100), ``offset`` ≥ 0;
+      acota la query del camino caliente del dashboard (antes traía TODAS las filas
+      sin tope). FastAPI devuelve 422 fuera de rango. El front no manda estos params
+      y recibe el default (backward-compatible: el shape ``items``/``total`` no cambia).
     - Solo lectura: un SELECT (vía store) + un COUNT, sin mutar nada.
     - Rate-limit (decisión #4): bucket por ``user_id`` compartido con las 2 rutas,
       ANTES de tocar la DB. fail-open si Redis cae. 429 + ``Retry-After`` al cruzar.
 
     Returns:
-        ``TasksResponse`` con ``items`` (las tareas del user) + ``total``.
+        ``TasksResponse`` con ``items`` (la página) + ``total`` (del user).
     """
     if not await check_tasks_rate_limit(store, user_id=str(user_id)):
         raise too_many_requests(get_settings().tasks_window_seconds)
 
-    items = await TaskStore(session, user_id).list_tasks()
+    items = await TaskStore(session, user_id).list_tasks(limit=limit, offset=offset)
 
     total = await session.scalar(
         select(func.count()).select_from(Task).where(Task.user_id == user_id)
