@@ -43,9 +43,10 @@ Decisiones de diseño (mismas que ``sessions.py``, NO re-litigar):
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from app.api.v1._http import too_many_requests
@@ -58,6 +59,12 @@ from app.schemas.calendar_event import CalendarEventOut, EventCreate, EventPatch
 from app.schemas.calendar_event_api import EventsResponse
 
 router = APIRouter()
+
+# Default + cap de la paginación de ``GET /v1/events`` (mismo criterio que
+# ``/v1/tasks``: default generoso porque el front pinta la agenda entera, el cap
+# solo acota el caso patológico de la query sin tope).
+_LIMIT_DEFAULT = 100
+_LIMIT_MAX = 200
 
 # Detail ÚNICO del 404 de ``PATCH``/``DELETE``: ajeno e inexistente comparten
 # exactamente este mensaje (sin oráculo de existencia ajena).
@@ -72,18 +79,25 @@ async def list_events(
     session: DbSession,
     user_id: CurrentUser,
     store: TokenStoreDep,
+    limit: Annotated[int, Query(ge=1, le=_LIMIT_MAX)] = _LIMIT_DEFAULT,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> EventsResponse:
     """Lista los eventos del usuario, ordenados por ``start_at`` ASC.
 
     - AISLAMIENTO: ``WHERE user_id == current`` en el SELECT y en el COUNT; solo
-      los eventos del user, y ``total`` es el conteo COMPLETO del user.
+      los eventos del user, y ``total`` es el conteo COMPLETO del user (no el largo
+      de la página) para que el cliente pueda paginar.
     - Orden ``start_at ASC`` (el más próximo primero, decisión #2).
+    - Paginación (API-001): ``limit`` ∈ ``[1, 200]`` (default 100), ``offset`` ≥ 0;
+      acota la query (antes traía TODOS los eventos sin tope). 422 fuera de rango.
+      El front no manda estos params y recibe el default (backward-compatible: el
+      shape ``items``/``total`` no cambia).
     - Solo lectura: un SELECT + un COUNT, sin mutar nada.
     - Rate-limit (decisión #5): bucket por ``user_id`` compartido con las 4 rutas,
       ANTES de tocar la DB. fail-open si Redis cae. 429 + ``Retry-After`` al cruzar.
 
     Returns:
-        ``EventsResponse`` con ``items`` (los eventos del user) + ``total``.
+        ``EventsResponse`` con ``items`` (la página) + ``total`` (del user).
     """
     if not await check_events_rate_limit(store, user_id=str(user_id)):
         raise too_many_requests(get_settings().events_window_seconds)
@@ -91,6 +105,8 @@ async def list_events(
         select(CalendarEvent)
         .where(CalendarEvent.user_id == user_id)
         .order_by(CalendarEvent.start_at.asc())
+        .limit(limit)
+        .offset(offset)
     )
     items = items_result.scalars().all()
 
