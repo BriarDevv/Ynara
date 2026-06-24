@@ -159,6 +159,6 @@ el commit único persiste todo atómico. Resultado: ya no hay desajuste DB-tiene
 - **Supersede parcialmente ADR-021**: mueve la ejecución de tools del async al síncrono
   para la config actual; la memoria (`consolidate_turn`) de ADR-021 sigue async.
 - **Respeta ADR-019**: playground observado a cero efecto, intacto.
-- **Reusa ADR-018**: las tablas `calendar_events` / `tasks` ya existen; este ADR no
+- **Reusa ADR-023**: las tablas `calendar_events` / `tasks` ya existen; este ADR no
   agrega migraciones.
 - **Config-driven (ADR-002 / catálogo de modos)**: el gate es `tools_enabled` por modo.

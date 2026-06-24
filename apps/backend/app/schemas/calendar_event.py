@@ -6,7 +6,7 @@ es el ``AgendaEvent`` del wire — **no** filtra ``user_id`` / ``created_at`` /
 ``updated_at`` (a diferencia de ``SessionOut``, que sí los expone): el front no
 los necesita y el contrato del front no los declara.
 
-Invariante ADR-018 (``recurrenceNeedsTimeZone`` en ``agenda.ts``): un evento con
+Invariante ADR-023 (``recurrenceNeedsTimeZone`` en ``agenda.ts``): un evento con
 ``recurrence`` no vacía DEBE traer ``time_zone``. Se valida en ``CalendarEventOut``
 y ``EventCreate``, **no** en ``EventPatch`` (parcial; el patch puede tocar
 ``recurrence`` apoyándose en el ``time_zone`` ya guardado). El router enforcea la
@@ -48,7 +48,7 @@ _WIRE_REQUEST_CONFIG = ConfigDict(
 def _validate_recurrence_needs_time_zone(
     recurrence: list[str] | None, time_zone: str | None
 ) -> None:
-    """Invariante ADR-018: ``recurrence`` no vacía exige ``time_zone``.
+    """Invariante ADR-023: ``recurrence`` no vacía exige ``time_zone``.
 
     Lanza ``PydanticCustomError`` (que Pydantic convierte en 422) si hay recurrencia
     sin huso. Sede única de la regla, compartida por ``CalendarEventOut`` /

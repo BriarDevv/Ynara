@@ -1,5 +1,5 @@
 /**
- * **Expansión de recurrencia** (CALENDAR-RESEARCH-2026 §1.3, ADR-018). Convierte
+ * **Expansión de recurrencia** (CALENDAR-RESEARCH-2026 §1.3, ADR-023). Convierte
  * un `AgendaEvent` (único o recurrente) en las **instancias concretas** que caen
  * en un rango `[from, to]`, listo para renderizar o servir desde `/v1/events`.
  *

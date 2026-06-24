@@ -1,4 +1,4 @@
-"""tasks - tabla operativa del dominio TAREAS (Fase D1, espejo de Agenda/ADR-018).
+"""tasks - tabla operativa del dominio TAREAS (Fase D1, espejo de Agenda/ADR-023).
 
 Tabla OPERATIVA (no sagrada, regla #3): tareas/prioridades del día del usuario, que
 el dashboard "Hoy" de la web consume vía ``/v1/tasks``. El alta la hace el agente

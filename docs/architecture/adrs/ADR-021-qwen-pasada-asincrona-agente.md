@@ -44,7 +44,7 @@ Hechos verificados del código que hacen esto realizable hoy:
   `calendar`/`reminder` como **stubs `not_wired`**; las tools con escritura real
   (`memory.update`/`delete`) viven en `memory_registry()`, opt-in.
 - **La agenda ya tiene tabla real**: `calendar_events` + modelo `CalendarEvent`
-  (ADR-018 / PR #402). O sea, `calendar.create_event` ya tiene **dónde escribir**.
+  (ADR-023 / PR #402). O sea, `calendar.create_event` ya tiene **dónde escribir**.
 - **El catálogo de modos es config-driven**: `ynara.config.json` declara por modo
   `tools_enabled[]` y `writes_memory` (expuesto en `GET /v1/modes`).
 
@@ -144,7 +144,7 @@ escalable y mantiene la decisión en manos del producto, no del código.
 
 - **Refina** [ADR-019](./ADR-019-playground-agente-observado.md): lleva el tool-loop
   observado (cero efecto) a **ejecución real async** en el chat de producción.
-- **Usa** [ADR-018](./ADR-018-calendar-event-model.md): `calendar.create_event`
+- **Usa** [ADR-023](./ADR-023-calendar-event-model.md): `calendar.create_event`
   escribe en `calendar_events`.
 - Se apoya en el patrón de consolidación asíncrona de memoria
   ([ADR-010](./ADR-010-memory-architecture-v2.md) /

@@ -104,7 +104,7 @@ class TurnRole(StrEnum):
 
 class EventStatus(StrEnum):
     """Estado de un evento de agenda. Ver ``packages/shared-schemas/src/agenda.ts``
-    y ADR-018.
+    y ADR-023.
 
     Tipo PG ``event_status_enum`` — dueño: ``CalendarEvent.status`` en
     ``app/models/calendar_event.py`` (único consumidor por ahora,
@@ -120,7 +120,7 @@ class EventStatus(StrEnum):
 class TaskStatus(StrEnum):
     """Estado de una tarea/prioridad del día. Ver
     ``packages/shared-schemas/src/today.ts`` (``TaskStatusSchema``) y el dominio
-    TAREAS (Fase D1, espejo de Agenda/ADR-018).
+    TAREAS (Fase D1, espejo de Agenda/ADR-023).
 
     Tipo PG ``task_status_enum`` — dueño: ``Task.status`` en
     ``app/models/task.py`` (único consumidor por ahora, pero la migración lo crea

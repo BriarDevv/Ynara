@@ -1,4 +1,4 @@
-# ADR-018: Modelo de evento de calendario (recurrencia, timezone, all-day, multi-día)
+# ADR-023: Modelo de evento de calendario (recurrencia, timezone, all-day, multi-día)
 
 ## Estado
 Propuesto

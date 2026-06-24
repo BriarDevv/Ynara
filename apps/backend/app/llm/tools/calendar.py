@@ -23,7 +23,7 @@ calendar real), igual que memory.* (stub en default, real en memory_registry).
 
 Args reales que espejan ``EventCreate`` (``app/schemas/calendar_event.py``):
 ``title`` / ``start_at`` / ``duration_min`` (+ ``mode`` / ``location`` /
-``time_zone`` / ``recurrence`` opcionales). La invariante ADR-018
+``time_zone`` / ``recurrence`` opcionales). La invariante ADR-023
 (``recurrence`` ⇒ ``time_zone``) se reusa del schema de dominio (un solo lugar).
 
 El JSON Schema OpenAI de cada tool se deriva del propio modelo Pydantic
@@ -155,7 +155,7 @@ class _AgentCreateEventArgs(BaseModel):
     ``title`` no vacío + ``start_at`` (ISO 8601, vía ``IsoDatetime`` que rechaza
     epoch numérico) + ``duration_min`` entero positivo, con ``mode`` / ``location`` /
     ``time_zone`` / ``recurrence`` opcionales. ``status`` NO se acepta (lo fija el
-    store en ``confirmed``). La invariante ADR-018 (``recurrence`` ⇒ ``time_zone``)
+    store en ``confirmed``). La invariante ADR-023 (``recurrence`` ⇒ ``time_zone``)
     se valida con la MISMA función del schema de dominio (un solo lugar).
 
     ``extra='forbid'``: ``user_id`` (u otro campo) NO puede inyectarse por argumento
@@ -222,7 +222,7 @@ class _AgentCreateEventArgs(BaseModel):
     @model_validator(mode="after")
     def _check_recurrence_time_zone(self) -> _AgentCreateEventArgs:
         # Misma sede que ``EventCreate`` / el router de eventos: recurrencia no vacía
-        # exige ``time_zone`` (ADR-018). Reusar la función evita duplicar la regla.
+        # exige ``time_zone`` (ADR-023). Reusar la función evita duplicar la regla.
         _validate_recurrence_needs_time_zone(self.recurrence, self.time_zone)
         return self
 

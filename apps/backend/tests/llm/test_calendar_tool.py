@@ -210,7 +210,7 @@ class TestAgentCreateEvent:
         assert not store.create_calls
 
     async def test_recurrence_without_time_zone_invalid(self) -> None:
-        # Invariante ADR-018: recurrence no vacía exige time_zone (misma regla que EventCreate).
+        # Invariante ADR-023: recurrence no vacía exige time_zone (misma regla que EventCreate).
         store = FakeCalendarStore()
         tool = AgentCreateEventTool(store)  # type: ignore[arg-type]
 
@@ -335,7 +335,7 @@ class TestAgentCreateEvent:
         assert store.create_calls[0].time_zone is None
 
     async def test_recurrence_with_valid_iana_time_zone_ok(self) -> None:
-        # FIX 1 + invariante ADR-018: recurrence con time_zone IANA válido pasa ambas
+        # FIX 1 + invariante ADR-023: recurrence con time_zone IANA válido pasa ambas
         # validaciones (field_validator + model_validator de recurrencia).
         store = FakeCalendarStore()
         tool = AgentCreateEventTool(store)  # type: ignore[arg-type]

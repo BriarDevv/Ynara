@@ -68,7 +68,7 @@ Notas:
 - **Memoria/tools "siempre" vs por modo**: resuelto **por config** (`tools_enabled` /
   `writes_memory`), no hardcode (ADR-021 D5). El producto lo cambia por data.
 - **`GET /v1/events` sin LIMIT**: la web filtra día/semana client-side; el filtrado
-  real `?from=&to=` es fase posterior (ADR-018 §3). Sin cap arbitrario que silencie
+  real `?from=&to=` es fase posterior (ADR-023 §3). Sin cap arbitrario que silencie
   eventos futuros.
 
 ## Verificación (estándar por fase)

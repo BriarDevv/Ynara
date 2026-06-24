@@ -77,7 +77,7 @@ describe("AgendaEventSchema", () => {
     expect(() => AgendaEventSchema.parse({ ...event, all_day: "si" })).toThrow();
   });
 
-  it("rechaza recurrence sin time_zone (invariante DST del ADR-018)", () => {
+  it("rechaza recurrence sin time_zone (invariante DST del ADR-023)", () => {
     expect(() => AgendaEventSchema.parse({ ...event, recurrence: ["RRULE:FREQ=DAILY"] })).toThrow();
   });
 

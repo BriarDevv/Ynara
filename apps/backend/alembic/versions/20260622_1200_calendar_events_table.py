@@ -1,4 +1,4 @@
-"""calendar_events - tabla operativa del dominio Agenda (ADR-018).
+"""calendar_events - tabla operativa del dominio Agenda (ADR-023).
 
 Tabla OPERATIVA (no sagrada, regla #3): eventos de agenda del usuario, que web +
 mobile consumen vía ``/v1/events``. Modelo canónico iCalendar/RFC 5545 aterrizado
