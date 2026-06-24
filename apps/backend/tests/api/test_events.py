@@ -168,6 +168,82 @@ async def test_list_events_only_own_ordered(db_session: AsyncSession) -> None:
         app.dependency_overrides.clear()
 
 
+# ---------------------------------------------------------------------------
+# 1b. Paginación (API-001): limit acota la query, total sigue completo
+# ---------------------------------------------------------------------------
+
+
+async def _seed_three_events(db_session: AsyncSession, user_id: uuid.UUID) -> None:
+    """Siembra 3 eventos a horas 8/10/12 (orden estable start_at asc)."""
+    for hour in (8, 10, 12):
+        await _seed_event(
+            db_session,
+            user_id=user_id,
+            title=f"E{hour}",
+            start_at=f"2026-06-22T{hour:02d}:00:00+00:00",
+        )
+
+
+async def test_list_events_respects_limit(db_session: AsyncSession) -> None:
+    """``?limit=2`` devuelve 2 items pero ``total`` sigue siendo el conteo completo."""
+    user = await _seed_user(db_session)
+    await _seed_three_events(db_session, user.id)
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.get("/v1/events?limit=2", headers=_bearer(user.id))
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["items"]) == 2
+        assert body["total"] == 3  # total = conteo del user, NO el largo de la página
+        assert [it["title"] for it in body["items"]] == ["E8", "E10"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_list_events_offset_paginates_without_overlap(db_session: AsyncSession) -> None:
+    """``limit``+``offset`` pagina con el mismo orden estable, sin solapar páginas."""
+    user = await _seed_user(db_session)
+    await _seed_three_events(db_session, user.id)
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            page1 = (
+                await client.get("/v1/events?limit=2&offset=0", headers=_bearer(user.id))
+            ).json()
+            page2 = (
+                await client.get("/v1/events?limit=2&offset=2", headers=_bearer(user.id))
+            ).json()
+
+        assert [it["title"] for it in page1["items"]] == ["E8", "E10"]
+        assert [it["title"] for it in page2["items"]] == ["E12"]
+        ids1 = {it["id"] for it in page1["items"]}
+        ids2 = {it["id"] for it in page2["items"]}
+        assert ids1.isdisjoint(ids2)  # páginas sucesivas no se solapan
+        assert page1["total"] == page2["total"] == 3
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize("query", ["limit=0", "limit=201", "offset=-1"])
+async def test_list_events_pagination_out_of_range_422(
+    db_session: AsyncSession, query: str
+) -> None:
+    """``limit`` fuera de ``[1, 200]`` u ``offset`` negativo → 422 (FastAPI valida)."""
+    user = await _seed_user(db_session)
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.get(f"/v1/events?{query}", headers=_bearer(user.id))
+        assert resp.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
 async def test_list_events_empty(db_session: AsyncSession) -> None:
     """Un user sin eventos → 200 con ``{items: [], total: 0}`` (``total or 0``)."""
     user = await _seed_user(db_session)
