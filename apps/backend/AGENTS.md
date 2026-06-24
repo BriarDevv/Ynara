@@ -155,7 +155,9 @@ Política completa: [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md).
 
 **Agregar un endpoint:** schema Pydantic en `app/schemas/` → modelo en `app/models/` (si es nuevo) → lógica en `app/services/` → ruta en `app/api/v1/` → test de integración → documentar en [`docs/ENDPOINTS.md`](./docs/ENDPOINTS.md).
 
-**Agregar una tool LLM:** modelo Pydantic de args en `app/llm/tools/<namespace>.py` (fechas con `IsoDatetime`) → `execute` que devuelve resultado o `tool_error(...)`, nunca `raise` → registrar en `default_registry()` → habilitar el namespace en `ynara.config.json[modes][*].tools_enabled` → [`docs/TOOLS.md`](./docs/TOOLS.md) → tests. (Namespace y `name` en singular, como `calendar`/`reminder`.)
+**Agregar una tool LLM (con efecto real en el chat):** modelo Pydantic de args en `app/llm/tools/<namespace>.py` (fechas con `IsoDatetime`) → `execute` que devuelve resultado o `tool_error(...)`, nunca `raise` → store de dominio + builder `<namespace>_registry(store)` → **registrar el `namespace → builder` en `_AGENT_TOOL_BUILDERS` de `app/llm/tools/agent_registry.py`** → habilitar el namespace en `ynara.config.json[modes][*].tools_enabled` → [`docs/TOOLS.md`](./docs/TOOLS.md) → tests. (Namespace y `name` en singular, como `calendar`/`task`.)
+
+> **Tres superficies de registry — NO confundir** (ver `app/llm/tools/agent_registry.py` y [`docs/TOOLS.md`](./docs/TOOLS.md)). El chat de **producción** consume `build_chat_tool_registry()` (ADR-022), que arma las tools reales desde `_AGENT_TOOL_BUILDERS`. `default_registry()` son **solo los stubs `not_wired` del playground observado** (ADR-019, cero efecto), y `_build_agent_registry()` es la pasada async **dormant** (ADR-021). Una tool registrada **solo** en `default_registry()` —y habilitada en `tools_enabled`— **NO se ejecuta en el chat real**: el builder tiene que estar en `_AGENT_TOOL_BUILDERS`.
 
 **Agregar un modo LLM:** ADR aprobado → entrada en `ynara.config.json[modes]` → `SYSTEM_PROMPT` en `app/llm/prompts/<modo>.py` (registrar en `loader.py`) → [`../../docs/product/MODES.md`](../../docs/product/MODES.md) → tests de invariantes (voz, perímetro, tools).
 

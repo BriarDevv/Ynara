@@ -18,21 +18,29 @@ Cuando hace falta que Qwen pueda ejecutar una acción nueva (ej:
 1. **Schema Pydantic**. Definir args + response en
    `apps/backend/app/llm/tools/<namespace>.py`:
    ```python
-   class CreateEventArgs(YnaraBaseModel):
+   class CreateEventArgs(BaseModel):   # Pydantic v2 strict, extra="forbid"
        title: str
-       start: datetime
-       end: datetime
-       attendees: list[str] | None = None
+       start_at: IsoDatetime           # solo ISO 8601 con tz (rechaza epoch)
+       duration_min: int               # el fin del bloque es derivado
    ```
-2. **Función ejecutora**. Implementar la función con type hints, que
-   tome los args validados y devuelva el resultado:
+2. **Clase `Tool`** (implementa el Protocol `Tool`: `namespace` / `name` /
+   `to_spec` / `execute`). El `execute` valida con el schema, escribe vía el
+   store de dominio y devuelve un `dict` o `tool_error(...)` — **nunca** `raise`
+   (el `ToolRegistry` blinda, pero el contrato es no propagar):
    ```python
-   async def create_event(args: CreateEventArgs, *, user_id: UUID) -> dict[str, Any]:
-       ...
+   class AgentCreateEventTool:          # ejemplo real: app/llm/tools/calendar.py
+       namespace = "calendar"
+       name = "calendar.create_event"
+       async def execute(self, arguments: dict[str, object]) -> dict[str, object]:
+           ...
    ```
-3. **Registro en el router**. Agregar la tool al catálogo del router
-   LLM (`apps/backend/app/llm/router.py`), asociándola a los modos
-   donde está habilitada.
+3. **Registro en la vía de producción**. Agregar el
+   `namespace → builder` a `_AGENT_TOOL_BUILDERS` en
+   `apps/backend/app/llm/tools/agent_registry.py` (lo consume
+   `build_chat_tool_registry`, el tool-loop síncrono del chat — ADR-022)
+   y habilitar el namespace en `ynara.config.json[modes][*].tools_enabled`.
+   **NO** registrar en `default_registry()`: son los stubs `not_wired` del
+   playground observado (ADR-019) y NO se ejecutan en el chat real.
 4. **Documentación**. Agregar entrada en
    `apps/backend/docs/TOOLS.md` con descripción, args, modos,
    ejemplo, errores.
@@ -57,8 +65,8 @@ Códigos comunes: `unauthorized`, `not_found`, `invalid_args`,
 ## Checklist
 
 - [ ] Schema Pydantic creado.
-- [ ] Función ejecutora con tests.
-- [ ] Registro en router con modos correctos.
+- [ ] Clase `Tool` con `execute` (devuelve dict / `tool_error`, nunca `raise`) + tests.
+- [ ] Registrada en `_AGENT_TOOL_BUILDERS` (no `default_registry()`) + namespace en `tools_enabled`.
 - [ ] `docs/TOOLS.md` actualizado.
 - [ ] Frontend muestra la acción (si aplica).
 - [ ] PR aprobado.
