@@ -52,6 +52,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enums import TurnRole
@@ -77,6 +78,14 @@ _HISTORY_MAX_MESSAGES = 40
 
 # Mapeo de rol de turno persistido -> rol del ``ChatMessage`` que espera el modelo.
 _TURN_ROLE_TO_CHAT = {TurnRole.USER: "user", TurnRole.MODEL: "assistant"}
+
+# Reintentos de persistencia de turnos ante una colisión de ``seq`` (MEM-SACRED-01).
+# Dos turnos concurrentes sobre la MISMA sesión pueden leer el mismo ``next_seq`` (TOCTOU)
+# y colisionar en ``UniqueConstraint(session_id, seq)`` al flushear. El UNIQUE es el
+# guardián de última instancia: ante el ``IntegrityError`` se reintenta con un ``seq``
+# fresco en un savepoint (bajo READ COMMITTED el retry ve el turno concurrente ya
+# commiteado y obtiene el próximo libre). 3 intentos cubren varios writers concurrentes.
+_PERSIST_MAX_ATTEMPTS = 3
 
 
 class ChatService:
@@ -240,29 +249,55 @@ class ChatService:
         un turno degradado/vacío no tiene una respuesta útil que valga la pena resumir.
 
         ``seq`` POR SESIÓN (no hardcodeado): el próximo libre es ``MAX(seq)+1`` de la
-        sesión (0 si está vacía). Hardcodear 0/1 rompía el SEGUNDO turno de una sesión
-        reusada con IntegrityError sobre ``UniqueConstraint(session_id, seq)`` en el flush
-        → rollback → 500 y turno perdido (issue #209). El turno user va en ``base`` y el del
-        modelo en ``base+1``: secuencia monotónica alternada user/model a lo largo de la sesión.
+        sesión (0 si está vacía). El turno user va en ``base`` y el del modelo en
+        ``base+1``: secuencia monotónica alternada user/model a lo largo de la sesión.
+
+        CONCURRENCIA (MEM-SACRED-01): ``next_seq`` y el flush del ``add`` son un TOCTOU —
+        dos turnos concurrentes sobre la MISMA sesión pueden leer el mismo ``base`` y
+        colisionar en ``UniqueConstraint(session_id, seq)`` al flushear. El UNIQUE es el
+        **guardián de última instancia** (garantiza que no haya ``seq`` duplicados), no un
+        bug a evitar: ante el ``IntegrityError`` se reintenta en un SAVEPOINT con un ``seq``
+        fresco (``_PERSIST_MAX_ATTEMPTS``). Bajo READ COMMITTED el retry re-lee ``MAX(seq)``
+        viendo el turno concurrente ya commiteado, así obtiene el próximo libre. Si tras
+        todos los intentos sigue colisionando (carga concurrente extrema), se degrada
+        loguenado SOLO el conteo (regla #4): el turno ya respondió, no devolvemos 500 con
+        la respuesta en mano por no poder persistir el transcript.
         """
         turns_store = ConversationTurnStore(self._session, self._user_id)
-        base = await turns_store.next_seq(chat_session.id)
-        await turns_store.add(
-            ConversationTurnCreate(
-                session_id=chat_session.id,
-                role=TurnRole.USER,
-                content=body.text,
-                seq=base,
-            )
-        )
-        await turns_store.add(
-            ConversationTurnCreate(
-                session_id=chat_session.id,
-                role=TurnRole.MODEL,
-                content=resp.text,
-                seq=base + 1,
-            )
-        )
+        for attempt in range(_PERSIST_MAX_ATTEMPTS):
+            try:
+                # Savepoint: aísla el INSERT de los 2 turnos para poder revertir SOLO esta
+                # tentativa ante una colisión y reintentar, sin envenenar la transacción del
+                # turno (un IntegrityError sin savepoint aborta toda la transacción en PG).
+                async with self._session.begin_nested():
+                    base = await turns_store.next_seq(chat_session.id)
+                    await turns_store.add(
+                        ConversationTurnCreate(
+                            session_id=chat_session.id,
+                            role=TurnRole.USER,
+                            content=body.text,
+                            seq=base,
+                        )
+                    )
+                    await turns_store.add(
+                        ConversationTurnCreate(
+                            session_id=chat_session.id,
+                            role=TurnRole.MODEL,
+                            content=resp.text,
+                            seq=base + 1,
+                        )
+                    )
+                return
+            except IntegrityError:
+                # Colisión de ``seq`` con un turno concurrente (TOCTOU). El ``async with``
+                # ya revirtió el savepoint; reintentar con ``next_seq`` fresco.
+                if attempt + 1 >= _PERSIST_MAX_ATTEMPTS:
+                    logger.warning(
+                        "persist_turns: colisión de seq tras %d intentos; turno no "
+                        "persistido (sin datos de usuario)",
+                        _PERSIST_MAX_ATTEMPTS,
+                    )
+                    return
 
     async def _enqueue_consolidation(
         self, chat_session: ChatSession, *, body: ChatHttpRequest, resp: ChatResponse
