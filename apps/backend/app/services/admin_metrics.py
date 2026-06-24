@@ -189,26 +189,61 @@ class AdminMetricsService:
             spark=[p.value for p in spark_points],
         )
 
+    async def _window_counts(
+        self, model: object, col: object, *, start: datetime, prev_start: datetime
+    ) -> tuple[int, int, int]:
+        """``(total, cur, prev)`` en UNA query con ``COUNT(*) FILTER`` (SCAL-04).
+
+        ``total`` = todas las filas; ``cur`` = ``col >= start`` (período actual); ``prev``
+        = ``prev_start <= col < start`` (la ventana anterior de igual longitud, para el
+        delta). Reemplaza los 3 ``COUNT`` seriales (total + cur + prev) por un solo
+        round-trip — el panel admin no suma latencia de N queries por métrica.
+        """
+        row = (
+            await self._session.execute(
+                select(
+                    func.count().label("total"),
+                    func.count().filter(col >= start).label("cur"),
+                    func.count().filter(col >= prev_start, col < start).label("prev"),
+                ).select_from(model)
+            )
+        ).one()
+        return int(row.total), int(row.cur), int(row.prev)
+
+    async def _cumulative_counts(
+        self, model: object, col: object, *, start: datetime
+    ) -> tuple[int, int]:
+        """``(total, antes_de_start)`` en UNA query con ``COUNT(*) FILTER`` (SCAL-04).
+
+        Para KPIs ACUMULATIVOS (users / memorias): el valor es el total y el delta compara
+        contra cuántas filas existían ANTES del período (``col < start``), no contra la
+        ventana anterior. Colapsa las 2 queries (total + prev) en una.
+        """
+        row = (
+            await self._session.execute(
+                select(
+                    func.count().label("total"),
+                    func.count().filter(col < start).label("before"),
+                ).select_from(model)
+            )
+        ).one()
+        return int(row.total), int(row.before)
+
     # --- Métricas ------------------------------------------------------------
 
     async def overview(self, range_id: str) -> AdminOverviewOut:
         """KPIs + serie de sesiones + mix de modos + preview de audit, para el rango pedido."""
         prev_start, start, now = _window(range_id)
 
-        # KPIs --------------------------------------------------------------
-        users_total = await self._count(select(func.count()).select_from(User))
-        users_prev = await self._count(
-            select(func.count()).select_from(User).where(User.created_at < start)
+        # KPIs (SCAL-04: cada KPI colapsa sus COUNT total/cur/prev en UNA query con
+        # COUNT(*) FILTER, en vez de 2-3 queries seriales por KPI) ----------
+        users_total, users_before = await self._cumulative_counts(
+            User, User.created_at, start=start
         )
-        users_total_kpi = KpiValueDelta(value=users_total, delta=_delta(users_total, users_prev))
+        users_total_kpi = KpiValueDelta(value=users_total, delta=_delta(users_total, users_before))
 
-        sessions_cur = await self._count(
-            select(func.count()).select_from(ChatSession).where(ChatSession.started_at >= start),
-        )
-        sessions_prev = await self._count(
-            select(func.count())
-            .select_from(ChatSession)
-            .where(ChatSession.started_at >= prev_start, ChatSession.started_at < start),
+        _, sessions_cur, sessions_prev = await self._window_counts(
+            ChatSession, ChatSession.started_at, start=start, prev_start=prev_start
         )
         sessions_series = await self._daily_series(
             date_column=ChatSession.started_at, start=start, now=now
@@ -219,37 +254,22 @@ class AdminMetricsService:
             spark=[p.value for p in sessions_series],
         )
 
-        memories_total = (
-            await self._count(select(func.count()).select_from(SemanticMemory))
-            + await self._count(select(func.count()).select_from(EpisodicMemory))
-            + await self._count(select(func.count()).select_from(ProceduralMemory))
+        # Memorias: total + "antes de start" por capa (1 query c/u, antes 2), sumadas.
+        sem_total, sem_before = await self._cumulative_counts(
+            SemanticMemory, SemanticMemory.created_at, start=start
         )
-        mem_prev = (
-            await self._count(
-                select(func.count())
-                .select_from(SemanticMemory)
-                .where(SemanticMemory.created_at < start),
-            )
-            + await self._count(
-                select(func.count())
-                .select_from(EpisodicMemory)
-                .where(EpisodicMemory.created_at < start),
-            )
-            + await self._count(
-                select(func.count())
-                .select_from(ProceduralMemory)
-                .where(ProceduralMemory.created_at < start),
-            )
+        epi_total, epi_before = await self._cumulative_counts(
+            EpisodicMemory, EpisodicMemory.created_at, start=start
         )
+        proc_total, proc_before = await self._cumulative_counts(
+            ProceduralMemory, ProceduralMemory.created_at, start=start
+        )
+        memories_total = sem_total + epi_total + proc_total
+        mem_prev = sem_before + epi_before + proc_before
         memories_kpi = KpiValueDelta(value=memories_total, delta=_delta(memories_total, mem_prev))
 
-        audit_cur = await self._count(
-            select(func.count()).select_from(AuditLog).where(AuditLog.created_at >= start)
-        )
-        audit_prev = await self._count(
-            select(func.count())
-            .select_from(AuditLog)
-            .where(AuditLog.created_at >= prev_start, AuditLog.created_at < start),
+        _, audit_cur, audit_prev = await self._window_counts(
+            AuditLog, AuditLog.created_at, start=start, prev_start=prev_start
         )
         audit_kpi = KpiValueDelta(value=audit_cur, delta=_delta(audit_cur, audit_prev))
 
@@ -402,27 +422,22 @@ class AdminMetricsService:
         """Conteos por capa + crecimiento + salud procedural + consolidación. CERO descifrado."""
         prev_start, start, now = _window(range_id)
 
-        # Conteos actuales por capa ----------------------------------------
-        semantic = await self._count(select(func.count()).select_from(SemanticMemory))
-        episodic = await self._count(select(func.count()).select_from(EpisodicMemory))
-        procedural = await self._count(select(func.count()).select_from(ProceduralMemory))
-
-        # Deltas: filas creadas en la ventana actual vs la anterior --------
-        async def _layer_delta(model: type, created_col: object) -> Delta:
-            cur = await self._count(
-                select(func.count()).select_from(model).where(created_col >= start)
-            )
-            prev = await self._count(
-                select(func.count())
-                .select_from(model)
-                .where(created_col >= prev_start, created_col < start),
-            )
-            return _delta(cur, prev)
-
+        # Conteo (total) + delta (cur vs prev) por capa, cada uno en UNA query con
+        # COUNT(*) FILTER (SCAL-04): antes eran 3 counts + 3x2 de los deltas = 9 queries
+        # seriales; ahora 3.
+        semantic, sem_cur, sem_prev = await self._window_counts(
+            SemanticMemory, SemanticMemory.created_at, start=start, prev_start=prev_start
+        )
+        episodic, epi_cur, epi_prev = await self._window_counts(
+            EpisodicMemory, EpisodicMemory.created_at, start=start, prev_start=prev_start
+        )
+        procedural, proc_cur, proc_prev = await self._window_counts(
+            ProceduralMemory, ProceduralMemory.created_at, start=start, prev_start=prev_start
+        )
         deltas = MoatDeltas(
-            semantic=await _layer_delta(SemanticMemory, SemanticMemory.created_at),
-            episodic=await _layer_delta(EpisodicMemory, EpisodicMemory.created_at),
-            procedural=await _layer_delta(ProceduralMemory, ProceduralMemory.created_at),
+            semantic=_delta(sem_cur, sem_prev),
+            episodic=_delta(epi_cur, epi_prev),
+            procedural=_delta(proc_cur, proc_prev),
         )
 
         # Crecimiento diario por capa (serie en la ventana) ----------------
