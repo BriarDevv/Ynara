@@ -182,3 +182,63 @@ async def test_purge_keeps_boundary_exact(db_session: AsyncSession) -> None:
     assert (sensitive_deleted, non_sensitive_deleted) == (0, 0), "nada en ventana se borra"
     assert await _episodic_exists(db_session, at_cutoff.id) is True
     assert await _episodic_exists(db_session, just_inside.id) is True
+
+
+# ---------------------------------------------------------------------------
+# 3. Batching (WW-01): los DOS loops disjuntos borran todo; conteo diferenciado exacto
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_purge_deletes_all_expired_in_batches(db_session: AsyncSession) -> None:
+    """WW-01: con ``batch_size`` chico, los DOS loops disjuntos borran TODAS las vencidas.
+
+    episodic tiene la sutileza de dos ``delete_in_batches`` separados (sensible /
+    no-sensible) para el conteo diferenciado (§5.3). Con ``batch_size=2``, 3 sensibles
+    + 4 no-sensibles vencidas, cada loop itera hasta agotar SU grupo y el conteo
+    diferenciado queda EXACTO ``(3, 4)``. La reciente no se toca.
+    """
+    now = datetime.now(UTC)
+    user = await _seed_user(db_session)
+
+    sensitive_ids = [
+        (
+            await _seed_episodic(
+                db_session,
+                user_id=user.id,
+                created_at=now - timedelta(days=180 + 10),
+                retention_days=180,
+                is_sensitive=True,
+            )
+        ).id
+        for _ in range(3)
+    ]
+    non_sensitive_ids = [
+        (
+            await _seed_episodic(
+                db_session,
+                user_id=user.id,
+                created_at=now - timedelta(days=365 + 30),
+                retention_days=365,
+                is_sensitive=False,
+            )
+        ).id
+        for _ in range(4)
+    ]
+    recent = await _seed_episodic(
+        db_session,
+        user_id=user.id,
+        created_at=now - timedelta(days=10),
+        retention_days=365,
+        is_sensitive=False,
+    )
+
+    sensitive_deleted, non_sensitive_deleted = await _async_purge_episodic(
+        session=db_session, now=now, batch_size=2
+    )
+
+    # Conteo diferenciado EXACTO: cada loop disjunto agota su grupo en lotes.
+    assert (sensitive_deleted, non_sensitive_deleted) == (3, 4)
+    for episodic_id in sensitive_ids + non_sensitive_ids:
+        assert await _episodic_exists(db_session, episodic_id) is False
+    assert await _episodic_exists(db_session, recent.id) is True, "la reciente queda intacta"

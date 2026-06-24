@@ -504,3 +504,32 @@ class TestAsyncDecayIntegration:
         # bajo umbral pero el orden marca stale antes del delete).
         assert result.staled >= 1
         assert result.deleted == 1
+
+    async def test_hard_delete_runs_in_batches(self, db_session: AsyncSession) -> None:
+        """WW-01: el HARD DELETE (c) borra TODAS las elegibles en lotes, no solo una.
+
+        Con ``batch_size=2`` y 5 entradas que cumplen el doble criterio (confidence
+        baja + muy vieja), ``delete_in_batches`` itera hasta agotar (3 lotes: 2+2+1).
+        Antes (un único DELETE) un backlog grande chocaba con el time-limit y
+        rollbackeaba todo.
+        """
+        user_id = await _seed_user(db_session)
+        very_old = datetime.now(UTC) - timedelta(days=HARD_DELETE_MIN_DAYS + 1)
+        ids = [
+            (
+                await _seed_procedural(
+                    db_session,
+                    user_id=user_id,
+                    key=f"borrar_{i}",
+                    confidence=0.05,
+                    last_reinforced_at=very_old,
+                )
+            ).id
+            for i in range(5)
+        ]
+
+        result = await _async_decay(session=db_session, batch_size=2)
+
+        assert result.deleted == 5, "el loop por lotes borra TODAS las elegibles, no un lote"
+        for entry_id in ids:
+            assert await _get(db_session, entry_id) is None
