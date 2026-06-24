@@ -40,25 +40,29 @@
 
 ```
 app/
-├── main.py            # entrypoint FastAPI (lifespan, CORS, routers v1)
-├── enums.py           # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation, TurnRole)
+├── main.py            # entrypoint FastAPI (lifespan, CORS, 10 routers v1, scrubbing de validación)
+├── enums.py           # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation, TurnRole, EventStatus, TaskStatus)
 ├── core/
 │   ├── config.py      # Settings (pydantic-settings); get_settings() cacheado y lazy
+│   ├── constants.py   # constantes cross-módulo (EMBEDDING_DIM: única fuente de verdad de la dim del embedding)
 │   ├── crypto.py      # AES-256-GCM per-user (HKDF-SHA256); encrypt_for_user / decrypt_for_user
 │   ├── db_guard.py    # guard anti-prod en lifespan: aborta el boot si DATABASE_URL apunta a Supabase prod sin opt-in
 │   ├── deps.py        # engine async LAZY (get_engine/get_sessionmaker cacheados, no module-level) + get_db (AsyncSession por request); dispose en el shutdown del lifespan
 │   ├── observability.py  # init_sentry() con before_send que scrubea PII (cuerpo, headers auth, user, extras) — regla #4
+│   ├── paths.py       # resolución de rutas del repo (raíz, ynara.config.json) sin hardcodear cwd
 │   ├── ratelimit.py   # rate-limit fail-open para login/register/refresh/chat/export, memory-wipe (`memory:ratelimit:wipe:`, solo el execute) y sessions (`sessions:ratelimit:read:`, bucket único list/get/close) (contadores Redis vía TokenStore)
 │   ├── security.py    # JWT/hashing — implementado con PyJWT + bcrypt directo (ADR-015, no python-jose/passlib): create_access_token, verify_access_token, hash_password, verify_password
 │   └── token_store.py # blocklist de jti + revocación por familia (sid) + contadores genéricos; Protocol + RedisTokenStore + InMemoryTokenStore (tests)
-├── api/v1/            # rutas, un archivo por dominio (health, auth, chat, sessions, memory)
-├── models/            # SQLAlchemy 2 (user, session, memory, audit, conversation_turn) — base.py: mixins UUIDPK/Timestamp
-├── schemas/           # Pydantic v2 mirror de models + payloads de API
-├── services/          # lógica de negocio SIN framework (recibe deps por argumento)
+├── api/v1/            # routers, un archivo por dominio (health, auth, chat, sessions, events, tasks, memory, modes, users) + subpaquete admin/ (metrics, playground, connectivity); privados _http.py / _sessions.py
+├── models/            # SQLAlchemy 2 (user, session, conversation_turn, calendar_event, task, admin_audit, memory 🔴, audit 🔴) — base.py: mixins UUIDPK/Timestamp
+├── schemas/           # Pydantic v2 mirror de models + payloads de API (*_api.py: envelopes de presentación)
+├── services/          # lógica de negocio SIN framework, deps por argumento (auth, chat, memory, admin_metrics)
+├── calendar/          # store del dominio Agenda (CalendarEventStore) — tabla operativa calendar_events
+├── tasks/             # store del dominio Tareas (TaskStore) — tabla operativa tasks (≠ Celery tasks)
 ├── llm/               # capa de inferencia — ver §3
 ├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, implementado); audit.py: AuditStore (único punto de inserción en audit_log — sagrado, no editar). Módulos neutrales (no sagrados, siblings de COMPORTAMIENTO, no tocan columnas): hashing.py (digests de audit_log: compute_record_hash + procedural_hash_payload), embedding.py (embed_one compartido), config.py (loader de thresholds de `[memory]`: decay + retention, #211), conversation_turns.py (store del buffer operativo)
-├── workers/           # Celery (celery_app.py + tasks) — autodiscovery en app.workflows
-└── workflows/         # consolidación async + decay procedural + retention de audit_log (purge_audit_log) implementados
+├── workers/           # Celery (celery_app.py + beat_schedule de los jobs periódicos) — autodiscovery en app.workflows
+└── workflows/         # jobs async: consolidation, decay procedural, episodic_retention, audit_retention (purge_audit_log), agent_pass (DORMANT, ADR-022), _engine.py (worker_session NullPool compartido)
 ```
 
 **Auth está layer-split a propósito (ADR-011).** Su superficie se reparte por capa —
@@ -96,7 +100,7 @@ llm/
 │   ├── factory.py     # build_llm_client() / build_embedder() / build_reranker(): Fakes por default, clientes reales por flag (LLM_BACKEND/EMBEDDING_BACKEND/RERANKER_BACKEND=vllm) o en prod
 │   └── reranker.py    # Protocol Reranker + FakeReranker passthrough + VllmReranker real (API /rerank de vLLM; prende por RERANKER_BACKEND=vllm)
 ├── prompts/           # shared.py (identidad/voz/seguridad) + loader.py (load_prompt(mode)) + 1 SYSTEM_PROMPT por modo
-├── tools/             # base.py (Tool Protocol, to_spec, tool_error, IsoDatetime) + registry.py + calendar.py + reminder.py + memory.py
+├── tools/             # base.py (Tool Protocol, to_spec, tool_error, IsoDatetime) + registry.py (default_registry: stubs playground) + agent_registry.py (_AGENT_TOOL_BUILDERS: vía prod ADR-022) + calendar.py + task.py + reminder.py + memory.py
 └── router.py          # M8 — orquesta modo→modelo→memoria→tools. Implementado.
 ```
 

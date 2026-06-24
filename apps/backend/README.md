@@ -14,7 +14,7 @@ perímetro (regla #4).
 
 ## Estado
 
-- **Construido y mergeado**: capa LLM **M0–M8** completa — config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + reminder stubs), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Persistencia de turnos crudos cifrados (`conversation_turns`, operativa) en `/v1/chat` + consolidación **episódica** async al cerrar la sesión (`consolidate_session`: resume con Qwen, embeddea, cifra y persiste en `episodic_memory`, purga los turnos). Workers Celery: consolidación async (semantic/procedural + episódica) + decay procedural. Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migraciones: cadena de **4** (initial → audit_log block-update trigger → `conversation_turns` table → drop de índices redundantes de `conversation_turns`); 7 tablas, 5 enums, pgvector + pgcrypto. Ver [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md).
+- **Construido y mergeado**: capa LLM **M0–M8** completa — config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, tools de agente (calendar + task reales, síncronas en el chat — ADR-022; reminder stub), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Persistencia de turnos crudos cifrados (`conversation_turns`, operativa) en `/v1/chat` + consolidación **episódica** async al cerrar la sesión (`consolidate_session`: resume con Qwen, embeddea, cifra y persiste en `episodic_memory`, purga los turnos). Workers Celery: consolidación async (semantic/procedural + episódica) + decay procedural. Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migraciones: cadena de **9** (de `initial_schema` hasta el índice btree en `episodic_memory.occurred_at`); 10 tablas, 7 enums, pgvector + pgcrypto. Ver [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md).
 - **Serving**: el motor local de 16GB es **Ollama/GGUF** (un endpoint OpenAI-compatible
   `http://localhost:11434/v1` con los modelos `gemma4` + `qwen`); vLLM queda reservado a 24GB+
   (ADR-014). El cliente HTTP del backend es OpenAI-compatible y sirve **ambos** motores: el flag
@@ -28,20 +28,22 @@ perímetro (regla #4).
 
 ```
 app/
-├── main.py          # entrypoint FastAPI (lifespan, CORS, routers v1)
-├── enums.py         # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation, TurnRole)
-├── core/            # config (Settings lazy), deps (engine async lazy: get_engine/get_sessionmaker), security (auth JWT con PyJWT + bcrypt directo — ADR-015, no python-jose/passlib), db_guard
-├── api/v1/          # rutas FastAPI, un archivo por dominio
-├── models/          # SQLAlchemy 2 (user, session, memory 🔴, audit 🔴, conversation_turn operativa)
-├── schemas/         # Pydantic v2 (mirror de models + payloads de API)
-├── services/        # lógica de negocio sin framework (deps por argumento)
+├── main.py          # entrypoint FastAPI (lifespan, CORS, 10 routers v1)
+├── enums.py         # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation, TurnRole, EventStatus, TaskStatus)
+├── core/            # config (Settings lazy), constants (EMBEDDING_DIM), crypto, deps (engine async lazy), security (JWT PyJWT+bcrypt — ADR-015), db_guard, ratelimit, token_store, observability, paths
+├── api/v1/          # routers, un archivo por dominio (auth, chat, sessions, events, tasks, memory, modes, users, health) + subpaquete admin/ (metrics, playground, connectivity)
+├── models/          # SQLAlchemy 2 (user, session, conversation_turn operativa, calendar_event, task, admin_audit, memory 🔴, audit 🔴)
+├── schemas/         # Pydantic v2 (mirror de models + payloads de API; *_api.py: envelopes)
+├── services/        # lógica de negocio sin framework, deps por argumento (auth, chat, memory, admin_metrics)
+├── calendar/        # store del dominio Agenda (CalendarEventStore)
+├── tasks/           # store del dominio Tareas (TaskStore) — ≠ Celery tasks
 ├── llm/             # capa de inferencia — config, clients/, prompts/, tools/, router (M8)
 ├── memory/          # 🔴 wrappers de las 3 capas sagradas + AuditStore (escritura de audit_log)
 │                     #   + módulos neutrales (no sagrados): hashing.py (digests de audit_log),
 │                     #   embedding.py (embed_one), config.py (decay+retention de [memory]),
 │                     #   conversation_turns.py (store del buffer operativo de turnos)
-├── workers/         # Celery (consolidación async)
-└── workflows/       # consolidación + decay (thresholds config-driven vía [memory]) + retention de audit_log implementados
+├── workers/         # Celery (consolidación async + beat_schedule de jobs periódicos)
+└── workflows/       # consolidation, decay, episodic_retention, audit_retention, agent_pass (dormant), _engine
 
 alembic/             # Migraciones (env.py acepta TEST_DATABASE_URL)
 docs/                # Catálogos vivos (MODELS, ENDPOINTS, TOOLS, MIGRATIONS)
