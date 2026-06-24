@@ -5,20 +5,29 @@ Evita que `docs/MIGRATIONS.md` y `docs/ENDPOINTS.md` queden stale respecto
 del código (el bug que ya nos pasó: agregar una migración / endpoint y
 olvidar registrarlo en el catálogo).
 
-Valida DOS cosas contra el estado actual del repo:
+Valida CINCO cosas contra el estado actual del repo:
 
 a) MIGRACIONES (ESTRICTO, falla el build):
    cada revision declarada en `alembic/versions/*.py`
    (línea `revision: str = "..."`) debe estar listada en `docs/MIGRATIONS.md`.
-   Si falta alguna -> imprime cuáles y devuelve exit 1.
 
-b) ENDPOINTS (INFORMATIVO, NO falla el build):
+b) MODELS (ESTRICTO, falla el build):
+   cada `__tablename__` de `app/models/*.py` debe aparecer en `docs/MODELS.md`.
+
+c) MAPA DE PAQUETES (ESTRICTO, falla el build):
+   cada paquete top-level de `app/` (directorio con `__init__.py`) debe aparecer
+   en el mapa de código de `AGENTS.md`. Convierte el drift del mapa (la causa de
+   que se "perdieran" calendar/ y tasks/) en una falla detectable.
+
+d) ENDPOINTS (INFORMATIVO, NO falla el build):
    cada path declarado en `app/api/v1/**/*.py` (decoradores
    `@router.get/post/patch/delete/put("...")`) debería aparecer mencionado en
-   `docs/ENDPOINTS.md`. Si falta -> imprime un WARNING pero NO cambia el exit
-   code. El parseo de rutas es fuzzy (los routers montan con prefijo `/v1` y la
-   doc usa varias formas del mismo path); arrancamos como warning para no
-   generar falsos positivos bloqueantes.
+   `docs/ENDPOINTS.md`. Parseo fuzzy (prefijo `/v1`, varias formas del path) ->
+   warning para no generar falsos positivos bloqueantes.
+
+e) TOOLS (INFORMATIVO, NO falla el build):
+   cada `name` de tool de `app/llm/tools/*.py` (literal o f-string con
+   `_NAMESPACE`) debería aparecer en `docs/TOOLS.md`. Parseo fuzzy -> warning.
 
 Solo stdlib. Pensado para correr en CI con:
 
@@ -116,15 +125,116 @@ def find_unmentioned_routes(api_dir: Path, endpoints_doc: Path) -> list[tuple[st
     return unmentioned
 
 
+# --- modelos (estricto) ---------------------------------------------------
+
+# Línea: __tablename__ = "tasks"
+_TABLENAME_RE = re.compile(
+    r"""^\s*__tablename__\s*=\s*['"](?P<table>[a-z_]+)['"]""",
+    re.MULTILINE,
+)
+
+
+def extract_table_names(models_dir: Path) -> dict[str, str]:
+    """Devuelve {tabla: archivo} para cada modelo con ``__tablename__``."""
+    tables: dict[str, str] = {}
+    for path in sorted(models_dir.glob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        for match in _TABLENAME_RE.finditer(path.read_text(encoding="utf-8")):
+            tables[match.group("table")] = path.name
+    return tables
+
+
+def find_missing_tables(models_dir: Path, models_doc: Path) -> list[tuple[str, str]]:
+    """Tablas declaradas en el código pero NO mencionadas en MODELS.md."""
+    tables = extract_table_names(models_dir)
+    doc_text = models_doc.read_text(encoding="utf-8") if models_doc.exists() else ""
+    missing = [(table, filename) for table, filename in tables.items() if table not in doc_text]
+    return sorted(missing, key=lambda item: item[0])
+
+
+# --- tools (informativo) --------------------------------------------------
+
+# _NAMESPACE = "calendar"  (al tope del módulo de tools)
+_NAMESPACE_RE = re.compile(r"""^\s*_NAMESPACE\s*=\s*['"](?P<ns>[a-z_]+)['"]""", re.MULTILINE)
+# name = f"{_NAMESPACE}.create_event"  (f-string con el namespace del módulo)
+_TOOL_FSTRING_RE = re.compile(r"""name\s*=\s*f['"]\{_NAMESPACE\}\.(?P<action>[a-z_]+)['"]""")
+# name = "reminder.set"  (literal namespace.action)
+_TOOL_LITERAL_RE = re.compile(r"""name\s*=\s*['"](?P<full>[a-z_]+\.[a-z_]+)['"]""")
+
+
+def extract_tool_names(tools_dir: Path) -> set[str]:
+    """Set de nombres de tool (``namespace.action``) declarados en el código.
+
+    Maneja las dos formas de declarar ``name``: f-string con el ``_NAMESPACE``
+    del módulo (``f"{_NAMESPACE}.create_event"``) y literal (``"reminder.set"``).
+    Los stubs y las tools reales comparten ``name`` (dedup por set).
+    """
+    names: set[str] = set()
+    for path in sorted(tools_dir.glob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        ns_match = _NAMESPACE_RE.search(text)
+        ns = ns_match.group("ns") if ns_match else None
+        if ns:
+            for match in _TOOL_FSTRING_RE.finditer(text):
+                names.add(f"{ns}.{match.group('action')}")
+        for match in _TOOL_LITERAL_RE.finditer(text):
+            names.add(match.group("full"))
+    return names
+
+
+def find_unmentioned_tools(tools_dir: Path, tools_doc: Path) -> list[str]:
+    """Nombres de tool declarados en el código pero NO mencionados en TOOLS.md."""
+    names = extract_tool_names(tools_dir)
+    doc_text = tools_doc.read_text(encoding="utf-8") if tools_doc.exists() else ""
+    return sorted(name for name in names if name not in doc_text)
+
+
+# --- mapa de paquetes (estricto) ------------------------------------------
+
+
+def extract_app_packages(app_dir: Path) -> list[str]:
+    """Paquetes top-level de ``app/`` (directorios con ``__init__.py``, sin dunder)."""
+    packages: list[str] = []
+    for path in sorted(app_dir.iterdir()):
+        if not path.is_dir() or path.name.startswith((".", "__")):
+            continue
+        if (path / "__init__.py").exists():
+            packages.append(path.name)
+    return packages
+
+
+def find_unmapped_packages(app_dir: Path, agents_doc: Path) -> list[str]:
+    """Paquetes de ``app/`` ausentes del mapa de código de AGENTS.md.
+
+    Convierte el drift del mapa (la causa de que se "perdieran" calendar/ y
+    tasks/) en una falla detectable: cada paquete debe aparecer como ``pkg/`` o
+    ``` `pkg` ``` en el texto de AGENTS.md.
+    """
+    packages = extract_app_packages(app_dir)
+    doc_text = agents_doc.read_text(encoding="utf-8") if agents_doc.exists() else ""
+    return [pkg for pkg in packages if f"{pkg}/" not in doc_text and f"`{pkg}`" not in doc_text]
+
+
 # --- runner ---------------------------------------------------------------
 
 
 def run(backend_root: Path) -> int:
-    """Corre ambos checks. Devuelve exit code (0 ok, 1 drift de migraciones)."""
+    """Corre los checks. Devuelve exit code (0 ok, 1 si hay drift estricto).
+
+    Estricto (falla el build): MIGRACIONES, MODELS, PAQUETES del mapa.
+    Informativo (warning): ENDPOINTS, TOOLS (parseo fuzzy).
+    """
     versions_dir = backend_root / "alembic" / "versions"
     migrations_doc = backend_root / "docs" / "MIGRATIONS.md"
     api_dir = backend_root / "app" / "api" / "v1"
     endpoints_doc = backend_root / "docs" / "ENDPOINTS.md"
+    models_dir = backend_root / "app" / "models"
+    models_doc = backend_root / "docs" / "MODELS.md"
+    tools_dir = backend_root / "app" / "llm" / "tools"
+    tools_doc = backend_root / "docs" / "TOOLS.md"
+    app_dir = backend_root / "app"
+    agents_doc = backend_root / "AGENTS.md"
 
     print("== DRIFT GUARD: catálogos de docs ==")
 
@@ -144,7 +254,35 @@ def run(backend_root: Path) -> int:
             f"\n[MIGRACIONES] OK: {total_revisions} revision(es) registradas en docs/MIGRATIONS.md."
         )
 
-    # b) ENDPOINTS (informativo)
+    # b) MODELS (estricto)
+    total_tables = len(extract_table_names(models_dir))
+    missing_tables = find_missing_tables(models_dir, models_doc)
+    if missing_tables:
+        print(
+            f"\n[MODELS] FALLA: {len(missing_tables)} de {total_tables} "
+            f"tabla(s) NO están en docs/MODELS.md:"
+        )
+        for table, filename in missing_tables:
+            print(f"  - {table}  ({filename})")
+        print("\n  -> Registralas en el catálogo de docs/MODELS.md.")
+    else:
+        print(f"\n[MODELS] OK: {total_tables} tabla(s) registradas en docs/MODELS.md.")
+
+    # c) PAQUETES del mapa (estricto)
+    total_packages = len(extract_app_packages(app_dir))
+    unmapped_packages = find_unmapped_packages(app_dir, agents_doc)
+    if unmapped_packages:
+        print(
+            f"\n[MAPA] FALLA: {len(unmapped_packages)} de {total_packages} "
+            f"paquete(s) de app/ NO aparecen en el mapa de AGENTS.md:"
+        )
+        for pkg in unmapped_packages:
+            print(f"  - app/{pkg}/")
+        print("\n  -> Agregalos al mapa de código (AGENTS.md §2).")
+    else:
+        print(f"\n[MAPA] OK: {total_packages} paquete(s) de app/ en el mapa de AGENTS.md.")
+
+    # d) ENDPOINTS (informativo)
     total_routes = len(extract_routes(api_dir))
     unmentioned_routes = find_unmentioned_routes(api_dir, endpoints_doc)
     if unmentioned_routes:
@@ -161,8 +299,23 @@ def run(backend_root: Path) -> int:
     else:
         print(f"\n[ENDPOINTS] OK: {total_routes} ruta(s) mencionadas en docs/ENDPOINTS.md.")
 
-    exit_code = 1 if missing_revisions else 0
-    print(f"\n== Resultado: {'FALLA (drift de migraciones)' if exit_code else 'OK'} ==")
+    # e) TOOLS (informativo)
+    total_tools = len(extract_tool_names(tools_dir))
+    unmentioned_tools = find_unmentioned_tools(tools_dir, tools_doc)
+    if unmentioned_tools:
+        print(
+            f"\n[TOOLS] WARNING (no bloquea): {len(unmentioned_tools)} de "
+            f"{total_tools} tool(s) NO aparecen en docs/TOOLS.md:"
+        )
+        for name in unmentioned_tools:
+            print(f"  - {name}")
+        print("\n  -> Considerá documentarlas en docs/TOOLS.md (parseo fuzzy de name).")
+    else:
+        print(f"\n[TOOLS] OK: {total_tools} tool(s) mencionadas en docs/TOOLS.md.")
+
+    strict_drift = bool(missing_revisions or missing_tables or unmapped_packages)
+    exit_code = 1 if strict_drift else 0
+    print(f"\n== Resultado: {'FALLA (drift de catálogos)' if exit_code else 'OK'} ==")
     return exit_code
 
 
