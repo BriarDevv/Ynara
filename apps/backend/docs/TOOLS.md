@@ -213,10 +213,16 @@
 
 ## Agregar una tool nueva
 
-Ver `skills/add-llm-tool/SKILL.md`. En resumen:
+Playbook detallado: `skills/add-llm-tool/SKILL.md` (raíz del repo). En resumen, una
+tool de agente **con efecto real en el chat de producción**:
 
-1. Definir schema Pydantic en `app/llm/tools/<namespace>.py`.
-2. Implementar la función ejecutora.
-3. Registrarla en el router LLM con los modos donde aplica.
-4. Documentarla acá.
-5. Tests.
+1. Schema Pydantic de args en `app/llm/tools/<namespace>.py` (fechas con `IsoDatetime`).
+2. Clase `Tool` con `execute` que devuelve el resultado o `tool_error(...)` — nunca `raise`.
+3. Store de dominio + builder `<namespace>_registry(store)`.
+4. **Registrar el `namespace → builder` en `_AGENT_TOOL_BUILDERS`** de
+   `app/llm/tools/agent_registry.py` (la vía de PRODUCCIÓN, ADR-022: la consume
+   `build_chat_tool_registry`). **NO** `default_registry()` (son solo los stubs `not_wired`
+   del playground observado, ADR-019, cero efecto en el chat).
+5. Habilitar el namespace en `ynara.config.json[modes][*].tools_enabled`.
+6. Documentarla acá.
+7. Tests (unit del schema/tool + integración del store).
