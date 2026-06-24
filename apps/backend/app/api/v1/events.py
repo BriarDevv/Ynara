@@ -53,10 +53,10 @@ from app.api.v1._http import too_many_requests
 from app.core.config import get_settings
 from app.core.deps import CurrentUser, DbSession, TokenStoreDep
 from app.core.ratelimit import check_events_rate_limit
-from app.enums import EventStatus
 from app.models.calendar_event import CalendarEvent
 from app.schemas.calendar_event import CalendarEventOut, EventCreate, EventPatch
 from app.schemas.calendar_event_api import EventsResponse
+from app.services.calendar import CalendarEventStore, RecurrenceNeedsTimeZoneError
 
 router = APIRouter()
 
@@ -101,21 +101,19 @@ async def list_events(
     """
     if not await check_events_rate_limit(store, user_id=str(user_id)):
         raise too_many_requests(get_settings().events_window_seconds)
-    items_result = await session.execute(
-        select(CalendarEvent)
-        .where(CalendarEvent.user_id == user_id)
-        .order_by(CalendarEvent.start_at.asc())
-        .limit(limit)
-        .offset(offset)
-    )
-    items = items_result.scalars().all()
+    # Delega la query al store (igual que /tasks): el aislamiento por user_id y el orden
+    # viven en CalendarEventStore. El COUNT del total queda inline (mismo patrón que tasks).
+    items = await CalendarEventStore(session, user_id).list_all(limit=limit, offset=offset)
 
     total = await session.scalar(
         select(func.count()).select_from(CalendarEvent).where(CalendarEvent.user_id == user_id)
     )
 
+    # ``list_all`` devuelve dicts JSON-safe (``_to_result``); se re-hidratan con
+    # ``strict=False`` (mismo criterio que /tasks: un str del wire no es instancia de
+    # UUID/datetime/enum bajo el strict heredado de YnaraBaseModel).
     return EventsResponse(
-        items=[CalendarEventOut.model_validate(ev) for ev in items],
+        items=[CalendarEventOut.model_validate(item, strict=False) for item in items],
         total=total or 0,
     )
 
@@ -141,23 +139,13 @@ async def create_event(
     """
     if not await check_events_rate_limit(store, user_id=str(user_id)):
         raise too_many_requests(get_settings().events_window_seconds)
-    event = CalendarEvent(
-        user_id=user_id,
-        title=payload.title,
-        start_at=payload.start_at,
-        duration_min=payload.duration_min,
-        mode=payload.mode,
-        status=EventStatus.CONFIRMED,
-        location=payload.location,
-        time_zone=payload.time_zone,
-        all_day=payload.all_day,
-        recurrence=payload.recurrence,
-    )
-    session.add(event)
+    # add_event INSERTA siempre (no deduplica, a diferencia de la tool del agente): un
+    # POST explícito del usuario debe crear el evento. El status arranca confirmed dentro
+    # del store; el commit lo da este router.
+    created = await CalendarEventStore(session, user_id).add_event(payload)
     await session.commit()
-    await session.refresh(event)
 
-    return CalendarEventOut.model_validate(event)
+    return CalendarEventOut.model_validate(created, strict=False)
 
 
 @router.patch("/events/{event_id}", response_model=CalendarEventOut, status_code=200)
@@ -185,31 +173,28 @@ async def patch_event(
     """
     if not await check_events_rate_limit(store, user_id=str(user_id)):
         raise too_many_requests(get_settings().events_window_seconds)
-    event = await session.get(CalendarEvent, event_id)
+    # update_event aplica el patch parcial y enforcea la invariante ADR-018 sobre el estado
+    # MERGEADO: si queda con recurrence sin time_zone lanza el domain-error (mapeado acá a
+    # 422, sin commit). None = evento inexistente O ajeno -> MISMO 404 (sin oráculo).
+    try:
+        updated = await CalendarEventStore(session, user_id).update_event(
+            event_id, payload.model_dump(exclude_unset=True)
+        )
+    except RecurrenceNeedsTimeZoneError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_RECURRENCE_TZ_DETAIL,
+        ) from None
 
-    # Aislamiento sin oráculo: evento inexistente y evento ajeno dan el MISMO 404.
-    if event is None or event.user_id != user_id:
+    if updated is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_NOT_FOUND_DETAIL,
         )
 
-    updates = payload.model_dump(exclude_unset=True)
-    for field, value in updates.items():
-        setattr(event, field, value)
-
-    # Invariante ADR-018 sobre el estado MERGEADO (la fila ya tiene el patch
-    # aplicado en memoria): recurrence no vacía exige time_zone -> 422 (sin commit).
-    if event.recurrence and not event.time_zone:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=_RECURRENCE_TZ_DETAIL,
-        )
-
     await session.commit()
-    await session.refresh(event)
 
-    return CalendarEventOut.model_validate(event)
+    return CalendarEventOut.model_validate(updated, strict=False)
 
 
 @router.delete("/events/{event_id}", status_code=204)
@@ -228,14 +213,13 @@ async def delete_event(
     """
     if not await check_events_rate_limit(store, user_id=str(user_id)):
         raise too_many_requests(get_settings().events_window_seconds)
-    event = await session.get(CalendarEvent, event_id)
-
-    # Aislamiento sin oráculo: evento inexistente y evento ajeno dan el MISMO 404.
-    if event is None or event.user_id != user_id:
+    # delete_event filtra por user_id (aislamiento): False = evento inexistente O ajeno ->
+    # MISMO 404 (sin oráculo de existencia ajena). El commit lo da este router.
+    deleted = await CalendarEventStore(session, user_id).delete_event(event_id)
+    if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_NOT_FOUND_DETAIL,
         )
 
-    await session.delete(event)
     await session.commit()

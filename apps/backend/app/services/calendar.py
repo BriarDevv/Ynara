@@ -44,6 +44,16 @@ from app.models.calendar_event import CalendarEvent
 from app.schemas.calendar_event import CalendarEventOut, EventCreate
 
 
+class RecurrenceNeedsTimeZoneError(ValueError):
+    """Invariante ADR-018 violada sobre el estado MERGEADO de un evento.
+
+    ``recurrence`` no vacía sin ``time_zone`` (la invariante que ``EventPatch`` no puede
+    validar sola por ser parcial). Es un error de DOMINIO, NO HTTP: lo lanza
+    ``CalendarEventStore.update_event`` y el router (``app/api/v1/events.py``) lo mapea a
+    un 422 — así el store framework-free no necesita conocer ``HTTPException``.
+    """
+
+
 class CalendarEventStore:
     """Store por-request de ``calendar_events``, ligado a un ``user_id``.
 
@@ -128,6 +138,98 @@ class CalendarEventStore:
             stmt = stmt.limit(limit)
         rows = list((await self._session.execute(stmt)).scalars().all())
         return [self._to_result(row) for row in rows]
+
+    # --- CRUD HTTP (GET/POST/PATCH/DELETE de /v1/events) ----------------------
+    # A diferencia de create_event/list_events (superficie del AGENTE: dedup + ventana
+    # de tiempo), estos métodos sirven el CRUD del dashboard: lista completa paginada,
+    # alta NO idempotente (un usuario que crea explícitamente espera que se cree), y
+    # get/update/delete por id con aislamiento por user (sin oráculo de existencia ajena).
+
+    async def list_all(self, *, limit: int, offset: int) -> list[dict[str, object]]:
+        """Lista TODOS los eventos del usuario (start_at ASC, paginado) para ``GET /v1/events``.
+
+        Filtra por ``user_id`` (aislamiento). Distinto de ``list_events`` (ventana de
+        tiempo, agente): el CRUD HTTP lista el calendario completo del user.
+        """
+        stmt = (
+            select(CalendarEvent)
+            .where(CalendarEvent.user_id == self._user_id)
+            .order_by(CalendarEvent.start_at.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return [self._to_result(row) for row in rows]
+
+    async def add_event(self, payload: EventCreate) -> dict[str, object]:
+        """Inserta SIEMPRE un evento nuevo (NO deduplica) — el alta de ``POST /v1/events``.
+
+        Un usuario que crea explícitamente un evento espera que se cree, aunque sea
+        idéntico a otro. Distinto de ``create_event``, que deduplica para la idempotencia
+        de la pasada async del agente (ADR-021). ``status`` arranca ``confirmed``; la
+        invariante ADR-018 ya la valida ``EventCreate``. Solo ``flush``; commit del router.
+        """
+        event = CalendarEvent(
+            user_id=self._user_id,
+            title=payload.title,
+            start_at=payload.start_at,
+            duration_min=payload.duration_min,
+            mode=payload.mode,
+            status=EventStatus.CONFIRMED,
+            location=payload.location,
+            time_zone=payload.time_zone,
+            all_day=payload.all_day,
+            recurrence=payload.recurrence,
+        )
+        self._session.add(event)
+        await self._session.flush()
+        await self._session.refresh(event)
+        return self._to_result(event)
+
+    async def update_event(
+        self, event_id: UUID, updates: dict[str, object]
+    ) -> dict[str, object] | None:
+        """Update PARCIAL de un evento del usuario; ``None`` si ajeno/inexistente.
+
+        Aplica solo los campos de ``updates`` (ya filtrados con ``exclude_unset`` por el
+        router). Enforcea la invariante ADR-018 sobre el estado MERGEADO: si tras el patch
+        queda con ``recurrence`` no vacía sin ``time_zone``, lanza
+        ``RecurrenceNeedsTimeZoneError`` (el router → 422, sin commit). Solo ``flush``.
+        """
+        event = await self._get_owned(event_id)
+        if event is None:
+            return None
+        for field, value in updates.items():
+            setattr(event, field, value)
+        if event.recurrence and not event.time_zone:
+            raise RecurrenceNeedsTimeZoneError
+        await self._session.flush()
+        await self._session.refresh(event)
+        return self._to_result(event)
+
+    async def delete_event(self, event_id: UUID) -> bool:
+        """Borra un evento del usuario; ``True`` si existía, ``False`` si ajeno/inexistente.
+
+        Filtra por ``self._user_id`` (aislamiento): el router traduce ``False`` a un 404
+        sin oráculo de existencia ajena. Solo ``flush``; el commit lo da el router.
+        """
+        event = await self._get_owned(event_id)
+        if event is None:
+            return False
+        await self._session.delete(event)
+        await self._session.flush()
+        return True
+
+    async def _get_owned(self, event_id: UUID) -> CalendarEvent | None:
+        """Devuelve el evento del usuario por id, o ``None`` si no existe / es ajeno.
+
+        Filtra por ``self._user_id`` (aislamiento estructural): un evento de otro usuario
+        es indistinguible de uno inexistente (sin oráculo de existencia ajena).
+        """
+        stmt = select(CalendarEvent).where(
+            CalendarEvent.id == event_id, CalendarEvent.user_id == self._user_id
+        )
+        return (await self._session.execute(stmt)).scalars().first()
 
     async def _find_duplicate(
         self, *, title: str, start_at: datetime, duration_min: int
