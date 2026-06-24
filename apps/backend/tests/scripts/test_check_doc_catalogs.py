@@ -208,3 +208,85 @@ def test_endpoint_match_fuzzy_por_substring(tmp_path: Path) -> None:
     )
 
     assert unmentioned == []
+
+
+# --- helper para los checks nuevos ----------------------------------------
+
+
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+# --- modelos: drift estricto ----------------------------------------------
+
+
+def test_extract_table_names_parsea_tablename(tmp_path: Path) -> None:
+    models = tmp_path / "app" / "models"
+    _write(models / "user.py", 'class User(Base):\n    __tablename__ = "users"\n')
+    _write(models / "task.py", 'class Task(Base):\n    __tablename__ = "tasks"\n')
+    _write(models / "__init__.py", "")  # sin __tablename__: ignorado
+
+    tables = cdc.extract_table_names(models)
+
+    assert tables == {"users": "user.py", "tasks": "task.py"}
+
+
+def test_tabla_faltante_en_models_doc_es_drift(tmp_path: Path) -> None:
+    models = tmp_path / "app" / "models"
+    _write(models / "task.py", 'class Task(Base):\n    __tablename__ = "tasks"\n')
+    doc = tmp_path / "docs" / "MODELS.md"
+    _write(doc, "# MODELS\n\nSolo `users` documentado.\n")
+
+    missing = cdc.find_missing_tables(models, doc)
+
+    assert missing == [("tasks", "task.py")]
+
+
+# --- tools: warning informativo -------------------------------------------
+
+
+def test_extract_tool_names_fstring_y_literal(tmp_path: Path) -> None:
+    tools = tmp_path / "tools"
+    _write(
+        tools / "calendar.py",
+        '_NAMESPACE = "calendar"\n\nclass T:\n    name = f"{_NAMESPACE}.create_event"\n',
+    )
+    _write(tools / "reminder.py", 'class R:\n    name = "reminder.set"\n')
+
+    names = cdc.extract_tool_names(tools)
+
+    assert names == {"calendar.create_event", "reminder.set"}
+
+
+def test_tool_no_documentada_se_reporta(tmp_path: Path) -> None:
+    tools = tmp_path / "tools"
+    _write(tools / "x.py", '_NAMESPACE = "x"\nname = f"{_NAMESPACE}.do"\n')
+    doc = tmp_path / "TOOLS.md"
+    _write(doc, "# TOOLS\nsin la tool.\n")
+
+    assert cdc.find_unmentioned_tools(tools, doc) == ["x.do"]
+
+
+# --- mapa de paquetes: drift estricto -------------------------------------
+
+
+def test_extract_app_packages_solo_dirs_con_init(tmp_path: Path) -> None:
+    app = tmp_path / "app"
+    _write(app / "core" / "__init__.py", "")
+    _write(app / "llm" / "__init__.py", "")
+    _write(app / "__pycache__" / "x.py", "")  # dunder dir -> ignorado
+    _write(app / "main.py", "")  # archivo top-level -> no es paquete
+    (app / "sinpkg").mkdir()  # dir sin __init__.py -> ignorado
+
+    assert cdc.extract_app_packages(app) == ["core", "llm"]
+
+
+def test_paquete_no_mapeado_es_drift(tmp_path: Path) -> None:
+    app = tmp_path / "app"
+    _write(app / "calendar" / "__init__.py", "")
+    _write(app / "core" / "__init__.py", "")
+    agents = tmp_path / "AGENTS.md"
+    _write(agents, "# AGENTS\n\n```\napp/\n+-- core/\n```\n")  # falta calendar/
+
+    assert cdc.find_unmapped_packages(app, agents) == ["calendar"]
