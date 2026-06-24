@@ -27,7 +27,7 @@ from app.enums import TaskStatus
 from app.models.task import Task
 from app.models.user import User
 from app.schemas.task import TaskCreate
-from app.tasks.store import TaskStore
+from app.services.tasks import TaskStore
 
 pytestmark = pytest.mark.integration
 

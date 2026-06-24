@@ -54,7 +54,7 @@ from app.core.ratelimit import check_tasks_rate_limit
 from app.models.task import Task
 from app.schemas.task import TaskOut, TaskPatch
 from app.schemas.task_api import TasksResponse
-from app.tasks.store import TaskStore
+from app.services.tasks import TaskStore
 
 router = APIRouter()
 

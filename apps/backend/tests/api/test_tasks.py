@@ -37,7 +37,7 @@ from app.main import app
 from app.models.task import Task
 from app.models.user import User
 from app.schemas.task import TaskCreate
-from app.tasks.store import TaskStore
+from app.services.tasks import TaskStore
 
 pytestmark = pytest.mark.integration
 
@@ -218,9 +218,7 @@ async def test_list_tasks_offset_paginates_without_overlap(db_session: AsyncSess
 
 
 @pytest.mark.parametrize("query", ["limit=0", "limit=201", "offset=-1"])
-async def test_list_tasks_pagination_out_of_range_422(
-    db_session: AsyncSession, query: str
-) -> None:
+async def test_list_tasks_pagination_out_of_range_422(db_session: AsyncSession, query: str) -> None:
     """``limit`` fuera de ``[1, 200]`` u ``offset`` negativo → 422 (FastAPI valida)."""
     user = await _seed_user(db_session)
 

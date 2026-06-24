@@ -56,9 +56,7 @@ app/
 ├── api/v1/            # routers, un archivo por dominio (health, auth, chat, sessions, events, tasks, memory, modes, users) + subpaquete admin/ (metrics, playground, connectivity); privados _http.py / _sessions.py
 ├── models/            # SQLAlchemy 2 (user, session, conversation_turn, calendar_event, task, admin_audit, memory 🔴, audit 🔴) — base.py: mixins UUIDPK/Timestamp
 ├── schemas/           # Pydantic v2 mirror de models + payloads de API (*_api.py: envelopes de presentación)
-├── services/          # lógica de negocio SIN framework, deps por argumento (auth, chat, memory, admin_metrics)
-├── calendar/          # store del dominio Agenda (CalendarEventStore) — tabla operativa calendar_events
-├── tasks/             # store del dominio Tareas (TaskStore) — tabla operativa tasks (≠ Celery tasks)
+├── services/          # lógica de negocio SIN framework, deps por argumento: auth, chat, memory, admin_metrics + stores de dominio operativo (calendar.py: CalendarEventStore; tasks.py: TaskStore, ≠ Celery). Agenda/Tareas son dominios ordinarios → layer-split acá (ADR-011 D1), no feature-packages
 ├── llm/               # capa de inferencia — ver §3
 ├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, implementado); audit.py: AuditStore (único punto de inserción en audit_log — sagrado, no editar). Módulos neutrales (no sagrados, siblings de COMPORTAMIENTO, no tocan columnas): hashing.py (digests de audit_log: compute_record_hash + procedural_hash_payload), embedding.py (embed_one compartido), config.py (loader de thresholds de `[memory]`: decay + retention, #211), conversation_turns.py (store del buffer operativo)
 ├── workers/           # Celery (celery_app.py + beat_schedule de los jobs periódicos) — autodiscovery en app.workflows
@@ -71,6 +69,11 @@ app/
 `get_token_store`, `UNAUTHORIZED_DETAIL`, …)— porque auth es un **dominio ordinario**
 (1 router + 1 service + 1 schema), no un subsistema pesado. Los feature-packages
 (`llm/`, `memory/`) se reservan a subsistemas **pesados y autocontenidos**.
+**Agenda (`calendar_events`) y Tareas (`tasks`) siguen el mismo criterio:** son
+dominios operativos ordinarios (1 store + router + schema), así que sus stores
+(`CalendarEventStore` / `TaskStore`) viven en `services/calendar.py` /
+`services/tasks.py`, **no** en un package propio top-level (`app/calendar/`,
+`app/tasks/` se eliminaron: eran feature-packages finos que violaban D1).
 `core/token_store.py` y `core/ratelimit.py` se quedan en `core/` por ser **infra
 compartida** (el rate-limit lo usan chat y memory-export, no solo auth): moverlos a un
 paquete de auth invertiría la dependencia `core→dominio`. No crear `app/auth/` salvo que

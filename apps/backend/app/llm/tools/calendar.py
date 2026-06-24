@@ -40,7 +40,6 @@ from zoneinfo import ZoneInfoNotFoundError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
-from app.calendar.store import CalendarEventStore
 from app.enums import Mode
 from app.llm.tools.base import (
     AGENT_LIST_RESULT_LIMIT,
@@ -51,6 +50,7 @@ from app.llm.tools.base import (
     tool_schema,
 )
 from app.schemas.calendar_event import EventCreate, _validate_recurrence_needs_time_zone
+from app.services.calendar import CalendarEventStore
 
 if TYPE_CHECKING:
     # Import perezoso en runtime (ver ``calendar_registry``): ``registry.py`` importa

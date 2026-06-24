@@ -45,7 +45,7 @@ from app.llm.tools.base import (
     tool_schema,
 )
 from app.schemas.task import TaskCreate
-from app.tasks.store import TaskStore
+from app.services.tasks import TaskStore
 
 if TYPE_CHECKING:
     # Import perezoso en runtime (ver ``task_registry``): ``registry.py`` importa ESTE

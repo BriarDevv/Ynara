@@ -89,8 +89,8 @@ def _calendar_registry(session: AsyncSession, user_id: UUID) -> ToolRegistry:
     módulo): así el store de dominio se resuelve LAZY (recién al armar el registry, no en
     startup) y a prueba de ciclos futuros (ver el bloque ``TYPE_CHECKING``).
     """
-    from app.calendar.store import CalendarEventStore
     from app.llm.tools.calendar import calendar_registry
+    from app.services.calendar import CalendarEventStore
 
     return calendar_registry(CalendarEventStore(session, user_id))
 
@@ -103,7 +103,7 @@ def _task_registry(session: AsyncSession, user_id: UUID) -> ToolRegistry:
     de ciclos futuros (ver el bloque ``TYPE_CHECKING``).
     """
     from app.llm.tools.task import task_registry
-    from app.tasks.store import TaskStore
+    from app.services.tasks import TaskStore
 
     return task_registry(TaskStore(session, user_id))
 
