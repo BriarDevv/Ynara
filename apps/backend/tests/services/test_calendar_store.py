@@ -20,11 +20,11 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.calendar.store import CalendarEventStore
 from app.enums import EventStatus
 from app.models.calendar_event import CalendarEvent
 from app.models.user import User
 from app.schemas.calendar_event import EventCreate
+from app.services.calendar import CalendarEventStore
 
 pytestmark = pytest.mark.integration
 

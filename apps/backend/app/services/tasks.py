@@ -1,6 +1,6 @@
 """Store por-request de las tareas del usuario (``tasks``, Fase D1).
 
-Espejo de ``CalendarEventStore`` (``app/calendar/store.py``) y de los stores de
+Espejo de ``CalendarEventStore`` (``app/services/calendar.py``) y de los stores de
 memoria (``SemanticMemoryStore``): el ``user_id`` se liga en el ``__init__`` y
 **todo** query filtra por ``self._user_id`` (aislamiento estructural; el ``user_id``
 nunca viaja como argumento de método, así toda fila queda forzosamente atada al

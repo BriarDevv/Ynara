@@ -110,7 +110,7 @@ class TestAsyncAgentPassTaskUnit:
         session = MagicMock(spec=AsyncSession)
         fake_store = _FakeTaskStore()
 
-        with patch("app.tasks.store.TaskStore", return_value=fake_store):
+        with patch("app.services.tasks.TaskStore", return_value=fake_store):
             result = await _async_agent_pass(
                 user_id=USER_ID,
                 session_id=SESSION_ID,
@@ -151,8 +151,8 @@ class TestAsyncAgentPassTaskUnit:
         fake_store = _FakeTaskStore()
 
         with (
-            patch("app.tasks.store.TaskStore", return_value=fake_store),
-            patch("app.calendar.store.CalendarEventStore"),
+            patch("app.services.tasks.TaskStore", return_value=fake_store),
+            patch("app.services.calendar.CalendarEventStore"),
         ):
             await _async_agent_pass(
                 user_id=USER_ID,

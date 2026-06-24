@@ -34,9 +34,7 @@ app/
 ├── api/v1/          # routers, un archivo por dominio (auth, chat, sessions, events, tasks, memory, modes, users, health) + subpaquete admin/ (metrics, playground, connectivity)
 ├── models/          # SQLAlchemy 2 (user, session, conversation_turn operativa, calendar_event, task, admin_audit, memory 🔴, audit 🔴)
 ├── schemas/         # Pydantic v2 (mirror de models + payloads de API; *_api.py: envelopes)
-├── services/        # lógica de negocio sin framework, deps por argumento (auth, chat, memory, admin_metrics)
-├── calendar/        # store del dominio Agenda (CalendarEventStore)
-├── tasks/           # store del dominio Tareas (TaskStore) — ≠ Celery tasks
+├── services/        # lógica de negocio sin framework (auth, chat, memory, admin_metrics) + stores de dominio operativo (calendar.py, tasks.py)
 ├── llm/             # capa de inferencia — config, clients/, prompts/, tools/, router (M8)
 ├── memory/          # 🔴 wrappers de las 3 capas sagradas + AuditStore (escritura de audit_log)
 │                     #   + módulos neutrales (no sagrados): hashing.py (digests de audit_log),
