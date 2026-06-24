@@ -515,6 +515,9 @@ async def test_stream_all_breakers_open_best_effort() -> None:
     chunks = [c async for c in resilient.stream(model=_MODEL, messages=_messages())]
     assert "".join(c.delta_text for c in chunks) == "x"
     assert client.stream_calls
+    # CORR-02 (contrato): un stream best-effort EXITOSO cierra el breaker
+    # (``record_success``): el stream exitoso ES evidencia de salud de la instancia.
+    assert resilient._breakers[id(client)].state is CircuitState.CLOSED
 
 
 async def test_stream_resolves_half_open_probe_so_complete_recovers() -> None:
@@ -573,6 +576,28 @@ async def test_stream_failure_records_breaker_failure() -> None:
     result = await resilient.complete(model=_MODEL, messages=_messages())
     assert result.text == "secundario"
     assert primary.complete_calls == []  # breaker abierto por el stream -> saltea
+
+
+async def test_stream_permanent_error_does_not_open_breaker() -> None:
+    """SEC-R4-01: un error PERMANENTE en el stream (request invalido) NO abre el breaker.
+
+    Espeja ``_try_candidate`` en el path de ``complete``, que re-lanza
+    ``_PERMANENT_ERRORS`` SIN ``record_failure``. Antes, ``_stream`` hacia
+    ``except Exception: record_failure``, abriendo el breaker de una instancia sana por
+    culpa de un request invalido (que luego ``complete`` saltearia).
+    """
+    primary = _fake()
+    factory = lambda: CircuitBreaker(failure_threshold=1, recovery_timeout_s=999.0)  # noqa: E731
+    resilient = _resilient([primary], max_attempts=1, breaker_factory=factory)
+
+    primary.queue_stream_error(LlmBadRequestError())
+    with pytest.raises(LlmBadRequestError):
+        async for _ in resilient.stream(model=_MODEL, messages=_messages()):
+            pass
+
+    # El breaker queda CLOSED: un request invalido es culpa del caller, no penaliza
+    # la salud de una instancia sana.
+    assert resilient._breakers[id(primary)].state is CircuitState.CLOSED
 
 
 def test_breaker_state_exposed() -> None:
