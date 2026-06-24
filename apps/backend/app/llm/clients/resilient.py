@@ -329,11 +329,14 @@ class ResilientClient:
         # prueba quedaria colgada para siempre y este candidato sano quedaria
         # demoteado en ``complete()`` (``if not allow(): continue``) hasta el
         # reinicio del proceso. Un stream exitoso cierra el breaker; uno que falla
-        # con un error real lo (re)abre, asi el streaming participa de la salud del
-        # breaker igual que ``complete``. Cancelacion / corte del consumidor
-        # (``CancelledError`` / ``GeneratorExit``, ambos ``BaseException``) NO son
-        # fallo de la instancia: ``except Exception`` no los atrapa, se propagan
-        # sin tocar el breaker.
+        # con un error de INFRA lo (re)abre, asi el streaming participa de la salud
+        # del breaker igual que ``complete``. Un error PERMANENTE (request invalido /
+        # modelo no servido) se re-lanza SIN tocar el breaker — es culpa del caller,
+        # no de la instancia, igual que ``_try_candidate`` en el path de ``complete``:
+        # un request invalido no debe abrir el breaker de una instancia sana.
+        # Cancelacion / corte del consumidor (``CancelledError`` / ``GeneratorExit``,
+        # ambos ``BaseException``) NO son fallo de la instancia: ``except Exception`` no
+        # los atrapa, se propagan sin tocar el breaker.
         breaker = self._breakers[id(client)]
         try:
             async for chunk in client.stream(
@@ -346,6 +349,9 @@ class ResilientClient:
                 timeout_s=timeout_s,
             ):
                 yield chunk
+        except _PERMANENT_ERRORS:
+            # Permanente (bug del request): re-lanzar sin penalizar la instancia sana.
+            raise
         except Exception:
             breaker.record_failure()
             raise
