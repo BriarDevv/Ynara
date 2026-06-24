@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,6 +43,14 @@ class Task(UUIDPKMixin, TimestampMixin, Base):
     """
 
     __tablename__ = "tasks"
+    __table_args__ = (
+        # El listado del dashboard "Hoy" (``GET /v1/tasks`` / ``TaskStore.list_tasks``)
+        # filtra por ``user_id`` y ordena por ``scheduled_at`` ASC. Índice btree compuesto
+        # ``(user_id, scheduled_at)`` (ALB-04): acota el scan a las filas del user y sirve
+        # el orden por horario sin sort. ``user_id`` solo (FK, ``index=True`` abajo) queda
+        # para el CASCADE y lookups simples.
+        Index("ix_tasks_user_id_scheduled_at", "user_id", "scheduled_at"),
+    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
