@@ -26,9 +26,7 @@ from alembic.config import Config
 from alembic import command
 
 _BACKEND = Path(__file__).resolve().parents[2]
-_MIGRATION = (
-    _BACKEND / "alembic" / "versions" / "20260624_1400_index_tasks_user_id_scheduled_at.py"
-)
+_MIGRATION = _BACKEND / "alembic" / "versions" / "20260624_1400_index_tasks_user_id_scheduled_at.py"
 
 _NEW_REVISION = "c1d2e3f4a5b6"
 _PREV_REVISION = "b8e4f2a1c3d6"  # index_memory_created_at (head previo)
