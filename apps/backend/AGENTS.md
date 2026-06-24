@@ -122,7 +122,7 @@ llm/
 - **Async-first**: `async def` en rutas y servicios; SQLAlchemy 2 async (`AsyncSession`).
 - **Pydantic v2 strict** en schemas. Sin `Any` salvo justificación puntual.
 - **Type hints completos.** Ruff con `E/W/F/I/B/C4/UP/ASYNC/S/RUF`, line-length 100 (config en `pyproject.toml`).
-- **Services sin framework**: la lógica en `app/services/` no importa FastAPI ni SQLAlchemy directo — recibe dependencias por argumento (testeable).
+- **Services sin framework**: la lógica en `app/services/` no importa FastAPI ni el *engine/sessionmaker* de SQLAlchemy — recibe sus dependencias por argumento (testeable). Usar `select(...)` y tipar la `AsyncSession` recibida SÍ está OK (es el patrón de todos los services: `auth`/`chat`/`memory`/`admin_metrics` y los stores `calendar`/`tasks`); lo prohibido es instanciar el engine o atar la sesión a nivel de módulo. "SQLAlchemy directo" = construir/poseer la conexión, no consultar con la sesión inyectada.
 - **`get_settings()`** es el acceso a config (cacheado con `lru_cache`); no se instancia `Settings` a nivel de módulo (así los imports no exigen `.env`).
 - **Consolidación de memoria siempre async** (Celery). Nunca en el path de respuesta.
 - **Naming de schemas** — dos patrones según colisión de nombre:

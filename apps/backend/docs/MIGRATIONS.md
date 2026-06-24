@@ -60,6 +60,16 @@ Esto es regla #3 de [`AGENTS.md`](../../../AGENTS.md).
 Drops, renames, type changes con data — documentar en el commit + tener
 plan de rollback escrito en el PR.
 
+**Índices a escala (`CREATE INDEX` sin `CONCURRENTLY`):** las migraciones de
+índices (`20260620`, `20260623`, `20260624_*`) usan `CREATE INDEX` simple, que
+toma un lock de escritura sobre la tabla mientras construye el índice. Para el MVP
+las tablas son chicas y el build es instantáneo, así que es seguro. **A escala**
+(tablas de memoria con millones de filas) un `CREATE INDEX` bloquearía las
+escrituras durante el build: migrar esos índices a `CREATE INDEX CONCURRENTLY`
+(que NO bloquea, pero NO puede correr dentro de una transacción → `op.create_index(...,
+postgresql_concurrently=True)` + `op.get_context().autocommit_block()` o una
+migración fuera de transacción). Decisión consciente, no olvido (auditoría SEC-R4-02).
+
 ## Cómo crear
 
 ```sh
