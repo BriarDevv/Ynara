@@ -16,6 +16,7 @@ from app.models.memory import (
     SemanticMemory,
 )
 from app.models.session import ChatSession
+from app.models.task import Task
 from app.models.user import User
 
 __all__ = [
@@ -28,6 +29,7 @@ __all__ = [
     "EpisodicMemory",
     "ProceduralMemory",
     "SemanticMemory",
+    "Task",
     "TimestampMixin",
     "UUIDPKMixin",
     "User",
