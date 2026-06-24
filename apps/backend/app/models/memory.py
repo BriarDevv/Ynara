@@ -67,6 +67,11 @@ class SemanticMemory(UUIDPKMixin, TimestampMixin, Base):
             postgresql_using="hnsw",
             postgresql_ops={"content_embedding": "vector_cosine_ops"},
         ),
+        # Métricas de crecimiento/moat del panel admin (app/services/admin_metrics.py):
+        # COUNT WHERE created_at < start + date_trunc('day', created_at) cross-user, sin
+        # índice → seq-scan + sort de toda la tabla por request. btree ADITIVO sobre
+        # created_at (migración 20260624_1200). Mismo criterio que ix_users_created_at.
+        Index("ix_semantic_memory_created_at", "created_at"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -115,6 +120,11 @@ class EpisodicMemory(UUIDPKMixin, TimestampMixin, Base):
         # filtro de user_id): un btree sobre occurred_at evita el seq-scan + sort
         # (migración 20260623_1200). El btree ascendente sirve el DESC por backward scan.
         Index("ix_episodic_memory_occurred_at", "occurred_at"),
+        # Métricas de crecimiento/moat del panel admin: COUNT WHERE created_at < start +
+        # date_trunc('day', created_at) cross-user (distinto de occurred_at = cuándo
+        # ocurrió la sesión; created_at = cuándo se consolidó el episodio). btree ADITIVO
+        # (migración 20260624_1200).
+        Index("ix_episodic_memory_created_at", "created_at"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -155,6 +165,11 @@ class ProceduralMemory(UUIDPKMixin, TimestampMixin, Base):
             "confidence BETWEEN 0 AND 1",
             name="confidence_range",
         ),
+        # Métricas de crecimiento/moat del panel admin (app/services/admin_metrics.py):
+        # COUNT WHERE created_at < start + date_trunc('day', created_at) cross-user, sin
+        # índice → seq-scan + sort de toda la tabla por request. btree ADITIVO sobre
+        # created_at (migración 20260624_1200). Mismo criterio que ix_users_created_at.
+        Index("ix_procedural_memory_created_at", "created_at"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
