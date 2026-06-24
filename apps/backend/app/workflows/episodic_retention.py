@@ -49,14 +49,13 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import ColumnElement, literal_column
-from sqlalchemy import delete as sa_delete
+from sqlalchemy import ColumnElement, and_, literal_column
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.models.memory import EpisodicMemory
 from app.workers.celery_app import celery_app
-from app.workflows._engine import worker_session
+from app.workflows._engine import DELETE_BATCH_SIZE, delete_in_batches, worker_session
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +83,7 @@ async def _async_purge_episodic(
     session: AsyncSession | None = None,
     settings: Settings | None = None,
     now: datetime | None = None,
+    batch_size: int = DELETE_BATCH_SIZE,
 ) -> tuple[int, int]:
     """Borra los episodios vencidos. Retorna ``(sensibles, no_sensibles)`` borrados.
 
@@ -99,36 +99,39 @@ async def _async_purge_episodic(
     current = now or datetime.now(UTC)
     expired = _expired_predicate(current)
 
-    async def _run(db: AsyncSession) -> tuple[int, int]:
-        # DELETE disjuntos: sensibles y no-sensibles por separado para contar cada
-        # uno (§5.3). ``synchronize_session=False``: bulk delete sin sincronizar el
-        # estado ORM en memoria (igual que audit_retention / wipe).
-        # La disjuncion ``IS TRUE`` / ``IS FALSE`` cubre TODAS las filas porque
-        # ``EpisodicMemory.is_sensitive`` es ``NOT NULL`` (default False); en logica
-        # ternaria de SQL un ``NULL`` no matchearia ninguna y nunca se purgaria. Si
-        # una migracion futura relajara esa nullability, este disjunto debe revisarse.
-        sens = await db.execute(
-            sa_delete(EpisodicMemory)
-            .where(expired, EpisodicMemory.is_sensitive.is_(True))
-            .execution_options(synchronize_session=False)
+    async def _run(db: AsyncSession, *, commit: bool) -> tuple[int, int]:
+        # DELETE disjuntos por lotes (WW-01): sensibles y no-sensibles por separado para
+        # contar cada uno (§5.3), cada DELETE en lotes con commit por lote en prod (un kill
+        # por time-limit preserva progreso, no rollbackea todo). La disjuncion ``IS TRUE`` /
+        # ``IS FALSE`` cubre TODAS las filas porque ``EpisodicMemory.is_sensitive`` es
+        # ``NOT NULL`` (default False); en logica ternaria de SQL un ``NULL`` no matchearia
+        # ninguna y nunca se purgaria. Si una migracion futura relajara esa nullability, este
+        # disjunto debe revisarse.
+        sensitive = await delete_in_batches(
+            db,
+            EpisodicMemory,
+            and_(expired, EpisodicMemory.is_sensitive.is_(True)),
+            batch_size=batch_size,
+            commit=commit,
         )
-        nons = await db.execute(
-            sa_delete(EpisodicMemory)
-            .where(expired, EpisodicMemory.is_sensitive.is_(False))
-            .execution_options(synchronize_session=False)
+        non_sensitive = await delete_in_batches(
+            db,
+            EpisodicMemory,
+            and_(expired, EpisodicMemory.is_sensitive.is_(False)),
+            batch_size=batch_size,
+            commit=commit,
         )
-        await db.flush()
-        return (sens.rowcount or 0, nons.rowcount or 0)
+        return (sensitive, non_sensitive)
 
     if session is not None:
         # Modo test: sesion inyectada, NO commitear (rollback del fixture).
-        return await _run(session)
+        return await _run(session, commit=False)
 
-    # Modo produccion: engine NullPool efimero; worker_session commitea al salir
-    # del bloque y dispone el engine (mismo patron centralizado en _engine.py).
+    # Modo produccion: engine NullPool efimero; el helper commitea por lote (el commit
+    # final de worker_session queda no-op) y worker_session dispone el engine.
     cfg = settings or get_settings()
     async with worker_session(cfg) as db_session:
-        return await _run(db_session)
+        return await _run(db_session, commit=True)
 
 
 @celery_app.task(bind=True, name="workflows.purge_episodic_memory")

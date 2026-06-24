@@ -35,13 +35,12 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.models.audit import AuditLog
 from app.workers.celery_app import celery_app
-from app.workflows._engine import worker_session
+from app.workflows._engine import DELETE_BATCH_SIZE, delete_in_batches, worker_session
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +59,7 @@ async def _async_purge_audit(
     session: AsyncSession | None = None,
     settings: Settings | None = None,
     now: datetime | None = None,
+    batch_size: int = DELETE_BATCH_SIZE,
 ) -> int:
     """Borra las filas de ``audit_log`` más viejas que ``AUDIT_RETENTION_DAYS``.
 
@@ -75,26 +75,23 @@ async def _async_purge_audit(
     current = now or datetime.now(UTC)
     cutoff = current - timedelta(days=AUDIT_RETENTION_DAYS)
 
-    async def _run(db: AsyncSession) -> int:
-        stmt = (
-            sa_delete(AuditLog)
-            .where(AuditLog.created_at < cutoff)
-            .execution_options(synchronize_session=False)
+    async def _run(db: AsyncSession, *, commit: bool) -> int:
+        # DELETE por lotes (WW-01): commit por lote en prod para que un kill por
+        # time-limit preserve el progreso, en vez de un único DELETE que rollbackea
+        # entero. ``where`` = filas vencidas (created_at < cutoff).
+        return await delete_in_batches(
+            db, AuditLog, AuditLog.created_at < cutoff, batch_size=batch_size, commit=commit
         )
-        res = await db.execute(stmt)
-        deleted = res.rowcount or 0
-        await db.flush()
-        return deleted
 
     if session is not None:
         # Modo test: sesión inyectada, NO commitear (rollback del fixture).
-        return await _run(session)
+        return await _run(session, commit=False)
 
-    # Modo producción: engine NullPool efímero; worker_session commitea al salir
-    # del bloque y dispone el engine (mismo patrón centralizado en _engine.py).
+    # Modo producción: engine NullPool efímero; el helper commitea por lote (el commit
+    # final de worker_session queda no-op) y worker_session dispone el engine.
     cfg = settings or get_settings()
     async with worker_session(cfg) as db_session:
-        return await _run(db_session)
+        return await _run(db_session, commit=True)
 
 
 # ---------------------------------------------------------------------------
