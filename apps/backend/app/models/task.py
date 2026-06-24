@@ -1,7 +1,7 @@
 """Modelo SQLAlchemy de tarea/prioridad del día: ``tasks``.
 
 Tabla **OPERATIVA**, no sagrada (regla #3): el dominio TAREAS (Fase D1, espejo de
-Agenda/ADR-018) lo consume el dashboard "Hoy" de la web vía ``/v1/tasks``. Destraba
+Agenda/ADR-023) lo consume el dashboard "Hoy" de la web vía ``/v1/tasks``. Destraba
 el front mock-first de prioridades: el agente qwen extrae to-dos de lo conversado
 (igual que agenda eventos) y la pantalla los lista/togglea. El shape espeja
 ``packages/shared-schemas/src/today.ts`` (``TaskSchema``: "Pydantic gana, Zod sigue").

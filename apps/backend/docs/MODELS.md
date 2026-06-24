@@ -293,7 +293,7 @@ con el atributo reservado de la declarative base de SQLAlchemy.
 ### calendar_events
 
 **OPERATIVA**, no sagrada (sin 🔴): eventos de agenda del usuario que web + mobile
-consumen vía `/v1/events` (dominio Agenda, ADR-018). Modelo canónico
+consumen vía `/v1/events` (dominio Agenda, ADR-023). Modelo canónico
 iCalendar/RFC 5545 aterrizado al stack: `start_at` (instante con offset) +
 `duration_min` (el fin es **derivado**, una sola fuente de verdad como `Task`), más
 los campos de calendario v2 (`time_zone` / `all_day` / `recurrence`) para soportar
@@ -302,7 +302,7 @@ huso real, día completo y recurrencia. El shape espeja
 `app/models/calendar_event.py` (`UUIDPKMixin` + `TimestampMixin`). Agregada en la
 migración `20260622_1200_calendar_events_table`.
 
-**Invariante (ADR-018, `recurrenceNeedsTimeZone` en `agenda.ts`)**: un evento con
+**Invariante (ADR-023, `recurrenceNeedsTimeZone` en `agenda.ts`)**: un evento con
 `recurrence` no vacía DEBE traer `time_zone` (si no el recurrente se corre en los
 cambios de DST). Se enforcea en los schemas Pydantic (`EventCreate` /
 `CalendarEventOut`) y en el router sobre el estado mergeado de un `PATCH`, **no** a
@@ -332,7 +332,7 @@ array de texto y se devuelve tal cual.
 
 **OPERATIVA**, no sagrada (sin 🔴): tareas/prioridades del día del usuario que el
 dashboard "Hoy" de la web consume vía `/v1/tasks` (dominio TAREAS, Fase D1, espejo de
-Agenda/ADR-018). El **alta la hace el agente** qwen por detrás de la conversación
+Agenda/ADR-023). El **alta la hace el agente** qwen por detrás de la conversación
 (`task.create_task`, igual que agenda eventos), no un `POST` manual; el CRUD HTTP
 expone solo `GET` (listar) + `PATCH` (togglear estado). El shape espeja
 `packages/shared-schemas/src/today.ts` (`TaskSchema`: "Pydantic gana, Zod sigue").
@@ -383,7 +383,7 @@ llevando el total a **7 tablas** (#209). La migración siguiente,
 los 3 índices parciales de `conversation_turns` por el único índice compuesto
 `(user_id, session_id, seq)`. La migración `20260622_1200_calendar_events_table`
 agrega el enum `event_status_enum` + la tabla operativa
-`calendar_events` (FK a `users`, dominio Agenda ADR-018), llevando el total a
+`calendar_events` (FK a `users`, dominio Agenda ADR-023), llevando el total a
 **9 tablas** (con `admin_audit`). La migración `20260622_1400_tasks_table`
 (**HEAD**) agrega el enum `task_status_enum` + la tabla operativa `tasks` (FK a
 `users`, dominio TAREAS Fase D1), llevando el total a **10 tablas**.

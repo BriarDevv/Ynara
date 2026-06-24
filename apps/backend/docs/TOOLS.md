@@ -59,7 +59,7 @@
   - `mode: str | None` (uno de los modos; opcional)
   - `location: str | None`
   - `time_zone: str | None`
-  - `recurrence: list[str] | None` (RRULE; si no vacía, exige `time_zone` — ADR-018)
+  - `recurrence: list[str] | None` (RRULE; si no vacía, exige `time_zone` — ADR-023)
 - **Habilitada en modos**: productividad (los modos con `calendar` en `tools_enabled`).
 - **Ejemplo**:
   ```json

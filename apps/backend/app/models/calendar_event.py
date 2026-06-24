@@ -1,13 +1,13 @@
 """Modelo SQLAlchemy de evento de agenda: ``calendar_events``.
 
-Tabla **OPERATIVA**, no sagrada (regla #3): el dominio Agenda (ADR-018) lo
+Tabla **OPERATIVA**, no sagrada (regla #3): el dominio Agenda (ADR-023) lo
 consume web + mobile vía ``/v1/events``. Es el modelo canónico iCalendar/RFC 5545
 aterrizado al stack: ``start_at`` (instante con offset) + ``duration_min`` (el fin
 es derivado), más ``time_zone`` / ``all_day`` / ``recurrence`` para soportar huso
 real, día completo y recurrencia. El shape espeja
 ``packages/shared-schemas/src/agenda.ts`` ("Pydantic gana, Zod sigue").
 
-Invariante ADR-018: un evento con ``recurrence`` no vacía DEBE traer
+Invariante ADR-023: un evento con ``recurrence`` no vacía DEBE traer
 ``time_zone`` (si no el recurrente se corre en los cambios de DST). La invariante
 se enforcea en los schemas Pydantic (``app/schemas/calendar_event.py``), no acá:
 el modelo solo declara columnas. La expansión de recurrencia es client-side
@@ -41,7 +41,7 @@ class CalendarEvent(UUIDPKMixin, TimestampMixin, Base):
     Un usuario tiene N eventos. ``start_at`` + ``duration_min`` arman el bloque
     (el fin es derivado); ``mode`` lo tinta (``None`` si es transversal);
     ``status`` arranca ``confirmed``. Los campos de calendario v2 (``time_zone`` /
-    ``all_day`` / ``recurrence``, ADR-018) son nullable/con default para
+    ``all_day`` / ``recurrence``, ADR-023) son nullable/con default para
     back-compat con el contrato del front.
     """
 

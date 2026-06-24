@@ -1,4 +1,4 @@
-"""CRUD del dominio **TAREAS** (Fase D1, espejo de Agenda/ADR-018): ``GET`` /
+"""CRUD del dominio **TAREAS** (Fase D1, espejo de Agenda/ADR-023): ``GET`` /
 ``PATCH`` sobre ``/v1/tasks``.
 
 El dashboard "Hoy" de la web ya consume estos endpoints contra mocks

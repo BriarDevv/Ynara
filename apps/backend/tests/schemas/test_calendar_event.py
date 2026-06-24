@@ -1,4 +1,4 @@
-"""Tests Pydantic puros (sin DB) de los schemas del dominio Agenda (ADR-018).
+"""Tests Pydantic puros (sin DB) de los schemas del dominio Agenda (ADR-023).
 
 Cubre ``CalendarEventOut`` / ``EventCreate`` / ``EventPatch`` (en
 ``app/schemas/calendar_event.py``) y el envelope ``EventsResponse``
@@ -6,7 +6,7 @@ Cubre ``CalendarEventOut`` / ``EventCreate`` / ``EventPatch`` (en
 
 Espeja el contrato de ``packages/shared-schemas/src/agenda.ts`` ("Pydantic gana,
 Zod sigue"): mismos campos, mismas validaciones (``title`` min 1, ``duration_min``
-> 0) y la invariante ``recurrence`` exige ``time_zone`` (ADR-018) en Out/Create,
+> 0) y la invariante ``recurrence`` exige ``time_zone`` (ADR-023) en Out/Create,
 NO en el patch parcial.
 
 GOTCHA STRICT (mismo que el resto de schemas Ynara): ``YnaraBaseModel`` usa
@@ -103,7 +103,7 @@ class TestCalendarEventOut:
         assert ev.mode is None
 
     def test_recurrence_without_time_zone_rejected(self) -> None:
-        """Invariante ADR-018: recurrence no vacía sin time_zone → ValidationError."""
+        """Invariante ADR-023: recurrence no vacía sin time_zone → ValidationError."""
         kwargs = _out_kwargs()
         kwargs["recurrence"] = ["RRULE:FREQ=WEEKLY"]
         kwargs["time_zone"] = None

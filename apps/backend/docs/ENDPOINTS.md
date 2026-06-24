@@ -353,7 +353,7 @@ una inexistente (sin oráculo de existencia ajena). Todas las read surfaces son
 
 ## /v1/events
 
-CRUD del dominio **Agenda** (ADR-018). El front (web + mobile) ya consume estos
+CRUD del dominio **Agenda** (ADR-023). El front (web + mobile) ya consume estos
 endpoints (`packages/core/src/features/agenda/api.ts`); el contrato del wire vive
 en `packages/shared-schemas/src/agenda.ts` y lo espejan los schemas
 `app/schemas/calendar_event.py` ("Pydantic gana, Zod sigue"). Contrato + decisiones
@@ -364,7 +364,7 @@ Invariantes transversales:
 - **Aislamiento por `user_id` del JWT**: el listado trae solo los eventos del user;
   un `PATCH`/`DELETE` de un evento inexistente **o** de otro usuario da el **mismo**
   404 (sin oráculo de existencia ajena).
-- **Invariante ADR-018** (`recurrenceNeedsTimeZone`): un evento con `recurrence` no
+- **Invariante ADR-023** (`recurrenceNeedsTimeZone`): un evento con `recurrence` no
   vacía DEBE traer `time_zone` → 422 si no. Se enforcea en el `POST` (schema) y en el
   `PATCH` sobre el **estado mergeado** (la fila guardada + el patch). No se expande
   recurrencia server-side (fase posterior): se guarda como array de texto y se
@@ -381,13 +381,13 @@ Invariantes transversales:
 - **POST** `/v1/events` — crea un evento del usuario.
   - Request: `EventCreate = { title: string (min 1), start_at: datetime (ISO+offset), duration_min: int (>0), mode?: Mode|null, location?: string|null, time_zone?: string|null, all_day?: bool (default false), recurrence?: string[]|null }`. `status` **no** se acepta del body (`extra: forbid`): arranca `confirmed` server-side.
   - Response **201**: `CalendarEventOut` del evento creado (`status: "confirmed"`).
-  - Response 422: validación (title vacío, `duration_min` ≤ 0, `start_at` no-ISO) o invariante ADR-018 (`recurrence` sin `time_zone`).
+  - Response 422: validación (title vacío, `duration_min` ≤ 0, `start_at` no-ISO) o invariante ADR-023 (`recurrence` sin `time_zone`).
 - **PATCH** `/v1/events/{event_id}` — update **parcial** de un evento del usuario.
   - Path param: `event_id: UUID`.
   - Body: `EventPatch` — todos los campos opcionales (`title`, `start_at`, `duration_min`, `mode`, `status`, `location`, `time_zone`, `all_day`, `recurrence`). Solo se aplican los campos **enviados** (`exclude_unset`); los demás quedan intactos. A diferencia del create, el patch **sí** acepta `status`.
   - Response 200: `CalendarEventOut` del evento actualizado.
   - Response 404: evento inexistente **o** de otro usuario — **mismo** 404 (status + `detail: "evento no encontrado"`), sin oráculo de existencia ajena.
-  - Response 422: invariante ADR-018 sobre el **estado mergeado** (si tras el patch el evento queda con `recurrence` no vacía y sin `time_zone`) — y **no** se commitea; o validación de campos (title vacío, `duration_min` ≤ 0).
+  - Response 422: invariante ADR-023 sobre el **estado mergeado** (si tras el patch el evento queda con `recurrence` no vacía y sin `time_zone`) — y **no** se commitea; o validación de campos (title vacío, `duration_min` ≤ 0).
 - **DELETE** `/v1/events/{event_id}` — borra un evento del usuario.
   - Path param: `event_id: UUID`.
   - Response **204** No Content (sin body).
@@ -405,7 +405,7 @@ Invariantes transversales:
 
 ## /v1/tasks
 
-CRUD del dominio **TAREAS** (Fase D1, espejo de Agenda/ADR-018). El dashboard "Hoy"
+CRUD del dominio **TAREAS** (Fase D1, espejo de Agenda/ADR-023). El dashboard "Hoy"
 de la web ya consume estos endpoints (`packages/core/src/features/today/api.ts`); el
 contrato del wire vive en `packages/shared-schemas/src/today.ts` y lo espejan los
 schemas `app/schemas/task.py` ("Pydantic gana, Zod sigue"). El **alta la hace el

@@ -1,4 +1,4 @@
-"""Store por-request de la agenda del usuario (``calendar_events``, ADR-018).
+"""Store por-request de la agenda del usuario (``calendar_events``, ADR-023).
 
 Espejo de los stores operativos (``ConversationTurnStore``) y de memoria
 (``SemanticMemoryStore``): el ``user_id`` se liga en el ``__init__`` y **todo**
@@ -45,7 +45,7 @@ from app.schemas.calendar_event import CalendarEventOut, EventCreate
 
 
 class RecurrenceNeedsTimeZoneError(ValueError):
-    """Invariante ADR-018 violada sobre el estado MERGEADO de un evento.
+    """Invariante ADR-023 violada sobre el estado MERGEADO de un evento.
 
     ``recurrence`` no vacía sin ``time_zone`` (la invariante que ``EventPatch`` no puede
     validar sola por ser parcial). Es un error de DOMINIO, NO HTTP: lo lanza
@@ -70,7 +70,7 @@ class CalendarEventStore:
         """Persiste un evento del usuario (idempotente) y devuelve un dict serializable.
 
         El ``status`` arranca ``confirmed`` (igual que ``POST /v1/events``: no se
-        acepta del payload). La invariante ADR-018 (``recurrence`` exige
+        acepta del payload). La invariante ADR-023 (``recurrence`` exige
         ``time_zone``) ya la valida ``EventCreate`` antes de llegar acá.
 
         IDEMPOTENCIA: si ya existe un evento del usuario con la misma tupla natural
@@ -167,7 +167,7 @@ class CalendarEventStore:
         Un usuario que crea explícitamente un evento espera que se cree, aunque sea
         idéntico a otro. Distinto de ``create_event``, que deduplica para la idempotencia
         de la pasada async del agente (ADR-021). ``status`` arranca ``confirmed``; la
-        invariante ADR-018 ya la valida ``EventCreate``. Solo ``flush``; commit del router.
+        invariante ADR-023 ya la valida ``EventCreate``. Solo ``flush``; commit del router.
         """
         event = CalendarEvent(
             user_id=self._user_id,
@@ -192,7 +192,7 @@ class CalendarEventStore:
         """Update PARCIAL de un evento del usuario; ``None`` si ajeno/inexistente.
 
         Aplica solo los campos de ``updates`` (ya filtrados con ``exclude_unset`` por el
-        router). Enforcea la invariante ADR-018 sobre el estado MERGEADO: si tras el patch
+        router). Enforcea la invariante ADR-023 sobre el estado MERGEADO: si tras el patch
         queda con ``recurrence`` no vacía sin ``time_zone``, lanza
         ``RecurrenceNeedsTimeZoneError`` (el router → 422, sin commit). Solo ``flush``.
         """

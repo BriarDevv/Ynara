@@ -37,8 +37,8 @@
 
 ## Fases (cada una = 1 PR atómico)
 
-### Fase 0 — ADR-018: congelar `CalendarEvent`  ·  *doc-only*
-[`docs/architecture/adrs/ADR-018-*`](../architecture/adrs/). Decide el modelo
+### Fase 0 — ADR-023: congelar `CalendarEvent`  ·  *doc-only*
+[`docs/architecture/adrs/ADR-023-*`](../architecture/adrs/). Decide el modelo
 (`time_zone` IANA, `all_day`, `recurrence` RRULE/RDATE/EXDATE + `recurrence_id`/
 `original_start` para overrides, multi-día), el engine (`rrule-temporal` +
 `@js-temporal/polyfill` detrás de una interfaz `expand(event, range)`), y el

@@ -27,7 +27,7 @@ export const EventStatusSchema = z.enum(["confirmed", "tentative", "cancelled"])
 export type EventStatus = z.infer<typeof EventStatusSchema>;
 
 /**
- * Invariante ADR-018: un evento con `recurrence` DEBE traer `time_zone`, si no
+ * Invariante ADR-023: un evento con `recurrence` DEBE traer `time_zone`, si no
  * el recurrente se corre en los cambios de DST (la alternativa "solo UTC" quedó
  * descartada en el ADR). Se aplica al evento completo y al create, NO al patch
  * parcial (que puede tocar `recurrence` dejando el `time_zone` ya guardado).
@@ -64,7 +64,7 @@ export const AgendaEventSchema = z
     status: EventStatusSchema,
     /** Nota o lugar opcional (subtítulo del bloque). `null` si no tiene. */
     location: z.string().nullable(),
-    // ── Calendario v2 (ADR-018) — campos opcionales, back-compat con el mock ────
+    // ── Calendario v2 (ADR-023) — campos opcionales, back-compat con el mock ────
     /**
      * Huso IANA del wall-clock del evento (ej. `"America/Argentina/Buenos_Aires"`).
      * `null`/ausente = hora local del cliente. **Requerido** en eventos con
@@ -76,12 +76,12 @@ export const AgendaEventSchema = z
     /**
      * Recurrencia: líneas RFC 5545 (`RRULE`/`RDATE`/`EXDATE`). `null`/ausente =
      * evento único. La expansión a instancias vive en `@ynara/core` (engine
-     * `rrule-temporal`, pendiente de aprobación de dep — ADR-018).
+     * `rrule-temporal`, pendiente de aprobación de dep — ADR-023).
      */
     recurrence: z.array(z.string()).nullable().optional(),
     // Overrides de instancias ("solo este" de una serie: `recurrence_id` +
     // `original_start`) se agregan cuando se construya la edición de recurrentes;
-    // hoy no tienen consumidor (ADR-018).
+    // hoy no tienen consumidor (ADR-023).
   })
   .superRefine(recurrenceNeedsTimeZone);
 export type AgendaEvent = z.infer<typeof AgendaEventSchema>;

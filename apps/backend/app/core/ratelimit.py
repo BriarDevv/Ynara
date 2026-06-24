@@ -63,7 +63,7 @@ _MEMORY_SEARCH_COUNTER_PREFIX = "memory:ratelimit:search:"
 # 1 get + commit idempotente el close). El ``:read:`` reserva el segmento por si en
 # el futuro se splitea close en su propio bucket (basta agregar otra key/settings).
 _SESSIONS_COUNTER_PREFIX = "sessions:ratelimit:read:"
-# Bucket de /v1/events (dominio Agenda, ADR-018), por user_id. UN solo prefijo
+# Bucket de /v1/events (dominio Agenda, ADR-023), por user_id. UN solo prefijo
 # compartido por las 4 rutas (list/create/patch/delete): un techo único por usuario
 # es el mínimo viable que cierra el gap de abuso del CRUD de agenda. Mismo criterio
 # que el bucket de sessions.
@@ -376,7 +376,7 @@ async def check_sessions_rate_limit(store: TokenStore, *, user_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Events (por user_id — del CurrentUser autenticado, dominio Agenda ADR-018)
+# Events (por user_id — del CurrentUser autenticado, dominio Agenda ADR-023)
 # ---------------------------------------------------------------------------
 
 

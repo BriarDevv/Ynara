@@ -1,4 +1,4 @@
-"""Tests E2E del CRUD de ``/v1/events`` (dominio Agenda, ADR-018).
+"""Tests E2E del CRUD de ``/v1/events`` (dominio Agenda, ADR-023).
 
 Todos son ``integration`` (tocan la DB de tests dedicada vía ``db_session``). El
 patrón es el de ``test_sessions.py`` / ``test_sessions_close.py``:
@@ -404,7 +404,7 @@ async def test_patch_event_clears_location_with_null(db_session: AsyncSession) -
 
 
 async def test_patch_recurrence_without_time_zone_422(db_session: AsyncSession) -> None:
-    """Agregar recurrence a un evento sin time_zone (ni en el patch) → 422 (ADR-018)."""
+    """Agregar recurrence a un evento sin time_zone (ni en el patch) → 422 (ADR-023)."""
     user = await _seed_user(db_session)
     # Evento sin recurrence ni time_zone.
     ev = await _seed_event(db_session, user_id=user.id, time_zone=None, recurrence=None)
@@ -653,7 +653,7 @@ async def test_events_without_token_401(db_session: AsyncSession) -> None:
 
 
 async def test_create_recurrence_without_time_zone_422(db_session: AsyncSession) -> None:
-    """POST con recurrence y sin time_zone → 422 (invariante ADR-018, schema)."""
+    """POST con recurrence y sin time_zone → 422 (invariante ADR-023, schema)."""
     user = await _seed_user(db_session)
 
     client = await _client(db_session)

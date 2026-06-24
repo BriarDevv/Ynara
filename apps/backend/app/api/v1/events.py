@@ -1,4 +1,4 @@
-"""CRUD del dominio **Agenda** (ADR-018): ``GET``/``POST``/``PATCH``/``DELETE``
+"""CRUD del dominio **Agenda** (ADR-023): ``GET``/``POST``/``PATCH``/``DELETE``
 sobre ``/v1/events``.
 
 El front (web + mobile) ya consume estos endpoints contra mocks
@@ -22,7 +22,7 @@ Decisiones de diseño (mismas que ``sessions.py``, NO re-litigar):
 (3) ``status`` arranca ``confirmed`` en el create (no se acepta del body). El
     ``EventCreate`` NO trae ``status``; el server lo fija.
 
-(4) Invariante ADR-018 (``recurrence`` exige ``time_zone``). En el ``POST`` la
+(4) Invariante ADR-023 (``recurrence`` exige ``time_zone``). En el ``POST`` la
     enforcea el schema (``EventCreate``). En el ``PATCH`` la enforcea ESTE router
     sobre el estado MERGEADO (la fila ya guardada + el patch): el ``EventPatch`` es
     parcial y no re-valida, pero el evento resultante DEBE satisfacerla → 422 si no.
@@ -70,7 +70,7 @@ _LIMIT_MAX = 200
 # exactamente este mensaje (sin oráculo de existencia ajena).
 _NOT_FOUND_DETAIL = "evento no encontrado"
 
-# Detail del 422 de la invariante ADR-018 sobre el estado mergeado de un PATCH.
+# Detail del 422 de la invariante ADR-023 sobre el estado mergeado de un PATCH.
 _RECURRENCE_TZ_DETAIL = "time_zone es obligatorio en eventos con recurrence."
 
 
@@ -129,7 +129,7 @@ async def create_event(
 
     - El ``user_id`` sale del JWT (no del body); el ``status`` arranca
       ``confirmed`` (decisión #3).
-    - La invariante ADR-018 (``recurrence`` exige ``time_zone``) la valida el
+    - La invariante ADR-023 (``recurrence`` exige ``time_zone``) la valida el
       schema ``EventCreate`` (un cuerpo que la viole da 422 antes de llegar acá).
     - Rate-limit (decisión #5): ANTES de tocar la DB. fail-open si Redis cae.
     - Commitea y devuelve el evento creado.
@@ -162,7 +162,7 @@ async def patch_event(
       MISMO ``detail`` (sin oráculo de existencia ajena, decisión #1).
     - Aplica SOLO los campos enviados (``exclude_unset``): los demás quedan
       intactos. Un ``status``/``time_zone``/``recurrence`` enviados se pisan.
-    - Invariante ADR-018 sobre el estado MERGEADO (decisión #4): si tras aplicar
+    - Invariante ADR-023 sobre el estado MERGEADO (decisión #4): si tras aplicar
       el patch el evento queda con ``recurrence`` no vacía y sin ``time_zone`` -> 422
       (y NO se commitea).
     - Rate-limit (decisión #5): ANTES de tocar la DB. fail-open si Redis cae.
@@ -173,7 +173,7 @@ async def patch_event(
     """
     if not await check_events_rate_limit(store, user_id=str(user_id)):
         raise too_many_requests(get_settings().events_window_seconds)
-    # update_event aplica el patch parcial y enforcea la invariante ADR-018 sobre el estado
+    # update_event aplica el patch parcial y enforcea la invariante ADR-023 sobre el estado
     # MERGEADO: si queda con recurrence sin time_zone lanza el domain-error (mapeado acá a
     # 422, sin commit). None = evento inexistente O ajeno -> MISMO 404 (sin oráculo).
     try:
