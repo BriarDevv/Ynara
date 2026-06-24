@@ -87,9 +87,7 @@ async def _seed_session(
 
 
 async def _seed_semantic(session: AsyncSession, *, user_id: uuid.UUID) -> None:
-    session.add(
-        SemanticMemory(user_id=user_id, content=b"\x00" * 16, content_embedding=_ZERO_VEC)
-    )
+    session.add(SemanticMemory(user_id=user_id, content=b"\x00" * 16, content_embedding=_ZERO_VEC))
     await session.flush()
 
 
