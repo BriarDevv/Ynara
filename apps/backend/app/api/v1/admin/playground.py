@@ -25,8 +25,8 @@ from fastapi.responses import StreamingResponse
 
 from app.core.config import get_settings
 from app.core.deps import CurrentAdmin, get_llm_client
+from app.core.llm_protocol import LLMClientProtocol
 from app.enums import Mode
-from app.llm.clients.base import LLMClient
 from app.llm.clients.factory import _wants_real_llm
 from app.llm.config import ModelConfig, load_llm_config
 from app.llm.errors import (
@@ -155,7 +155,7 @@ def _resolve_playground_request(body: PlaygroundIn) -> _ResolvedPlayground:
 @router.get("/admin/serving", response_model=ServingOut, status_code=200)
 async def admin_serving(
     admin_id: CurrentAdmin,
-    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+    llm_client: Annotated[LLMClientProtocol, Depends(get_llm_client)],
 ) -> ServingOut:
     """Inventario read-only del serving: config estática + salud runtime agregada.
 
@@ -222,7 +222,7 @@ def _map_llm_error(exc: LlmError) -> HTTPException:
 async def admin_playground(
     body: PlaygroundIn,
     admin_id: CurrentAdmin,
-    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+    llm_client: Annotated[LLMClientProtocol, Depends(get_llm_client)],
 ) -> PlaygroundOut:
     """Completion ad-hoc aislada contra un modelo elegido (F1 ADR-018).
 
@@ -305,7 +305,7 @@ def _sse_event(event: str, data: dict[str, Any]) -> bytes:
 async def admin_playground_stream(
     body: PlaygroundIn,
     admin_id: CurrentAdmin,
-    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+    llm_client: Annotated[LLMClientProtocol, Depends(get_llm_client)],
 ) -> StreamingResponse:
     """Completion ad-hoc en STREAMING (SSE) — gemela de ``/admin/playground``.
 
@@ -430,7 +430,7 @@ async def admin_playground_stream(
 async def admin_playground_agent(
     body: PlaygroundIn,
     admin_id: CurrentAdmin,
-    llm_client: Annotated[LLMClient, Depends(get_llm_client)],
+    llm_client: Annotated[LLMClientProtocol, Depends(get_llm_client)],
 ) -> PlaygroundAgentOut:
     """Tool-loop OBSERVADO contra un modelo elegido, a cero efecto (Fase B ADR-019).
 

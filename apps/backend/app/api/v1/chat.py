@@ -64,10 +64,12 @@ from app.core.deps import (
     get_llm_client,
     get_reranker,
 )
+from app.core.llm_protocol import (
+    EmbeddingClientProtocol,
+    LLMClientProtocol,
+    RerankerProtocol,
+)
 from app.core.ratelimit import charge_chat_tool_writes, check_chat_rate_limit
-from app.llm.clients.base import LLMClient
-from app.llm.clients.embedding import EmbeddingClient
-from app.llm.clients.reranker import Reranker
 from app.schemas.chat import Action, ChatHttpRequest, ChatHttpResponse
 from app.services.chat import ChatService
 
@@ -83,9 +85,9 @@ _TOKEN_CHUNK_SIZE = 6
 _STREAM_ERROR_CODE = "stream_error"
 _STREAM_ERROR_MESSAGE = "No se pudo completar la respuesta"
 
-LlmClientDep = Annotated[LLMClient, Depends(get_llm_client)]
-EmbedderDep = Annotated[EmbeddingClient, Depends(get_embedder)]
-RerankerDep = Annotated[Reranker, Depends(get_reranker)]
+LlmClientDep = Annotated[LLMClientProtocol, Depends(get_llm_client)]
+EmbedderDep = Annotated[EmbeddingClientProtocol, Depends(get_embedder)]
+RerankerDep = Annotated[RerankerProtocol, Depends(get_reranker)]
 
 
 # Tope de ítems de una lista (``events`` / ``tasks``) que viaja en el ``result`` de una

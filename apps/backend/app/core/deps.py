@@ -23,11 +23,13 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
-from app.core.llm_protocol import LLMClientProtocol
+from app.core.llm_protocol import (
+    EmbeddingClientProtocol,
+    LLMClientProtocol,
+    RerankerProtocol,
+)
 from app.core.security import InvalidTokenError, verify_access_token
 from app.core.token_store import TokenStore
-from app.llm.clients.embedding import EmbeddingClient
-from app.llm.clients.reranker import Reranker
 from app.models.user import User
 
 # Detail ÚNICO del 401 de credenciales, compartido por ``get_current_claims`` /
@@ -243,11 +245,17 @@ def get_llm_client(request: Request) -> LLMClientProtocol:
     return request.app.state.llm_client  # type: ignore[no-any-return]
 
 
-def get_embedder(request: Request) -> EmbeddingClient:
-    """Devuelve el cliente de embeddings singleton construido en el lifespan."""
+def get_embedder(request: Request) -> EmbeddingClientProtocol:
+    """Devuelve el cliente de embeddings singleton construido en el lifespan.
+
+    Tipado contra ``EmbeddingClientProtocol`` (``core``), no ``app.llm`` (ADR-011).
+    """
     return request.app.state.embedder  # type: ignore[no-any-return]
 
 
-def get_reranker(request: Request) -> Reranker:
-    """Devuelve el cliente de reranking singleton construido en el lifespan."""
+def get_reranker(request: Request) -> RerankerProtocol:
+    """Devuelve el cliente de reranking singleton construido en el lifespan.
+
+    Tipado contra ``RerankerProtocol`` (``core``), no ``app.llm`` (ADR-011).
+    """
     return request.app.state.reranker  # type: ignore[no-any-return]
