@@ -17,6 +17,7 @@ Privacidad (regla #4): el service NUNCA descifra contenido ni expone ``record_ha
 from __future__ import annotations
 
 import time
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
@@ -125,37 +126,34 @@ async def admin_audit(
 # ---------------------------------------------------------------------------
 
 
-async def _probe_postgres(session: AsyncSession) -> ServiceStatus:
-    """``SELECT 1`` contra la DB de la sesión actual. Reporta solo el tipo de error."""
+async def _timed_probe(action: Callable[[], Awaitable[object]], *, label: str) -> ServiceStatus:
+    """Ejecuta un probe (``action``) midiendo latencia + capturando el tipo de error.
+
+    Centraliza el patrón timing + try/except + construcción de ``ServiceStatus`` que
+    comparten todos los probes de infra: en éxito reporta ``label`` como detalle; en
+    fallo, solo el nombre de la excepción (NUNCA el mensaje, que podría filtrar credenciales
+    o estructura interna). ``action`` es un callable (no un awaitable ya creado) para que el
+    armado del coroutine —y cualquier acceso a ``app.state`` que pueda fallar— quede DENTRO
+    del try. Cada probe concreto solo aporta su ``await`` específico.
+    """
     started = time.perf_counter()
     try:
-        await session.execute(text("SELECT 1"))
-        latency = round((time.perf_counter() - started) * 1000, 2)
-        return ServiceStatus(
-            up=True, latency_ms=latency, detail="SELECT 1", checked_at=datetime.now(UTC)
-        )
+        await action()
+        detail, up = label, True
     except Exception as exc:
-        latency = round((time.perf_counter() - started) * 1000, 2)
-        return ServiceStatus(
-            up=False, latency_ms=latency, detail=type(exc).__name__, checked_at=datetime.now(UTC)
-        )
+        detail, up = type(exc).__name__, False
+    latency = round((time.perf_counter() - started) * 1000, 2)
+    return ServiceStatus(up=up, latency_ms=latency, detail=detail, checked_at=datetime.now(UTC))
+
+
+async def _probe_postgres(session: AsyncSession) -> ServiceStatus:
+    """``SELECT 1`` contra la DB de la sesión actual. Reporta solo el tipo de error."""
+    return await _timed_probe(lambda: session.execute(text("SELECT 1")), label="SELECT 1")
 
 
 async def _probe_redis(request: Request) -> ServiceStatus:
     """PING al cliente Redis singleton (``app.state.redis``). Solo el tipo de error."""
-    started = time.perf_counter()
-    try:
-        client = request.app.state.redis
-        await client.ping()
-        latency = round((time.perf_counter() - started) * 1000, 2)
-        return ServiceStatus(
-            up=True, latency_ms=latency, detail="PING", checked_at=datetime.now(UTC)
-        )
-    except Exception as exc:
-        latency = round((time.perf_counter() - started) * 1000, 2)
-        return ServiceStatus(
-            up=False, latency_ms=latency, detail=type(exc).__name__, checked_at=datetime.now(UTC)
-        )
+    return await _timed_probe(lambda: request.app.state.redis.ping(), label="PING")
 
 
 def _schema_head() -> str:
