@@ -128,6 +128,7 @@ El cifrado *at-rest* mata BM25/full-text/`LIKE` server-side sobre `content`/`sum
 - **ADR-004, 007, 008, 009 quedan vigentes y reforzados** — esta no es una reescritura, es cerrar la única contradicción abierta (ADR-003).
 - **Camino de escalado claro y barato** (HNSW → particionado por user_id → pgvectorscale) sin salir de Postgres.
 - **Pipeline el mejor posible bajo cifrado**: vector-first + decrypt-top-K + cross-encoder rerank es el techo de calidad **compatible con cifrado at-rest**. No iguala a un híbrido con BM25 (que el cifrado nos veda): el costo asumido es el exact-match léxico, mitigado por el rerank.
+- **Costo del decrypt-top-K ya optimizado (SCAL-02, MITIGADO post-M7, no diferido)**: el "descifrar el top-K in-process" de D2 (paso 3 del read path) no es un cuello de botella pendiente. La key derivada por usuario se cachea (`_derive_key_cached`, LRU por `(master_key, user_id)` en `app/core/crypto.py`): HKDF-SHA256 ya no se re-corre por record. `decrypt_many_for_user` deriva la key UNA vez y reusa una única instancia `AESGCM` para todo el lote del top-K (y de los listados/export), y el descifrado se offloadea a un thread (`asyncio.to_thread`, `app/memory/semantic.py:114` / `episodic.py:108`): es CPU-bound y OpenSSL libera el GIL, así que no bloquea el event loop bajo concurrencia. El antiguo costo de re-derivar HKDF + reconstruir `AESGCM` por record en el top-K ya no existe.
 
 ## Consecuencias negativas
 
