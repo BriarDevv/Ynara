@@ -23,9 +23,9 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
+from app.core.llm_protocol import LLMClientProtocol
 from app.core.security import InvalidTokenError, verify_access_token
 from app.core.token_store import TokenStore
-from app.llm.clients.base import LLMClient
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
 from app.models.user import User
@@ -232,8 +232,14 @@ CurrentAdmin = Annotated[UUID, Depends(get_current_admin)]
 # Cuando vLLM esté disponible, solo cambia el lifespan; estas deps no tocan.
 
 
-def get_llm_client(request: Request) -> LLMClient:
-    """Devuelve el cliente LLM singleton construido en el lifespan."""
+def get_llm_client(request: Request) -> LLMClientProtocol:
+    """Devuelve el cliente LLM singleton construido en el lifespan.
+
+    El type hint es ``LLMClientProtocol`` (``core/llm_protocol.py``), no
+    ``app.llm.clients.base.LLMClient``: ``core`` no debe depender del
+    feature-package ``app/llm/`` (ADR-011). El singleton concreto satisface el
+    protocolo estructuralmente.
+    """
     return request.app.state.llm_client  # type: ignore[no-any-return]
 
 
