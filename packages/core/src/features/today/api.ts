@@ -19,17 +19,19 @@ import { qk } from "../../query-keys";
  * Hooks de data de "Hoy", compartidos web + mobile (ADR-012). Validación Zod
  * en cliente: un contrato roto se ve en dev.
  *
- * `/v1/tasks` ya existe en el backend (Tanda 1). `/v1/suggestions` y
- * `/v1/recap` NO están implementados todavía (decisión de producto, roadmap
- * D2/F); sus hooks degradan limpio ante un 404 para que Hoy renderice sin
- * bloqueos mientras esos endpoints no existan.
+ * `/v1/tasks`, `/v1/suggestions` y `/v1/recap` ya existen en el backend.
+ * `suggestions`/`recap` son la v1 DERIVADA de las tareas del usuario (sin LLM
+ * todavía; la generación con voz propia por LLM es roadmap F). `notImplementedOr`
+ * se mantiene como guard defensivo: si alguno volviera a 404 (deploy desfasado), el
+ * hook degrada limpio a vacío en vez de romper Hoy.
  */
 
 /**
- * Helper de degradación graceful para endpoints no implementados aún.
- * Convierte un 404 (endpoint inexistente por diseño) en el valor `fallback`
- * en vez de propagar error. Otros errores (5xx, red, 401…) siguen propagando
- * para que react-query los trate como error real y el usuario pueda reintentar.
+ * Helper de degradación graceful (guard defensivo). Convierte un 404 en el valor
+ * `fallback` en vez de propagar error: hoy `/v1/suggestions` y `/v1/recap` existen,
+ * pero si un deploy quedara desfasado y devolviera 404, Hoy renderiza sin bloqueos.
+ * Otros errores (5xx, red, 401…) siguen propagando para que react-query los trate
+ * como error real y el usuario pueda reintentar.
  */
 async function notImplementedOr<T>(promise: Promise<T>, fallback: T): Promise<T> {
   try {
