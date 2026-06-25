@@ -99,13 +99,27 @@ class ToolParsingError(LlmError):
 
 
 class ToolExecutionError(LlmError):
-    """La ejecucion de una tool fallo."""
+    """La ejecucion de una tool fallo.
+
+    Entrada RESERVADA de la taxonomia, todavia NO cableada. El path previsto
+    es que ``tool_loop.py`` envuelva los fallos de ejecucion de tool en esta
+    excepcion. No es dead-code sino taxonomia forward-looking: ya queda
+    cubierta por el ``except LlmError`` de familia que envuelve ``route()``,
+    asi que cuando se cablee no requiere tocar el manejo de errores.
+    """
 
     message = "error ejecutando tool"
 
 
 class MemoryRetrievalError(LlmError):
-    """Fallo la recuperacion de contexto de memoria."""
+    """Fallo la recuperacion de contexto de memoria.
+
+    Entrada RESERVADA de la taxonomia, todavia NO cableada. El path previsto
+    es que ``memory_engine.py`` envuelva los fallos de retrieval en esta
+    excepcion. No es dead-code sino taxonomia forward-looking: ya queda
+    cubierta por el ``except LlmError`` de familia que envuelve ``route()``,
+    asi que cuando se cablee no requiere tocar el manejo de errores.
+    """
 
     message = "error recuperando memoria"
 
