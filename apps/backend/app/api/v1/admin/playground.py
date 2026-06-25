@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import AsyncIterator
-from typing import Annotated, Any
+from typing import Annotated, Any, NamedTuple
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -28,7 +28,7 @@ from app.core.deps import CurrentAdmin, get_llm_client
 from app.enums import Mode
 from app.llm.clients.base import LLMClient
 from app.llm.clients.factory import _wants_real_llm
-from app.llm.config import load_llm_config
+from app.llm.config import ModelConfig, load_llm_config
 from app.llm.errors import (
     LlmBadRequestError,
     LlmContextOverflowError,
@@ -62,6 +62,94 @@ _LOW_PERF_TIMEOUT_S = 30.0
 # System prompt neutro por default cuando el operador no manda ``system_prompt`` ni
 # ``mode`` (el playground es un probe del modelo crudo, sin la voz de producto).
 _PLAYGROUND_DEFAULT_SYSTEM = "Sos un asistente útil. Respondé de forma concisa."
+
+
+class _ResolvedPlayground(NamedTuple):
+    """Resultado de resolver los pasos 1-5 comunes a los 3 handlers del playground.
+
+    Inmutable (NamedTuple): centraliza el lookup del modelo, el thinking efectivo, el
+    preset low_perf y el system prompt ya construido como ``messages``. Cada handler
+    consume solo lo que necesita: el probe sync/stream usa ``max_tokens``/``temperature``/
+    ``timeout_s``; el tool-loop agente los ignora (el loop no toma params per-request).
+    """
+
+    model_cfg: ModelConfig
+    thinking: bool
+    max_tokens: int
+    temperature: float
+    timeout_s: float | None
+    messages: list[ChatMessage]
+
+
+def _resolve_playground_request(body: PlaygroundIn) -> _ResolvedPlayground:
+    """Centraliza los pasos 1-5 compartidos por los 3 handlers (DRY, behavior-preserving).
+
+    Mismos chequeos y MISMO orden que tenía cada handler inline:
+    (1) lookup del ``served_name`` en el catálogo -> 422 "modelo no servido";
+    (2) backend fake sin serving real -> 409 "serving real no disponible";
+    (3) thinking efectivo: override del body > default por role (True solo si ``agent``);
+    (4) preset low_perf: pisa max_tokens/temp/thinking + fija timeout (el agente solo
+        lee ``thinking``, ignora los params -> el efecto observable es idéntico);
+    (5) system prompt: override crudo > ``load_prompt(mode)`` > default neutro, con 422
+        "modo desconocido" si el ``mode`` no resuelve.
+
+    Las ``HTTPException`` (422/409) suben tal cual al caller -> mismos códigos/mensajes.
+    """
+    settings = get_settings()
+    cfg = load_llm_config()
+
+    # 1) Validar el modelo elegido contra el catálogo de served_names.
+    models_by_served = {m.served_name: m for m in cfg.models.values()}
+    model_cfg = models_by_served.get(body.model)
+    if model_cfg is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modelo no servido"
+        )
+
+    # 2) Sin serving real (backend fake) no hay generación: 409 ANTES de llamar al
+    #    cliente (el Fake del lifespan no tiene respuestas encoladas -> evita el 500).
+    if not _wants_real_llm(settings):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="serving real no disponible"
+        )
+
+    # 3) Thinking efectivo: override manual del body, si no el default por role
+    #    (False conversational / True agent; gotcha Gemma+thinking -> content vacío).
+    thinking = body.thinking if body.thinking is not None else model_cfg.role == "agent"
+
+    # 4) Params efectivos; el preset low_perf pisa max_tokens/temp/thinking + timeout.
+    max_tokens = body.params.max_tokens
+    temperature = body.params.temperature
+    timeout_s: float | None = None
+    if body.params.low_perf:
+        max_tokens = min(_LOW_PERF_MAX_TOKENS, body.params.max_tokens)
+        temperature = min(_LOW_PERF_TEMPERATURE, body.params.temperature)
+        thinking = False
+        timeout_s = _LOW_PERF_TIMEOUT_S
+
+    # 5) System prompt: override crudo > load_prompt(mode) > default neutro.
+    system_content = body.system_prompt or _PLAYGROUND_DEFAULT_SYSTEM
+    if body.system_prompt is None and body.mode is not None:
+        try:
+            system_content = load_prompt(Mode(body.mode))
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modo desconocido"
+            ) from exc
+
+    messages = [
+        ChatMessage(role="system", content=system_content),
+        ChatMessage(role="user", content=body.message),
+    ]
+
+    return _ResolvedPlayground(
+        model_cfg=model_cfg,
+        thinking=thinking,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        timeout_s=timeout_s,
+        messages=messages,
+    )
 
 
 @router.get("/admin/serving", response_model=ServingOut, status_code=200)
@@ -144,63 +232,23 @@ async def admin_playground(
     ``AssertionError`` del Fake del lifespan), aplica el preset low_perf si se pidió y
     mapea la familia ``LlmError`` a status sin ecoar el payload (regla #4).
     """
-    settings = get_settings()
-    cfg = load_llm_config()
-
-    # 1) Validar el modelo elegido contra el catálogo de served_names.
-    models_by_served = {m.served_name: m for m in cfg.models.values()}
-    model_cfg = models_by_served.get(body.model)
-    if model_cfg is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modelo no servido"
-        )
-
-    # 2) Sin serving real (backend fake) no hay generación: el Fake del lifespan no
-    #    tiene respuestas encoladas -> 409 ANTES de llamar complete() (evita el 500).
-    if not _wants_real_llm(settings):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="serving real no disponible"
-        )
-
-    # 3) Thinking efectivo: override manual del body, si no el default por role
-    #    (False conversational / True agent; gotcha Gemma+thinking -> content vacío).
-    thinking = body.thinking if body.thinking is not None else model_cfg.role == "agent"
-
-    # 4) Params efectivos; el preset low_perf pisa max_tokens/temp/thinking + timeout.
-    max_tokens = body.params.max_tokens
-    temperature = body.params.temperature
-    timeout_s: float | None = None
-    if body.params.low_perf:
-        max_tokens = min(_LOW_PERF_MAX_TOKENS, body.params.max_tokens)
-        temperature = min(_LOW_PERF_TEMPERATURE, body.params.temperature)
-        thinking = False
-        timeout_s = _LOW_PERF_TIMEOUT_S
-
-    # 5) System prompt: override crudo > load_prompt(mode) > default neutro.
-    system_content = body.system_prompt or _PLAYGROUND_DEFAULT_SYSTEM
-    if body.system_prompt is None and body.mode is not None:
-        try:
-            system_content = load_prompt(Mode(body.mode))
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modo desconocido"
-            ) from exc
-
-    messages = [
-        ChatMessage(role="system", content=system_content),
-        ChatMessage(role="user", content=body.message),
-    ]
+    # 1-5) Resolución compartida: lookup/422 + 409 fake + thinking + low_perf + prompt.
+    resolved = _resolve_playground_request(body)
+    model_cfg = resolved.model_cfg
+    thinking = resolved.thinking
+    max_tokens = resolved.max_tokens
+    temperature = resolved.temperature
 
     # 6) Llamada directa al cliente; 7) mapear LlmError a status sin ecoar payload.
     try:
         result = await llm_client.complete(
             model=model_cfg.served_name,
-            messages=messages,
+            messages=resolved.messages,
             tools=None,
             max_tokens=max_tokens,
             temperature=temperature,
             thinking=thinking,
-            timeout_s=timeout_s,
+            timeout_s=resolved.timeout_s,
         )
     except LlmError as exc:
         raise _map_llm_error(exc) from exc
@@ -283,54 +331,18 @@ async def admin_playground_stream(
     real del stream del modelo) y ``tokens_per_second`` se deriva con la latencia
     medida en el server. El stream NO trae ``usage`` -> sin ``prompt_tokens``.
     """
-    settings = get_settings()
-    cfg = load_llm_config()
-
-    # 1) Validar el modelo contra el catálogo de served_names (gate del probe sync).
-    models_by_served = {m.served_name: m for m in cfg.models.values()}
-    model_cfg = models_by_served.get(body.model)
-    if model_cfg is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modelo no servido"
-        )
-
-    # 2) Sin serving real (backend fake) no hay generación -> 409 ANTES del stream.
-    if not _wants_real_llm(settings):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="serving real no disponible"
-        )
-
-    # 3) Thinking efectivo: override manual del body, si no el default por role.
-    thinking = body.thinking if body.thinking is not None else model_cfg.role == "agent"
-
-    # 4) Params efectivos; el preset low_perf pisa max_tokens/temp/thinking + timeout.
-    max_tokens = body.params.max_tokens
-    temperature = body.params.temperature
-    timeout_s: float | None = None
-    if body.params.low_perf:
-        max_tokens = min(_LOW_PERF_MAX_TOKENS, body.params.max_tokens)
-        temperature = min(_LOW_PERF_TEMPERATURE, body.params.temperature)
-        thinking = False
-        timeout_s = _LOW_PERF_TIMEOUT_S
-
-    # 5) System prompt: override crudo > load_prompt(mode) > default neutro.
-    system_content = body.system_prompt or _PLAYGROUND_DEFAULT_SYSTEM
-    if body.system_prompt is None and body.mode is not None:
-        try:
-            system_content = load_prompt(Mode(body.mode))
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modo desconocido"
-            ) from exc
-
-    messages = [
-        ChatMessage(role="system", content=system_content),
-        ChatMessage(role="user", content=body.message),
-    ]
+    # 1-5) Resolución compartida (idéntica al probe sync): lookup/422 + 409 fake +
+    #    thinking + low_perf + prompt. Las validaciones suben como HTTP normal acá,
+    #    ANTES de construir el StreamingResponse (no como SSE).
+    resolved = _resolve_playground_request(body)
+    max_tokens = resolved.max_tokens
+    temperature = resolved.temperature
+    timeout_s = resolved.timeout_s
+    messages = resolved.messages
     # Snapshot a primitivos: el generator cierra sobre valores ya resueltos (no
     # sobre el request/Depends), mismo cuidado que /chat/stream.
-    served_name = model_cfg.served_name
-    effective_thinking = thinking
+    served_name = resolved.model_cfg.served_name
+    effective_thinking = resolved.thinking
 
     async def _gen() -> AsyncIterator[bytes]:
         started = time.perf_counter()
@@ -435,45 +447,14 @@ async def admin_playground_agent(
     from app.llm.tool_loop import run_tool_loop
     from app.llm.tools.registry import default_registry
 
-    settings = get_settings()
-    cfg = load_llm_config()
-
-    # 1) Validar el modelo elegido contra el catálogo de served_names (igual que
-    #    /playground): served_name fuera del catálogo -> 422 neutro.
-    models_by_served = {m.served_name: m for m in cfg.models.values()}
-    model_cfg = models_by_served.get(body.model)
-    if model_cfg is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modelo no servido"
-        )
-
-    # 2) Sin serving real (backend fake) no hay generación: 409 ANTES de tocar el
-    #    loop (el Fake del lifespan no tiene respuestas encoladas -> AssertionError/500).
-    if not _wants_real_llm(settings):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="serving real no disponible"
-        )
-
-    # 3) Thinking efectivo: override del body > default por role; low_perf lo fuerza
-    #    OFF (igual que /playground). El loop no toma max_tokens/temp/timeout per-request.
-    thinking = body.thinking if body.thinking is not None else model_cfg.role == "agent"
-    if body.params.low_perf:
-        thinking = False
-
-    # 4) System prompt: override crudo > load_prompt(mode) > default neutro.
-    system_content = body.system_prompt or _PLAYGROUND_DEFAULT_SYSTEM
-    if body.system_prompt is None and body.mode is not None:
-        try:
-            system_content = load_prompt(Mode(body.mode))
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="modo desconocido"
-            ) from exc
-
-    messages = [
-        ChatMessage(role="system", content=system_content),
-        ChatMessage(role="user", content=body.message),
-    ]
+    # 1-4) Resolución compartida (igual que /playground): lookup/422 + 409 fake +
+    #    thinking (low_perf lo fuerza OFF) + prompt. El tool-loop NO toma
+    #    max_tokens/temp/timeout per-request, así que esos campos del resolved se
+    #    ignoran: el efecto observable es idéntico al inline previo.
+    resolved = _resolve_playground_request(body)
+    model_cfg = resolved.model_cfg
+    thinking = resolved.thinking
+    messages = resolved.messages
 
     # 5) INVARIANTE DE NO-EFECTO (ADR-019 D2): default_registry() (4 stubs no-op) +
     #    None (SIN memory_registry -> ni se construye el store -> memory.* es
