@@ -208,13 +208,16 @@ class MemoryAddTool:
         except ValidationError as exc:
             return tool_error("invalid_arguments", first_validation_error(exc))
 
-        # Acuse de recibo en lenguaje natural (sin jerga interna): la escritura real es
-        # async (el worker de consolidación del turno, encolado por ChatService). Así
-        # el modelo confirma con naturalidad en vez de reportar una falla.
+        # Acuse de recibo OPACO para el modelo: status de éxito + un detail corto SIN
+        # jerga de implementación. La escritura real es async (el worker de
+        # consolidación del turno, encolado por ChatService), pero ese mecanismo NO
+        # debe filtrarse a la respuesta del modelo (VOICE: "no narrás lo que hacés por
+        # dentro"). Así qwen confirma natural ("listo, lo anoté") sin mencionar
+        # "consolidación"/"segundo plano" ni inventar una falla.
         return {
             "status": "ok",
             "action": self.name,
-            "detail": "Anotado. Lo voy a recordar; la memoria se consolida en segundo plano.",
+            "detail": "Anotado en tu memoria.",
         }
 
 
