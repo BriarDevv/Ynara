@@ -9,6 +9,29 @@ docker-compose principal:
 - Reglas de firewall.
 - Tuning Postgres para la fase V2 (cuando se migre a self-hosted).
 
+## Broker Redis con auth (SEC-001)
+
+El `redis` del `docker-compose.yml` corre con `--requirepass` (defensa en
+profundidad: no se expone a internet, pero exige credencial igual). Para que el
+stack levante hay que setear **dos** lugares de forma consistente:
+
+1. **`REDIS_PASSWORD`** en el entorno de compose (la VPS o un `.env` junto al
+   compose). Si falta, el servicio `redis` no arranca (`:?` lo exige).
+2. Los **broker URLs** en `apps/backend/.env`, incluyendo la pass:
+
+   ```sh
+   REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+   CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+   CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+   ```
+
+   (host `redis` = nombre del servicio en la red interna `ynara`). Si los URLs no
+   incluyen la pass, api/worker/beat fallan con `NOAUTH Authentication required`.
+
+Para TLS extremo-a-extremo (solo si el broker cruza hosts, no en la VPS
+single-host actual) usar `rediss://` + `--tls-port` en redis; hoy el broker vive
+en la red bridge interna, así que `requirepass` es la cota suficiente.
+
 ## systemd units de vLLM (issue #212)
 
 > **ADR-014:** en GPU de 16 GB el motor es **Ollama/GGUF**, no vLLM. Estas units
