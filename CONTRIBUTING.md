@@ -136,14 +136,16 @@
 Decisiones de calibración deliberadas del repo. Se documentan acá para
 que no se relean como deuda técnica en cada auditoría:
 
-- **QC-FN-LEN — docstrings por encima del límite de 50 líneas.** El repo
-  **prioriza** docstrings y comentarios de rationale exhaustivos por
-  encima del límite de 50 líneas de **cuerpo** de función. La regla
-  aplica al **cuerpo lógico** (`<50` líneas); el docstring **no cuenta**
-  para ese límite. Algunas funciones (ej. `route()` en el módulo `llm`,
-  con ~46 líneas de docstring sobre un cuerpo lineal) exceden el conteo
-  **total** por documentación, no por complejidad — eso es intencional y
-  no se refactoriza.
+- **QC-FN-LEN — el límite de 50 líneas aplica al cuerpo, y admite cuerpos
+  lineales largos.** Dos aclaraciones sobre la guía de "`<50` líneas de
+  función": **(a)** el límite aplica al **cuerpo lógico**; los docstrings y
+  comentarios de rationale (que el repo prioriza, a veces extensos) **no
+  cuentan** para ese conteo. **(b)** Una función cuyo **cuerpo** excede 50
+  líneas pero es un **pipeline lineal y secuencial** —cada paso comentado,
+  sin anidamiento profundo ni ramas que ameriten extraer un helper— puede
+  quedar entera cuando partirla perjudicaría la legibilidad. Ej.: `route()`
+  en el módulo `llm` (~35 líneas de docstring + ~109 de cuerpo secuencial)
+  es intencional y no se refactoriza por el conteo.
 
 - **Cluster de testing — calibración consciente de cobertura.** Tres
   decisiones sobre qué se testea y hasta dónde:
