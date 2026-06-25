@@ -28,7 +28,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 
-from sqlalchemy import Float, cast, func, select
+from sqlalchemy import Float, Select, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enums import AuditOperation, LlmModel, MemoryLayer, Mode
@@ -134,9 +134,9 @@ class AdminMetricsService:
 
     # --- Helpers con DB ------------------------------------------------------
 
-    async def _count(self, stmt: object) -> int:
+    async def _count(self, stmt: Select[tuple[int]]) -> int:
         """Ejecuta un ``select(func.count())...`` y devuelve el entero (0 si None)."""
-        return (await self._session.scalar(stmt)) or 0  # type: ignore[arg-type]
+        return (await self._session.scalar(stmt)) or 0
 
     async def _daily_series(
         self,
