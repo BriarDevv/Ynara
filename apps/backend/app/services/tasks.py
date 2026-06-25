@@ -37,9 +37,10 @@ misma transacción donde corre el tool loop.
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enums import TaskStatus
@@ -134,6 +135,61 @@ class TaskStore:
             stmt = stmt.offset(offset)
         rows = list((await self._session.execute(stmt)).scalars().all())
         return [self._to_result(row) for row in rows]
+
+    async def list_upcoming_pending(
+        self, *, after: datetime, limit: int
+    ) -> list[dict[str, object]]:
+        """Tareas PENDIENTES del usuario con horario A FUTURO (``scheduled_at > after``).
+
+        Ordenadas por horario ASC y acotadas a ``limit``: empuja el filtro (estado +
+        futuro) a SQL en vez de traer toda la tabla y filtrar en Python (evita la
+        regresión de API-002 en el camino caliente del dashboard Hoy). Usa el índice
+        ``(user_id, scheduled_at)``. Filtra por ``user_id`` (aislamiento). Read-only.
+
+        Alimenta las sugerencias de ``GET /v1/suggestions`` (nudges de preparación).
+        """
+        stmt = (
+            select(Task)
+            .where(
+                Task.user_id == self._user_id,
+                Task.status == TaskStatus.PENDING,
+                Task.scheduled_at.is_not(None),
+                Task.scheduled_at > after,
+            )
+            .order_by(Task.scheduled_at.asc())
+            .limit(limit)
+        )
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return [self._to_result(row) for row in rows]
+
+    async def list_recent_done(self, *, limit: int) -> list[dict[str, object]]:
+        """Tareas DONE del usuario, más recientes primero (``updated_at`` DESC), acotadas.
+
+        Empuja el filtro a SQL y acota a ``limit`` (no trae toda la tabla: las DONE se
+        acumulan sin archivar). Filtra por ``user_id`` (aislamiento). Read-only.
+
+        Alimenta los highlights del recap de ``GET /v1/recap``.
+        """
+        stmt = (
+            select(Task)
+            .where(Task.user_id == self._user_id, Task.status == TaskStatus.DONE)
+            .order_by(Task.updated_at.desc())
+            .limit(limit)
+        )
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return [self._to_result(row) for row in rows]
+
+    async def count_pending(self) -> int:
+        """Cuenta las tareas PENDIENTES del usuario (para el recap). Read-only.
+
+        Filtra por ``user_id`` (aislamiento). Un COUNT acotado, no trae filas.
+        """
+        stmt = (
+            select(func.count())
+            .select_from(Task)
+            .where(Task.user_id == self._user_id, Task.status == TaskStatus.PENDING)
+        )
+        return (await self._session.execute(stmt)).scalar_one()
 
     async def set_status(self, task_id: UUID, status: TaskStatus) -> dict[str, object] | None:
         """Setea el ``status`` de UNA tarea del usuario; devuelve el dict o ``None``.

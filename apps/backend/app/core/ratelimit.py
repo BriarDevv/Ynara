@@ -409,12 +409,16 @@ async def check_events_rate_limit(store: TokenStore, *, user_id: str) -> bool:
 async def check_tasks_rate_limit(store: TokenStore, *, user_id: str) -> bool:
     """``True`` si la request a ``/v1/tasks`` esta permitida; ``False`` si excede el limite.
 
-    UN solo bucket por ``user_id`` compartido por las 2 rutas (list/patch): el JWT ya
-    autentico al caller, asi que el freno es por usuario (no por IP) y no penaliza a
-    varios usuarios tras un NAT compartido. Un techo unico amplio corta el scripting
-    abusivo del CRUD de tareas sin molestar el uso interactivo legitimo del dashboard
-    "Hoy". Chequea + incrementa en una sola op. fail-open: si Redis cae,
-    ``incr_with_ttl`` => 0 => permite (baseline sin freno, nunca un auto-DoS).
+    UN solo bucket por ``user_id`` compartido por las 4 rutas del dashboard "Hoy"
+    (``GET``/``PATCH`` ``/v1/tasks`` + ``GET`` ``/v1/suggestions`` + ``GET`` ``/v1/recap``):
+    el JWT ya autentico al caller, asi que el freno es por usuario (no por IP) y no
+    penaliza a varios usuarios tras un NAT compartido. Un techo unico amplio corta el
+    scripting abusivo sin molestar el uso interactivo legitimo. Ojo al multiplicador:
+    una carga del dashboard dispara 3 hits (``/tasks`` + ``/suggestions`` + ``/recap``)
+    sobre este bucket, asi que con ``TASKS_MAX_REQUESTS`` (120) por ``TASKS_WINDOW_SECONDS``
+    (60s) quedan ~40 cargas/min de headroom antes del 429. Chequea + incrementa en una
+    sola op. fail-open: si Redis cae, ``incr_with_ttl`` => 0 => permite (baseline sin
+    freno, nunca un auto-DoS).
 
     El ``user_id`` es un UUID opaco (no PII directa): va crudo en la key, sin
     hashear (ver ``_tasks_counter_key``).

@@ -3,22 +3,27 @@
 
 Hasta ahora la web las consumía contra mocks (``packages/core/.../today/api.ts``
 degradaba el 404 a vacío). Acá se vuelven endpoints reales: NO inventan data ni
-persisten nada — **derivan** de las tareas reales del usuario (``TaskStore``):
+persisten nada — **derivan** de las tareas reales del usuario (``TaskStore``), con
+queries ACOTADAS en SQL (``list_upcoming_pending`` / ``list_recent_done`` /
+``count_pending``: no traen toda la tabla, evitando la regresión de API-002 en el
+camino caliente del dashboard):
 
 - ``build_suggestions``: surfacea las próximas prioridades pendientes con horario
   como nudges de preparación ("Preparate para X"). Tocarlas abre un chat para
   prepararlas (acción real, distinta de la lista de prioridades). Vacío si no hay
-  nada agendado a futuro (la web oculta la sección).
+  nada agendado a futuro (la web oculta la sección). ``mode=None`` (transversal): la
+  v1 no puede derivar el modo real de la tarea, y un valor fijo incorrecto teñiría
+  mal; ``None`` es lo que el wire/Zod aceptan como "transversal".
 - ``build_recap``: arma un borrador del día con highlights de las tareas reales
-  (cerradas + pendientes). ``pending=True`` solo si hay contenido.
+  (cerradas + el conteo de pendientes). ``pending=True`` solo si hay contenido.
 
 La **generación por LLM** (Ynara lee el día y escribe recap + sugerencias con voz
 propia, roadmap F documentado en ``shared-schemas/today.ts``) es la PRÓXIMA fase;
 esta v1 derivada cierra el 404 y muestra contenido real mientras tanto.
 
 ``now`` se inyecta (default ``datetime.now(UTC)``) para que los tests sean
-deterministas: el "próximas" de las sugerencias y el ``date`` del recap dependen de
-la hora actual.
+deterministas. Se normaliza a aware (UTC si viene naive) para no romper la
+comparación con ``scheduled_at`` (que es ``timestamptz``).
 """
 
 from __future__ import annotations
@@ -28,24 +33,24 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.enums import Mode, TaskStatus
 from app.schemas.today import RecapOut, SuggestionOut
 from app.services.tasks import TaskStore
 
 # Cuántos nudges de preparación surfaceamos (las próximas, no toda la agenda).
 _MAX_SUGGESTIONS = 2
-# Cuántas tareas cerradas listamos como highlights del recap (las más recientes
-# del orden del store), para que el borrador sea conciso.
+# Cuántas tareas cerradas listamos como highlights del recap (las más recientes),
+# para que el borrador sea conciso.
 _MAX_RECAP_DONE = 3
 # Namespace estable para derivar el ``id`` (uuid5) de cada sugerencia desde el id
 # de su tarea: misma tarea -> mismo id de sugerencia entre requests (key de React).
 _SUGGESTION_NS = uuid5(NAMESPACE_URL, "ynara:today:suggestion")
 
 
-def _parse_when(iso: str) -> datetime:
-    """Parsea un ``scheduled_at`` ISO a ``datetime`` aware (UTC si viene naive)."""
-    when = datetime.fromisoformat(iso)
-    return when if when.tzinfo is not None else when.replace(tzinfo=UTC)
+def _aware_now(now: datetime | None) -> datetime:
+    """``now`` por defecto (UTC), normalizado a timezone-aware si viene naive."""
+    if now is None:
+        return datetime.now(UTC)
+    return now if now.tzinfo is not None else now.replace(tzinfo=UTC)
 
 
 async def build_suggestions(
@@ -53,36 +58,26 @@ async def build_suggestions(
 ) -> list[SuggestionOut]:
     """Sugerencias v1: nudges de preparación de las próximas prioridades del usuario.
 
-    Toma las tareas PENDIENTES con ``scheduled_at`` a futuro (respecto de ``now``),
-    en orden de horario, y arma hasta ``_MAX_SUGGESTIONS`` sugerencias "Preparate
-    para X". El ``id`` es estable por tarea (uuid5). Si no hay nada agendado a
-    futuro, devuelve ``[]`` (la web oculta la sección — no se inventa contenido).
+    Toma (vía SQL acotado) las tareas PENDIENTES con ``scheduled_at`` a futuro
+    respecto de ``now``, en orden de horario, hasta ``_MAX_SUGGESTIONS``, y arma una
+    sugerencia "Preparate para X" por cada una. El ``id`` es estable por tarea
+    (uuid5). ``mode=None`` (transversal): la v1 no deriva el modo real. Si no hay
+    nada agendado a futuro, devuelve ``[]`` (la web oculta la sección).
 
     NO usa LLM: la generación con voz propia es la próxima fase (roadmap F).
     """
-    now = now or datetime.now(UTC)
-    tasks = await TaskStore(session, user_id).list_tasks()
-
-    upcoming: list[tuple[datetime, dict[str, object]]] = []
-    for task in tasks:
-        if task["status"] != TaskStatus.PENDING:
-            continue
-        scheduled_at = task["scheduled_at"]
-        if not isinstance(scheduled_at, str):
-            continue
-        when = _parse_when(scheduled_at)
-        if when > now:
-            upcoming.append((when, task))
-
-    upcoming.sort(key=lambda pair: pair[0])
+    now = _aware_now(now)
+    upcoming = await TaskStore(session, user_id).list_upcoming_pending(
+        after=now, limit=_MAX_SUGGESTIONS
+    )
     return [
         SuggestionOut(
             id=uuid5(_SUGGESTION_NS, str(task["id"])),
             title=f"Preparate para {task['title']}",
             why="Es una de tus próximas prioridades agendadas.",
-            mode=Mode.PRODUCTIVIDAD,
+            mode=None,
         )
-        for _when, task in upcoming[:_MAX_SUGGESTIONS]
+        for task in upcoming
     ]
 
 
@@ -100,27 +95,29 @@ async def build_recap(
 ) -> RecapOut:
     """Recap v1: borrador del día derivado de las tareas reales del usuario.
 
-    Arma highlights de las tareas cerradas ("Cerraste: X") y una línea con el
-    pendiente. ``pending=True`` solo si hay contenido (highlights no vacío); si el
-    usuario no tiene tareas, ``pending=False`` y la web no muestra el CTA hacia un
-    recap vacío. ``headline`` es una frase derivada (la voz real es por LLM, roadmap
-    F). ``date`` es ``now`` (el día del recap).
+    Arma highlights de las tareas cerradas recientes ("Cerraste: X", vía SQL acotado)
+    y una línea con el conteo de pendientes. ``pending=True`` solo si hay contenido;
+    si el usuario no tiene tareas, ``pending=False`` y la web no muestra el CTA hacia
+    un recap vacío. ``headline`` es una frase derivada (la voz real es por LLM,
+    roadmap F). ``date`` es ``now`` (el día del recap).
     """
-    now = now or datetime.now(UTC)
-    tasks = await TaskStore(session, user_id).list_tasks()
+    now = _aware_now(now)
+    store = TaskStore(session, user_id)
+    done = await store.list_recent_done(limit=_MAX_RECAP_DONE)
+    pending_count = await store.count_pending()
 
-    done = [t for t in tasks if t["status"] == TaskStatus.DONE]
-    pending = [t for t in tasks if t["status"] == TaskStatus.PENDING]
+    highlights = [f"Cerraste: {task['title']}" for task in done]
+    if pending_count:
+        plural = "es" if pending_count > 1 else ""
+        verb = "n" if pending_count > 1 else ""
+        highlights.append(f"Te queda{verb} {pending_count} prioridad{plural} por hacer")
 
-    highlights = [f"Cerraste: {task['title']}" for task in done[:_MAX_RECAP_DONE]]
-    if pending:
-        count = len(pending)
-        plural = "es" if count > 1 else ""
-        verb = "n" if count > 1 else ""
-        highlights.append(f"Te queda{verb} {count} prioridad{plural} por hacer")
+    # Únicos preservando orden: dos tareas cerradas con el MISMO título no duplican
+    # la línea (ni la key de React del front, que usa el string como key).
+    highlights = list(dict.fromkeys(highlights))
 
     has_content = bool(highlights)
     headline = (
-        _recap_headline(done_count=len(done), pending_count=len(pending)) if has_content else None
+        _recap_headline(done_count=len(done), pending_count=pending_count) if has_content else None
     )
     return RecapOut(pending=has_content, date=now, headline=headline, highlights=highlights)
