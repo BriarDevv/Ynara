@@ -28,6 +28,7 @@ en el constructor vuelve el aislamiento estructural (regla #3 / ADR-010).
 
 from __future__ import annotations
 
+import asyncio
 from uuid import UUID
 
 from sqlalchemy import delete as sa_delete
@@ -35,7 +36,7 @@ from sqlalchemy import func, select
 from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.crypto import decrypt_for_user, encrypt_for_user
+from app.core.crypto import decrypt_for_user, decrypt_many_for_user, encrypt_for_user
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
 from app.memory.embedding import embed_one
@@ -106,8 +107,11 @@ class SemanticMemoryStore:
         if not rows:
             return []
 
-        # Descifrar el top-K in-process ANTES de tocar el schema strict.
-        plaintexts = [decrypt_for_user(self._user_id, row.content) for row in rows]
+        # Descifrar el top-K en un thread (CPU-bound, libera el GIL) ANTES de
+        # tocar el schema strict: no bloquea el event loop bajo concurrencia
+        # (SCAL-02). Los blobs se materializan en el loop (sin lazy-load en thread).
+        blobs = [row.content for row in rows]
+        plaintexts = await asyncio.to_thread(decrypt_many_for_user, self._user_id, blobs)
 
         # Rerank passthrough (FakeReranker en M7): preserva el orden ANN.
         ranked = await self._reranker.rerank(query, plaintexts, top_n=limit)
@@ -138,10 +142,13 @@ class SemanticMemoryStore:
         if limit is not None:
             stmt = stmt.limit(limit)
         rows = list((await self._session.execute(stmt)).scalars().all())
-        # Descifrar fila por fila ANTES del schema strict (todas son del user).
+        # Descifrar el lote en un thread ANTES del schema strict (todas son del
+        # user); el export sin tope puede ser grande, no bloquear el loop (SCAL-02).
+        blobs = [row.content for row in rows]
+        plaintexts = await asyncio.to_thread(decrypt_many_for_user, self._user_id, blobs)
         return [
-            self._to_out(row, plaintext=decrypt_for_user(self._user_id, row.content))
-            for row in rows
+            self._to_out(row, plaintext=plaintext)
+            for row, plaintext in zip(rows, plaintexts, strict=True)
         ]
 
     async def count(self) -> int:
