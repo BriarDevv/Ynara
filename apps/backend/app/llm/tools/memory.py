@@ -9,8 +9,9 @@ ya está ligado al ``user_id`` en su constructor (la key de cifrado se deriva de
 Las tools reciben el store ya construido en ``memory_registry()``.
 
 ``memory.add`` NO escribe de forma síncrona (regla #2 de ``MEMORY.md``: la
-escritura de memoria nunca va en el path de respuesta). Devuelve
-``not_wired_result`` con el detalle de consolidación async pendiente (M8).
+escritura de memoria nunca va en el path de respuesta). Acusa recibo en lenguaje
+natural para el modelo; la escritura REAL la hace el worker de consolidación del
+turno (``app/workflows/consolidation.py``, que ``ChatService`` encola post-commit).
 
 ``memory.search`` cablea el store real: embed → ANN → descifrar → rerank.
 ``memory.update`` / ``memory.delete`` cablean el store (solo semántica).
@@ -28,7 +29,6 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationEr
 
 from app.llm.tools.base import (
     first_validation_error,
-    not_wired_result,
     tool_error,
     tool_schema,
 )
@@ -177,20 +177,26 @@ class MemorySearchTool:
 class MemoryAddTool:
     """Registra un hecho nuevo en la memoria del usuario.
 
-    NO escribe de forma síncrona (MEMORY.md regla #2: la escritura de memoria
-    nunca va en el path de respuesta del agente). Devuelve ``not_wired_result``
-    con el detalle de la consolidación async pendiente (M8).
+    NO escribe de forma síncrona (MEMORY.md regla #2: la escritura de memoria nunca
+    va en el path de respuesta del agente). La escritura REAL la hace el worker de
+    consolidación (``app/workflows/consolidation.py``), que ``ChatService`` encola
+    DESPUÉS del commit del turno de memoria. Esta tool solo ACUSA RECIBO para el
+    modelo, en lenguaje natural.
+
+    Antes devolvía un stub ``not_wired`` con jerga interna
+    (``"consolidacion async pendiente (M8)"``): Qwen lo leía como una FALLA y le
+    reportaba al usuario un falso "hubo un error ejecutando la acción". El acuse de
+    recibo en prosa natural evita eso (el modelo confirma "listo, lo voy a recordar").
     """
 
     name = f"{_NAMESPACE}.add"
     namespace = _NAMESPACE
     description = (
-        "Registra un nuevo hecho en la memoria semántica del usuario "
-        "(la escritura real es async — M8)."
+        "Registra un nuevo hecho en la memoria del usuario (se consolida en segundo plano)."
     )
 
     def __init__(self, store: SemanticMemoryStore) -> None:
-        self._store = store  # guardado aunque no se use (wiring completo en M8)
+        self._store = store  # ligado aunque la escritura síncrona no use el store
 
     @property
     def parameters(self) -> dict[str, object]:
@@ -198,15 +204,18 @@ class MemoryAddTool:
 
     async def execute(self, arguments: dict[str, object]) -> dict[str, object]:
         try:
-            validated = _AddArgs.model_validate(arguments)
+            _AddArgs.model_validate(arguments)
         except ValidationError as exc:
             return tool_error("invalid_arguments", first_validation_error(exc))
 
-        return not_wired_result(
-            self.name,
-            validated.model_dump(mode="json"),
-            detail="consolidacion async pendiente (M8)",
-        )
+        # Acuse de recibo en lenguaje natural (sin jerga interna): la escritura real es
+        # async (el worker de consolidación del turno, encolado por ChatService). Así
+        # el modelo confirma con naturalidad en vez de reportar una falla.
+        return {
+            "status": "ok",
+            "action": self.name,
+            "detail": "Anotado. Lo voy a recordar; la memoria se consolida en segundo plano.",
+        }
 
 
 class MemoryUpdateTool:

@@ -5,7 +5,7 @@ implementa la misma interfaz que ``SemanticMemoryStore`` sin tocar Postgres.
 
 Verifican:
 - ``memory.search`` con args validos llama al store y devuelve resultados.
-- ``memory.add`` devuelve siempre ``not_wired`` (MEMORY.md regla #2).
+- ``memory.add`` acusa recibo (``status: "ok"``); la escritura real es async (MEMORY.md regla #2).
 - ``layer`` alucinado/omitido se normaliza a ``'semantic'`` (BeforeValidator tolerante).
 - Args invalidos (falta campo, tipo incorrecto, extra) -> ``invalid_arguments``.
 - ``memory.update`` / ``memory.delete`` con store que devuelve None/False -> ``not_found``.
@@ -182,31 +182,35 @@ class TestMemorySearch:
 
 
 # ---------------------------------------------------------------------------
-# memory.add — siempre not_wired (MEMORY.md regla #2)
+# memory.add — acuse de recibo natural (la escritura real es async, MEMORY.md regla #2)
 # ---------------------------------------------------------------------------
 
 
 class TestMemoryAdd:
-    async def test_valid_args_returns_not_wired(self) -> None:
+    async def test_valid_args_acknowledges(self) -> None:
         store = FakeSemanticStore()
         tool = MemoryAddTool(store)
 
         result = await tool.execute({"content": "nuevo hecho", "layer": "semantic"})
 
-        assert result["status"] == "not_wired"
+        # status "ok" (no "not_wired") + detalle en prosa natural, SIN jerga interna:
+        # el viejo stub ("not_wired" / "consolidacion async pendiente (M8)") hacía que
+        # qwen reportara un falso "hubo un error ejecutando la acción".
+        assert result["status"] == "ok"
         assert result["action"] == "memory.add"
-        assert "consolidacion async" in result["detail"]  # type: ignore[operator]
+        assert "not_wired" not in str(result).lower()
+        assert "m8" not in str(result["detail"]).lower()  # type: ignore[arg-type]
 
-    async def test_not_wired_does_not_call_store(self) -> None:
+    async def test_add_does_not_write_synchronously(self) -> None:
         store = FakeSemanticStore()
         tool = MemoryAddTool(store)
 
         await tool.execute({"content": "x", "layer": "semantic"})
 
-        # memory.add nunca escribe síncrono
+        # La escritura síncrona nunca toca el store (la hace el worker async).
         assert not hasattr(store, "add_calls")
 
-    async def test_with_importance_returns_not_wired(self) -> None:
+    async def test_with_importance_acknowledges(self) -> None:
         store = FakeSemanticStore()
         tool = MemoryAddTool(store)
 
@@ -214,34 +218,32 @@ class TestMemoryAdd:
             {"content": "hecho importante", "layer": "semantic", "importance": 80}
         )
 
-        assert result["status"] == "not_wired"
+        assert result["status"] == "ok"
 
     async def test_hallucinated_layer_value_is_tolerated(self) -> None:
         """Regresión (#259): el modelo (qwen) alucina valores de ``layer``
         ('personal', 'base', etc.) que el ``Literal['semantic']`` rechazaba con
         ``invalid_arguments``, haciendo que el agente le reportara al usuario un
         FALSO 'no pude guardar' (la escritura real la hace el worker async, no esta
-        tool — que es un stub not_wired). Ahora cualquier ``layer`` se normaliza a
-        'semantic' (única capa soportada hoy) y la tool responde ``not_wired``."""
+        tool). Ahora cualquier ``layer`` se normaliza a 'semantic' y la tool ACUSA
+        recibo (``status: "ok"``) en vez de fallar — que ``status`` no sea
+        ``invalid_arguments`` es la prueba de que la coerción ocurrió."""
         store = FakeSemanticStore()
         tool = MemoryAddTool(store)
 
         result = await tool.execute({"content": "me llamo Mateo", "layer": "personal"})
 
-        assert result.get("status") == "not_wired", result
-        # El echo refleja la normalización a 'semantic' (no el valor alucinado).
-        assert result["echo"]["layer"] == "semantic"  # type: ignore[index]
+        assert result.get("status") == "ok", result
 
     async def test_layer_episodic_is_coerced_to_semantic(self) -> None:
         """Un ``layer`` no-semantic (episodic/procedural) se normaliza a 'semantic':
-        memory.add solo escribe semantic hoy (M8 cablea multi-capa). No falla."""
+        memory.add solo escribe semantic hoy. No falla: acusa recibo (``status: "ok"``)."""
         store = FakeSemanticStore()
         tool = MemoryAddTool(store)
 
         result = await tool.execute({"content": "algo", "layer": "episodic"})
 
-        assert result.get("status") == "not_wired", result
-        assert result["echo"]["layer"] == "semantic"  # type: ignore[index]
+        assert result.get("status") == "ok", result
 
     async def test_missing_content_returns_invalid_arguments(self) -> None:
         store = FakeSemanticStore()
@@ -258,8 +260,8 @@ class TestMemoryAdd:
 
         result = await tool.execute({"content": "algo"})
 
-        assert result.get("status") == "not_wired", result
-        assert result["echo"]["layer"] == "semantic"  # type: ignore[index]
+        # Sin ``layer`` el default 'semantic' aplica: la tool acusa recibo (no falla).
+        assert result.get("status") == "ok", result
 
     async def test_importance_out_of_range_returns_invalid_arguments(self) -> None:
         store = FakeSemanticStore()
