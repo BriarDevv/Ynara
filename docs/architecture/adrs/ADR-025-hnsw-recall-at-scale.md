@@ -25,7 +25,7 @@ partición física del índice. Verificado contra el código:
   arma el query como
   `WHERE user_id == self._user_id` + `ORDER BY content_embedding.cosine_distance(qvec)`
   + `LIMIT _ANN_TOP_K` (50). Idéntico en
-  [`app/memory/episodic.py`](../../../apps/backend/app/memory/episodic.py) (~92-97)
+  [`app/memory/episodic.py`](../../../apps/backend/app/memory/episodic.py) (~93-99)
   sobre `summary_embedding`.
 - **`ef_search` no se setea por sesión**: no hay `SET LOCAL hnsw.ef_search` en el
   camino de lectura; el query usa el `ef_search` default de pgvector.
