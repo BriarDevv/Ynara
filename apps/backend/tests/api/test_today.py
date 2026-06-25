@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db
 from app.core.security import create_access_token
-from app.enums import Mode, TaskStatus
+from app.enums import TaskStatus
 from app.main import app
 from app.models.task import Task
 from app.models.user import User
@@ -108,7 +108,7 @@ async def test_suggestions_surface_upcoming_pending_only(db_session: AsyncSessio
 
     assert len(out) == 1
     assert out[0].title == "Preparate para Reunión"
-    assert out[0].mode == Mode.PRODUCTIVIDAD
+    assert out[0].mode is None  # v1 transversal: no derivamos el modo real (≠ un fijo incorrecto)
     assert out[0].why  # tiene un porqué no vacío
 
 
@@ -201,6 +201,17 @@ async def test_recap_all_done_headline(db_session: AsyncSession) -> None:
     assert recap.headline == "Cerraste todo lo del día. Bien ahí."
 
 
+async def test_recap_dedups_identical_done_titles(db_session: AsyncSession) -> None:
+    """Dos tareas cerradas con el MISMO título → una sola línea (highlights únicos)."""
+    user = await _seed_user(db_session)
+    await _seed_task(db_session, user_id=user.id, title="Reunión", status=TaskStatus.DONE)
+    await _seed_task(db_session, user_id=user.id, title="Reunión", status=TaskStatus.DONE)
+
+    recap = await build_recap(db_session, user.id, now=_NOW)
+
+    assert recap.highlights.count("Cerraste: Reunión") == 1
+
+
 async def test_recap_isolation(db_session: AsyncSession) -> None:
     """El recap de A no se arma con tareas de B."""
     user_a = await _seed_user(db_session)
@@ -235,7 +246,7 @@ async def test_get_suggestions_http_shape(db_session: AsyncSession) -> None:
         assert set(body.keys()) == {"items"}
         assert len(body["items"]) == 1
         assert set(body["items"][0].keys()) == {"id", "title", "why", "mode"}
-        assert body["items"][0]["mode"] == "productividad"
+        assert body["items"][0]["mode"] is None  # transversal en v1
     finally:
         app.dependency_overrides.clear()
 
@@ -268,5 +279,29 @@ async def test_today_without_token_401(db_session: AsyncSession) -> None:
             r_rec = await client.get("/v1/recap")
         assert r_sug.status_code == 401
         assert r_rec.status_code == 401
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_today_rate_limited_429(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cruzar el rate-limit (bucket del dashboard Hoy) → 429 + ``Retry-After`` en ambas."""
+    user = await _seed_user(db_session)
+
+    async def _deny(*_args: object, **_kwargs: object) -> bool:
+        return False
+
+    monkeypatch.setattr("app.api.v1.today.check_tasks_rate_limit", _deny)
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            r_sug = await client.get("/v1/suggestions", headers=_bearer(user.id))
+            r_rec = await client.get("/v1/recap", headers=_bearer(user.id))
+        assert r_sug.status_code == 429
+        assert "Retry-After" in r_sug.headers
+        assert r_rec.status_code == 429
+        assert "Retry-After" in r_rec.headers
     finally:
         app.dependency_overrides.clear()
