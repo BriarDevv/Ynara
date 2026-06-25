@@ -195,9 +195,7 @@ def test_decrypt_many_matches_individual(patched_key: None) -> None:
     texts = ["hecho 1", "café ☕", "", "tercero con espacios"]
     blobs = [encrypt_for_user(_USER_A, t) for t in texts]
     assert decrypt_many_for_user(_USER_A, blobs) == texts
-    assert decrypt_many_for_user(_USER_A, blobs) == [
-        decrypt_for_user(_USER_A, b) for b in blobs
-    ]
+    assert decrypt_many_for_user(_USER_A, blobs) == [decrypt_for_user(_USER_A, b) for b in blobs]
 
 
 def test_decrypt_many_empty_returns_empty(patched_key: None) -> None:
