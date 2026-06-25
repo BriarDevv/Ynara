@@ -290,3 +290,131 @@ def test_paquete_no_mapeado_es_drift(tmp_path: Path) -> None:
     _write(agents, "# AGENTS\n\n```\napp/\n+-- core/\n```\n")  # falta calendar/
 
     assert cdc.find_unmapped_packages(app, agents) == ["calendar"]
+
+
+# --- conteos en prosa: drift estricto (DOC-R3) ----------------------------
+
+
+def test_count_domain_enums_solo_app_enums(tmp_path: Path) -> None:
+    # Tres StrEnum en el módulo: el conteo es 3 (otras clases no cuentan).
+    enums = tmp_path / "app" / "enums.py"
+    _write(
+        enums,
+        "from enum import StrEnum\n\n"
+        "class Mode(StrEnum):\n    A = 'a'\n\n"
+        "class Layer(StrEnum):\n    B = 'b'\n\n"
+        "class Role(StrEnum):\n    C = 'c'\n\n"
+        "class NoEnum:\n    pass\n",
+    )
+
+    assert cdc.count_domain_enums(enums) == 3
+
+
+def test_count_domain_enums_modulo_ausente(tmp_path: Path) -> None:
+    assert cdc.count_domain_enums(tmp_path / "app" / "enums.py") == 0
+
+
+def test_extract_prose_counts_parsea_los_tres(tmp_path: Path) -> None:
+    doc = tmp_path / "AGENTS.md"
+    _write(doc, "Migraciones: cadena de **11**; total 10 tablas, 7 enums, pgvector.\n")
+
+    counts = cdc.extract_prose_counts(doc)
+
+    assert counts == {"migrations": 11, "tables": 10, "enums": 7}
+
+
+def test_extract_prose_counts_clave_ausente_es_none(tmp_path: Path) -> None:
+    doc = tmp_path / "README.md"
+    _write(doc, "Solo menciona 10 tablas, nada más.\n")
+
+    counts = cdc.extract_prose_counts(doc)
+
+    assert counts == {"migrations": None, "tables": 10, "enums": None}
+
+
+def test_prose_count_match_no_es_drift(tmp_path: Path) -> None:
+    doc = tmp_path / "AGENTS.md"
+    _write(doc, "cadena de **11**; total 10 tablas, 7 enums.\n")
+
+    drift = cdc.find_prose_count_drift(doc, real_migrations=11, real_tables=10, real_enums=7)
+
+    assert drift == []
+
+
+def test_prose_count_mismatch_es_drift(tmp_path: Path) -> None:
+    # La prosa dice 9 migraciones pero el código tiene 11: drift.
+    doc = tmp_path / "README.md"
+    _write(doc, "cadena de **9**; total 10 tablas, 7 enums.\n")
+
+    drift = cdc.find_prose_count_drift(doc, real_migrations=11, real_tables=10, real_enums=7)
+
+    assert drift == [("migrations", 9, 11)]
+
+
+def test_prose_count_clave_ausente_se_ignora(tmp_path: Path) -> None:
+    # El doc no declara enums: aunque el real sea 7, no se reporta drift por enums.
+    doc = tmp_path / "README.md"
+    _write(doc, "cadena de **11**; total 10 tablas.\n")
+
+    drift = cdc.find_prose_count_drift(doc, real_migrations=11, real_tables=10, real_enums=7)
+
+    assert drift == []
+
+
+def _make_full_backend(
+    tmp_path: Path,
+    *,
+    agents_prose: str,
+    readme_prose: str,
+) -> Path:
+    """backend_root completo (migración + modelo + paquete + enums) para `run`.
+
+    Los conteos reales quedan fijos en 1 migración / 1 tabla / 2 enums; los
+    tests varían solo la prosa de AGENTS.md / README.md.
+    """
+    backend = tmp_path / "backend"
+    _write(
+        backend / "alembic" / "versions" / "0001_init.py",
+        'revision: str = "aaa111"\n',
+    )
+    _write(backend / "docs" / "MIGRATIONS.md", "| init | `aaa111` |\n")
+    _write(
+        backend / "app" / "models" / "user.py",
+        'class User(Base):\n    __tablename__ = "users"\n',
+    )
+    _write(backend / "docs" / "MODELS.md", "`users` documentado.\n")
+    _write(backend / "app" / "core" / "__init__.py", "")
+    _write(
+        backend / "app" / "enums.py",
+        "from enum import StrEnum\n\n"
+        "class A(StrEnum):\n    X = 'x'\n\n"
+        "class B(StrEnum):\n    Y = 'y'\n",
+    )
+    _write(
+        backend / "AGENTS.md",
+        f"# AGENTS\n\n```\napp/\n+-- core/\n```\n\n{agents_prose}\n",
+    )
+    _write(backend / "README.md", f"# README\n\n{readme_prose}\n")
+    return backend
+
+
+def test_run_falla_con_drift_de_conteos_en_prosa(tmp_path: Path) -> None:
+    # Reales: 1 migración / 1 tabla / 2 enums. La prosa miente (9 migraciones).
+    backend = _make_full_backend(
+        tmp_path,
+        agents_prose="cadena de **9**; 1 tablas, 2 enums.",
+        readme_prose="cadena de **1**; 1 tablas, 2 enums.",
+    )
+
+    assert cdc.run(backend) == 1
+
+
+def test_run_ok_con_conteos_en_prosa_correctos(tmp_path: Path) -> None:
+    # Reales: 1 migración / 1 tabla / 2 enums. La prosa de ambos docs coincide.
+    backend = _make_full_backend(
+        tmp_path,
+        agents_prose="cadena de **1**; total 1 tablas, 2 enums, pgvector.",
+        readme_prose="cadena de **1**; 1 tablas, 2 enums.",
+    )
+
+    assert cdc.run(backend) == 0

@@ -5,7 +5,7 @@ Evita que `docs/MIGRATIONS.md` y `docs/ENDPOINTS.md` queden stale respecto
 del código (el bug que ya nos pasó: agregar una migración / endpoint y
 olvidar registrarlo en el catálogo).
 
-Valida CINCO cosas contra el estado actual del repo:
+Valida SEIS cosas contra el estado actual del repo:
 
 a) MIGRACIONES (ESTRICTO, falla el build):
    cada revision declarada en `alembic/versions/*.py`
@@ -18,6 +18,13 @@ c) MAPA DE PAQUETES (ESTRICTO, falla el build):
    cada paquete top-level de `app/` (directorio con `__init__.py`) debe aparecer
    en el mapa de código de `AGENTS.md`. Convierte el drift del mapa (la causa de
    que se "perdieran" calendar/ y tasks/) en una falla detectable.
+
+c-bis) CONTEOS EN PROSA (ESTRICTO, falla el build) — DOC-R3:
+   los conteos en prosa de `AGENTS.md` y `README.md` (X migraciones, Y tablas,
+   Z enums) deben coincidir con los conteos REALES del código (len de revisiones
+   de Alembic, len de `__tablename__` de models, número de `StrEnum` en
+   `app/enums.py`). Cierra la causa-raíz del drift de prosa: antes los números
+   "cadena de N", "M tablas", "K enums" se editaban a mano y quedaban stale.
 
 d) ENDPOINTS (INFORMATIVO, NO falla el build):
    cada path declarado en `app/api/v1/**/*.py` (decoradores
@@ -216,13 +223,82 @@ def find_unmapped_packages(app_dir: Path, agents_doc: Path) -> list[str]:
     return [pkg for pkg in packages if f"{pkg}/" not in doc_text and f"`{pkg}`" not in doc_text]
 
 
+# --- conteos en prosa (estricto, DOC-R3) ----------------------------------
+
+# StrEnum cross-domain: `class Mode(StrEnum):` en app/enums.py (los que se
+# materializan como tipos PG nativos). NO contamos StrEnums de otros módulos
+# (p. ej. CircuitState en llm/clients/circuit.py): la prosa habla de los enums
+# de DB, que viven todos en app/enums.py.
+_STRENUM_RE = re.compile(r"""^class\s+\w+\(StrEnum\)\s*:""", re.MULTILINE)
+
+# Conteos en prosa de AGENTS.md / README.md:
+#   "cadena de **11**" / "cadena de 11"  -> migraciones
+#   "10 tablas"                          -> tablas
+#   "7 enums"                            -> enums
+_PROSE_MIGRATIONS_RE = re.compile(r"cadena de \*{0,2}(?P<n>\d+)")
+_PROSE_TABLES_RE = re.compile(r"\*{0,2}(?P<n>\d+)\*{0,2}\s+tablas\b")
+_PROSE_ENUMS_RE = re.compile(r"\*{0,2}(?P<n>\d+)\*{0,2}\s+enums\b")
+
+
+def count_domain_enums(enums_module: Path) -> int:
+    """Número de ``StrEnum`` declarados en ``app/enums.py`` (enums de DB)."""
+    if not enums_module.exists():
+        return 0
+    return len(_STRENUM_RE.findall(enums_module.read_text(encoding="utf-8")))
+
+
+def extract_prose_counts(doc: Path) -> dict[str, int | None]:
+    """Extrae los conteos en prosa (migraciones/tablas/enums) de un doc.
+
+    Devuelve un dict con las claves ``migrations``/``tables``/``enums``; cada
+    valor es el primer entero matcheado o ``None`` si el doc no declara ese
+    conteo (no es drift que falte una clave: solo se comparan las presentes).
+    """
+    text = doc.read_text(encoding="utf-8") if doc.exists() else ""
+    return {
+        "migrations": _first_int(_PROSE_MIGRATIONS_RE, text),
+        "tables": _first_int(_PROSE_TABLES_RE, text),
+        "enums": _first_int(_PROSE_ENUMS_RE, text),
+    }
+
+
+def _first_int(pattern: re.Pattern[str], text: str) -> int | None:
+    """Primer entero capturado por ``pattern`` en ``text``, o ``None``."""
+    match = pattern.search(text)
+    return int(match.group("n")) if match else None
+
+
+def find_prose_count_drift(
+    doc: Path,
+    *,
+    real_migrations: int,
+    real_tables: int,
+    real_enums: int,
+) -> list[tuple[str, int, int]]:
+    """Conteos en prosa de ``doc`` que NO coinciden con los reales del código.
+
+    Devuelve una lista de tuplas ``(categoria, declarado_en_prosa, real)`` por
+    cada mismatch. Una clave ausente en la prosa NO es drift (se ignora): solo
+    se comparan los conteos que el doc efectivamente declara.
+    """
+    prose = extract_prose_counts(doc)
+    reals = {"migrations": real_migrations, "tables": real_tables, "enums": real_enums}
+    drift: list[tuple[str, int, int]] = []
+    for category, real in reals.items():
+        declared = prose[category]
+        if declared is not None and declared != real:
+            drift.append((category, declared, real))
+    return drift
+
+
 # --- runner ---------------------------------------------------------------
 
 
 def run(backend_root: Path) -> int:
     """Corre los checks. Devuelve exit code (0 ok, 1 si hay drift estricto).
 
-    Estricto (falla el build): MIGRACIONES, MODELS, PAQUETES del mapa.
+    Estricto (falla el build): MIGRACIONES, MODELS, PAQUETES del mapa,
+    CONTEOS en prosa (DOC-R3).
     Informativo (warning): ENDPOINTS, TOOLS (parseo fuzzy).
     """
     versions_dir = backend_root / "alembic" / "versions"
@@ -235,6 +311,8 @@ def run(backend_root: Path) -> int:
     tools_doc = backend_root / "docs" / "TOOLS.md"
     app_dir = backend_root / "app"
     agents_doc = backend_root / "AGENTS.md"
+    readme_doc = backend_root / "README.md"
+    enums_module = backend_root / "app" / "enums.py"
 
     print("== DRIFT GUARD: catálogos de docs ==")
 
@@ -282,6 +360,34 @@ def run(backend_root: Path) -> int:
     else:
         print(f"\n[MAPA] OK: {total_packages} paquete(s) de app/ en el mapa de AGENTS.md.")
 
+    # c-bis) CONTEOS EN PROSA (estricto, DOC-R3)
+    real_migrations = total_revisions
+    real_tables = total_tables
+    real_enums = count_domain_enums(enums_module)
+    prose_drift: list[tuple[str, str, int, int]] = []
+    for doc in (agents_doc, readme_doc):
+        for category, declared, real in find_prose_count_drift(
+            doc,
+            real_migrations=real_migrations,
+            real_tables=real_tables,
+            real_enums=real_enums,
+        ):
+            prose_drift.append((doc.name, category, declared, real))
+    if prose_drift:
+        print(
+            f"\n[CONTEOS] FALLA: {len(prose_drift)} conteo(s) en prosa NO coinciden con "
+            f"el código (reales: {real_migrations} migraciones / {real_tables} tablas / "
+            f"{real_enums} enums):"
+        )
+        for doc_name, category, declared, real in prose_drift:
+            print(f"  - {doc_name}: {category} dice {declared}, el código tiene {real}")
+        print("\n  -> Corregí el conteo en prosa de AGENTS.md / README.md.")
+    else:
+        print(
+            f"\n[CONTEOS] OK: prosa de AGENTS.md/README.md coincide con el código "
+            f"({real_migrations} migraciones / {real_tables} tablas / {real_enums} enums)."
+        )
+
     # d) ENDPOINTS (informativo)
     total_routes = len(extract_routes(api_dir))
     unmentioned_routes = find_unmentioned_routes(api_dir, endpoints_doc)
@@ -313,7 +419,7 @@ def run(backend_root: Path) -> int:
     else:
         print(f"\n[TOOLS] OK: {total_tools} tool(s) mencionadas en docs/TOOLS.md.")
 
-    strict_drift = bool(missing_revisions or missing_tables or unmapped_packages)
+    strict_drift = bool(missing_revisions or missing_tables or unmapped_packages or prose_drift)
     exit_code = 1 if strict_drift else 0
     print(f"\n== Resultado: {'FALLA (drift de catálogos)' if exit_code else 'OK'} ==")
     return exit_code
