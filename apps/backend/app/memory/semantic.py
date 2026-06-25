@@ -142,6 +142,8 @@ class SemanticMemoryStore:
         if limit is not None:
             stmt = stmt.limit(limit)
         rows = list((await self._session.execute(stmt)).scalars().all())
+        if not rows:
+            return []
         # Descifrar el lote en un thread ANTES del schema strict (todas son del
         # user); el export sin tope puede ser grande, no bloquear el loop (SCAL-02).
         blobs = [row.content for row in rows]
