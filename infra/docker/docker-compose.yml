@@ -100,11 +100,11 @@ services:
     networks:
       - ynara
     # Con requirepass, PING sin AUTH devuelve NOAUTH: el healthcheck autentica con
-    # -a (--no-auth-warning silencia el aviso de pass en CLI) y exige PONG.
+    # REDISCLI_AUTH (env, NO aparece en `ps`/cmdline a diferencia de `-a`) y exige PONG.
     healthcheck:
       test:
         - CMD-SHELL
-        - redis-cli -a "$$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG
+        - REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli --no-auth-warning ping | grep -q PONG
       interval: 10s
       timeout: 3s
       retries: 5
