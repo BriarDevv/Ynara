@@ -14,7 +14,7 @@ import pytest
 from cryptography.exceptions import InvalidTag
 
 from app.core.config import Settings
-from app.core.crypto import decrypt_for_user, encrypt_for_user
+from app.core.crypto import decrypt_for_user, decrypt_many_for_user, encrypt_for_user
 
 # 32 bytes deterministas (0..31) en base64: master key válido para los tests.
 _VALID_KEY = base64.b64encode(bytes(range(32))).decode("ascii")
@@ -185,3 +185,40 @@ def test_error_does_not_leak_plaintext(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(RuntimeError) as exc:
         encrypt_for_user(_USER_A, secret)
     assert secret not in str(exc.value)
+
+
+# ---------- descifrado por lotes (SCAL-02: top-K / export en un thread) ----------
+
+
+def test_decrypt_many_matches_individual(patched_key: None) -> None:
+    # El lote descifra IGUAL que decrypt_for_user uno por uno (deriva la key 1 vez).
+    texts = ["hecho 1", "café ☕", "", "tercero con espacios"]
+    blobs = [encrypt_for_user(_USER_A, t) for t in texts]
+    assert decrypt_many_for_user(_USER_A, blobs) == texts
+    assert decrypt_many_for_user(_USER_A, blobs) == [
+        decrypt_for_user(_USER_A, b) for b in blobs
+    ]
+
+
+def test_decrypt_many_empty_returns_empty(patched_key: None) -> None:
+    assert decrypt_many_for_user(_USER_A, []) == []
+
+
+def test_decrypt_many_preserves_order(patched_key: None) -> None:
+    # El orden del lote se preserva (el top-K depende del orden ANN).
+    texts = [f"item-{i}" for i in range(20)]
+    blobs = [encrypt_for_user(_USER_A, t) for t in texts]
+    assert decrypt_many_for_user(_USER_A, blobs) == texts
+
+
+def test_decrypt_many_too_short_blob_rejected(patched_key: None) -> None:
+    blobs = [encrypt_for_user(_USER_A, "ok"), b"corto"]
+    with pytest.raises(ValueError, match="demasiado corto"):
+        decrypt_many_for_user(_USER_A, blobs)
+
+
+def test_decrypt_many_cross_user_raises_invalid_tag(patched_key: None) -> None:
+    # Un blob ajeno en el lote (key de A) no se descifra con la key de B: InvalidTag.
+    blobs = [encrypt_for_user(_USER_A, "de A"), encrypt_for_user(_USER_B, "de B")]
+    with pytest.raises(InvalidTag):
+        decrypt_many_for_user(_USER_A, blobs)
