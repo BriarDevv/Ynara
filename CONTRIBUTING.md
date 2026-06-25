@@ -131,6 +131,31 @@
 - Sin emojis en código ni en docs salvo que un humano lo pida
   explícitamente.
 
+### Convenciones ratificadas (no son deuda)
+
+Decisiones de calibración deliberadas del repo. Se documentan acá para
+que no se relean como deuda técnica en cada auditoría:
+
+- **QC-FN-LEN — docstrings por encima del límite de 50 líneas.** El repo
+  **prioriza** docstrings y comentarios de rationale exhaustivos por
+  encima del límite de 50 líneas de **cuerpo** de función. La regla
+  aplica al **cuerpo lógico** (`<50` líneas); el docstring **no cuenta**
+  para ese límite. Algunas funciones (ej. `route()` en el módulo `llm`,
+  con ~46 líneas de docstring sobre un cuerpo lineal) exceden el conteo
+  **total** por documentación, no por complejidad — eso es intencional y
+  no se refactoriza.
+
+- **Cluster de testing — calibración consciente de cobertura.** Tres
+  decisiones sobre qué se testea y hasta dónde:
+  - El path `commit=True` de `_async_decay` **no** se testea con commit
+    real porque contaminaría la DB compartida de tests. Está mitigado por
+    el wrapper Celery (unit-tested) + savepoint.
+  - Las migraciones de `calendar`/`tasks`/`trigger` quedan cubiertas por
+    el roundtrip full-chain del test de migraciones de índices, no por
+    tests dedicados por migración.
+  - El piso de cobertura es **85%** sobre cobertura combinada, con
+    `branch=false` como decisión de calibración deliberada.
+
 ## Cambios arquitectónicos
 
 Cualquier cambio que afecte:
