@@ -53,7 +53,7 @@ app/
 │   ├── ratelimit.py   # rate-limit fail-open para login/register/refresh/chat/export, memory-wipe (`memory:ratelimit:wipe:`, solo el execute) y sessions (`sessions:ratelimit:read:`, bucket único list/get/close) (contadores Redis vía TokenStore)
 │   ├── security.py    # JWT/hashing — implementado con PyJWT + bcrypt directo (ADR-015, no python-jose/passlib): create_access_token, verify_access_token, hash_password, verify_password
 │   └── token_store.py # blocklist de jti + revocación por familia (sid) + contadores genéricos; Protocol + RedisTokenStore + InMemoryTokenStore (tests)
-├── api/v1/            # routers, un archivo por dominio (health, auth, chat, sessions, events, tasks, memory, modes, users) + subpaquete admin/ (metrics, playground, connectivity); privados _http.py / _sessions.py
+├── api/v1/            # routers, un archivo por dominio (health, auth, chat, sessions, events, tasks, today, memory, modes, users) + subpaquete admin/ (metrics, playground, connectivity); privados _http.py / _sessions.py
 ├── models/            # SQLAlchemy 2 (user, session, conversation_turn, calendar_event, task, admin_audit, memory 🔴, audit 🔴) — base.py: mixins UUIDPK/Timestamp
 ├── schemas/           # Pydantic v2 mirror de models + payloads de API (*_api.py: envelopes de presentación)
 ├── services/          # lógica de negocio SIN framework, deps por argumento: auth, chat, memory, admin_metrics + stores de dominio operativo (calendar.py: CalendarEventStore; tasks.py: TaskStore, ≠ Celery). Agenda/Tareas son dominios ordinarios → layer-split acá (ADR-011 D1), no feature-packages

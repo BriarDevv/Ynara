@@ -447,6 +447,35 @@ Invariantes transversales:
   tocar la DB.
 - Modos: todos.
 
+## /v1/suggestions y /v1/recap (dashboard "Hoy" derivado)
+
+Las DOS superficies restantes del dashboard **Hoy** que la web consumía contra mocks
+(las prioridades `/v1/tasks` ya eran reales). **No** hay tabla ni persistencia: ambas
+se **derivan** de las tareas reales del usuario (`app/services/today.py`); la
+generación con voz propia por **LLM** es la próxima fase (roadmap F, ver
+`packages/shared-schemas/src/today.ts`). Contrato + decisiones en
+[`../app/api/v1/today.py`](../app/api/v1/today.py). Mismo aislamiento + rate-limit que
+`/v1/tasks` (es el MISMO dashboard).
+
+- **GET** `/v1/suggestions` — sugerencias proactivas ("Ynara sugiere"): nudges de
+  preparación de las próximas prioridades pendientes con horario (hasta 2). Tocarlas
+  abre un chat para prepararlas.
+  - Request: ninguno (el `user_id` sale del JWT).
+  - Response 200: `SuggestionsResponse = { "items": SuggestionOut[] }` donde
+    `SuggestionOut = { id, title, why, mode }` (`mode` ∈ Mode o `null`). `items` vacío
+    es válido (la web oculta la sección): no se inventa contenido sin señal real.
+- **GET** `/v1/recap` — recap del día (borrador derivado de las tareas reales).
+  - Request: ninguno.
+  - Response 200: `RecapOut = { pending, date, headline, highlights }`. `pending` es
+    `true` solo si hay contenido (la web muestra el CTA "Recap pendiente" solo si
+    `pending`); `false` si no hubo actividad. `headline` derivado (`null` si no hay
+    nada); `highlights` son bullets de las tareas reales.
+- Response 401 (ambas rutas): sin token / token inválido.
+- Response 429 (ambas rutas): rate-limit por `user_id` (bucket compartido del
+  dashboard Hoy, `TASKS_*`).
+- Permisos: **usuario autenticado** (solo sobre sus propios datos).
+- Modos: todos.
+
 ## /v1/admin
 
 Panel admin interno (subpaquete [`../app/api/v1/admin/`](../app/api/v1/admin/)): 6 GET de
