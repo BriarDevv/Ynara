@@ -6,11 +6,12 @@ import { ModeSchema } from "./modes";
  * Contrato del dashboard **Hoy** (build-plan Fase E): prioridades del día,
  * sugerencias proactivas y recap del día.
  *
- * Estado actual de los endpoints (junio 2026):
+ * Estado actual de los endpoints:
  *  - `/v1/tasks` → **operativo** (backend real, Tanda 1).
- *  - `/v1/suggestions` → **pendiente** (requiere LLM real + agenda; roadmap D2/F).
- *  - `/v1/recap` → **pendiente** (requiere LLM real; roadmap F). Hasta que
- *    existan, los hooks degradan a resultado vacío ante 404 (no error visible).
+ *  - `/v1/suggestions` → **operativo** (v1 DERIVADA de las tareas del usuario, sin
+ *    LLM; la generación con voz propia por LLM es roadmap F).
+ *  - `/v1/recap` → **operativo** (v1 DERIVADA de las tareas del usuario, sin LLM; voz
+ *    propia por LLM roadmap F).
  *
  * Snake_case y `datetime({ offset: true })` para espejar la convención Pydantic
  * del resto del backend (FastAPI), de modo que al cablear el endpoint real el

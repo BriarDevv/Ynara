@@ -13,17 +13,12 @@ type Props = {
   recap: Recap;
 };
 
-/** Stats mock derivados de los highlights (cifras grandes, §mockup RecapSheet). */
-const MOCK_STATS = [
-  { value: "3/5", label: "Tareas hechas" },
-  { value: "90 min", label: "Foco" },
-  { value: "1", label: "Pendiente" },
-] as const;
-
 /**
  * Sheet del recap del día (wireframe 15 / build-plan E4): header con orbe +
- * fecha, stats con cifras grandes, insights con Diamond como bullet.
- * Los stats son mock hasta que el endpoint devuelva cifras reales (Fase H2).
+ * fecha e insights reales (los ``highlights`` que devuelve ``GET /v1/recap``,
+ * derivados de las tareas del usuario) con Diamond como bullet. Las cifras grandes
+ * mock se quitaron: el contrato del recap (`RecapSchema`) no las declara, así que
+ * mostrarlas era data falsa. (La voz/cifras LLM son la próxima fase, roadmap F.)
  */
 export function RecapSheet({ open, onClose, recap }: Props) {
   const activeMode = useActiveMode();
@@ -48,20 +43,6 @@ export function RecapSheet({ open, onClose, recap }: Props) {
               {recap.headline || "Cómo te fue hoy"}
             </h2>
           </div>
-        </div>
-
-        {/* Stats: cifras grandes, aireadas, sin caja */}
-        <div className="flex gap-8 px-0.5">
-          {MOCK_STATS.map((s) => (
-            <div key={s.label}>
-              <div className="text-[1.6rem] font-semibold leading-none tracking-tight text-[var(--color-ink)]">
-                {s.value}
-              </div>
-              <div className="mt-1.5 text-[11.5px] leading-tight text-[var(--color-ink-soft)]">
-                {s.label}
-              </div>
-            </div>
-          ))}
         </div>
 
         {/* Insights: label + lista con Diamond como bullet */}
