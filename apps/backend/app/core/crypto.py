@@ -30,6 +30,7 @@ from __future__ import annotations
 import base64
 import binascii
 import os
+from collections.abc import Sequence
 from functools import lru_cache
 from uuid import UUID
 
@@ -39,13 +40,14 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from app.core.config import get_settings
 
-__all__ = ["decrypt_for_user", "encrypt_for_user"]
+__all__ = ["decrypt_for_user", "decrypt_many_for_user", "encrypt_for_user"]
 
 _MASTER_KEY_BYTES = 32  # AES-256
 _DERIVED_KEY_BYTES = 32  # AES-256
 _NONCE_BYTES = 12  # GCM: nonce de 96 bits (recomendado)
 _TAG_BYTES = 16  # GCM: auth tag de 128 bits
 _HKDF_INFO_PREFIX = b"ynara-memory-v1:"  # versionado: permite rotar el esquema
+_DERIVED_KEY_CACHE_SIZE = 2048  # keys derivadas residentes (LRU): cota del cache HKDF
 
 
 @lru_cache(maxsize=4)
@@ -76,12 +78,16 @@ def _master_key() -> bytes:
     return _decode_master_key(b64_key)
 
 
-def _derive_key(user_id: UUID) -> bytes:
-    """Deriva la key AES-256 del usuario vía HKDF-SHA256 sobre el master key.
+@lru_cache(maxsize=_DERIVED_KEY_CACHE_SIZE)
+def _derive_key_cached(master_key: bytes, user_id: UUID) -> bytes:
+    """HKDF-SHA256(master_key, info=user_id) cacheado por ``(master_key, user_id)``.
 
-    ``info`` liga la key a este ``user_id`` (y al schema v1): aísla el blast
-    radius entre usuarios. HKDF es single-use en ``cryptography``, instancia
-    nueva por llamada.
+    Cachear sobre AMBOS — el master key Y el ``user_id`` — es deliberado: la key
+    derivada depende de los dos, así que incluir el master en la clave del cache
+    hace que un master rotado/ausente nunca devuelva una key vieja (un cambio de
+    master produce otra entrada; si falta, ``_master_key`` levanta ANTES de llegar
+    acá). El cache deja keys derivadas residentes en memoria, mismo perímetro de
+    confianza que el master (ya residente); ``maxsize`` acota el crecimiento.
     """
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
@@ -89,7 +95,18 @@ def _derive_key(user_id: UUID) -> bytes:
         salt=None,
         info=_HKDF_INFO_PREFIX + str(user_id).encode("ascii"),
     )
-    return hkdf.derive(_master_key())
+    return hkdf.derive(master_key)
+
+
+def _derive_key(user_id: UUID) -> bytes:
+    """Deriva la key AES-256 del usuario vía HKDF-SHA256 sobre el master key.
+
+    ``info`` liga la key a este ``user_id`` (y al schema v1): aísla el blast
+    radius entre usuarios. Delega en ``_derive_key_cached`` para no re-correr
+    HKDF-SHA256 en cada cifrado/descifrado del mismo usuario (SCAL-02): el cuello
+    de botella del top-K de las búsquedas era re-derivar por record.
+    """
+    return _derive_key_cached(_master_key(), user_id)
 
 
 def encrypt_for_user(user_id: UUID, plaintext: str) -> bytes:
@@ -118,3 +135,30 @@ def decrypt_for_user(user_id: UUID, blob: bytes) -> str:
     key = _derive_key(user_id)
     plaintext = AESGCM(key).decrypt(nonce, sealed, None)
     return plaintext.decode("utf-8")
+
+
+def decrypt_many_for_user(user_id: UUID, blobs: Sequence[bytes]) -> list[str]:
+    """Descifra un lote de blobs para ``user_id`` derivando la key UNA sola vez.
+
+    Pensado para el top-K de las búsquedas ANN y los listados/export de memoria
+    (``semantic``/``episodic``): deriva la key del usuario una vez (vía el cache
+    de ``_derive_key``) y reutiliza una única instancia ``AESGCM`` para todo el
+    lote, en lugar de re-derivar HKDF + reconstruir ``AESGCM`` por record. Es
+    CPU-bound y las primitivas de OpenSSL liberan el GIL, así que el caller lo
+    corre en un thread (``asyncio.to_thread``) para no bloquear el event loop
+    bajo concurrencia (SCAL-02).
+
+    Mismos modos de falla que ``decrypt_for_user``, por blob: ``InvalidTag`` si la
+    key no corresponde o el ciphertext fue manipulado (GCM autentica), y
+    ``ValueError`` si un blob es más corto que el overhead mínimo. Falla en el
+    primer blob inválido (no descifra parcialmente un resultado corrupto).
+    """
+    key = _derive_key(user_id)
+    aesgcm = AESGCM(key)
+    plaintexts: list[str] = []
+    for blob in blobs:
+        if len(blob) < _NONCE_BYTES + _TAG_BYTES:
+            raise ValueError("blob de memoria demasiado corto: corrupto o no cifrado por Ynara")
+        nonce, sealed = blob[:_NONCE_BYTES], blob[_NONCE_BYTES:]
+        plaintexts.append(aesgcm.decrypt(nonce, sealed, None).decode("utf-8"))
+    return plaintexts
