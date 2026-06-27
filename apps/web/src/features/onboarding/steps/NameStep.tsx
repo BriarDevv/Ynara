@@ -8,7 +8,6 @@ import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
 import { STEP_COPY } from "../constants";
 import { useOnboardingNav } from "../hooks/useOnboardingNav";
-import { useOnboardingResumeStore } from "../resumeStore";
 import { NameFormSchema, type NameFormValues } from "../schemas";
 import { useOnboardingStore } from "../store";
 
@@ -23,10 +22,6 @@ const NAME_NEXT_BUTTON = (
 export function NameStep() {
   const copy = STEP_COPY.nombre;
   const { next, back } = useOnboardingNav("nombre");
-  // En resume (completar perfil desde Tú, ya autenticado) "nombre" es el piso:
-  // volver a "auth" llevaría a signup/login sin sentido y podría pisar la
-  // sesión. Sin resume, el flujo normal sí permite volver a auth.
-  const resuming = useOnboardingResumeStore((s) => s.resuming);
   const displayName = useOnboardingStore((s) => s.displayName);
   const setDisplayName = useOnboardingStore((s) => s.setDisplayName);
 
@@ -46,7 +41,7 @@ export function NameStep() {
       eyebrow="Paso 2 — Tu nombre"
       title={copy.title}
       subtitle={copy.subtitle}
-      footer={<StepFooter onBack={resuming ? undefined : back} customNext={NAME_NEXT_BUTTON} />}
+      footer={<StepFooter onBack={back} customNext={NAME_NEXT_BUTTON} />}
     >
       <form
         id="name-form"

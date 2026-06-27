@@ -14,7 +14,6 @@ import { Toast } from "@/components/ui/Toast";
 import { Toggle } from "@/components/ui/Toggle";
 import { useChatStore } from "@/features/chat/store";
 import { useMemoryExport } from "@/features/memory/api";
-import { useOnboardingResumeStore } from "@/features/onboarding/resumeStore";
 import { useOnboardingStore } from "@/features/onboarding/store";
 import { useUpdateMe } from "@/features/profile/api";
 import { useAvisosStore } from "@/features/today/avisosStore";
@@ -241,31 +240,8 @@ export function TuView() {
     useActiveModeStore.getState().reset();
     useAvisosStore.getState().reset();
     useOnboardingStore.getState().reset();
-    useOnboardingResumeStore.getState().setResuming(false);
     queryClient.clear();
     router.push("/onboarding");
-  }
-
-  // ── Resume de perfil (para usuarios que saltearon el onboarding) ────────────
-  // Si saltó, el perfil quedó vacío (sin nombre). Ofrecemos re-abrir el flujo de
-  // onboarding desde "nombre", sembrando el draft con la sesión actual para que
-  // el cierre (useCompleteOnboarding) tenga la auth y no falle.
-  const profileIncomplete = (displayName ?? "").trim().length === 0;
-
-  function handleResumeProfile() {
-    const user = useUserStore.getState();
-    const onboarding = useOnboardingStore.getState();
-    onboarding.reset();
-    if (user.userId && user.token) {
-      onboarding.setAuth({
-        userId: user.userId,
-        token: user.token,
-        mode: user.isEphemeral ? "ephemeral" : "signup",
-      });
-    }
-    onboarding.setStep("nombre");
-    useOnboardingResumeStore.getState().setResuming(true);
-    router.push("/onboarding/nombre");
   }
 
   return (
@@ -314,20 +290,6 @@ export function TuView() {
             </div>
           </div>
         </div>
-
-        {/* ── Reanudar perfil (solo si saltó el onboarding) ── */}
-        {profileIncomplete ? (
-          <SettingsGroup label="Perfil incompleto">
-            <SettingsRow
-              first
-              title="Completá tu perfil"
-              sub="Saltaste el onboarding. Contale a Ynara quién sos."
-              as="button"
-              onClick={handleResumeProfile}
-              action={<ChevronRight />}
-            />
-          </SettingsGroup>
-        ) : null}
 
         {/* ── Sección: Perfil ── */}
         <SettingsGroup label="Perfil">

@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { type OnboardingStep, STEP_INDEX } from "@/features/onboarding/constants";
-import { useOnboardingResumeStore } from "@/features/onboarding/resumeStore";
 import { A11yStep } from "@/features/onboarding/steps/A11yStep";
 import { AuthStep } from "@/features/onboarding/steps/AuthStep";
 import { ModesStep } from "@/features/onboarding/steps/ModesStep";
@@ -47,15 +46,6 @@ export function StepRouter({ step }: Props) {
     // react-doctor-disable-next-line react-doctor/no-event-handler
     const stepIndexFromUrl = STEP_INDEX[step];
     const storeStepIndex = STEP_INDEX[storeStep];
-
-    // En resume (completar perfil ya autenticado), "nombre" es el piso: no se
-    // puede volver a "auth" (signup/login no aplica y pisaría la sesión).
-    if (useOnboardingResumeStore.getState().resuming && stepIndexFromUrl < STEP_INDEX.nombre) {
-      // Guard client-only: depende de `resuming` (zustand), inaccesible en SSR.
-      // react-doctor-disable-next-line react-doctor/nextjs-no-client-side-redirect
-      router.replace("/onboarding/nombre");
-      return;
-    }
 
     if (stepIndexFromUrl > storeStepIndex) {
       // Guard client-only: compara contra `currentStep` (zustand), inaccesible en SSR.
