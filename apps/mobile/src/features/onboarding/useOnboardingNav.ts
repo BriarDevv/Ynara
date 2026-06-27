@@ -4,8 +4,8 @@ import { ONBOARDING_STEPS, STEP_INDEX } from "./steps";
 
 /**
  * Navegación del wizard de onboarding (mobile). El wizard es una sola pantalla
- * manejada por `step` del step store (mobile, decoplado de core para incluir
- * "sobre-vos"). `next`/`back` solo mueven ese step.
+ * manejada por `step` del step store (mobile, UI state); el ORDEN de los pasos
+ * viene de @ynara/core. `next`/`back` solo mueven ese step.
  */
 export function useOnboardingNav() {
   const currentStep = useOnboardingStepStore((s) => s.step);

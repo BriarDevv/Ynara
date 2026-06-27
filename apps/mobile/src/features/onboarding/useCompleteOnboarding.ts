@@ -34,6 +34,15 @@ export function useCompleteOnboarding() {
       (m): m is Mode => ModeSchema.safeParse(m).success,
     );
     user.setInterestedModes(interestedModes);
+    // Sobre-vos: igual que mood/modos, no tiene endpoint y queda client-side.
+    // Se traslada del draft al user store.
+    user.setProfileContext({
+      dedication: draft.dedication,
+      studyWhat: draft.studyWhat,
+      workWhat: draft.workWhat,
+      purpose: draft.purpose,
+      interests: draft.interests,
+    });
     if (draft.authedUserId && draft.authedToken) {
       // El onboarding solo crea cuentas reales (signup): ya no hay entrada
       // efímera, así que isEphemeral va en false. (El flag existe en el backend
