@@ -3,7 +3,7 @@
  * El orden es canónico: la ruta del onboarding usa estos slugs. El copy de
  * cada step es platform-specific y vive en cada app.
  */
-export const ONBOARDING_STEPS = ["auth", "nombre", "dia", "modos", "a11y"] as const;
+export const ONBOARDING_STEPS = ["auth", "nombre", "dia", "modos", "sobre-vos", "a11y"] as const;
 
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 

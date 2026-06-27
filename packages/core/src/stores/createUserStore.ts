@@ -1,6 +1,10 @@
 import type { Mode } from "@ynara/shared-schemas";
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
+// Import type-only (se borra en runtime): no genera ciclo porque el store de
+// onboarding no importa de `stores`. `Dedication` es la fuente canónica del
+// step "sobre-vos"; la reusamos acá para no duplicar la unión.
+import type { Dedication } from "../features/onboarding/store";
 
 /**
  * Store del perfil de usuario, compartido web + mobile (ADR-012). El storage
@@ -24,6 +28,16 @@ export type UserProfile = {
   moodFreeText: string;
   /** Modos elegidos en el onboarding. */
   interestedModes: Mode[];
+  /**
+   * Contexto del step "sobre-vos" (a qué se dedica, qué estudia/trabaja, para
+   * qué usa Ynara y qué le interesa). Alimenta la personalización/memoria;
+   * todo opcional y client-side (el backend todavía no tiene columnas).
+   */
+  dedication: Dedication | null;
+  studyWhat: string;
+  workWhat: string;
+  purpose: string;
+  interests: string;
   onboardingCompleted: boolean;
   onboardedAt: number | null;
 };
@@ -33,6 +47,13 @@ type UserActions = {
   setDisplayName: (name: string) => void;
   setMood: (mood: string[], freeText: string) => void;
   setInterestedModes: (modes: Mode[]) => void;
+  setProfileContext: (ctx: {
+    dedication: Dedication | null;
+    studyWhat: string;
+    workWhat: string;
+    purpose: string;
+    interests: string;
+  }) => void;
   completeOnboarding: () => void;
   reset: () => void;
 };
@@ -45,6 +66,11 @@ const initialState: UserProfile = {
   mood: [],
   moodFreeText: "",
   interestedModes: [],
+  dedication: null,
+  studyWhat: "",
+  workWhat: "",
+  purpose: "",
+  interests: "",
   onboardingCompleted: false,
   onboardedAt: null,
 };
@@ -62,6 +88,7 @@ export function createUserStore(storage: StateStorage) {
         setDisplayName: (displayName) => set({ displayName }),
         setMood: (mood, moodFreeText) => set({ mood, moodFreeText }),
         setInterestedModes: (interestedModes) => set({ interestedModes }),
+        setProfileContext: (ctx) => set(ctx),
         completeOnboarding: () => set({ onboardingCompleted: true, onboardedAt: Date.now() }),
         reset: () => set(initialState),
       }),
