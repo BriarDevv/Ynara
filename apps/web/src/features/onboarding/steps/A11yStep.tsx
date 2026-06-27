@@ -104,7 +104,7 @@ export function A11yStep() {
 
   return (
     <StepShell
-      eyebrow="Paso 5 — Cómo se lee"
+      eyebrow="Paso 6 — Cómo se lee"
       title={copy.title}
       subtitle={copy.subtitle}
       footer={<StepFooter onBack={back} customNext={customNext} />}
