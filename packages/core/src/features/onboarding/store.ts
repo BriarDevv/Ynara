@@ -18,7 +18,7 @@ export type OnboardingDraft = {
   // Step 1 — Auth
   authedUserId: string | null;
   authedToken: string | null;
-  authMode: "signup" | "login" | "ephemeral" | null;
+  authMode: "signup" | "login" | null;
 
   // Step 2 — Nombre
   displayName: string;
@@ -40,16 +40,7 @@ export type OnboardingDraft = {
 
 type OnboardingActions = {
   setStep: (step: OnboardingStep) => void;
-  setAuth: (input: {
-    userId: string;
-    token: string;
-    mode: "signup" | "login" | "ephemeral";
-  }) => void;
-  /**
-   * Resetea el draft y deja el user marcado como ephemeral en una sola pasada.
-   * Evita la race teórica de llamar reset() + setAuth().
-   */
-  startEphemeral: (input: { userId: string; token: string }) => void;
+  setAuth: (input: { userId: string; token: string; mode: "signup" | "login" }) => void;
   setDisplayName: (name: string) => void;
   setMood: (mood: string[], freeText: string) => void;
   setInterestedModes: (modes: string[]) => void;
@@ -89,13 +80,6 @@ export function createOnboardingStore(storage: StateStorage) {
         setStep: (currentStep) => set({ currentStep }),
         setAuth: ({ userId, token, mode }) =>
           set({ authedUserId: userId, authedToken: token, authMode: mode }),
-        startEphemeral: ({ userId, token }) =>
-          set({
-            ...initialState,
-            authedUserId: userId,
-            authedToken: token,
-            authMode: "ephemeral",
-          }),
         setDisplayName: (displayName) => set({ displayName }),
         setMood: (mood, moodFreeText) => set({ mood, moodFreeText }),
         setInterestedModes: (interestedModes) => set({ interestedModes }),

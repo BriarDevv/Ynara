@@ -106,11 +106,13 @@ export function useCompleteOnboarding(): Returns & {
         setError("Sesión inválida. Volvé a empezar el onboarding.");
         return;
       }
-      // D4 (bloqueante): propagar isEphemeral al user store.
+      // El onboarding solo crea cuentas reales (signup/login): ya no hay entrada
+      // efímera client-side, así que isEphemeral va en false. (El flag is_ephemeral
+      // existe en el backend pero el front todavía no lo consume.)
       useUserStore.getState().setAuth({
         userId: d.authedUserId,
         token: d.authedToken,
-        isEphemeral: d.authMode === "ephemeral",
+        isEphemeral: false,
       });
       useUserStore.getState().setDisplayName(data.displayName);
       useUserStore.getState().setMood(data.mood, data.moodFreeText ?? "");
