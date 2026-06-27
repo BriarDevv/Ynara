@@ -3,6 +3,13 @@ import { createJSONStorage, persist, type StateStorage } from "zustand/middlewar
 import type { OnboardingStep } from "./steps";
 
 /**
+ * A qué se dedica el user (step "sobre-vos").
+ * TODO(backend): sobre-vos es client-side todavía; cuando exista la columna/
+ * contrato, espejar esta unión en @ynara/shared-schemas (Pydantic gana, Zod sigue).
+ */
+export type Dedication = "estudio" | "trabajo" | "ambos" | "otro";
+
+/**
  * Store del draft del onboarding, compartido web + mobile (ADR-012). Estado
  * provisional mientras el user avanza por los steps.
  *
@@ -30,7 +37,16 @@ export type OnboardingDraft = {
   // Step 4 — Modos
   interestedModes: string[];
 
-  // Step 5 — A11y (mirror del a11y store para mostrar valores actuales en el
+  // Step 5 — Sobre vos (contexto para la memoria de Ynara). Todo opcional: el
+  // user puede dejarlo en blanco. `studyWhat` se llena si dedication es
+  // estudio/ambos; `workWhat` si es trabajo/ambos.
+  dedication: Dedication | null;
+  studyWhat: string;
+  workWhat: string;
+  purpose: string;
+  interests: string;
+
+  // Step 6 — A11y (mirror del a11y store para mostrar valores actuales en el
   // step; la fuente canónica de a11y es siempre el a11y store. Estos campos se
   // mantienen por compat pero no se leen al completar).
   a11yTextSize: "sm" | "md" | "lg";
@@ -44,6 +60,13 @@ type OnboardingActions = {
   setDisplayName: (name: string) => void;
   setMood: (mood: string[], freeText: string) => void;
   setInterestedModes: (modes: string[]) => void;
+  setProfileContext: (ctx: {
+    dedication: Dedication | null;
+    studyWhat: string;
+    workWhat: string;
+    purpose: string;
+    interests: string;
+  }) => void;
   setA11y: (
     prefs: Partial<{
       textSize: OnboardingDraft["a11yTextSize"];
@@ -63,6 +86,11 @@ const initialState: OnboardingDraft = {
   mood: [],
   moodFreeText: "",
   interestedModes: [],
+  dedication: null,
+  studyWhat: "",
+  workWhat: "",
+  purpose: "",
+  interests: "",
   a11yTextSize: "md",
   a11yHighContrast: false,
   a11yMotion: "auto",
@@ -83,6 +111,7 @@ export function createOnboardingStore(storage: StateStorage) {
         setDisplayName: (displayName) => set({ displayName }),
         setMood: (mood, moodFreeText) => set({ mood, moodFreeText }),
         setInterestedModes: (interestedModes) => set({ interestedModes }),
+        setProfileContext: (ctx) => set(ctx),
         setA11y: (prefs) =>
           set((s) => ({
             a11yTextSize: prefs.textSize ?? s.a11yTextSize,
