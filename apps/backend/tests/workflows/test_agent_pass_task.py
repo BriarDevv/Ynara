@@ -264,4 +264,7 @@ def test_agent_tool_builders_reexported_from_agent_pass() -> None:
     from app.workflows.agent_pass import _AGENT_TOOL_BUILDERS as reexported
 
     assert reexported is canonical
-    assert set(canonical.keys()) == {"calendar", "task"}
+    # ``reminder`` se sumó como tool de agente REAL (PR-C): ahora hay backend (tabla
+    # ``reminders`` + ``ReminderStore`` + scheduler), así que su builder vive acá igual que
+    # ``calendar``/``task``.
+    assert set(canonical.keys()) == {"calendar", "task", "reminder"}

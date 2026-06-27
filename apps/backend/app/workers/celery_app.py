@@ -119,6 +119,14 @@ celery_app.conf.beat_schedule = {
         "task": "workflows.purge_episodic_memory",
         "schedule": timedelta(days=_EPISODIC_RETENTION_INTERVAL_DAYS),
     },
+    # Despacho de recordatorios vencidos (PR-C): cada minuto busca los ``pending`` cuya
+    # hora llegó (``remind_at <= now``) y los despacha (noop por ahora), marcándolos
+    # ``sent``. Cadencia fina (1 min) porque un recordatorio debe avisar cerca de su hora,
+    # a diferencia de la retention (diaria/mensual).
+    "dispatch-due-reminders-every-minute": {
+        "task": "workflows.dispatch_due_reminders",
+        "schedule": timedelta(minutes=1),
+    },
 }
 
 # Autodiscovery de tasks en app.workflows.*. Hoy registra consolidation.py

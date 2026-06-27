@@ -21,10 +21,12 @@ from app.api.v1 import (
     admin,
     auth,
     chat,
+    devices,
     events,
     health,
     memory,
     modes,
+    reminders,
     sessions,
     tasks,
     today,
@@ -262,6 +264,8 @@ app.include_router(chat.router, prefix="/v1", tags=["chat"])
 app.include_router(sessions.router, prefix="/v1", tags=["sessions"])
 app.include_router(events.router, prefix="/v1", tags=["events"])
 app.include_router(tasks.router, prefix="/v1", tags=["tasks"])
+app.include_router(reminders.router, prefix="/v1", tags=["reminders"])
+app.include_router(devices.router, prefix="/v1", tags=["devices"])
 app.include_router(today.router, prefix="/v1", tags=["today"])
 app.include_router(memory.router, prefix="/v1", tags=["memory"])
 app.include_router(modes.router, prefix="/v1", tags=["modes"])

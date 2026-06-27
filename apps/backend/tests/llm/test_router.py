@@ -144,8 +144,14 @@ async def test_route_uses_context_budget_for_render(monkeypatch: pytest.MonkeyPa
     # del budget para no sobre-asignar el bloque de memoria). Se fija current_now para que
     # el preambulo sea determinista y el expected coincida con lo que recibe render.
     fixed = datetime(2026, 7, 22, 18, 30, tzinfo=ZoneInfo("America/Argentina/Buenos_Aires"))
-    monkeypatch.setattr(router_mod, "current_now", lambda: fixed)
-    base_system = f"{build_now_preamble(fixed)}\n\n{load_prompt(Mode.VIDA)}"
+    # ``current_now`` ahora acepta ``tz``: el stub ignora el arg y devuelve el fijo.
+    monkeypatch.setattr(router_mod, "current_now", lambda *_a, **_k: fixed)
+    # route() ahora nombra el huso (``tz_label=tz``, default APP_TIMEZONE): el budget se
+    # mide contra el MISMO preámbulo que arma route, así que el expected lo replica.
+    base_system = (
+        f"{build_now_preamble(fixed, tz_label='America/Argentina/Buenos_Aires')}"
+        f"\n\n{load_prompt(Mode.VIDA)}"
+    )
     expected = context_budget(max_model_len=max_model_len, system_prompt=base_system)
 
     try:
@@ -295,7 +301,7 @@ async def test_route_injects_datetime_preamble_in_system() -> None:
     router_mod.build_memory_context = lambda **_kw: empty_ctx
     try:
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr(router_mod, "current_now", lambda: fixed)
+            mp.setattr(router_mod, "current_now", lambda *_a, **_k: fixed)
             await route(
                 ChatRequest(text="agendame gym mañana 18hs", mode=Mode.VIDA, session_id="s-dt"),
                 session=MagicMock(),
@@ -312,8 +318,12 @@ async def test_route_injects_datetime_preamble_in_system() -> None:
     assert system_msg.role == "system"
     # El preambulo va al inicio del system (ancla la fecha antes del resto).
     assert system_msg.content.startswith("Fecha y hora actual: ")
-    # 2026-07-22 cae miércoles (el dia se deriva con weekday(), no se hardcodea).
-    assert "miércoles 22 de julio de 2026, 18:30 (hora de Argentina)" in system_msg.content
+    # 2026-07-22 cae miércoles (el dia se deriva con weekday(), no se hardcodea). El
+    # preámbulo ahora nombra el huso (``tz_label``) en vez de la frase genérica "hora local".
+    assert (
+        "miércoles 22 de julio de 2026, 18:30 "
+        "(hora de America/Argentina/Buenos_Aires, offset UTC-03:00)" in system_msg.content
+    )
     assert "resolver fechas relativas" in system_msg.content
 
 

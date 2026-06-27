@@ -26,6 +26,14 @@ from app.workflows import (
     consolidation,
     decay,
     episodic_retention,
+    reminder_dispatch,
 )
 
-__all__ = ["agent_pass", "audit_retention", "consolidation", "decay", "episodic_retention"]
+__all__ = [
+    "agent_pass",
+    "audit_retention",
+    "consolidation",
+    "decay",
+    "episodic_retention",
+    "reminder_dispatch",
+]

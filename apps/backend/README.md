@@ -14,7 +14,7 @@ perímetro (regla #4).
 
 ## Estado
 
-- **Construido y mergeado**: capa LLM **M0–M8** completa — config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, tools de agente (calendar + task reales, síncronas en el chat — ADR-022; reminder stub), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Persistencia de turnos crudos cifrados (`conversation_turns`, operativa) en `/v1/chat` + consolidación **episódica** async al cerrar la sesión (`consolidate_session`: resume con Qwen, embeddea, cifra y persiste en `episodic_memory`, purga los turnos). Workers Celery: consolidación async (semantic/procedural + episódica) + decay procedural. Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migraciones: cadena de **11** (de `initial_schema` hasta el índice btree compuesto `(user_id, scheduled_at)` en `tasks`); 10 tablas, 7 enums, pgvector + pgcrypto. Ver [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md).
+- **Construido y mergeado**: capa LLM **M0–M8** completa — config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, tools de agente (calendar + task reales, síncronas en el chat — ADR-022; reminder stub), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Persistencia de turnos crudos cifrados (`conversation_turns`, operativa) en `/v1/chat` + consolidación **episódica** async al cerrar la sesión (`consolidate_session`: resume con Qwen, embeddea, cifra y persiste en `episodic_memory`, purga los turnos). Workers Celery: consolidación async (semantic/procedural + episódica) + decay procedural. Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migraciones: cadena de **14** (de `initial_schema` hasta la tabla `reminders`); 12 tablas, 9 enums, pgvector + pgcrypto. Ver [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md).
 - **Serving**: el motor local de 16GB es **Ollama/GGUF** (un endpoint OpenAI-compatible
   `http://localhost:11434/v1` con los modelos `gemma4` + `qwen`); vLLM queda reservado a 24GB+
   (ADR-014). El cliente HTTP del backend es OpenAI-compatible y sirve **ambos** motores: el flag
@@ -28,13 +28,13 @@ perímetro (regla #4).
 
 ```
 app/
-├── main.py          # entrypoint FastAPI (lifespan, CORS, 10 routers v1)
-├── enums.py         # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation, TurnRole, EventStatus, TaskStatus)
+├── main.py          # entrypoint FastAPI (lifespan, CORS, 13 routers v1)
+├── enums.py         # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation, TurnRole, EventStatus, TaskStatus, DevicePlatform, ReminderStatus)
 ├── core/            # config (Settings lazy), constants (EMBEDDING_DIM), crypto, deps (engine async lazy), security (JWT PyJWT+bcrypt — ADR-015), db_guard, ratelimit, token_store, observability, paths
-├── api/v1/          # routers, un archivo por dominio (auth, chat, sessions, events, tasks, memory, modes, users, health) + subpaquete admin/ (metrics, playground, connectivity)
-├── models/          # SQLAlchemy 2 (user, session, conversation_turn operativa, calendar_event, task, admin_audit, memory 🔴, audit 🔴)
+├── api/v1/          # routers, un archivo por dominio (auth, chat, sessions, events, tasks, reminders, devices, memory, modes, users, health) + subpaquete admin/ (metrics, playground, connectivity)
+├── models/          # SQLAlchemy 2 (user, session, conversation_turn operativa, calendar_event, task, reminder, device_token, admin_audit, memory 🔴, audit 🔴)
 ├── schemas/         # Pydantic v2 (mirror de models + payloads de API; *_api.py: envelopes)
-├── services/        # lógica de negocio sin framework (auth, chat, memory, admin_metrics) + stores de dominio operativo (calendar.py, tasks.py)
+├── services/        # lógica de negocio sin framework (auth, chat, memory, admin_metrics, notifications) + stores de dominio operativo (calendar.py, tasks.py, reminders.py, devices.py)
 ├── llm/             # capa de inferencia — config, clients/, prompts/, tools/, router (M8)
 ├── memory/          # 🔴 wrappers de las 3 capas sagradas + AuditStore (escritura de audit_log)
 │                     #   + módulos neutrales (no sagrados): hashing.py (digests de audit_log),

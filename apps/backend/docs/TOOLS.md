@@ -18,35 +18,38 @@
 
 ## Tools disponibles
 
-> **Estado**: `reminder.*` son stubs (esqueleto sin integración externa real).
-> `calendar.*` y `task.*` están **implementados de verdad** y, desde **ADR-022**, se
-> ejecutan **SÍNCRONOS en el chat de producción** (modo `productividad`): cuando qwen
-> llama `calendar.create_event` / `task.create_task` durante un turno, la tool ESCRIBE
-> en `calendar_events` / `tasks` dentro del turno (atómico con su commit) y el modelo
-> confirma la acción en su respuesta. `memory.*` está **implementado** (M7, mergeado).
+> **Estado**: `calendar.*`, `task.*` y `reminder.*` están **implementados de verdad** y,
+> desde **ADR-022**, se ejecutan **SÍNCRONOS en el chat de producción** (modo
+> `productividad`): cuando qwen llama `calendar.create_event` / `task.create_task` /
+> `reminder.set` durante un turno, la tool ESCRIBE en `calendar_events` / `tasks` /
+> `reminders` dentro del turno (atómico con su commit) y el modelo confirma la acción en su
+> respuesta. `reminder.*` tiene además un scheduler (`dispatch_due_reminders`, beat 1 min)
+> que despacha los recordatorios vencidos vía un `NotificationDelivery` (hoy noop).
+> `memory.*` está **implementado** (M7, mergeado).
 >
 > **Tres superficies, tres registries** (mismo patrón para `calendar.*` / `task.*` /
-> `memory.*`):
-> - `default_registry()` trae los `calendar.*` / `task.*` como **stubs `not_wired`**
->   (cero efecto): los consume el **playground observado** (ADR-019 D2, invariante de
->   no-efecto). **Intacto** (ADR-022 no lo toca).
+> `reminder.*` / `memory.*`):
+> - `default_registry()` trae los `calendar.*` / `task.*` / `reminder.*` como **stubs
+>   `not_wired`** (cero efecto): los consume el **playground observado** (ADR-019 D2,
+>   invariante de no-efecto). **Intacto**.
 > - `build_chat_tool_registry(session, user_id, tools_enabled)`
 >   (`app/llm/tools/agent_registry.py`) es el del **chat de producción** (ADR-022): trae
->   los `calendar.*` / `task.*` **reales** de los namespaces que el modo habilita en
->   `tools_enabled`, MÁS los stubs `not_wired` de `reminder` si está habilitado (sigue
->   sin backend real). Lo arma `build_memory_context` (`_default_reg`). Gateado
->   estrictamente por modo: para los modos gemma (`tools_enabled=[]`) queda vacío.
-> - `calendar_registry(store)` / `task_registry(store)` / `_build_agent_registry(...)`
->   son los tools **reales** que usa la **pasada async del agente**
->   (`app/workflows/agent_pass.py`), hoy **dormant** (ADR-022 D5): registrada pero sin
->   encolador, reservada para una futura pasada en modos gemma.
+>   los `calendar.*` / `task.*` / `reminder.*` **reales** de los namespaces que el modo
+>   habilita en `tools_enabled` (vía `_AGENT_TOOL_BUILDERS`). Lo arma `build_memory_context`
+>   (`_default_reg`). Gateado estrictamente por modo: para los modos gemma
+>   (`tools_enabled=[]`) queda vacío.
+> - `calendar_registry(store)` / `task_registry(store)` / `reminder_registry(store)` /
+>   `_build_agent_registry(...)` son los tools **reales** que usa la **pasada async del
+>   agente** (`app/workflows/agent_pass.py`), hoy **dormant** (ADR-022 D5): registrada pero
+>   sin encolador, reservada para una futura pasada en modos gemma.
 >
 > En las tres superficies el `user_id` nunca viaja como argumento (el store ya lo tiene;
 > `extra='forbid'` lo impide), igual que la memoria.
 >
 > Las clases reales son `AgentCreateEventTool` / `AgentListEventsTool` /
-> `AgentCreateTaskTool` / `AgentListTasksTool` (stateful); los stubs
-> `CreateEventTool` / `ListEventsTool` / `CreateTaskTool` / `ListTasksTool` se conservan
+> `AgentCreateTaskTool` / `AgentListTasksTool` / `AgentSetReminderTool` /
+> `AgentListRemindersTool` (stateful); los stubs `CreateEventTool` / `ListEventsTool` /
+> `CreateTaskTool` / `ListTasksTool` / `SetReminderTool` / `ListRemindersTool` se conservan
 > para el playground.
 
 ### calendar.create_event
@@ -138,25 +141,44 @@
 
 ### reminder.set
 
-- **Descripción**: crear un recordatorio.
-- **Parámetros**:
-  - `text: str`
-  - `when: datetime` (ISO 8601 con tz)
-- **Habilitada en modos**: productividad.
-- **Estado**: **stub `not_wired`** incluso en el chat de producción (ADR-022): a
-  diferencia de `calendar.*` / `task.*`, `reminder` no tiene backend real todavía (no
-  hay tabla `reminders` ni scheduler). El modelo VE la tool (sigue en `tools_enabled`)
-  pero llamarla no tiene efecto. Se "cablea" agregando su builder a
-  `_AGENT_TOOL_BUILDERS` cuando exista el store.
+- **Descripción**: crear un recordatorio para una fecha y hora.
+- **Parámetros (tool real)**:
+  - `text: str` (no vacío, máx 200 — cota LLM-fed)
+  - `when: datetime` (ISO 8601 con tz; rechaza epoch numérico) → mapea a `remind_at`
+- **Habilitada en modos**: productividad (los modos con `reminder` en `tools_enabled`).
+- **Ejemplo**:
+  ```json
+  {
+    "tool": "reminder.set",
+    "args": {
+      "text": "Llamar al dentista",
+      "when": "2026-05-20T15:00:00-03:00"
+    }
+  }
+  ```
+- **Efecto (tool real)**: INSERTA en `reminders` (status `pending`), atado al `user_id` del
+  store. Desde ADR-022 corre **síncrona en el chat** (productividad): commitea atómica con
+  el turno. **Idempotente**: deduplica por la tupla natural `(user_id, text, remind_at)` →
+  un reintento NO crea el aviso dos veces. El scheduler `dispatch_due_reminders` (beat 1 min)
+  despacha los vencidos vía `NotificationDelivery` (hoy noop) y los pasa a `sent`. Devuelve
+  el recordatorio serializado (`id` + campos del wire, sin `user_id`/timestamps).
+- **Errores**: `invalid_arguments` (texto vacío o > 200, `when` no-ISO/epoch, `user_id` u
+  otro extra).
+- **Stub (playground observado)**: la versión del `default_registry()` valida args y
+  devuelve `not_wired` (cero efecto).
 
 ### reminder.list
 
-- **Descripción**: listar los recordatorios del usuario.
-- **Parámetros**:
-  - `from_dt: datetime | None` (ISO 8601)
-  - `to_dt: datetime | None`
+- **Descripción**: listar los recordatorios del usuario en una ventana de tiempo.
+- **Parámetros (tool real)**:
+  - `from_dt: datetime` (ISO 8601)
+  - `to_dt: datetime` (ISO 8601; debe ser `from_dt < to_dt`)
 - **Habilitada en modos**: productividad.
-- **Estado**: **stub `not_wired`** (ver `reminder.set`).
+- **Efecto (tool real)**: lee `reminders` del usuario que vencen en `[from_dt, to_dt)`,
+  ordenados por `remind_at` ASC (cap `AGENT_LIST_RESULT_LIMIT`). Devuelve
+  `{ "reminders": [...] }` (serializados, sin metadata interna). El stub del
+  `default_registry()` sigue devolviendo `not_wired`.
+- **Errores**: `invalid_arguments` (args malformados; `from_dt >= to_dt`).
 
 ### memory.add
 

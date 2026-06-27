@@ -72,6 +72,10 @@ _EVENTS_COUNTER_PREFIX = "events:ratelimit:crud:"
 # compartido por las 2 rutas (list/patch): un techo único por usuario cierra el gap
 # de abuso del CRUD de tareas. Mismo criterio que el bucket de events.
 _TASKS_COUNTER_PREFIX = "tasks:ratelimit:crud:"
+# Bucket de /v1/reminders (dominio Recordatorios), por user_id. UN solo prefijo
+# compartido por las 4 rutas (list/create/patch/delete): un techo único por usuario
+# cierra el gap de abuso del CRUD de recordatorios. Mismo criterio que events/tasks.
+_REMINDERS_COUNTER_PREFIX = "reminders:ratelimit:crud:"
 
 
 def _normalize_email(email: str) -> str:
@@ -135,6 +139,11 @@ def _events_counter_key(user_id: str) -> str:
 def _tasks_counter_key(user_id: str) -> str:
     # user_id es un UUID opaco (no PII directa): va crudo, no hasheado.
     return f"{_TASKS_COUNTER_PREFIX}{user_id}"
+
+
+def _reminders_counter_key(user_id: str) -> str:
+    # user_id es un UUID opaco (no PII directa): va crudo, no hasheado.
+    return f"{_REMINDERS_COUNTER_PREFIX}{user_id}"
 
 
 # ---------------------------------------------------------------------------
@@ -429,3 +438,29 @@ async def check_tasks_rate_limit(store: TokenStore, *, user_id: str) -> bool:
         ttl_seconds=settings.tasks_window_seconds,
     )
     return count <= settings.tasks_max_requests
+
+
+# ---------------------------------------------------------------------------
+# Reminders (por user_id — del CurrentUser autenticado, dominio Recordatorios)
+# ---------------------------------------------------------------------------
+
+
+async def check_reminders_rate_limit(store: TokenStore, *, user_id: str) -> bool:
+    """``True`` si la request a ``/v1/reminders`` esta permitida; ``False`` si excede el limite.
+
+    UN solo bucket por ``user_id`` compartido por las 4 rutas (list/create/patch/delete):
+    el JWT ya autentico al caller, asi que el freno es por usuario (no por IP) y no
+    penaliza a varios usuarios tras un NAT compartido. Un techo unico amplio corta el
+    scripting abusivo del CRUD de recordatorios sin molestar el uso interactivo legitimo.
+    Chequea + incrementa en una sola op. fail-open: si Redis cae, ``incr_with_ttl`` => 0
+    => permite (baseline sin freno, nunca un auto-DoS).
+
+    El ``user_id`` es un UUID opaco (no PII directa): va crudo en la key, sin
+    hashear (ver ``_reminders_counter_key``).
+    """
+    settings = get_settings()
+    count = await store.incr_with_ttl(
+        _reminders_counter_key(user_id),
+        ttl_seconds=settings.reminders_window_seconds,
+    )
+    return count <= settings.reminders_max_requests

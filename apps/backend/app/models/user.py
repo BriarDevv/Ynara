@@ -20,7 +20,9 @@ if TYPE_CHECKING:
     from app.models.admin_audit import AdminAudit
     from app.models.audit import AuditLog
     from app.models.calendar_event import CalendarEvent
+    from app.models.device_token import DeviceToken
     from app.models.memory import EpisodicMemory, ProceduralMemory, SemanticMemory
+    from app.models.reminder import Reminder
     from app.models.session import ChatSession
     from app.models.task import Task
 
@@ -58,6 +60,13 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     is_admin: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # Huso horario IANA del usuario (p.ej. ``America/Argentina/Buenos_Aires``). Mismo
+    # criterio que ``is_admin``: ``server_default='UTC'`` para no romper filas existentes
+    # en la migración (tabla sensible — sin backfill, default seguro). Se llama
+    # ``time_zone`` (no ``timezone``) por consistencia con ``calendar_events.time_zone``.
+    # La validación IANA vive en el boundary Pydantic (``validate_iana_tz``), no acá: el
+    # modelo solo declara la columna.
+    time_zone: Mapped[str] = mapped_column(String(64), nullable=False, server_default=text("'UTC'"))
     retention_sensitive_days: Mapped[int] = mapped_column(Integer, nullable=False, default=180)
 
     sessions: Mapped[list[ChatSession]] = relationship(
@@ -67,6 +76,12 @@ class User(UUIDPKMixin, TimestampMixin, Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     tasks: Mapped[list[Task]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    device_tokens: Mapped[list[DeviceToken]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    reminders: Mapped[list[Reminder]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
     semantic_memories: Mapped[list[SemanticMemory]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )

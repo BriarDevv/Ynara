@@ -40,6 +40,8 @@ schemas Pydantic.
 | `TurnRole` | `turn_role_enum` | user, model | `conversation_turns.role` (dueño, único consumidor) |
 | `EventStatus` | `event_status_enum` | confirmed, tentative, cancelled | `calendar_events.status` (dueño, único consumidor) |
 | `TaskStatus` | `task_status_enum` | pending, done | `tasks.status` (dueño, único consumidor) |
+| `DevicePlatform` | `device_platform_enum` | ios, android, web | `device_tokens.platform` (dueño, único consumidor) |
+| `ReminderStatus` | `reminder_status_enum` | pending, sent, cancelled | `reminders.status` (dueño, único consumidor) |
 
 ## Tablas sagradas 🔴
 
@@ -203,6 +205,7 @@ familia entera vía `sid` + blocklist por `jti` — #142).
 | `is_ephemeral` | BOOLEAN NOT NULL DEFAULT false | Modo "probar sin cuenta" |
 | `onboarding_completed` | BOOLEAN NOT NULL DEFAULT false | Setea el frontend al final del onboarding |
 | `is_admin` | BOOLEAN NOT NULL DEFAULT false | Gate del panel admin interno (`/v1/admin/*`). `server_default=false` para no romper filas existentes. Bootstrap inicial (antes de poblar la columna) vía `ADMIN_BOOTSTRAP_IDS` en `get_current_admin`; esta flag es la fuente de verdad persistente. Agregada en la migración `20260619_1200_add_is_admin_and_admin_audit` |
+| `time_zone` | VARCHAR(64) NOT NULL DEFAULT 'UTC' | Huso horario IANA del usuario (p.ej. `America/Argentina/Buenos_Aires`). `server_default='UTC'` para no romper filas existentes (sin backfill). Lo usa el preámbulo de fecha/hora del chat (resolver fechas relativas en SU huso) y el dashboard "Hoy" (recap del día local). Validación IANA en el boundary Pydantic (`validate_iana_tz`), no a nivel DB. Agregada en la migración `20260625_1000_users_time_zone` |
 | `retention_sensitive_days` | INTEGER NOT NULL DEFAULT 180 | TTL configurable por usuario para episódica con `is_sensitive=true`. Rango 30-365 (constraint) |
 | `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
 
@@ -362,6 +365,65 @@ de Agenda).
 natural `(user_id, title, scheduled_at)` (con `IS NULL` cuando no hay horario), así un
 retry de la pasada async del agente no crea el mismo to-do dos veces.
 
+### device_tokens
+
+**OPERATIVA**, no sagrada (sin 🔴): device tokens de push (FCM/APNS/web push) de los
+dispositivos del usuario. El scheduler de recordatorios (`app/workflows/reminder_dispatch.py`)
+los carga para despachar avisos vía el `NotificationDelivery` (hoy un noop, sin proveedor
+real cableado). Modelo en `app/models/device_token.py` (`UUIDPKMixin` + `TimestampMixin`).
+Agregada en la migración `20260625_1100_device_tokens_table`.
+
+Privacidad (regla #4): el `token` ES una credencial de envío — el unregister va por **body**
+(no por path, no aparece en URLs/logs) y el notifier loguea SOLO `len(tokens)`, nunca el
+token. `DeviceTokenOut` no expone `user_id`.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | `gen_random_uuid()` |
+| `user_id` | UUID FK → users.id, ON DELETE CASCADE | indexed btree |
+| `platform` | `device_platform_enum` NOT NULL | ios / android / web |
+| `token` | VARCHAR(512) NOT NULL UNIQUE | Token de push; UNIQUE global (un re-registro re-asigna el dueño, no duplica) |
+| `last_seen_at` | TIMESTAMPTZ NOT NULL DEFAULT now() | Último registro/visto del dispositivo |
+| `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
+
+**Índices**:
+- `ix_device_tokens_user_id` (btree, por `user_id`) — queries por usuario + cascade-delete.
+
+**Constraint**: `uq_device_tokens_token` (UNIQUE sobre `token`) — un dispositivo no se
+duplica; `DeviceTokenStore.register` hace upsert por token (re-asigna `user_id`/`platform`/
+`last_seen_at`).
+
+### reminders
+
+**OPERATIVA**, no sagrada (sin 🔴): recordatorios por-tiempo del usuario. El tool
+`reminder.set` / `reminder.list` (`app/llm/tools/reminder.py`) los crea/lista y el scheduler
+(`app/workflows/reminder_dispatch.py`, beat cada minuto) despacha los vencidos (`remind_at <=
+now`) marcándolos `sent`. Tabla **DEDICADA** (NO se reusan `tasks`): un recordatorio es un
+aviso por-tiempo, no una prioridad del día. Modelo en `app/models/reminder.py` (`UUIDPKMixin`
++ `TimestampMixin`). Agregada en la migración `20260625_1200_reminders_table`.
+
+`text` (no `title`, a diferencia de `Task`) mapea el `text` del contrato de la tool;
+`remind_at` mapea el `when`. Privacidad (regla #4): `text` es contenido del usuario, NO se
+loguea.
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | UUID PK | `gen_random_uuid()` |
+| `user_id` | UUID FK → users.id, ON DELETE CASCADE | indexed btree |
+| `text` | VARCHAR NOT NULL | Texto del recordatorio (min 1 en el schema) |
+| `remind_at` | TIMESTAMPTZ NOT NULL | Cuándo avisar (instante con offset) |
+| `status` | `reminder_status_enum` NOT NULL | pending / sent / cancelled. Arranca `pending`; el scheduler lo pasa a `sent`; el usuario puede pasarlo a `cancelled` |
+| `created_at`, `updated_at` | TIMESTAMPTZ | TimestampMixin |
+
+**Índices**:
+- `ix_reminders_user_id` (btree, por `user_id`) — cascade-delete + lookups simples.
+- `ix_reminders_user_id_remind_at` (btree compuesto, `(user_id, remind_at)`) — listado por-usuario (filtra por user, ordena por horario sin sort).
+- `ix_reminders_status_remind_at` (btree compuesto, `(status, remind_at)`) — scan GLOBAL del scheduler (`WHERE status='pending' AND remind_at<=now`, cross-user) sin seq-scan + sort.
+
+**Idempotencia** (ADR-021): `ReminderStore.create_reminder` (vía el agente) deduplica por la
+tupla natural `(user_id, text, remind_at)`. El POST REST usa `add_reminder` (sin dedup: un
+alta explícita siempre crea).
+
 ## Migración inicial
 
 Mergeada. La migración inicial vive en `apps/backend/alembic/versions/`
@@ -385,8 +447,12 @@ los 3 índices parciales de `conversation_turns` por el único índice compuesto
 agrega el enum `event_status_enum` + la tabla operativa
 `calendar_events` (FK a `users`, dominio Agenda ADR-023), llevando el total a
 **9 tablas** (con `admin_audit`). La migración `20260622_1400_tasks_table`
-(**HEAD**) agrega el enum `task_status_enum` + la tabla operativa `tasks` (FK a
-`users`, dominio TAREAS Fase D1), llevando el total a **10 tablas**.
+agrega el enum `task_status_enum` + la tabla operativa `tasks` (FK a
+`users`, dominio TAREAS Fase D1), llevando el total a **10 tablas**. Las migraciones
+`20260625_1100_device_tokens_table` y `20260625_1200_reminders_table` (**HEAD**) agregan
+las tablas operativas `device_tokens` (+ `device_platform_enum`) y `reminders` (+
+`reminder_status_enum`), llevando el total a **12 tablas**; la migración intermedia
+`20260625_1000_users_time_zone` agrega la columna `users.time_zone`.
 
 Ver [`docs/MIGRATIONS.md`](./MIGRATIONS.md) para la cadena completa y la política.
 

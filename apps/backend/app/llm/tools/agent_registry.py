@@ -12,29 +12,27 @@ agente con efecto real (``calendar`` / ``task``) y de las dos formas de armar un
    módulo de workflows (capa equivocada + riesgo de ciclo Celery↔router).
 
 2. ``build_chat_tool_registry``: lo que consume el **tool-loop SÍNCRONO del chat de
-   producción** (ADR-022). Es ``_build_agent_registry`` MÁS los stubs de ``reminder``
-   cuando el modo los habilita. La diferencia con la pasada async es deliberada y se
-   explica abajo.
+   producción** (ADR-022). Hoy es exactamente ``_build_agent_registry`` (las tools de
+   agente reales de los namespaces habilitados): ``calendar`` / ``task`` / ``reminder``
+   tienen backend real y entran por ``_AGENT_TOOL_BUILDERS``.
 
 Gating por modo (``tools_enabled``)
 -----------------------------------
 TODO el armado está gateado por ``tools_enabled`` del modo activo (config-driven,
 ``ynara.config.json``): una tool solo se construye/expone si su namespace está en esa
 lista. Es el MISMO gate que usa la pasada async (ADR-021) y el que filtra las specs
-hacia el modelo (``specs_for(enabled)``). El efecto neto: ``calendar``/``task`` reales
-solo existen en ``productividad`` (el único modo que los habilita hoy); los modos
+hacia el modelo (``specs_for(enabled)``). El efecto neto: ``calendar``/``task``/``reminder``
+reales solo existen en ``productividad`` (el único modo que los habilita hoy); los modos
 gemma (``tools_enabled=[]``) obtienen un registry vacío.
 
-Por qué ``reminder`` SIGUE siendo stub
----------------------------------------
-``reminder`` está en ``tools_enabled`` de ``productividad``, pero NO tiene backend
-real todavía (no existe tabla ``reminders`` ni scheduler): sus únicas
-implementaciones son los stubs ``SetReminderTool`` / ``ListRemindersTool`` que validan
-args y devuelven ``not_wired``. Por eso ``build_chat_tool_registry`` registra esos
-stubs cuando el modo habilita ``reminder``: así el modelo sigue VIENDO la tool (el
-contrato no cambia) pero llamarla no tiene efecto, igual que antes de ADR-022. Cuando
-``reminder`` tenga store real, se agrega su builder a ``_AGENT_TOOL_BUILDERS`` y deja
-de tratarse como stub (sin tocar el resto del flujo).
+``reminder`` ya es una tool REAL
+--------------------------------
+``reminder`` tiene backend real (tabla ``reminders`` + ``ReminderStore`` + scheduler
+``reminder_dispatch``): su builder está en ``_AGENT_TOOL_BUILDERS`` igual que
+``calendar``/``task``, así que el chat de producción ejecuta ``reminder.set`` /
+``reminder.list`` con efecto (escriben/leen ``reminders``). Los stubs ``SetReminderTool``
+/ ``ListRemindersTool`` quedan SOLO para el playground observado (``default_registry()``,
+ADR-019, cero efecto).
 """
 
 from __future__ import annotations
@@ -79,6 +77,7 @@ if TYPE_CHECKING:
 _AGENT_TOOL_BUILDERS: dict[str, Callable[[AsyncSession, UUID], ToolRegistry]] = {
     "calendar": lambda session, user_id: _calendar_registry(session, user_id),
     "task": lambda session, user_id: _task_registry(session, user_id),
+    "reminder": lambda session, user_id: _reminder_registry(session, user_id),
 }
 
 
@@ -106,6 +105,18 @@ def _task_registry(session: AsyncSession, user_id: UUID) -> ToolRegistry:
     from app.services.tasks import TaskStore
 
     return task_registry(TaskStore(session, user_id))
+
+
+def _reminder_registry(session: AsyncSession, user_id: UUID) -> ToolRegistry:
+    """Construye el reminder registry difiriendo los imports del store + registry (evita ciclo).
+
+    ``ReminderStore`` y ``reminder_registry`` se importan acá adentro (no a nivel de módulo):
+    mismo patrón lazy que ``_calendar_registry`` / ``_task_registry``.
+    """
+    from app.llm.tools.reminder import reminder_registry
+    from app.services.reminders import ReminderStore
+
+    return reminder_registry(ReminderStore(session, user_id))
 
 
 def _build_agent_registry(
@@ -139,35 +150,24 @@ def build_chat_tool_registry(
 ) -> ToolRegistry:
     """Registry para el tool-loop SÍNCRONO del chat de producción (ADR-022).
 
-    A diferencia del playground (``default_registry()``, cero efecto, ADR-019) y de la
-    pasada async (solo tools reales, ADR-021), el chat de producción necesita un único
-    registry que:
-
-    - traiga las tools de agente REALES (``calendar`` / ``task``) de los namespaces que
-      el modo habilita en ``tools_enabled`` — vía ``_build_agent_registry``, así
-      ``calendar.create_event`` ESCRIBE de verdad en el turno (atómico con el commit del
-      turno; las semánticas de commit las da ``ChatService.run_turn``), y
-    - registre ADEMÁS los stubs ``not_wired`` de ``reminder`` cuando el modo lo habilita,
-      porque ``reminder`` no tiene backend real todavía (ver el docstring del módulo): el
-      modelo sigue viendo la tool pero llamarla no tiene efecto.
+    A diferencia del playground (``default_registry()``, cero efecto, ADR-019), el chat de
+    producción necesita las tools de agente REALES (``calendar`` / ``task`` / ``reminder``)
+    de los namespaces que el modo habilita en ``tools_enabled`` — vía
+    ``_build_agent_registry`` (que las arma desde ``_AGENT_TOOL_BUILDERS``), así
+    ``calendar.create_event`` / ``task.create_task`` / ``reminder.set`` ESCRIBEN de verdad
+    en el turno (atómico con el commit del turno; las semánticas de commit las da
+    ``ChatService.run_turn``).
 
     Gating estricto por modo: un namespace que NO esté en ``tools_enabled`` no aporta
     ninguna tool. Para los modos gemma (``tools_enabled=[]``) el registry queda vacío;
     para ``memoria`` (``tools_enabled=[memory]``) tampoco hay calendar/task/reminder (el
     namespace ``memory`` lo maneja ``MemoryContext`` aparte, vía ``memory_registry``).
 
-    Los stubs de ``reminder`` se importan diferido (mismo motivo de ciclo que arriba).
+    Hoy es idéntico a ``_build_agent_registry`` (ya no hay stubs especiales: ``reminder``
+    pasó a ser una tool real con backend). Se mantiene como función separada porque es la
+    superficie pública que consume ``build_memory_context`` y el punto natural donde sumar
+    lógica específica del chat sin tocar la pasada async.
     """
-    from app.llm.tools.reminder import ListRemindersTool, SetReminderTool
-
-    # Base: las tools de agente REALES de los namespaces habilitados (calendar/task).
+    # Las tools de agente REALES de los namespaces habilitados (calendar/task/reminder).
     # ``_build_agent_registry`` ya devuelve un ``ToolRegistry`` (con su import diferido).
-    registry = _build_agent_registry(session, user_id, tools_enabled)
-
-    # ``reminder`` habilitado pero sin backend real -> se agregan los stubs not_wired,
-    # así el contrato hacia el modelo no cambia mientras el backend no exista.
-    if "reminder" in tools_enabled:
-        registry.register(SetReminderTool())
-        registry.register(ListRemindersTool())
-
-    return registry
+    return _build_agent_registry(session, user_id, tools_enabled)

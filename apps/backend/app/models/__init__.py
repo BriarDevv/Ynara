@@ -10,11 +10,13 @@ from app.models.audit import AuditLog
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
 from app.models.calendar_event import CalendarEvent
 from app.models.conversation_turn import ConversationTurn
+from app.models.device_token import DeviceToken
 from app.models.memory import (
     EpisodicMemory,
     ProceduralMemory,
     SemanticMemory,
 )
+from app.models.reminder import Reminder
 from app.models.session import ChatSession
 from app.models.task import Task
 from app.models.user import User
@@ -26,8 +28,10 @@ __all__ = [
     "CalendarEvent",
     "ChatSession",
     "ConversationTurn",
+    "DeviceToken",
     "EpisodicMemory",
     "ProceduralMemory",
+    "Reminder",
     "SemanticMemory",
     "Task",
     "TimestampMixin",

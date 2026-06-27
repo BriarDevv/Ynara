@@ -186,6 +186,12 @@ class Settings(BaseSettings):
     # que el bucket de events. fail-open si Redis cae.
     tasks_max_requests: int = Field(120, alias="TASKS_MAX_REQUESTS")
     tasks_window_seconds: int = Field(60, alias="TASKS_WINDOW_SECONDS")
+    # Rate-limit de /v1/reminders (dominio Recordatorios), por user_id. UN bucket
+    # compartido por las 4 rutas (list/create/patch/delete): default amplio para cubrir el
+    # uso interactivo y solo cortar scripting abusivo. Mismo criterio que events/tasks.
+    # fail-open si Redis cae.
+    reminders_max_requests: int = Field(120, alias="REMINDERS_MAX_REQUESTS")
+    reminders_window_seconds: int = Field(60, alias="REMINDERS_WINDOW_SECONDS")
 
     # Reverse-proxy / IP real del cliente (issue #151). El rate-limit anti-fuerza-bruta
     # cuenta por IP; detrás de Cloudflare Tunnel el peer que ve uvicorn es el conector
