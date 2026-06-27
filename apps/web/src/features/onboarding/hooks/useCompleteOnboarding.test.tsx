@@ -25,7 +25,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
-function seedDraft({ auth }: { auth: "ephemeral" | "signup" | null }) {
+function seedDraft({ auth }: { auth: "signup" | "login" | null }) {
   const ob = useOnboardingStore.getState();
   ob.reset();
   ob.setDisplayName("Mateo");
@@ -42,8 +42,8 @@ beforeEach(() => {
 });
 
 describe("useCompleteOnboarding", () => {
-  it("éxito: PATCH /v1/users/me snake_case, flipea onboardingCompleted y deriva isEphemeral del authMode", async () => {
-    seedDraft({ auth: "ephemeral" });
+  it("éxito: PATCH /v1/users/me snake_case y flipea onboardingCompleted", async () => {
+    seedDraft({ auth: "signup" });
     patch.mockResolvedValue({ id: "u1", onboarding_completed: true });
 
     const { result } = renderHook(() => useCompleteOnboarding(), { wrapper });
@@ -60,7 +60,6 @@ describe("useCompleteOnboarding", () => {
       { headers: { Authorization: "Bearer t1" } },
     );
     expect(useUserStore.getState().onboardingCompleted).toBe(true);
-    expect(useUserStore.getState().isEphemeral).toBe(true);
     expect(result.current.error).toBeNull();
   });
 
@@ -95,7 +94,7 @@ describe("useCompleteOnboarding", () => {
   });
 
   it("ApiError: mapea body.detail al mensaje de error y no completa", async () => {
-    seedDraft({ auth: "ephemeral" });
+    seedDraft({ auth: "signup" });
     patch.mockRejectedValue(new ApiError(500, { detail: "Backend caído" }));
 
     const { result } = renderHook(() => useCompleteOnboarding(), { wrapper });

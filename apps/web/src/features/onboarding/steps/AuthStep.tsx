@@ -41,7 +41,6 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
   const { next } = useOnboardingNav("auth");
   const queryClient = useQueryClient();
   const setAuth = useOnboardingStore((s) => s.setAuth);
-  const startEphemeral = useOnboardingStore((s) => s.startEphemeral);
 
   const form = useForm<SignupValues>({
     resolver: zodResolver(SignupRequestSchema),
@@ -71,12 +70,6 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
 
   const onSubmit: SubmitHandler<SignupValues> = (values) => {
     mutation.mutate(values);
-  };
-
-  const handleEphemeral = () => {
-    const id = `ephemeral-${Date.now()}`;
-    startEphemeral({ userId: id, token: `ephemeral-${id}` });
-    next();
   };
 
   // Memoizado: StepFooter es un hijo que recibe JSX por prop; sin memo recibiría
@@ -129,25 +122,9 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
         />
       </form>
 
-      {/*
-        Bloque secundario, alineado a la izquierda — mismo eje que el form
-        y el título. Antes "Probar sin cuenta" y la nota quedaban centrados,
-        rompiendo la grilla del step.
-
-        La nota va en una línea aparte (text-caption) en lugar de inline
-        con punto separador: mobile no la cortaba bien y la jerarquía
-        queda más clara (acción primero, explicación abajo).
-      */}
+      {/* Cambio signup ↔ login, alineado a la izquierda (mismo eje que el form). */}
       <div className="flex flex-col gap-3 pt-2">
         <AuthModeSwitchLink mode="signup" onChange={onSwitch} />
-        <div className="flex flex-col gap-1">
-          <Button variant="subtle" onClick={handleEphemeral} className="text-body-sm self-start">
-            Probar sin cuenta
-          </Button>
-          <p className="text-caption text-[var(--color-ink-soft)]">
-            Cuenta efímera — no se guarda entre sesiones.
-          </p>
-        </div>
       </div>
     </StepShell>
   );
@@ -157,11 +134,6 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
 // Login
 // ============================================================
 
-/**
- * LoginForm intencionalmente no muestra "Probar sin cuenta": la cuenta
- * efímera es para users nuevos sin credenciales (flujo signup). Si
- * el user llegó al tab login, asumimos que tiene cuenta real.
- */
 function LoginForm({ onSwitch }: { onSwitch: () => void }) {
   const { next } = useOnboardingNav("auth");
   const queryClient = useQueryClient();

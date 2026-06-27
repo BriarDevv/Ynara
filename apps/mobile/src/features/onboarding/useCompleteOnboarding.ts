@@ -35,10 +35,13 @@ export function useCompleteOnboarding() {
     );
     user.setInterestedModes(interestedModes);
     if (draft.authedUserId && draft.authedToken) {
+      // El onboarding solo crea cuentas reales (signup): ya no hay entrada
+      // efímera, así que isEphemeral va en false. (El flag existe en el backend
+      // pero el front todavía no lo consume.)
       user.setAuth({
         userId: draft.authedUserId,
         token: draft.authedToken,
-        isEphemeral: draft.authMode === "ephemeral",
+        isEphemeral: false,
       });
     }
     user.completeOnboarding();
