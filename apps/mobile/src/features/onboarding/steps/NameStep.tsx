@@ -31,6 +31,8 @@ export function NameStep() {
       eyebrow={copy.eyebrow}
       title={copy.title}
       subtitle={copy.subtitle}
+      // El nombre tiene autoFocus: no le robamos el foco al título.
+      focusOnMount={false}
       footer={<StepFooter onBack={back} onNext={onNext} />}
     >
       <TextField
