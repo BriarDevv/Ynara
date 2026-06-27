@@ -8,6 +8,7 @@ import { AuthStep } from "@/features/onboarding/steps/AuthStep";
 import { ModesStep } from "@/features/onboarding/steps/ModesStep";
 import { MoodStep } from "@/features/onboarding/steps/MoodStep";
 import { NameStep } from "@/features/onboarding/steps/NameStep";
+import { SobreVosStep } from "@/features/onboarding/steps/SobreVosStep";
 import { useOnboardingStore } from "@/features/onboarding/store";
 
 type Props = {
@@ -67,6 +68,8 @@ export function StepRouter({ step }: Props) {
       return <MoodStep />;
     case "modos":
       return <ModesStep />;
+    case "sobre-vos":
+      return <SobreVosStep />;
     case "a11y":
       return <A11yStep />;
   }

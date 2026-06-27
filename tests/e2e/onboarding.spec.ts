@@ -9,7 +9,7 @@ import { gatedViolations } from "./axe-utils";
  * handlers de `src/lib/api.mocks.ts`, así no necesitamos el backend real.
  *
  * Cobertura:
- *   (a) happy path: auth(signup) → nombre → día → modos → a11y → outro → /hoy
+ *   (a) happy path: auth(signup) → nombre → día → modos → sobre-vos → a11y → outro → /hoy
  *   (b) error inline en auth (email inválido, validación cliente)
  *   (c) axe sin violations CRÍTICAS en /onboarding/auth y /hoy
  *
@@ -25,10 +25,11 @@ const STEP_TITLES = {
   nombre: "¿Cómo te llamo?",
   dia: "¿Cómo viene tu día, en general?",
   modos: "¿Para qué te puedo servir?",
+  "sobre-vos": "Contame un poco de vos",
   a11y: "Ajustemos cómo se lee.",
 } as const;
 
-/** Recorre signup + nombre + día + modos + a11y hasta llegar al /hoy. */
+/** Recorre signup + nombre + día + modos + sobre-vos + a11y hasta llegar al /hoy. */
 async function completeOnboarding(page: Page): Promise<void> {
   await page.goto("/onboarding/auth");
 
@@ -52,7 +53,11 @@ async function completeOnboarding(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: STEP_TITLES.modos })).toBeVisible();
   await page.getByRole("button", { name: "Seguir" }).click();
 
-  // --- Step 5: A11y — el CTA "Listo" dispara el outro de celebración ---
+  // --- Step 5: Sobre vos — opcional, lo pasamos sin completar ---
+  await expect(page.getByRole("heading", { name: STEP_TITLES["sobre-vos"] })).toBeVisible();
+  await page.getByRole("button", { name: "Seguir" }).click();
+
+  // --- Step 6: A11y — el CTA "Listo" dispara el outro de celebración ---
   await expect(page.getByRole("heading", { name: STEP_TITLES.a11y })).toBeVisible();
   await page.getByRole("button", { name: "Listo" }).click();
 

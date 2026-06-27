@@ -117,6 +117,16 @@ export function useCompleteOnboarding(): Returns & {
       useUserStore.getState().setDisplayName(data.displayName);
       useUserStore.getState().setMood(data.mood, data.moodFreeText ?? "");
       useUserStore.getState().setInterestedModes(data.interestedModes as ModeId[]);
+      // Sobre-vos: igual que mood/modes, no tiene columna en el backend y queda
+      // client-side. Se lee del draft (no del payload validado, que solo lleva
+      // lo que `OnboardRequestSchema` conoce).
+      useUserStore.getState().setProfileContext({
+        dedication: d.dedication,
+        studyWhat: d.studyWhat,
+        workWhat: d.workWhat,
+        purpose: d.purpose,
+        interests: d.interests,
+      });
       useUserStore.getState().completeOnboarding();
       useOnboardingStore.getState().reset();
       // El perfil "me" vive en el user store (no hay query "me" en core), pero

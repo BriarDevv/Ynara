@@ -26,6 +26,10 @@ export const STEP_COPY: Record<OnboardingStep, { title: string; subtitle: string
     title: "¿Para qué te puedo servir?",
     subtitle: "Empezás por lo que te interese. Después abrís más.",
   },
+  "sobre-vos": {
+    title: "Contame un poco de vos",
+    subtitle: "Para conocerte y acordarme de quién sos. Es opcional.",
+  },
   a11y: {
     title: "Ajustemos cómo se lee.",
     subtitle: "Lo cambiás cuando quieras.",
