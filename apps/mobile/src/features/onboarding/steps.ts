@@ -1,18 +1,12 @@
 /**
- * Secuencia de pasos del onboarding (mobile). Decoplada de
- * `@ynara/core/features/onboarding` a propósito: así podemos sumar "sobre-vos"
- * (paso 5) sin tocar `packages/core`, que comparte el onboarding con web y se
- * rompería al recibir un step que su UI no conoce. El draft de datos sigue en el
- * store de core; acá vive solo el ORDEN de los pasos.
+ * Secuencia de pasos del onboarding (mobile). Ya NO se forkea: la estructura
+ * (orden, índice, tipo) vive en `@ynara/core/features/onboarding` y se comparte
+ * con web (ADR-012). "sobre-vos" ahora es canónico en core, así que mobile la
+ * re-exporta como hace web. Se mantiene el alias `OnboardingStepId` para no
+ * tocar los call-sites mobile que ya lo importan (`steps`, `Wizard`, etc.).
  */
-export const ONBOARDING_STEPS = ["auth", "nombre", "dia", "modos", "sobre-vos", "a11y"] as const;
+import { ONBOARDING_STEPS, type OnboardingStep, STEP_INDEX } from "@ynara/core/features/onboarding";
 
-export type OnboardingStepId = (typeof ONBOARDING_STEPS)[number];
+export { ONBOARDING_STEPS, STEP_INDEX };
 
-export const STEP_INDEX: Record<OnboardingStepId, number> = ONBOARDING_STEPS.reduce(
-  (acc, slug, i) => {
-    acc[slug] = i;
-    return acc;
-  },
-  {} as Record<OnboardingStepId, number>,
-);
+export type OnboardingStepId = OnboardingStep;

@@ -2,9 +2,10 @@ import { create } from "zustand";
 import type { OnboardingStepId } from "@/features/onboarding/steps";
 
 /**
- * Step actual del wizard de onboarding (mobile). Separado del draft store de core
- * porque la secuencia de pasos es mobile-only (incluye "sobre-vos"). Efímero (una
- * sesión): no se persiste; arranca en "auth" y se resetea al completar.
+ * Step ACTUAL del wizard de onboarding (mobile): puro UI state de qué pantalla se
+ * muestra. El ORDEN de los pasos vive en @ynara/core (compartido con web); acá
+ * solo guardamos en cuál estamos. Efímero (una sesión): no se persiste; arranca
+ * en "auth" y se resetea al completar.
  */
 export const useOnboardingStepStore = create<{
   step: OnboardingStepId;

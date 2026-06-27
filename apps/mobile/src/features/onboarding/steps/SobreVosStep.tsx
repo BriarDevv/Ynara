@@ -1,9 +1,10 @@
+import type { Dedication } from "@ynara/core/features/onboarding";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { Text } from "@/components/ui/Text";
 import { TextField } from "@/components/ui/TextField";
 import { cn } from "@/lib/cn";
-import { type Dedication, useProfileContextStore } from "@/stores/profileContext";
+import { useOnboardingStore } from "@/stores/onboarding";
 import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
 import { STEP_COPY } from "../constants";
@@ -17,28 +18,29 @@ const DEDICATION_OPTIONS: readonly { value: Dedication; label: string }[] = [
 ];
 
 /**
- * Step "Sobre vos" del onboarding (mobile-only): contexto para que Ynara te
- * conozca y lo recuerde (a qué te dedicás, qué estudiás/trabajás, para qué la
- * usás, qué te interesa). Opcional — podés dejar todo en blanco y "Continuar".
- * Guarda en `useProfileContextStore` (la persistencia real, en la memoria de
- * Ynara, la hará el backend). Va después de "modos" y antes de "accesibilidad".
+ * Step "Sobre vos" del onboarding: contexto para que Ynara te conozca y lo
+ * recuerde (a qué te dedicás, qué estudiás/trabajás, para qué la usás, qué te
+ * interesa). Opcional — podés dejar todo en blanco y "Continuar". Guarda en el
+ * draft de onboarding de core (`setProfileContext`), igual que web; al completar,
+ * el draft se vuelca al user store. Va después de "modos" y antes de "accesibilidad".
  */
 export function SobreVosStep() {
   const { back, next } = useOnboardingNav();
-  const setContext = useProfileContextStore((s) => s.setContext);
+  const draft = useOnboardingStore.getState();
+  const setProfileContext = useOnboardingStore((s) => s.setProfileContext);
   const copy = STEP_COPY["sobre-vos"];
 
-  const [dedication, setDedication] = useState<Dedication | null>(null);
-  const [studyWhat, setStudyWhat] = useState("");
-  const [workWhat, setWorkWhat] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [interests, setInterests] = useState("");
+  const [dedication, setDedication] = useState<Dedication | null>(draft.dedication);
+  const [studyWhat, setStudyWhat] = useState(draft.studyWhat);
+  const [workWhat, setWorkWhat] = useState(draft.workWhat);
+  const [purpose, setPurpose] = useState(draft.purpose);
+  const [interests, setInterests] = useState(draft.interests);
 
   const showStudy = dedication === "estudio" || dedication === "ambos";
   const showWork = dedication === "trabajo" || dedication === "ambos";
 
   const onNext = () => {
-    setContext({
+    setProfileContext({
       dedication,
       studyWhat: studyWhat.trim(),
       workWhat: workWhat.trim(),
