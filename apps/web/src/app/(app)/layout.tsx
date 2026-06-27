@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useSyncExternalStore } from "react";
 import { AppShell } from "@/components/AppShell";
-import { useOnboardingResumeStore } from "@/features/onboarding/resumeStore";
 import { useUserStore } from "@/stores/user";
 
 // Suscripción a la rehidratación del store de usuario vía useSyncExternalStore:
@@ -55,12 +54,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       // el server no lo conoce, un redirect SSR no puede evaluar este guard.
       // react-doctor-disable-next-line react-doctor/nextjs-no-client-side-redirect
       router.replace("/onboarding");
-      return;
     }
-    // Entramos a la app autenticada → ya no estamos resumiendo el onboarding;
-    // limpiar el flag acá (mount-effect idempotente, safe bajo StrictMode, a
-    // diferencia de un cleanup de unmount que se dispara en el doble-render).
-    useOnboardingResumeStore.getState().setResuming(false);
   }, [hydrated, onboardingCompleted, router]);
 
   if (!allowed) {
