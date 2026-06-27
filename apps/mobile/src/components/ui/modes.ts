@@ -1,31 +1,13 @@
 import type { Mode } from "@ynara/shared-schemas";
 
 /**
- * Descriptores de los modos para la UI mobile (label + blurb) — fuente única,
- * espejo de apps/web/src/components/ui/modes.ts. La consumen el onboarding
- * (ModesStep) y el chat (selector + ModeChip). El orden sigue ynara.config.json.
+ * Descriptores de los modos para la UI mobile (label + blurb). El copy y el
+ * orden vienen de la **fuente única** en `@ynara/core/features/modes`, que
+ * comparten web/mobile/admin. Mobile sólo agrega su presentación NativeWind
+ * (`MODE_DOT_CLASS`). Los consume el onboarding (ModesStep) y el chat (selector
+ * + ModeChip).
  */
-export type ModeDescriptor = {
-  id: Mode;
-  label: string;
-  blurb: string;
-};
-
-export const MODE_DESCRIPTORS: readonly ModeDescriptor[] = [
-  { id: "productividad", label: "Productividad", blurb: "Agendar, recordar, ejecutar." },
-  { id: "estudio", label: "Estudio", blurb: "Tutoría, explicar, procesar textos." },
-  { id: "bienestar", label: "Bienestar", blurb: "Descarga, acompañar." },
-  { id: "vida", label: "Vida", blurb: "Charla casual, recomendaciones." },
-  { id: "memoria", label: "Memoria", blurb: "Recordar conversaciones." },
-] as const;
-
-export const MODE_BY_ID: Record<Mode, ModeDescriptor> = MODE_DESCRIPTORS.reduce(
-  (acc, m) => {
-    acc[m.id] = m;
-    return acc;
-  },
-  {} as Record<Mode, ModeDescriptor>,
-);
+export { MODE_BY_ID, MODE_DESCRIPTORS, type ModeDescriptor } from "@ynara/core/features/modes";
 
 /**
  * Clase NativeWind del dot/acento por modo. Mapa estático: NativeWind necesita

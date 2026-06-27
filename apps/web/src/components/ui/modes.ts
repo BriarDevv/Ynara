@@ -1,4 +1,12 @@
-export type ModeId = "productividad" | "estudio" | "bienestar" | "vida" | "memoria";
+import { DEFAULT_MODE, MODE_DESCRIPTORS } from "@ynara/core/features/modes";
+import type { Mode } from "@ynara/shared-schemas";
+
+/**
+ * `ModeId` = el enum `Mode` de `@ynara/shared-schemas` (la misma union de
+ * strings de siempre). Se mantiene el alias para no tocar los consumidores ni
+ * los template-literal types `var(--mode-${ModeId})`.
+ */
+export type ModeId = Mode;
 
 export type ModeDescriptor = {
   id: ModeId;
@@ -16,43 +24,18 @@ export type ModeDescriptor = {
   fillVar: `var(--mode-${ModeId}-fill)`;
 };
 
-export const MODES: readonly ModeDescriptor[] = [
-  {
-    id: "productividad",
-    label: "Productividad",
-    blurb: "Agendar, recordar, ejecutar.",
-    tintVar: "var(--mode-productividad)",
-    fillVar: "var(--mode-productividad-fill)",
-  },
-  {
-    id: "estudio",
-    label: "Estudio",
-    blurb: "Tutoría, explicar, procesar textos.",
-    tintVar: "var(--mode-estudio)",
-    fillVar: "var(--mode-estudio-fill)",
-  },
-  {
-    id: "bienestar",
-    label: "Bienestar",
-    blurb: "Descarga, acompañar.",
-    tintVar: "var(--mode-bienestar)",
-    fillVar: "var(--mode-bienestar-fill)",
-  },
-  {
-    id: "vida",
-    label: "Vida",
-    blurb: "Charla casual, recomendaciones.",
-    tintVar: "var(--mode-vida)",
-    fillVar: "var(--mode-vida-fill)",
-  },
-  {
-    id: "memoria",
-    label: "Memoria",
-    blurb: "Recordar conversaciones.",
-    tintVar: "var(--mode-memoria)",
-    fillVar: "var(--mode-memoria-fill)",
-  },
-] as const;
+/**
+ * Tabla visual de los modos. El copy (label/blurb/orden) viene de la **fuente
+ * única** en `@ynara/core/features/modes`; acá sólo se agregan los campos de
+ * presentación web (`tintVar`/`fillVar`).
+ */
+export const MODES: readonly ModeDescriptor[] = MODE_DESCRIPTORS.map((d) => ({
+  id: d.id,
+  label: d.label,
+  blurb: d.blurb,
+  tintVar: `var(--mode-${d.id})`,
+  fillVar: `var(--mode-${d.id}-fill)`,
+}));
 
 export const MODE_BY_ID: Record<ModeId, ModeDescriptor> = MODES.reduce(
   (acc, mode) => {
@@ -71,3 +54,5 @@ export const MODE_BY_ID: Record<ModeId, ModeDescriptor> = MODES.reduce(
  * que estos pares estén en sync con la paleta de `globals.css`.
  */
 export { MODE_CLIMATE, type ModeClimate } from "@ynara/core/features/field";
+/** Re-export de la fuente única para los consumidores que importan desde acá. */
+export { DEFAULT_MODE };
