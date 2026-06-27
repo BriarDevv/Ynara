@@ -78,7 +78,9 @@ export function TuScreen() {
     }
     try {
       const out = await updateMe.mutateAsync({ display_name: parsed.data });
-      setDisplayName(out.display_name);
+      // display_name puede venir null del backend; el store espera string.
+      // Fallback vacío, igual que el TuView web.
+      setDisplayName(out.display_name ?? "");
       setNameSaved(true);
     } catch {
       setNameError("No pudimos guardar el nombre. Intentá de nuevo.");
