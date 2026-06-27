@@ -1,6 +1,7 @@
 import type { TextSize } from "@ynara/core/stores";
 import { View } from "react-native";
 import { ChipGroup } from "@/components/ui/ChipGroup";
+import { Text } from "@/components/ui/Text";
 import { Toggle } from "@/components/ui/Toggle";
 import { useA11yStore } from "@/stores/a11y";
 import { StepFooter } from "../components/StepFooter";
@@ -32,14 +33,21 @@ export function A11yStep() {
   const setHighContrast = useA11yStore((s) => s.setHighContrast);
   const setMotion = useA11yStore((s) => s.setMotion);
 
-  const { complete } = useCompleteOnboarding();
+  const { complete, isPending, error } = useCompleteOnboarding();
 
   return (
     <StepShell
       eyebrow={copy.eyebrow}
       title={copy.title}
       subtitle={copy.subtitle}
-      footer={<StepFooter onBack={back} onNext={complete} nextLabel="Listo" />}
+      footer={
+        <StepFooter
+          onBack={back}
+          onNext={complete}
+          nextLabel={isPending ? "Guardando…" : "Listo"}
+          nextDisabled={isPending}
+        />
+      }
     >
       <View className="gap-6">
         <ChipGroup
@@ -60,6 +68,7 @@ export function A11yStep() {
           checked={motion === "reduce"}
           onChange={(on) => setMotion(on ? "reduce" : "auto")}
         />
+        {error ? <Text className="text-body-sm text-error">{error}</Text> : null}
       </View>
     </StepShell>
   );
