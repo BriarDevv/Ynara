@@ -1,4 +1,5 @@
-import { View } from "react-native";
+import { useEffect } from "react";
+import { BackHandler, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LivingField } from "@/components/ui/LivingField";
 import { OnboardingHeader } from "./components/OnboardingHeader";
@@ -37,7 +38,21 @@ function renderStep(step: OnboardingStepId) {
  * (mobile). Header con progreso fijo arriba + el step actual abajo.
  */
 export function OnboardingWizard() {
-  const { currentStep, index, total } = useOnboardingNav();
+  const { currentStep, index, total, isFirst, back } = useOnboardingNav();
+
+  // Android: el botón "atrás" del sistema vuelve un paso en vez de salir del
+  // onboarding; en el primer paso deja salir (return false). Espeja el back del
+  // browser que el web ya tiene vía rutas. (iOS no tiene back de hardware.)
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (!isFirst) {
+        back();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [isFirst, back]);
 
   return (
     <View className="flex-1 bg-bg-canvas">
