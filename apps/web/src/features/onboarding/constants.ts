@@ -1,5 +1,4 @@
 import { ONBOARDING_STEPS, type OnboardingStep, STEP_INDEX } from "@ynara/core/features/onboarding";
-import type { ModeId } from "@/components/ui/modes";
 
 export type { OnboardingStep };
 // La estructura de steps (orden, índice, tipo) se movió a @ynara/core (ADR-012)
@@ -64,5 +63,5 @@ export const MOOD_OPTIONS: readonly MoodOption[] = [
   { value: "cansado", label: "Cansado" },
 ] as const;
 
-/** Modo pre-marcado por default en Step 4 (modos). */
-export const DEFAULT_MODE: ModeId = "productividad";
+/** Modo pre-marcado por default en Step 4 (modos) — fuente única en core. */
+export { DEFAULT_MODE } from "@/components/ui/modes";
