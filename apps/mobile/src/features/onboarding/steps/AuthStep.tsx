@@ -13,7 +13,7 @@ import { useOnboardingStore } from "@/stores/onboarding";
 import { authErrorMessage } from "../../auth/errors";
 import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
-import { AUTH_STEP_COPY } from "../constants";
+import { AUTH_STEP_COPY, STEP_COPY } from "../constants";
 import { useOnboardingNav } from "../useOnboardingNav";
 
 /**
@@ -61,9 +61,11 @@ export function AuthStep() {
 
   return (
     <StepShell
-      eyebrow="Paso 1 — Cuenta"
+      eyebrow={STEP_COPY.auth.eyebrow}
       title={copy.title}
       subtitle={copy.subtitle}
+      // El email tiene autoFocus: no le robamos el foco al título.
+      focusOnMount={false}
       footer={
         <StepFooter
           onNext={onSubmit}
