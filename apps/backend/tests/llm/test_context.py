@@ -646,16 +646,16 @@ def _build_ctx_for_tools(tools_enabled: list[str]) -> MemoryContext:
     )
 
 
-def test_default_reg_productividad_has_real_calendar_and_reminder_stub() -> None:
-    """En productividad (calendar/reminder/task), ``_default_reg`` tiene la calendar tool
-    REAL (con efecto) y reminder como STUB not_wired (ADR-022).
+def test_default_reg_productividad_has_real_calendar_task_and_reminder() -> None:
+    """En productividad (calendar/reminder/task), ``_default_reg`` tiene las 3 tools de
+    agente REALES (con efecto): calendar, task y AHORA reminder (PR-C).
 
-    - ``calendar.create_event`` debe ser ``AgentCreateEventTool`` (real, escribe), NO el
-      stub ``CreateEventTool``.
-    - ``reminder.set`` debe ser el stub ``SetReminderTool`` (no hay backend real).
+    - ``calendar.create_event`` -> ``AgentCreateEventTool`` (real, escribe).
+    - ``task.create_task`` -> ``AgentCreateTaskTool`` (real, escribe).
+    - ``reminder.set`` -> ``AgentSetReminderTool`` (real, escribe; ya no el stub).
     """
     from app.llm.tools.calendar import AgentCreateEventTool
-    from app.llm.tools.reminder import SetReminderTool
+    from app.llm.tools.reminder import AgentSetReminderTool
     from app.llm.tools.task import AgentCreateTaskTool
 
     ctx = _build_ctx_for_tools(["calendar", "reminder", "task"])
@@ -668,12 +668,10 @@ def test_default_reg_productividad_has_real_calendar_and_reminder_stub() -> None
     assert reg.has("task.create_task")
     assert reg.has("reminder.set")
 
-    # calendar.create_event y task.create_task son las tools REALES (escriben), no los stubs.
+    # Las 3 son las tools REALES (escriben), no los stubs del playground.
     assert isinstance(reg.get_tool("calendar.create_event"), AgentCreateEventTool)
     assert isinstance(reg.get_tool("task.create_task"), AgentCreateTaskTool)
-
-    # reminder sigue siendo stub not_wired (sin backend real).
-    assert isinstance(reg.get_tool("reminder.set"), SetReminderTool)
+    assert isinstance(reg.get_tool("reminder.set"), AgentSetReminderTool)
 
     # Las specs hacia el modelo exponen los 3 namespaces habilitados.
     specs = ctx.tool_specs(["calendar", "reminder", "task"])

@@ -268,7 +268,10 @@ class TestAsyncAgentPassUnit:
         assert system_msg.role == "system"
         assert system_msg.content.startswith("Fecha y hora actual: ")
         # 2026-07-22 cae miércoles (el día se deriva con weekday(), no se hardcodea).
-        assert "miércoles 22 de julio de 2026, 18:30 (hora de Argentina)" in system_msg.content
+        assert (
+            "miércoles 22 de julio de 2026, 18:30 (hora local, offset UTC-03:00)"
+            in system_msg.content
+        )
         assert "resolver fechas relativas" in system_msg.content
         # El cuerpo estático sigue presente (no se perdió al anteponer el preámbulo).
         assert "ACCIONAR" in system_msg.content

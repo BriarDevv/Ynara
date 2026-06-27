@@ -60,10 +60,12 @@ from app.llm.clients.base import LLMClient
 from app.llm.clients.embedding import EmbeddingClient
 from app.llm.clients.reranker import Reranker
 from app.llm.config import load_llm_config
+from app.llm.prompts.datetime_context import APP_TIMEZONE
 from app.llm.router import route
 from app.llm.schemas import ChatMessage, ChatRequest, ChatResponse
 from app.memory.conversation_turns import ConversationTurnStore
 from app.models.session import ChatSession
+from app.models.user import User
 from app.schemas.chat import ChatHttpRequest
 from app.schemas.conversation_turn import ConversationTurnCreate
 from app.workflows.consolidation import consolidate_turn
@@ -162,6 +164,11 @@ class ChatService:
         # En el primer turno de la sesión la lista viene vacía.
         history = await self._load_history(chat_session)
 
+        # Huso del usuario para el preámbulo de fecha/hora (resuelve "mañana"/"el lunes"
+        # contra SU huso, no el de la app). Se lee de ``users.time_zone``; si la fila no
+        # se resuelve (caso raro), cae a ``APP_TIMEZONE`` (back-compat).
+        tz = await self._resolve_user_tz()
+
         savepoint = await self._session.begin_nested()
         resp = await route(
             domain_req,
@@ -171,6 +178,7 @@ class ChatService:
             embedder=self._embedder,
             reranker=self._reranker,
             history=history,
+            tz=tz,
         )
         if resp.finish_reason == "degraded":
             # Turno degradado: descartar las escrituras de tools flusheadas dentro del
@@ -203,6 +211,16 @@ class ChatService:
         await self._enqueue_consolidation(chat_session, body=body, resp=resp)
 
         return resp
+
+    async def _resolve_user_tz(self) -> str:
+        """Resuelve el huso horario del usuario (``users.time_zone``) para el preámbulo.
+
+        Lee la fila del usuario por id; si no se resuelve (caso raro: usuario borrado
+        entre la auth y el turno) cae a ``APP_TIMEZONE`` (back-compat con el comportamiento
+        previo a ``users.time_zone``). Un SELECT puntual por PK, barato.
+        """
+        user = await self._session.get(User, self._user_id)
+        return user.time_zone if user is not None else APP_TIMEZONE
 
     async def _load_history(self, chat_session: ChatSession) -> list[ChatMessage]:
         """Carga los últimos turnos previos de la sesión como historial para el modelo.

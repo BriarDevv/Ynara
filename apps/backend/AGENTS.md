@@ -26,7 +26,7 @@
 
 **Construido y mergeado** (capa LLM M0–M8 completa):
 
-- Config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + task reales, síncronas en el chat — ADR-022; reminder stub), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Workers Celery: consolidación async + decay procedural + retention de audit_log (24 meses). Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migraciones: cadena de **11** (de `initial_schema` hasta el índice btree compuesto `(user_id, scheduled_at)` en `tasks`, pasando por trigger block-update de `audit_log`, tabla `conversation_turns` + `turn_role_enum`, admin_audit, calendar_events, tasks y los índices operativos); total 10 tablas, 7 enums, pgvector + pgcrypto. Persistencia de turnos para consolidación episódica: tabla `conversation_turns` + `consolidate_session` al cerrar la sesión (#209).
+- Config single-source, cliente vLLM resiliente (pool + circuit breaker + fallback on-prem), prompts por modo, framework de tools (calendar + task reales, síncronas en el chat — ADR-022; reminder stub), tools `memory.*` (M7), router LLM (M8). Auth JWT real (`/v1/auth` register/token/me). Endpoints `/v1/chat` (sync + SSE streaming), `/v1/sessions` (list/detail/close), `/v1/memory` (list/detail/export, PATCH/DELETE individual por capa, wipe total). Workers Celery: consolidación async + decay procedural + retention de audit_log (24 meses). Cifrado AES-256-GCM per-user (`app/core/crypto.py`). Guard anti-prod (`app/core/db_guard.py`). Migraciones: cadena de **14** (de `initial_schema` hasta la tabla `reminders`, pasando por trigger block-update de `audit_log`, tabla `conversation_turns` + `turn_role_enum`, admin_audit, calendar_events, tasks, los índices operativos, `users.time_zone`, `device_tokens` y `reminders`); total 12 tablas, 9 enums, pgvector + pgcrypto. Persistencia de turnos para consolidación episódica: tabla `conversation_turns` + `consolidate_session` al cerrar la sesión (#209).
 
 **Pendiente** (no empezar sin leer el plan):
 
@@ -40,8 +40,8 @@
 
 ```
 app/
-├── main.py            # entrypoint FastAPI (lifespan, CORS, 10 routers v1, scrubbing de validación)
-├── enums.py           # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation, TurnRole, EventStatus, TaskStatus)
+├── main.py            # entrypoint FastAPI (lifespan, CORS, 13 routers v1, scrubbing de validación)
+├── enums.py           # StrEnums cross-domain (Mode, MemoryLayer, LlmModel, AuditOperation, TurnRole, EventStatus, TaskStatus, DevicePlatform, ReminderStatus)
 ├── core/
 │   ├── config.py      # Settings (pydantic-settings); get_settings() cacheado y lazy
 │   ├── constants.py   # constantes cross-módulo (EMBEDDING_DIM: única fuente de verdad de la dim del embedding)
@@ -53,10 +53,10 @@ app/
 │   ├── ratelimit.py   # rate-limit fail-open para login/register/refresh/chat/export, memory-wipe (`memory:ratelimit:wipe:`, solo el execute) y sessions (`sessions:ratelimit:read:`, bucket único list/get/close) (contadores Redis vía TokenStore)
 │   ├── security.py    # JWT/hashing — implementado con PyJWT + bcrypt directo (ADR-015, no python-jose/passlib): create_access_token, verify_access_token, hash_password, verify_password
 │   └── token_store.py # blocklist de jti + revocación por familia (sid) + contadores genéricos; Protocol + RedisTokenStore + InMemoryTokenStore (tests)
-├── api/v1/            # routers, un archivo por dominio (health, auth, chat, sessions, events, tasks, today, memory, modes, users) + subpaquete admin/ (metrics, playground, connectivity); privados _http.py / _sessions.py
-├── models/            # SQLAlchemy 2 (user, session, conversation_turn, calendar_event, task, admin_audit, memory 🔴, audit 🔴) — base.py: mixins UUIDPK/Timestamp
+├── api/v1/            # routers, un archivo por dominio (health, auth, chat, sessions, events, tasks, reminders, devices, today, memory, modes, users) + subpaquete admin/ (metrics, playground, connectivity); privados _http.py / _sessions.py
+├── models/            # SQLAlchemy 2 (user, session, conversation_turn, calendar_event, task, reminder, device_token, admin_audit, memory 🔴, audit 🔴) — base.py: mixins UUIDPK/Timestamp
 ├── schemas/           # Pydantic v2 mirror de models + payloads de API (*_api.py: envelopes de presentación)
-├── services/          # lógica de negocio SIN framework, deps por argumento: auth, chat, memory, admin_metrics + stores de dominio operativo (calendar.py: CalendarEventStore; tasks.py: TaskStore, ≠ Celery). Agenda/Tareas son dominios ordinarios → layer-split acá (ADR-011 D1), no feature-packages
+├── services/          # lógica de negocio SIN framework, deps por argumento: auth, chat, memory, admin_metrics, notifications (push noop) + stores de dominio operativo (calendar.py: CalendarEventStore; tasks.py: TaskStore; reminders.py: ReminderStore; devices.py: DeviceTokenStore; ≠ Celery). Agenda/Tareas/Recordatorios son dominios ordinarios → layer-split acá (ADR-011 D1), no feature-packages
 ├── llm/               # capa de inferencia — ver §3
 ├── memory/            # 🔴 wrappers de las 3 capas sagradas (M7, implementado); audit.py: AuditStore (único punto de inserción en audit_log — sagrado, no editar). Módulos neutrales (no sagrados, siblings de COMPORTAMIENTO, no tocan columnas): hashing.py (digests de audit_log: compute_record_hash + procedural_hash_payload), embedding.py (embed_one compartido), config.py (loader de thresholds de `[memory]`: decay + retention, #211), conversation_turns.py (store del buffer operativo)
 ├── workers/           # Celery (celery_app.py + beat_schedule de los jobs periódicos) — autodiscovery en app.workflows

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, UUID, uuid5
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,15 +47,23 @@ _MAX_RECAP_DONE = 3
 _SUGGESTION_NS = uuid5(NAMESPACE_URL, "ynara:today:suggestion")
 
 
-def _aware_now(now: datetime | None) -> datetime:
-    """``now`` por defecto (UTC), normalizado a timezone-aware si viene naive."""
-    if now is None:
-        return datetime.now(UTC)
-    return now if now.tzinfo is not None else now.replace(tzinfo=UTC)
+def _local_now(now: datetime | None, tz: str) -> datetime:
+    """``now`` normalizado a timezone-aware y expresado en el huso ``tz`` del usuario.
+
+    Default UTC (``datetime.now(UTC)``) y, si viene naive, se asume UTC; luego se convierte
+    al huso del usuario (``astimezone``). Convertir NO cambia el instante absoluto (la
+    comparación con ``scheduled_at`` sigue siendo correcta), pero deja ``date`` y el "hoy"
+    expresados en el wall-clock del usuario. Con ``tz='UTC'`` (default) es idéntico al
+    comportamiento previo (instante UTC), así no rompe a los callers que no pasan ``tz``.
+    """
+    base = datetime.now(UTC) if now is None else now
+    if base.tzinfo is None:
+        base = base.replace(tzinfo=UTC)
+    return base.astimezone(ZoneInfo(tz))
 
 
 async def build_suggestions(
-    session: AsyncSession, user_id: UUID, *, now: datetime | None = None
+    session: AsyncSession, user_id: UUID, *, now: datetime | None = None, tz: str = "UTC"
 ) -> list[SuggestionOut]:
     """Sugerencias v1: nudges de preparación de las próximas prioridades del usuario.
 
@@ -66,7 +75,7 @@ async def build_suggestions(
 
     NO usa LLM: la generación con voz propia es la próxima fase (roadmap F).
     """
-    now = _aware_now(now)
+    now = _local_now(now, tz)
     upcoming = await TaskStore(session, user_id).list_upcoming_pending(
         after=now, limit=_MAX_SUGGESTIONS
     )
@@ -91,7 +100,7 @@ def _recap_headline(*, done_count: int, pending_count: int) -> str:
 
 
 async def build_recap(
-    session: AsyncSession, user_id: UUID, *, now: datetime | None = None
+    session: AsyncSession, user_id: UUID, *, now: datetime | None = None, tz: str = "UTC"
 ) -> RecapOut:
     """Recap v1: borrador del día derivado de las tareas reales del usuario.
 
@@ -99,9 +108,10 @@ async def build_recap(
     y una línea con el conteo de pendientes. ``pending=True`` solo si hay contenido;
     si el usuario no tiene tareas, ``pending=False`` y la web no muestra el CTA hacia
     un recap vacío. ``headline`` es una frase derivada (la voz real es por LLM,
-    roadmap F). ``date`` es ``now`` (el día del recap).
+    roadmap F). ``date`` es ``now`` expresado en el huso ``tz`` del usuario (el día del
+    recap es el de SU calendario, no el de UTC).
     """
-    now = _aware_now(now)
+    now = _local_now(now, tz)
     store = TaskStore(session, user_id)
     done = await store.list_recent_done(limit=_MAX_RECAP_DONE)
     pending_count = await store.count_pending()

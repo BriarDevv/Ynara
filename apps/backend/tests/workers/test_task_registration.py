@@ -29,6 +29,7 @@ _EXPECTED_TASK_NAMES = frozenset(
         "workflows.purge_audit_log",
         "workflows.purge_episodic_memory",
         "workflows.agent_turn_pass",
+        "workflows.dispatch_due_reminders",
     }
 )
 

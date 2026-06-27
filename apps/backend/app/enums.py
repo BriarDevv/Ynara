@@ -117,6 +117,37 @@ class EventStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class DevicePlatform(StrEnum):
+    """Plataforma de un device token registrado para push. Ver ``DeviceToken``.
+
+    Tipo PG ``device_platform_enum`` — dueño: ``DeviceToken.platform`` en
+    ``app/models/device_token.py`` (único consumidor por ahora, pero la migración lo
+    crea explícitamente con ``create_type=False`` en la columna, mismo patrón que
+    ``task_status_enum`` / ``event_status_enum``). Identifica el destino del envío
+    (FCM/APNS/web push), que hoy es un noop (sin proveedor real cableado).
+    """
+
+    IOS = "ios"
+    ANDROID = "android"
+    WEB = "web"
+
+
+class ReminderStatus(StrEnum):
+    """Estado de un recordatorio (``reminders``). Ver el tool ``reminder.set``/``list``.
+
+    Tipo PG ``reminder_status_enum`` — dueño: ``Reminder.status`` en
+    ``app/models/reminder.py`` (único consumidor por ahora, pero la migración lo crea
+    explícitamente con ``create_type=False`` en la columna, mismo patrón que
+    ``task_status_enum`` / ``event_status_enum``). ``pending`` es el estado inicial que
+    fija el server al crear; el scheduler lo pasa a ``sent`` cuando despacha el aviso; el
+    usuario puede pasarlo a ``cancelled`` (no se despacha).
+    """
+
+    PENDING = "pending"
+    SENT = "sent"
+    CANCELLED = "cancelled"
+
+
 class TaskStatus(StrEnum):
     """Estado de una tarea/prioridad del día. Ver
     ``packages/shared-schemas/src/today.ts`` (``TaskStatusSchema``) y el dominio

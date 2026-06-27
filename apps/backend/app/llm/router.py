@@ -97,7 +97,7 @@ from app.llm.context import (
     trim_history_to_budget,
 )
 from app.llm.errors import LlmError, ModelNotServedError
-from app.llm.prompts.datetime_context import build_now_preamble, current_now
+from app.llm.prompts.datetime_context import APP_TIMEZONE, build_now_preamble, current_now
 from app.llm.prompts.loader import load_prompt
 from app.llm.schemas import ChatMessage, ChatRequest, ChatResponse
 from app.llm.tool_loop import run_tool_loop
@@ -145,6 +145,7 @@ async def route(
     reranker: Reranker,
     history: list[ChatMessage] | None = None,
     config: LlmRuntimeConfig | None = None,
+    tz: str = APP_TIMEZONE,
 ) -> ChatResponse:
     """Punto de entrada unico al LLM: ensambla contexto + tool loop y responde.
 
@@ -206,12 +207,14 @@ async def route(
     )
     # Preambulo de fecha/hora actual (timezone-aware, huso de la app). Cierra el gap
     # E2E: sin esto el modelo NO podia resolver fechas relativas ("mañana", "el lunes")
-    # al agendar. Se construye por-run con current_now() (lee el reloj una sola vez aca);
-    # NO se cachea porque cambia cada minuto. Se arma ANTES del budget a proposito: el
-    # bloque de memoria debe dimensionarse reservando tambien los tokens del preambulo
-    # (si se calculaba el budget con el prompt pelado, el bloque quedaba sobre-asignado y
-    # final_system podia excederse de max_model_len).
-    now_preamble = build_now_preamble(current_now())
+    # al agendar. Se construye por-run con current_now(tz) (lee el reloj una sola vez aca,
+    # en el huso del usuario); NO se cachea porque cambia cada minuto. Se arma ANTES del
+    # budget a proposito: el bloque de memoria debe dimensionarse reservando tambien los
+    # tokens del preambulo (si se calculaba el budget con el prompt pelado, el bloque
+    # quedaba sobre-asignado y final_system podia excederse de max_model_len). ``tz`` baja
+    # del huso del usuario (``users.time_zone``, resuelto en ``ChatService.run_turn``);
+    # default ``APP_TIMEZONE`` para callers directos / tests.
+    now_preamble = build_now_preamble(current_now(tz), tz_label=tz)
 
     # Base del system para el budget: preambulo + prompt del modo (STRING NUEVO; decision
     # #6: no mutar el prompt cacheado). El bloque de memoria se dimensiona contra ESTA base

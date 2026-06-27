@@ -36,10 +36,11 @@ def test_build_now_preamble_exact_string() -> None:
     result = build_now_preamble(now)
 
     assert result == (
-        "Fecha y hora actual: miércoles 22 de julio de 2026, 18:30 (hora de Argentina). "
+        "Fecha y hora actual: miércoles 22 de julio de 2026, 18:30 (hora local, offset "
+        "UTC-03:00). "
         "Usala para resolver fechas relativas como 'mañana', 'el lunes', 'en 2 horas'. "
         "Cuando agendes eventos o tareas, expresá las fechas (start_at / scheduled_at) en "
-        "hora local de Argentina con el offset -03:00 (formato ISO 8601, "
+        "hora local con el offset -03:00 (formato ISO 8601, "
         "p.ej. 2026-01-15T09:30:00-03:00); no uses 'Z' ni otro huso."
     )
 
@@ -105,12 +106,52 @@ def test_build_now_preamble_includes_relative_date_hint() -> None:
     assert "mañana" in result
 
 
+def test_build_now_preamble_offset_for_non_argentina_tz() -> None:
+    """Huso ≠ Argentina → el offset se DERIVA de ``now.utcoffset()`` (no el literal -03:00).
+
+    Cubre la generalización: un usuario en Madrid (UTC+01:00 en enero) recibe ``+01:00``,
+    NO ``-03:00``. El offset aparece tanto en la etiqueta como en el ejemplo ISO.
+    """
+    madrid = ZoneInfo("Europe/Madrid")
+    # Enero: Madrid está en UTC+01:00 (sin DST).
+    now = datetime(2026, 1, 15, 9, 30, tzinfo=madrid)
+
+    result = build_now_preamble(now)
+
+    assert "offset UTC+01:00" in result
+    assert "2026-01-15T09:30:00+01:00" in result
+    assert "-03:00" not in result  # no se filtra el literal de Argentina
+
+
+def test_build_now_preamble_utc_offset() -> None:
+    """Un ``now`` en UTC produce offset ``+00:00`` (no asume Argentina)."""
+    now = datetime(2026, 6, 22, 12, 0, tzinfo=ZoneInfo("UTC"))
+    result = build_now_preamble(now)
+    assert "offset UTC+00:00" in result
+    assert "2026-01-15T09:30:00+00:00" in result
+
+
+def test_build_now_preamble_tz_label_named() -> None:
+    """Con ``tz_label`` la línea nombra el huso (``hora de <label>``)."""
+    now = datetime(2026, 7, 22, 18, 30, tzinfo=_TZ)
+    result = build_now_preamble(now, tz_label="America/Argentina/Buenos_Aires")
+    assert "(hora de America/Argentina/Buenos_Aires, offset UTC-03:00)" in result
+
+
 def test_current_now_is_timezone_aware_in_app_tz() -> None:
-    """``current_now()`` devuelve un datetime aware en el huso de la app."""
+    """``current_now()`` devuelve un datetime aware en el huso de la app (default)."""
     now = current_now()
     assert now.tzinfo is not None
     # El huso resuelto es el de Argentina (mismo que Celery).
     assert now.utcoffset() == datetime.now(_TZ).utcoffset()
+
+
+def test_current_now_accepts_explicit_tz() -> None:
+    """``current_now(tz)`` lee el reloj en el huso pedido (no el default de la app)."""
+    madrid = ZoneInfo("Europe/Madrid")
+    now = current_now("Europe/Madrid")
+    assert now.tzinfo is not None
+    assert now.utcoffset() == datetime.now(madrid).utcoffset()
 
 
 def test_app_timezone_matches_celery() -> None:

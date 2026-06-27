@@ -447,6 +447,72 @@ Invariantes transversales:
   tocar la DB.
 - Modos: todos.
 
+## /v1/reminders
+
+CRUD del dominio **Recordatorios** (por-tiempo). Tabla DEDICADA `reminders` (NO `tasks`).
+El alta también la hace el **agente** (`reminder.set`, ver TOOLS.md); este CRUD expone la
+superficie completa. El scheduler `dispatch_due_reminders` (Celery beat, cada minuto)
+despacha los vencidos. Contrato + decisiones en
+[`../app/api/v1/reminders.py`](../app/api/v1/reminders.py).
+
+Invariantes transversales (mismas que `/v1/events`):
+
+- **Aislamiento por `user_id` del JWT**: el listado trae solo los del user; un
+  `PATCH`/`DELETE` de uno inexistente **o** de otro usuario da el **mismo** 404 (sin
+  oráculo). `ReminderOut` **no** expone `user_id` / `created_at` / `updated_at`.
+- **`status` server-set**: arranca `pending` en el `POST` (no se acepta del body); el
+  `PATCH` sí acepta `status` (cancelar / re-activar).
+
+- **GET** `/v1/reminders` — lista los recordatorios del usuario, ordenados por `remind_at` **ASC**.
+  - Query: `limit?: int (1..200, default 100)`, `offset?: int (>=0, default 0)`.
+  - Response 200: `RemindersResponse = { "items": ReminderOut[], "total": N }` donde
+    `ReminderOut = { id, text, remind_at, status }`. `total` es el conteo completo del user.
+    `RemindersResponse` vive en `app/schemas/reminder_api.py` (no sagrado).
+  - Response 422: `limit` fuera de `[1, 200]` o `offset < 0`.
+- **POST** `/v1/reminders` — crea un recordatorio del usuario.
+  - Request: `ReminderCreate = { text: string (min 1), remind_at: datetime (ISO+offset) }`. `status` **no** se acepta del body (`extra: forbid`): arranca `pending` server-side.
+  - Response **201**: `ReminderOut` del recordatorio creado (`status: "pending"`).
+  - Response 422: validación (text vacío, `remind_at` no-ISO).
+- **PATCH** `/v1/reminders/{reminder_id}` — update **parcial** de un recordatorio del usuario.
+  - Path param: `reminder_id: UUID`. Body: `ReminderPatch` — `text?`, `remind_at?`, `status?` (todos opcionales). Solo se aplican los enviados (`exclude_unset`).
+  - Response 200: `ReminderOut` del recordatorio actualizado.
+  - Response 404: inexistente **o** de otro usuario — **mismo** 404 (`detail: "recordatorio no encontrado"`), sin oráculo.
+- **DELETE** `/v1/reminders/{reminder_id}` — borra un recordatorio del usuario.
+  - Response **204** No Content. Response 404: inexistente **o** ajeno — **mismo** 404.
+- Response 401 (todas): sin token / token inválido.
+- Response 429 (todas): rate-limit por `user_id` — `detail` neutro + `Retry-After` ==
+  `REMINDERS_WINDOW_SECONDS`.
+- Permisos: **usuario autenticado** (solo sus propios recordatorios).
+- Rate limit: por `user_id`, **un bucket** compartido por las 4 rutas,
+  `REMINDERS_MAX_REQUESTS` (120) por `REMINDERS_WINDOW_SECONDS` (60s); fail-open si Redis
+  cae. El check corre **antes** de tocar la DB.
+- Modos: todos.
+
+## /v1/devices
+
+Registro de **device tokens** de push (FCM/APNS/web push) por dispositivo. Los usa el
+scheduler de recordatorios para despachar avisos. Contrato + decisiones en
+[`../app/api/v1/devices.py`](../app/api/v1/devices.py).
+
+Decisiones (regla #4): el `token` es una **credencial** — el unregister va por **body**, no
+por path (no aparece en URLs/logs de acceso). `DeviceTokenOut` no expone `user_id`. **Sin
+rate-limit** por tiempo (precedente `users.py` PATCH: write de bajo costo sobre la propia
+fila), pero **sí un cap** de tokens por usuario (`MAX_DEVICE_TOKENS_PER_USER` = 20) que corta
+el alta de tokens nuevos con un 429 (anti-inflado de la tabla). Una re-asignación de un token
+entre usuarios se registra en logs con **solo** ids (nunca el token).
+
+- **POST** `/v1/devices` — registra (upsert) un device token del usuario.
+  - Request: `DeviceRegister = { platform: "ios"|"android"|"web", token: string (1..512) }`. `extra: forbid`.
+  - Response **201** (alta nueva) / **200** (re-registro: upsert por `token`, re-asigna el dueño sin duplicar): `DeviceTokenOut = { id, platform, token, last_seen_at }`.
+  - Response 422: `platform` fuera del enum, `token` vacío / > 512, o campo extra.
+  - Response **429**: el usuario alcanzó el cap de device tokens (`MAX_DEVICE_TOKENS_PER_USER` = 20) y registra uno **nuevo**; `detail` genérico (regla #4). Un re-registro de un token ya existente **no** cuenta contra el cap (nunca da 429).
+- **DELETE** `/v1/devices` — des-registra un device token del usuario (token por **body**).
+  - Request: `DeviceUnregister = { token: string (1..512) }`.
+  - Response **204** No Content. Response 404: token inexistente **o** de otro usuario — **mismo** 404 (`detail: "device token no encontrado"`), sin oráculo.
+- Response 401 (ambas): sin token / token inválido.
+- Permisos: **usuario autenticado** (solo sus propios devices).
+- Modos: todos.
+
 ## /v1/suggestions y /v1/recap (dashboard "Hoy" derivado)
 
 Las DOS superficies restantes del dashboard **Hoy** que la web consumía contra mocks

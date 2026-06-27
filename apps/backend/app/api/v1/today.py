@@ -19,10 +19,23 @@ from app.api.v1._http import too_many_requests
 from app.core.config import get_settings
 from app.core.deps import CurrentUser, DbSession, TokenStoreDep
 from app.core.ratelimit import check_tasks_rate_limit
+from app.llm.prompts.datetime_context import APP_TIMEZONE
+from app.models.user import User
 from app.schemas.today import RecapOut, SuggestionsResponse
 from app.services.today import build_recap, build_suggestions
 
 router = APIRouter()
+
+
+async def _resolve_user_tz(session: DbSession, user_id: CurrentUser) -> str:
+    """Huso del usuario (``users.time_zone``) para computar su "hoy"; default app si falta.
+
+    El recap/sugerencias derivan el "hoy" en el huso del usuario (no UTC): un usuario en
+    Buenos Aires ve el recap de SU día. Si la fila no se resuelve (caso raro), cae a
+    ``APP_TIMEZONE`` (back-compat).
+    """
+    user = await session.get(User, user_id)
+    return user.time_zone if user is not None else APP_TIMEZONE
 
 
 @router.get("/suggestions", response_model=SuggestionsResponse, status_code=200)
@@ -45,7 +58,8 @@ async def get_suggestions(
     if not await check_tasks_rate_limit(store, user_id=str(user_id)):
         raise too_many_requests(get_settings().tasks_window_seconds)
 
-    items = await build_suggestions(session, user_id)
+    tz = await _resolve_user_tz(session, user_id)
+    items = await build_suggestions(session, user_id, tz=tz)
     return SuggestionsResponse(items=items)
 
 
@@ -67,4 +81,5 @@ async def get_recap(
     if not await check_tasks_rate_limit(store, user_id=str(user_id)):
         raise too_many_requests(get_settings().tasks_window_seconds)
 
-    return await build_recap(session, user_id)
+    tz = await _resolve_user_tz(session, user_id)
+    return await build_recap(session, user_id, tz=tz)
