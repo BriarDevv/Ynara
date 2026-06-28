@@ -47,8 +47,16 @@ const currentUser = {
   id: USER_ID,
   email: "mateo@ynara.app",
   display_name: "Mateo",
+  is_ephemeral: false,
   onboarding_completed: true,
+  time_zone: "America/Argentina/Buenos_Aires",
   retention_sensitive_days: 365,
+  // Espeja la columna JSONB operativa (modos + a11y) del backend, igual que el
+  // mock de web: un demo ya onboardeado tiene modos y a11y elegidos.
+  preferences: {
+    interested_modes: ["productividad", "estudio"],
+    a11y: { text_size: "md", high_contrast: false, motion: "auto" },
+  },
   created_at: CREATED_AT,
   updated_at: CREATED_AT,
 };
