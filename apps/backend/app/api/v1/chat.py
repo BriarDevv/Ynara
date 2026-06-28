@@ -230,11 +230,21 @@ async def chat_stream(
     es el wire: en vez de un JSON ``ChatHttpResponse``, emite el stream SSE que consume
     ``packages/shared-schemas/src/sse.ts``::
 
+        event: reasoning
+        data: {"delta": "pensando..."}
+
         event: token
         data: {"delta": "Hola"}
 
         event: done
         data: {"session_id": "...", "actions": [...], "finish_reason": "stop"}
+
+    ORDEN del wire: primero N eventos ``reasoning`` (el canal de razonamiento separado,
+    re-troceado por ``_TOKEN_CHUNK_SIZE``), DESPUES los ``token``, despues ``done``. Los
+    ``reasoning`` se emiten SOLO si hubo razonamiento no vacio y el turno NO degrado
+    (espeja el evento ``reasoning`` del admin playground). DISPLAY-ONLY: el toggle de
+    mostrar/ocultar el razonamiento es 100% del front; el backend siempre lo emite si
+    existe.
 
     Diseno (NO re-litigar):
 
@@ -287,6 +297,11 @@ async def chat_stream(
     # (2) SNAPSHOT de primitivos puros ANTES del generator. NUNCA se pasa chat_session ni
     #     atributos ORM al closure (evita lazy-load post-commit).
     text: str = resp.text
+    # Razonamiento del turno (canal ``reasoning`` separado, acumulado por el tool loop). Se
+    # re-trocea como eventos SSE ``reasoning`` ANTES de los ``token`` (mismo camino post-hoc
+    # que el texto). DISPLAY-ONLY: el toggle de mostrar/ocultar es 100% del front; el backend
+    # siempre emite el reasoning si existe. ``resp.reasoning`` puede ser None -> "".
+    reasoning_text: str = resp.reasoning or ""
     session_id_str: str = str(chat_session.id)
     actions_payload: list[dict[str, Any]] = [
         a.model_dump(mode="json") for a in _to_http_actions(resp.actions)
@@ -304,6 +319,15 @@ async def chat_stream(
     #     payload esta pre-serializado.
     async def _gen() -> AsyncIterator[str]:
         try:
+            # Eventos ``reasoning`` PRIMERO (troceados igual que los token, por
+            # _TOKEN_CHUNK_SIZE), solo si hay razonamiento no vacio Y el turno NO degrado
+            # (un turno degradado no surfacea razonamiento; ademas route() ya deja
+            # reasoning=None ahi). Espeja el evento ``reasoning`` del admin playground.
+            if reasoning_text and finish_reason != "degraded":
+                for i in range(0, len(reasoning_text), _TOKEN_CHUNK_SIZE):
+                    yield _sse_event(
+                        "reasoning", {"delta": reasoning_text[i : i + _TOKEN_CHUNK_SIZE]}
+                    )
             for i in range(0, len(text), _TOKEN_CHUNK_SIZE):
                 yield _sse_event("token", {"delta": text[i : i + _TOKEN_CHUNK_SIZE]})
             # text vacio -> el for no itera -> 0 tokens (D7). Igual se emite done.

@@ -45,8 +45,14 @@ def _make_result(
     text: str = "hola",
     finish_reason: str = "stop",
     tool_calls: list[ToolCall] | None = None,
+    reasoning: str | None = None,
 ) -> CompletionResult:
-    """Construye un CompletionResult con los campos minimos."""
+    """Construye un CompletionResult con los campos minimos.
+
+    ``reasoning`` (canal de razonamiento separado) es opcional: por default ``None``
+    (modelo sin thinking). Se setea en los tests que ejercitan la acumulacion de
+    reasoning del tool loop.
+    """
     return CompletionResult(
         text=text,
         finish_reason=finish_reason,
@@ -55,6 +61,7 @@ def _make_result(
         completion_tokens=5,
         model_name="gemma4",
         latency_ms=42.0,
+        reasoning=reasoning,
     )
 
 
@@ -85,7 +92,7 @@ async def test_gemma_sin_specs_una_vuelta() -> None:
     fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
     fake.queue_result(_make_result(text="Hola! En que te ayudo?", finish_reason="stop"))
 
-    text, actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="gemma4",
         messages=_messages(),
@@ -93,7 +100,10 @@ async def test_gemma_sin_specs_una_vuelta() -> None:
         registries=_empty_registries(),
         fallback_text="lo siento, no pude responder",
     )
+    text, actions, finish_reason = result.text, result.actions, result.finish_reason
 
+    # Sin reasoning encolado, el loop devuelve reasoning=None (no string vacio).
+    assert result.reasoning is None
     assert text == "Hola! En que te ayudo?"
     assert actions == []
     assert finish_reason == "stop"
@@ -137,7 +147,7 @@ async def test_qwen_1_vuelta_con_tool_call() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    text, actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -145,6 +155,7 @@ async def test_qwen_1_vuelta_con_tool_call() -> None:
         registries=(reg, None),
         fallback_text="fallback",
     )
+    text, actions, finish_reason = result.text, result.actions, result.finish_reason
 
     assert text == "Listo, evento creado."
     assert finish_reason == "stop"
@@ -196,7 +207,7 @@ async def test_tool_call_luego_stop_vacio_fuerza_confirmacion() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    text, actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -204,6 +215,7 @@ async def test_tool_call_luego_stop_vacio_fuerza_confirmacion() -> None:
         registries=(reg, None),
         fallback_text="FALLBACK-no-deberia-verse",
     )
+    text, actions, finish_reason = result.text, result.actions, result.finish_reason
 
     # La accion se ejecuto y NO se cae al fallback: el usuario ve la confirmacion forzada.
     assert text == "Listo, te agende Gimnasio."
@@ -224,7 +236,7 @@ async def test_stop_vacio_sin_acciones_no_fuerza_y_cae_a_fallback() -> None:
     fake = FakeLlmClient(served_models=frozenset({"qwen"}))
     fake.queue_result(_make_result(text="", finish_reason="stop"))
 
-    text, actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -232,6 +244,7 @@ async def test_stop_vacio_sin_acciones_no_fuerza_y_cae_a_fallback() -> None:
         registries=_empty_registries(),
         fallback_text="fallback",
     )
+    text, actions, finish_reason = result.text, result.actions, result.finish_reason
 
     assert text == "fallback"
     assert actions == []
@@ -273,7 +286,7 @@ async def test_qwen_2_vueltas_con_tool_call() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    text, actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -281,6 +294,7 @@ async def test_qwen_2_vueltas_con_tool_call() -> None:
         registries=(reg, None),
         fallback_text="fallback",
     )
+    text, actions, finish_reason = result.text, result.actions, result.finish_reason
 
     assert text == "Dos eventos creados."
     assert finish_reason == "stop"
@@ -338,7 +352,7 @@ async def test_guard_max_iteraciones_fuerza_respuesta_final() -> None:
 
     reg, spec = _looping_registry_and_spec()
 
-    text, actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -347,6 +361,7 @@ async def test_guard_max_iteraciones_fuerza_respuesta_final() -> None:
         max_iterations=MAX_TOOL_ITERATIONS,
         fallback_text="no pude completar la tarea",
     )
+    text, actions, finish_reason = result.text, result.actions, result.finish_reason
 
     # NO el fallback: la completion forzada produjo una respuesta real.
     assert text == "Listo, lo anoté en tu memoria."
@@ -373,7 +388,7 @@ async def test_guard_max_iteraciones_usa_fallback_si_forzada_vacia() -> None:
 
     reg, spec = _looping_registry_and_spec()
 
-    text, actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -382,6 +397,7 @@ async def test_guard_max_iteraciones_usa_fallback_si_forzada_vacia() -> None:
         max_iterations=MAX_TOOL_ITERATIONS,
         fallback_text="no pude completar la tarea",
     )
+    text, actions, finish_reason = result.text, result.actions, result.finish_reason
 
     assert text == "no pude completar la tarea"
     assert finish_reason == "max_iterations"
@@ -455,7 +471,7 @@ async def test_guard_max_iteraciones_usa_result_text_si_no_vacio() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    text, _actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -464,6 +480,7 @@ async def test_guard_max_iteraciones_usa_result_text_si_no_vacio() -> None:
         max_iterations=MAX_TOOL_ITERATIONS,
         fallback_text="fallback no debe aparecer",
     )
+    text, finish_reason = result.text, result.finish_reason
 
     assert text == "algo parcial"
     # Guard agotado (aunque el ultimo result.text no este vacio).
@@ -485,7 +502,7 @@ async def test_unknown_tool_devuelve_tool_error() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    _text, actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -493,6 +510,7 @@ async def test_unknown_tool_devuelve_tool_error() -> None:
         registries=_empty_registries(),
         fallback_text="fallback",
     )
+    actions, finish_reason = result.actions, result.finish_reason
 
     assert len(actions) == 1
     assert actions[0]["id"] == "tc-unk"
@@ -519,7 +537,7 @@ async def test_degraded_termina_inmediatamente() -> None:
         )
     )
 
-    text, actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -527,6 +545,7 @@ async def test_degraded_termina_inmediatamente() -> None:
         registries=_empty_registries(),
         fallback_text="fallback",
     )
+    text, actions, finish_reason = result.text, result.actions, result.finish_reason
 
     assert text == "lo siento, estoy degradado"
     assert actions == []
@@ -571,7 +590,7 @@ async def test_cap_tool_calls_por_turno() -> None:
     )
 
     msgs = _messages()
-    _text, actions, _fr = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=msgs,
@@ -579,6 +598,7 @@ async def test_cap_tool_calls_por_turno() -> None:
         registries=(reg, None),
         fallback_text="fallback",
     )
+    actions = result.actions
 
     # Solo se ejecutan las primeras cap, en orden; las extra se descartan.
     assert len(actions) == MAX_CALLS_PER_TURN
@@ -601,7 +621,7 @@ async def test_result_text_vacio_final_usa_fallback() -> None:
     fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
     fake.queue_result(_make_result(text="", finish_reason="stop"))
 
-    text, actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="gemma4",
         messages=_messages(),
@@ -609,6 +629,7 @@ async def test_result_text_vacio_final_usa_fallback() -> None:
         registries=_empty_registries(),
         fallback_text="texto de fallback",
     )
+    text, actions, finish_reason = result.text, result.actions, result.finish_reason
 
     assert text == "texto de fallback"
     assert actions == []
@@ -621,7 +642,7 @@ async def test_specs_vacia_pasa_tools_none() -> None:
     fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
     fake.queue_result(_make_result(text="ok", finish_reason="stop"))
 
-    _text, _actions, _fr = await run_tool_loop(
+    await run_tool_loop(
         llm_client=fake,
         served_name="gemma4",
         messages=_messages(),
@@ -645,7 +666,7 @@ async def test_specs_no_vacia_pasa_tools_lista() -> None:
         parameters={"type": "object", "properties": {}},
     )
 
-    _text, _actions, _fr = await run_tool_loop(
+    await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -673,7 +694,7 @@ async def test_run_tool_loop_pasa_thinking_a_complete(thinking: bool | None) -> 
     fake = FakeLlmClient(served_models=frozenset({"qwen"}))
     fake.queue_result(_make_result(text="ok", finish_reason="stop"))
 
-    _text, _actions, _fr = await run_tool_loop(
+    await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -778,7 +799,7 @@ async def test_chatmessage_tool_contiene_id_y_nombre() -> None:
     reg.register(FakeTool())  # type: ignore[arg-type]
 
     msgs = _messages()
-    _text, _actions, _fr = await run_tool_loop(
+    await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=msgs,
@@ -858,7 +879,7 @@ async def test_guard_forzada_con_texto_usa_finish_reason_real() -> None:
 
     reg, spec = _looping_registry_and_spec()
 
-    text, actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -867,6 +888,7 @@ async def test_guard_forzada_con_texto_usa_finish_reason_real() -> None:
         max_iterations=MAX_TOOL_ITERATIONS,
         fallback_text="no pude completar la tarea",
     )
+    text, actions, finish_reason = result.text, result.actions, result.finish_reason
 
     assert text == "Respuesta truncada."
     # finish_reason de la forzada, no el sentinel (FIX 3).
@@ -892,7 +914,7 @@ async def test_guard_forzada_vacia_mantiene_sentinel_max_iterations() -> None:
 
     reg, spec = _looping_registry_and_spec()
 
-    text, _actions, finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=fake,
         served_name="qwen",
         messages=_messages(),
@@ -901,8 +923,53 @@ async def test_guard_forzada_vacia_mantiene_sentinel_max_iterations() -> None:
         max_iterations=MAX_TOOL_ITERATIONS,
         fallback_text="fallback sentinel",
     )
+    text, finish_reason = result.text, result.finish_reason
 
     assert text == "fallback sentinel"
     # Forzada vacia: el sentinel 'max_iterations' se preserva (FIX 3).
     assert finish_reason == "max_iterations"
     assert len(fake.complete_calls) == MAX_TOOL_ITERATIONS + 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: reasoning acumulado/concatenado (feat chat-thinking)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reasoning_se_acumula_y_concatena_entre_iteraciones() -> None:
+    """El canal de razonamiento de CADA iteracion se acumula y concatena (como actions).
+
+    Cada ``CompletionResult`` trae su ``reasoning`` (canal separado del ``content``).
+    El loop, igual que con ``actions``, lo acumula a lo largo de TODAS las iteraciones
+    y lo concatena en ``ToolLoopResult.reasoning``. Antes el router lo descartaba; ahora
+    se devuelve para que el endpoint lo re-trocee como evento SSE ``reasoning``.
+    """
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+
+    tc = _make_tool_call("calendar.create_event", "tc-1")
+    # Iteracion 1: tool call con reasoning (planifica la tool).
+    fake.queue_result(
+        _make_result(
+            text="", finish_reason="tool_calls", tool_calls=[tc], reasoning="pienso paso 1 "
+        )
+    )
+    # Iteracion 2: stop con texto final + mas reasoning.
+    fake.queue_result(_make_result(text="Listo.", finish_reason="stop", reasoning="pienso paso 2"))
+
+    reg, spec = _looping_registry_and_spec()
+
+    result = await run_tool_loop(
+        llm_client=fake,
+        served_name="qwen",
+        messages=_messages(),
+        specs=[spec],
+        registries=(reg, None),
+        fallback_text="fallback",
+    )
+
+    assert result.text == "Listo."
+    assert result.finish_reason == "stop"
+    assert len(result.actions) == 1
+    # Reasoning de ambas iteraciones, concatenado en orden.
+    assert result.reasoning == "pienso paso 1 pienso paso 2"

@@ -64,8 +64,15 @@ def _completion(
     finish_reason: str = "stop",
     tool_calls: list[ToolCall] | None = None,
     model_name: str = "gemma4",
+    reasoning: str | None = None,
 ) -> CompletionResult:
-    """``CompletionResult`` minimo para programar el ``FakeLlmClient``."""
+    """``CompletionResult`` minimo para programar el ``FakeLlmClient``.
+
+    ``reasoning`` (canal separado de razonamiento) es opcional: el ``FakeLlmClient``
+    devuelve el ``CompletionResult`` encolado tal cual, asi que encolar uno con
+    ``reasoning`` alcanza para ejercitar el evento SSE ``reasoning`` con
+    ``LLM_BACKEND=fake`` (sin Ollama).
+    """
     return CompletionResult(
         text=text,
         finish_reason=finish_reason,
@@ -74,6 +81,7 @@ def _completion(
         completion_tokens=5,
         model_name=model_name,
         latency_ms=42.0,
+        reasoning=reasoning,
     )
 
 
@@ -165,6 +173,11 @@ def _parse_sse(raw: str) -> list[tuple[str, dict]]:
 def _deltas(events: list[tuple[str, dict]]) -> list[str]:
     """Los ``delta`` de los eventos ``token``, en orden."""
     return [d["delta"] for (name, d) in events if name == "token"]
+
+
+def _reasonings(events: list[tuple[str, dict]]) -> list[str]:
+    """Los ``delta`` de los eventos ``reasoning``, en orden."""
+    return [d["delta"] for (name, d) in events if name == "reasoning"]
 
 
 def _done(events: list[tuple[str, dict]]) -> dict:
@@ -839,6 +852,120 @@ async def test_error_mid_stream_emite_event_error_neutro(
         assert str(user.id) not in resp.text
         # El except corto el stream antes del done: la respuesta termina en error.
         assert "done" not in names
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+# ---------------------------------------------------------------------------
+# 18. Reasoning: eventos ``reasoning`` ANTES de los ``token`` (feat chat-thinking)
+# ---------------------------------------------------------------------------
+
+
+async def test_reasoning_events_antes_de_tokens(db_session: AsyncSession) -> None:
+    """Con reasoning encolado: eventos ``reasoning`` (troceados) ANTES de los ``token``.
+
+    El ``FakeLlmClient`` devuelve el ``CompletionResult`` tal cual, asi que encolar uno
+    con ``reasoning`` hace que ``route()`` lo surfacee en ``ChatResponse.reasoning`` y el
+    stream lo re-troquele como eventos ``reasoning`` ANTES del bucle de ``token``. El
+    ``''.join`` de cada canal reconstruye su texto exacto.
+    """
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    fake.queue_result(
+        _completion(text="respuesta final", reasoning="estoy pensando esto", model_name="gemma4")
+    )
+
+    client = await _client(db_session, llm_client=fake)
+    try:
+        async with client:
+            resp = await client.post(
+                "/v1/chat/stream",
+                json={"text": "hola", "mode": "vida"},
+                headers=_bearer(user.id),
+            )
+
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        names = [name for (name, _) in events]
+
+        # Ambos canales reconstruyen su texto exacto.
+        assert "".join(_reasonings(events)) == "estoy pensando esto"
+        assert "".join(_deltas(events)) == "respuesta final"
+
+        # ORDEN del wire: TODOS los reasoning antes del PRIMER token.
+        first_token = names.index("token")
+        last_reasoning = max(i for i, n in enumerate(names) if n == "reasoning")
+        assert last_reasoning < first_token
+        # El done sigue siendo el ultimo bloque.
+        assert names[-1] == "done"
+        assert _done(events)["finish_reason"] == "stop"
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+async def test_sin_reasoning_no_emite_eventos_reasoning(db_session: AsyncSession) -> None:
+    """Sin reasoning (``resp.reasoning`` None): 0 eventos ``reasoning``, solo token + done."""
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+    # Sin reasoning encolado -> CompletionResult.reasoning None -> ChatResponse.reasoning None.
+    fake.queue_result(_completion(text="hola mundo", model_name="gemma4"))
+
+    client = await _client(db_session, llm_client=fake)
+    try:
+        async with client:
+            resp = await client.post(
+                "/v1/chat/stream",
+                json={"text": "hola", "mode": "vida"},
+                headers=_bearer(user.id),
+            )
+
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        assert _reasonings(events) == []
+        assert "".join(_deltas(events)) == "hola mundo"
+        assert _done(events)["finish_reason"] == "stop"
+    finally:
+        app.dependency_overrides.clear()
+        await _delete_user(db_session, user.id)
+
+
+async def test_turno_degradado_no_emite_reasoning(db_session: AsyncSession) -> None:
+    """Turno degradado: NO se emiten eventos ``reasoning`` aunque ``resp`` traiga uno.
+
+    El path real degradado deja ``reasoning=None`` (route()), pero el gate del stream es
+    doble (``reasoning_text`` no vacio Y ``finish_reason != 'degraded'``). Para probar el
+    gate de ``degraded`` aislado, se parchea ``route`` para devolver un ``ChatResponse``
+    con ``reasoning`` no vacio y ``finish_reason='degraded'``: el stream NO debe emitir
+    eventos ``reasoning`` igual.
+    """
+    user = await _seed_user(db_session)
+    fake = FakeLlmClient(served_models=frozenset({"gemma4"}))
+
+    degraded_resp = ChatResponse(
+        text="respuesta de fallback",
+        actions=[],
+        session_id="opaco",
+        finish_reason="degraded",
+        reasoning="esto no deberia verse",
+    )
+    client = await _client(db_session, llm_client=fake)
+    try:
+        with patch("app.services.chat.route", new=AsyncMock(return_value=degraded_resp)):
+            async with client:
+                resp = await client.post(
+                    "/v1/chat/stream",
+                    json={"text": "hola", "mode": "vida"},
+                    headers=_bearer(user.id),
+                )
+
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        # Gate de degraded: 0 eventos reasoning aunque resp.reasoning venia poblado.
+        assert _reasonings(events) == []
+        assert "".join(_deltas(events)) == "respuesta de fallback"
+        assert _done(events)["finish_reason"] == "degraded"
     finally:
         app.dependency_overrides.clear()
         await _delete_user(db_session, user.id)

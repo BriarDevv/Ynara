@@ -43,7 +43,13 @@ class FakeLlmClient:
     # ---------- programacion ----------
 
     def queue_result(self, result: CompletionResult) -> None:
-        """Encola un resultado para la proxima llamada a ``complete``."""
+        """Encola un resultado para la proxima llamada a ``complete``.
+
+        ``complete`` devuelve el ``CompletionResult`` encolado TAL CUAL, incluido su
+        canal ``reasoning`` (separado del ``content``): encolar un resultado con
+        ``reasoning`` alcanza para ejercitar el evento SSE ``reasoning`` del chat con
+        ``LLM_BACKEND=fake`` (sin Ollama). No hace falta una API aparte.
+        """
         self._results.append(result)
 
     def queue_error(self, error: Exception) -> None:

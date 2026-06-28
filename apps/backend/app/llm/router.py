@@ -266,7 +266,7 @@ async def route(
     # sus _PERMANENT_ERRORS) y un VllmClient pelado RE-LANZA todo: este except es la
     # red real. Se loguea SOLO type(exc).__name__ (regla #4) para no degradar a ciegas.
     try:
-        final_text, actions, finish_reason = await run_tool_loop(
+        loop_result = await run_tool_loop(
             llm_client=llm_client,
             served_name=model_cfg.served_name,
             messages=messages,
@@ -281,8 +281,14 @@ async def route(
         raise
     except LlmError as exc:
         logger.warning("route degrado por error LLM: %s", type(exc).__name__)
+        # reasoning=None en el turno degradado: no hubo razonamiento util que surfacear
+        # (el modelo no completo el turno) y el endpoint NO debe emitir eventos reasoning.
         return ChatResponse(
-            text=_FALLBACK_TEXT, actions=[], session_id=session_id, finish_reason="degraded"
+            text=_FALLBACK_TEXT,
+            actions=[],
+            session_id=session_id,
+            finish_reason="degraded",
+            reasoning=None,
         )
 
     # NO se encola consolidacion aca (M10 Ola 0): el enqueue se movio al service
@@ -291,5 +297,9 @@ async def route(
     # worker Celery (otro proceso) lea el turno. ``route()`` ya no encola NADA: la
     # condicion (``writes_memory`` + turno no-degradado) se replica en el service.
     return ChatResponse(
-        text=final_text, actions=actions, session_id=session_id, finish_reason=finish_reason
+        text=loop_result.text,
+        actions=loop_result.actions,
+        session_id=session_id,
+        finish_reason=loop_result.finish_reason,
+        reasoning=loop_result.reasoning,
     )
