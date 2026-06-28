@@ -24,7 +24,6 @@ const USER_SEED = JSON.stringify({
     userId: "snap-user",
     token: "snap-token",
     displayName: "Mateo",
-    isEphemeral: true,
     mood: ["tranquilo"],
     moodFreeText: "",
     interestedModes: ["productividad"],

@@ -17,15 +17,13 @@ mkdirSync(OUT, { recursive: true });
 
 /**
  * Estado mínimo del useUserStore persistido (zustand persist) para que
- * el guard de (app)/layout.tsx deje pasar. `isEphemeral=true` evita
- * promesas de auth real.
+ * el guard de (app)/layout.tsx deje pasar.
  */
 const USER_SEED = JSON.stringify({
   state: {
     userId: "snap-user",
     token: "snap-token",
     displayName: "Mateo",
-    isEphemeral: true,
     mood: ["tranquilo"],
     moodFreeText: "",
     interestedModes: ["productividad"],

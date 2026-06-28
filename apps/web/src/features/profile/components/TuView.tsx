@@ -85,7 +85,6 @@ export function TuView() {
   // Store de usuario
   const displayName = useUserStore((s) => s.displayName);
   const setDisplayName = useUserStore((s) => s.setDisplayName);
-  const isEphemeral = useUserStore((s) => s.isEphemeral);
   const resetUser = useUserStore((s) => s.reset);
 
   // Store de tema
@@ -231,8 +230,7 @@ export function TuView() {
     // datos personales. `router.push` es navegación client-side (no recarga), así
     // que el chat store (sessions+messages en localStorage) y la cache de memoria
     // de TanStack Query sobreviven al logout y los vería el próximo usuario del
-    // dispositivo. Esto cumple la promesa del LogoutDialog efímero ("se borran tus
-    // datos de este dispositivo"). Tema y a11y NO se tocan: son prefs del
+    // dispositivo. Por eso los limpiamos acá. Tema y a11y NO se tocan: son prefs del
     // dispositivo, no datos del usuario (limpiar a11y degradaría la accesibilidad
     // del próximo que use el equipo).
     resetUser();
@@ -270,11 +268,6 @@ export function TuView() {
               {displayName ?? "Vos"}
             </h1>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              {isEphemeral ? (
-                <span className="text-caption inline-block rounded-full bg-[var(--color-bg-soft)] px-2.5 py-0.5 text-[var(--color-ink-soft)]">
-                  Invitado
-                </span>
-              ) : null}
               <span className="text-caption inline-block rounded-full bg-[var(--color-bg-soft)] px-2.5 py-0.5 text-[var(--color-ink-soft)]">
                 Plan gratis
               </span>
@@ -450,10 +443,9 @@ export function TuView() {
         onSuccess={() => setToast({ message: "Memoria borrada.", variant: "success" })}
       />
 
-      {/* Confirmación de cierre de sesión (destructivo si la cuenta es efímera) */}
+      {/* Confirmación de cierre de sesión */}
       <LogoutDialog
         open={logoutOpen}
-        isEphemeral={isEphemeral}
         onClose={() => setLogoutOpen(false)}
         onConfirm={handleLogout}
       />

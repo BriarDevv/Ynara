@@ -27,7 +27,7 @@ type Returns = {
  * Orquesta el cierre del onboarding:
  *  1. Valida el draft completo con `OnboardRequestSchema` (validación LOCAL).
  *  2. `PATCH /v1/users/me` con `{ display_name, onboarding_completed: true }`.
- *  3. Traslada datos al `useUserStore` (incluyendo `isEphemeral`).
+ *  3. Traslada datos al `useUserStore`.
  *  4. Resetea el draft del onboarding.
  *  5. Setea `isCelebrating=true` para que la UI monte `CelebrationOutro`.
  *  6. Cuando `CelebrationOutro` llama `triggerOutroComplete()`, navega
@@ -106,13 +106,11 @@ export function useCompleteOnboarding(): Returns & {
         setError("Sesión inválida. Volvé a empezar el onboarding.");
         return;
       }
-      // El onboarding solo crea cuentas reales (signup/login): ya no hay entrada
-      // efímera client-side, así que isEphemeral va en false. (El flag is_ephemeral
-      // existe en el backend pero el front todavía no lo consume.)
+      // El onboarding solo crea cuentas reales (signup/login). El backend
+      // hardcodea is_ephemeral=False y el front no consume ese flag.
       useUserStore.getState().setAuth({
         userId: d.authedUserId,
         token: d.authedToken,
-        isEphemeral: false,
       });
       useUserStore.getState().setDisplayName(data.displayName);
       useUserStore.getState().setMood(data.mood, data.moodFreeText ?? "");

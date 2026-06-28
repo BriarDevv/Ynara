@@ -133,7 +133,7 @@ describe("useChatStream", () => {
     vi.stubGlobal("fetch", fetchMock);
     // Token en el store de usuario → debe viajar como Authorization.
     const { useUserStore } = await import("@/stores/user");
-    useUserStore.getState().setAuth({ userId: "u1", token: "tok-123", isEphemeral: false });
+    useUserStore.getState().setAuth({ userId: "u1", token: "tok-123" });
 
     const { sessionId, userMessageId } = setupSession();
     const { result } = renderHook(() => useChatStream(sessionId));
