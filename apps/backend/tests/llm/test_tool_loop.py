@@ -28,6 +28,7 @@ from app.llm.schemas import (
     ToolSpec,
 )
 from app.llm.tool_loop import (
+    _ACTIONS_DONE_TEXT,
     MAX_CALLS_PER_TURN,
     MAX_TOOL_ITERATIONS,
     _execute_anywhere,
@@ -224,8 +225,118 @@ async def test_tool_call_luego_stop_vacio_fuerza_confirmacion() -> None:
     assert actions[0]["result"] == {"id": "ev-9", "status": "confirmed"}
     # 3 llamadas: tool_call + stop-vacio + forzada-sin-tools.
     assert len(fake.complete_calls) == 3
-    # La 3ra (forzada) va SIN tools.
+    # La 3ra (forzada) va SIN tools y con thinking=False (la confirmacion no razona).
     assert fake.complete_calls[2]["tools"] is None
+    assert fake.complete_calls[2]["thinking"] is False
+
+
+@pytest.mark.asyncio
+async def test_tool_call_forzada_tambien_vacia_usa_ack_no_fallback() -> None:
+    """Gotcha qwen reforzado (E2E del feature de razonamiento): tras ejecutar una tool el
+    modelo corta vacio Y la forzada TAMBIEN vuelve vacia (vuelca todo al canal reasoning).
+    El usuario NO debe ver el fallback-error: como SI hubo acciones, se devuelve un ack
+    determinista (``_ACTIONS_DONE_TEXT``). La forzada va con thinking=False para que la
+    confirmacion caiga en content, no en reasoning."""
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+
+    tc = _make_tool_call("memory.add", "tc-z")
+    # 1) tool call -> se ejecuta la tool
+    fake.queue_result(_make_result(text="", finish_reason="tool_calls", tool_calls=[tc]))
+    # 2) corte terminal 'stop' con content VACIO
+    fake.queue_result(_make_result(text="", finish_reason="stop"))
+    # 3) forzada: qwen vuelve a dejar el content VACIO (vuelca al reasoning)
+    fake.queue_result(_make_result(text="", finish_reason="stop"))
+
+    reg = ToolRegistry()
+
+    class FakeTool:
+        name = "memory.add"
+        namespace = "memory"
+        description = "guarda un recuerdo"
+
+        @property
+        def parameters(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        async def execute(self, arguments: dict) -> dict:
+            return {"status": "ok"}
+
+    reg.register(FakeTool())  # type: ignore[arg-type]
+
+    spec = ToolSpec(
+        name="memory.add",
+        description="guarda un recuerdo",
+        parameters={"type": "object", "properties": {}},
+    )
+
+    result = await run_tool_loop(
+        llm_client=fake,
+        served_name="qwen",
+        messages=_messages(),
+        specs=[spec],
+        registries=(reg, None),
+        fallback_text="FALLBACK-no-deberia-verse",
+    )
+
+    # Hubo accion -> ack determinista, NUNCA el fallback-error generico.
+    assert result.text == _ACTIONS_DONE_TEXT
+    assert result.text != "FALLBACK-no-deberia-verse"
+    assert len(result.actions) == 1
+    assert result.actions[0]["result"] == {"status": "ok"}
+    # 3 llamadas; la forzada (3ra) SIN tools y con thinking=False.
+    assert len(fake.complete_calls) == 3
+    assert fake.complete_calls[2]["tools"] is None
+    assert fake.complete_calls[2]["thinking"] is False
+
+
+@pytest.mark.asyncio
+async def test_tool_error_con_forzada_vacia_usa_fallback_no_ack() -> None:
+    """Si la tool FALLA (action con ``{"error": ...}``) y la forzada vuelve vacia, NO se usa
+    el ack (mentiria exito): se cae al ``fallback_text``. El ack es solo para acciones
+    EXITOSAS (sin clave ``error`` en el result)."""
+    fake = FakeLlmClient(served_models=frozenset({"qwen"}))
+
+    tc = _make_tool_call("calendar.create_event", "tc-err")
+    fake.queue_result(_make_result(text="", finish_reason="tool_calls", tool_calls=[tc]))
+    fake.queue_result(_make_result(text="", finish_reason="stop"))
+    # forzada tambien vacia
+    fake.queue_result(_make_result(text="", finish_reason="stop"))
+
+    reg = ToolRegistry()
+
+    class FailingTool:
+        name = "calendar.create_event"
+        namespace = "calendar"
+        description = "crea un evento"
+
+        @property
+        def parameters(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        async def execute(self, arguments: dict) -> dict:
+            raise RuntimeError("boom")
+
+    reg.register(FailingTool())  # type: ignore[arg-type]
+
+    spec = ToolSpec(
+        name="calendar.create_event",
+        description="crea un evento",
+        parameters={"type": "object", "properties": {}},
+    )
+
+    result = await run_tool_loop(
+        llm_client=fake,
+        served_name="qwen",
+        messages=_messages(),
+        specs=[spec],
+        registries=(reg, None),
+        fallback_text="FALLBACK-esperado",
+    )
+
+    # La accion fallo (clave 'error' en el result) -> NO ack: fallback honesto.
+    assert "error" in result.actions[0]["result"]
+    assert result.text == "FALLBACK-esperado"
+    assert result.text != _ACTIONS_DONE_TEXT
 
 
 @pytest.mark.asyncio
