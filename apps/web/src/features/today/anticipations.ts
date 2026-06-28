@@ -1,4 +1,5 @@
 import type { ModeId } from "@/components/ui/modes";
+import { shouldEnableMocks } from "@/lib/env";
 
 /** Una acción que el usuario puede tomar desde la tarjeta de anticipación. */
 export type AnticipationAction = {
@@ -22,10 +23,16 @@ export type Anticipation = {
 };
 
 /**
- * Anticipaciones canned para el mock de Hoy y Avisos (no hay backend todavía).
- * Cuando el endpoint real exista se apaga esta función y la UI queda intacta.
+ * Anticipaciones canned para el mock de Hoy y Avisos. **No hay endpoint backend
+ * de avisos todavía**, así que solo existen con los mocks prendidos: el gate es
+ * `shouldEnableMocks` (mismo criterio que el resto de los datos fake del front).
+ * Con mocks apagados (backend real / producción) devuelve `[]` y la cascada de
+ * UI queda vacía — los consumidores ya gatean por `length > 0` y los empty-states
+ * honestos toman el relevo. Cuando exista el endpoint real se reemplaza esta
+ * fuente y la UI queda intacta.
  */
 export function buildAnticipations(): Anticipation[] {
+  if (!shouldEnableMocks) return [];
   return [
     {
       id: "ant-foco-001",

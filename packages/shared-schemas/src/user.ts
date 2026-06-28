@@ -55,6 +55,10 @@ export const UserUpdateSchema = z.object({
   display_name: DisplayNameSchema.optional(),
   onboarding_completed: z.boolean().optional(),
   retention_sensitive_days: RetentionDaysSchema.optional(),
+  // Huso horario IANA del cliente (ej. "America/Argentina/Buenos_Aires"). Acá
+  // solo validamos que sea un string no vacío; el formato IANA fuerte lo valida
+  // el backend (Pydantic). El onboarding lo inyecta con el huso del browser.
+  time_zone: z.string().min(1).optional(),
 });
 export type UserUpdate = z.infer<typeof UserUpdateSchema>;
 

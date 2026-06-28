@@ -8,6 +8,7 @@ import type { ModeId } from "@/components/ui/modes";
 import { ApiError } from "@/lib/api";
 import { qk } from "@/lib/queryKeys";
 import { useA11yStore } from "@/stores/a11y";
+import { useActiveModeStore } from "@/stores/mode";
 import { useUserStore } from "@/stores/user";
 import type { ApiErrorBody } from "../schemas";
 import { useOnboardingStore } from "../store";
@@ -79,6 +80,12 @@ export function useCompleteOnboarding(): Returns & {
       useUserStore.getState().setDisplayName(data.displayName);
       useUserStore.getState().setMood(data.mood, data.moodFreeText ?? "");
       useUserStore.getState().setInterestedModes(data.interestedModes as ModeId[]);
+      // Sembrar el modo activo global con el PRIMER modo de interés elegido en el
+      // onboarding. Sin esto, el override de `useActiveModeStore` nunca se siembra
+      // y `useActiveMode` cae siempre a `interestedModes[0]` por derivación; el
+      // resultado visible era que el modo activo arrancaba fijo en 'productividad'.
+      const [primary] = data.interestedModes;
+      if (primary) useActiveModeStore.getState().setMode(primary as ModeId);
       // Sobre-vos: igual que mood/modes, no tiene columna en el backend y queda
       // client-side. Se lee del draft (no del payload validado, que solo lleva
       // lo que `OnboardRequestSchema` conoce).

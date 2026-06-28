@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +9,7 @@ import { OptionCard } from "@/components/ui/OptionCard";
 import { AVAILABLE_MODES } from "@/lib/modes";
 import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
-import { DEFAULT_MODE, STEP_COPY } from "../constants";
+import { STEP_COPY } from "../constants";
 import { useOnboardingNav } from "../hooks/useOnboardingNav";
 import { ModeSchema } from "../schemas";
 import { useOnboardingStore } from "../store";
@@ -35,29 +34,19 @@ export function ModesStep() {
   const draftModes = useOnboardingStore((s) => s.interestedModes);
   const setInterestedModes = useOnboardingStore((s) => s.setInterestedModes);
 
-  // Si el draft está vacío al montar, pre-marcamos DEFAULT_MODE.
-  const initialModes =
-    draftModes.length === 0 ? [DEFAULT_MODE] : (draftModes as ModesFormValues["interestedModes"]);
+  // Sin pre-pin de un modo por default: arrancamos con lo que haya en el draft
+  // (vacío en el primer paso). Así el PRIMER modo que el usuario elige lidera
+  // `interestedModes[0]` — y, vía `useActiveMode`, el modo activo de la app. El
+  // schema exige `.min(1)`, así que el submit sin elegir nada muestra el error
+  // en vez de avanzar con un default sintético ('productividad') que pisaba la
+  // intención real del usuario.
+  const initialModes = draftModes as ModesFormValues["interestedModes"];
 
   const form = useForm<ModesFormValues>({
     resolver: zodResolver(ModesFormSchema),
     defaultValues: { interestedModes: initialModes },
     mode: "onSubmit",
   });
-
-  // Si arrancamos con default sintético, escribirlo al store para que
-  // el resto del flujo lo vea coherente. Sólo al montar.
-  //
-  // Leemos el draft fresco del store con getState() en vez de cerrar sobre
-  // `draftModes`: así la única dependencia es `setInterestedModes` (acción de
-  // zustand, identidad estable), y `[setInterestedModes]` queda honestamente
-  // exhaustivo sin re-correr ni pisar la selección posterior del usuario.
-  useEffect(() => {
-    const { interestedModes } = useOnboardingStore.getState();
-    if (interestedModes.length === 0) {
-      setInterestedModes([DEFAULT_MODE]);
-    }
-  }, [setInterestedModes]);
 
   const onSubmit: SubmitHandler<ModesFormValues> = (values) => {
     setInterestedModes(values.interestedModes);

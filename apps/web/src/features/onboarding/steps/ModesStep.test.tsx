@@ -16,24 +16,23 @@ afterEach(() => {
   useOnboardingStore.getState().reset();
 });
 
-// DEFAULT_MODE = "productividad" → label "Productividad" (única pre-marcada).
-function defaultModeCard(): HTMLElement {
-  return screen.getByRole("button", { name: /Productividad/i });
+function modeCard(name: RegExp): HTMLElement {
+  return screen.getByRole("button", { name });
 }
 
 describe("ModesStep", () => {
-  it("pre-marca el modo por default cuando el draft no tiene modos", () => {
+  it("no pre-marca ningún modo: el primer pick real lidera", () => {
     render(<ModesStep />);
-    expect(defaultModeCard()).toHaveAttribute("aria-pressed", "true");
+    // Antes 'Productividad' venía pre-pineada y siempre quedaba de líder; ahora
+    // arranca sin selección para que el modo activo refleje el primer modo que el
+    // usuario elige de verdad.
+    expect(modeCard(/Productividad/i)).toHaveAttribute("aria-pressed", "false");
+    expect(modeCard(/Estudio/i)).toHaveAttribute("aria-pressed", "false");
   });
 
   it('muestra el error "Elegí al menos uno" al submitear sin ningún modo', async () => {
     const user = userEvent.setup();
     render(<ModesStep />);
-
-    // Deselecciono el único modo pre-marcado (productividad).
-    await user.click(defaultModeCard());
-    expect(defaultModeCard()).toHaveAttribute("aria-pressed", "false");
 
     await user.click(screen.getByRole("button", { name: /seguir/i }));
 
@@ -41,16 +40,29 @@ describe("ModesStep", () => {
     expect(error).toHaveTextContent("Elegí al menos uno");
   });
 
-  it("limpia el error al volver a elegir un modo", async () => {
+  it("limpia el error al elegir un modo", async () => {
     const user = userEvent.setup();
     render(<ModesStep />);
 
-    await user.click(defaultModeCard());
     await user.click(screen.getByRole("button", { name: /seguir/i }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
 
-    // Reselecciono un modo: el error se borra (toggle llama setError(null)).
-    await user.click(defaultModeCard());
+    // Elegir un modo borra el error (toggle llama setError(null)).
+    await user.click(modeCard(/Productividad/i));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("el primer modo elegido lidera interestedModes[0]", async () => {
+    const user = userEvent.setup();
+    render(<ModesStep />);
+
+    // Elijo Estudio primero, después Vida: Estudio debe quedar de líder (índice 0),
+    // que es lo que useActiveMode/useCompleteOnboarding usan para el modo activo.
+    // `^Vida` anclado: "Productividad" también contiene "vida" como substring.
+    await user.click(modeCard(/Estudio/i));
+    await user.click(modeCard(/^Vida/i));
+    await user.click(screen.getByRole("button", { name: /seguir/i }));
+
+    expect(useOnboardingStore.getState().interestedModes[0]).toBe("estudio");
   });
 });

@@ -92,7 +92,7 @@ export function HoyView() {
           <SuggestionsSection />
         </div>
         <div data-hero-reveal>
-          <CheckinSection />
+          <CheckinSection now={now} />
         </div>
         <div data-hero-reveal>
           <RecapSection />
