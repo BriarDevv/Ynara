@@ -17,6 +17,7 @@ Notas y limitaciones conocidas:
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 
 from app.llm.schemas import ChatMessage, ToolCall, ToolSpec
 from app.llm.tools.base import tool_error
@@ -41,6 +42,31 @@ TOOL_RESULT_MAX_BYTES: int = 32_768
 
 # finish_reason que indica que el loop debe terminar (con o sin tool_calls).
 _TERMINAL_REASONS = frozenset({"stop", "length", "degraded"})
+
+
+@dataclass(frozen=True)
+class ToolLoopResult:
+    """Resultado inmutable del tool loop (reemplaza la 4-tupla mixta previa).
+
+    Contenedor con campos nombrados (coding-style del repo) en vez de una tupla
+    posicional:
+
+    - ``text``: respuesta final del modelo (nunca vacia: usa ``fallback_text``).
+    - ``actions``: tools ejecutadas, en orden, como dicts
+      ``{'id', 'name', 'arguments', 'result'}``.
+    - ``finish_reason``: ``finish_reason`` del ultimo ``CompletionResult`` procesado,
+      o ``'max_iterations'`` si se agoto el guard sin converger.
+    - ``reasoning``: razonamiento del modelo (canal ``reasoning`` SEPARADO de cada
+      ``CompletionResult``) acumulado y concatenado a lo largo de TODAS las iteraciones
+      del loop, igual que ``actions``. ``None`` si ninguna iteracion expuso razonamiento
+      (thinking off, o modelo sin canal de razonamiento). Aditivo: los consumidores que
+      lo ignoran no cambian.
+    """
+
+    text: str
+    actions: list[dict[str, object]]
+    finish_reason: str
+    reasoning: str | None = None
 
 
 async def _execute_anywhere(
@@ -78,7 +104,7 @@ async def run_tool_loop(
     max_iterations: int = MAX_TOOL_ITERATIONS,
     thinking: bool | None = None,
     fallback_text: str,
-) -> tuple[str, list[dict[str, object]], str]:
+) -> ToolLoopResult:
     """Loop principal de inferencia + ejecucion de tools.
 
     Por cada iteracion:
@@ -116,19 +142,22 @@ async def run_tool_loop(
         fallback_text: Texto de fallback si el texto final esta vacio.
 
     Returns:
-        Tupla ``(text, actions, finish_reason)`` donde:
-        - ``text``: Respuesta final del modelo (nunca vacia: usa fallback_text).
-        - ``actions``: Lista de dicts
-          ``{'id': str, 'name': str, 'arguments': dict, 'result': dict}``
-          de las tools ejecutadas, en orden de ejecucion.
-        - ``finish_reason``: El ``finish_reason`` del ultimo ``CompletionResult``
-          procesado, o ``'max_iterations'`` si se agoto el guard sin converger.
+        Un ``ToolLoopResult`` (inmutable) con ``text``, ``actions``, ``finish_reason``
+        y ``reasoning`` (ver el docstring del dataclass). El ``reasoning`` acumula el
+        canal de razonamiento separado de cada iteracion del loop (concatenado), igual
+        que ``actions`` acumula las tools ejecutadas; ``None`` si ninguna iteracion
+        expuso razonamiento.
     """
     actions: list[dict[str, object]] = []
     tool_specs: list[ToolSpec] | None = specs if specs else None
 
     last_text: str = ""
     last_finish_reason: str = "stop"
+    # Razonamiento acumulado de TODAS las iteraciones (patron ``reasoning_parts`` del
+    # playground): cada ``CompletionResult`` trae el canal de razonamiento SEPARADO del
+    # ``content``; se concatena al final. Hoy el router lo descartaba; ahora se devuelve
+    # para que el endpoint pueda re-trocearlo como evento SSE ``reasoning``.
+    reasoning_parts: list[str] = []
 
     for _ in range(max_iterations):
         result = await llm_client.complete(
@@ -139,6 +168,8 @@ async def run_tool_loop(
         )
         last_text = result.text
         last_finish_reason = result.finish_reason
+        if result.reasoning:
+            reasoning_parts.append(result.reasoning)
 
         # Sin tool_calls o finish_reason terminal -> terminar
         if not result.tool_calls or result.finish_reason in _TERMINAL_REASONS:
@@ -215,8 +246,16 @@ async def run_tool_loop(
             thinking=thinking,
         )
         last_text = forced.text
+        if forced.reasoning:
+            reasoning_parts.append(forced.reasoning)
         if last_text:
             last_finish_reason = forced.finish_reason
 
     final_text = last_text if last_text else fallback_text
-    return final_text, actions, last_finish_reason
+    reasoning = "".join(reasoning_parts) or None
+    return ToolLoopResult(
+        text=final_text,
+        actions=actions,
+        finish_reason=last_finish_reason,
+        reasoning=reasoning,
+    )

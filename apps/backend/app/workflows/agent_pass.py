@@ -175,7 +175,7 @@ async def _run_agent_pass_in_db(
 
     # registries = (agent_reg, None): el registry combinado tiene TODAS las tools de
     # agente habilitadas. El loop ejecuta cada tool call vía ese registry real.
-    _text, actions, _finish_reason = await run_tool_loop(
+    result = await run_tool_loop(
         llm_client=llm_client,
         served_name=served_name,
         messages=messages,
@@ -184,7 +184,7 @@ async def _run_agent_pass_in_db(
         thinking=thinking,
         fallback_text=_FALLBACK_TEXT,
     )
-    return len(actions)
+    return len(result.actions)
 
 
 async def _async_agent_pass(

@@ -40,6 +40,11 @@ class ChatResponse(BaseModel):
     actions: list[dict[str, Any]] = []
     session_id: str
     finish_reason: str | None = None
+    # Razonamiento del modelo acumulado por el tool loop (canal ``reasoning`` separado).
+    # El endpoint /chat/stream lo re-trocea como evento SSE ``reasoning`` (display-only:
+    # el toggle de mostrar/ocultar es 100% del front). ``None`` cuando no hubo
+    # razonamiento o el turno degrado. Aditivo: los callers que lo ignoran no cambian.
+    reasoning: str | None = None
 
 
 # ---------- Mensajes y tools ----------

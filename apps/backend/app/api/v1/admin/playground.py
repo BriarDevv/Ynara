@@ -464,7 +464,7 @@ async def admin_playground_agent(
 
     # 6) Correr el tool-loop real; 7) mapear LlmError a status sin ecoar payload.
     try:
-        text, actions, finish_reason = await run_tool_loop(
+        loop_result = await run_tool_loop(
             llm_client=llm_client,
             served_name=model_cfg.served_name,
             messages=messages,
@@ -486,12 +486,12 @@ async def admin_playground_agent(
             arguments=action["arguments"],  # type: ignore[arg-type]
             result=json.dumps(action["result"], ensure_ascii=False),
         )
-        for action in actions
+        for action in loop_result.actions
     ]
 
     return PlaygroundAgentOut(
-        text=text,
-        finish_reason=finish_reason,
+        text=loop_result.text,
+        finish_reason=loop_result.finish_reason,
         model_name=model_cfg.served_name,
         actions=observed,
     )
