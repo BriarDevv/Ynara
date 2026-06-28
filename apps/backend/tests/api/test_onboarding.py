@@ -26,8 +26,10 @@ import pytest
 from httpx import ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_db
+from app.core.deps import get_db, get_embedder, get_reranker
 from app.core.security import create_access_token
+from app.llm.clients.embedding import FakeEmbeddingClient
+from app.llm.clients.reranker import FakeReranker
 from app.main import app
 from app.models.user import User
 
@@ -69,8 +71,11 @@ def _bearer(user_id: uuid.UUID) -> dict[str, str]:
 
 
 async def _client(db_session: AsyncSession) -> httpx.AsyncClient:
-    """Cliente con ``get_db`` overrideado al ``db_session`` del fixture.
+    """Cliente con ``get_db`` + clientes Fake overrideados, y el ``db_session`` del fixture.
 
+    El endpoint depende de ``get_embedder``/``get_reranker`` (G4 siembra memoria
+    semántica). Bajo ``ASGITransport`` el lifespan no corre, así que ``app.state`` no
+    tiene esos singletons: se overridean con Fakes (espejo de ``test_memory_audit.py``).
     El caller usa el cliente dentro de ``async with`` y limpia los overrides en su
     ``finally`` con ``app.dependency_overrides.clear()``.
     """
@@ -79,6 +84,8 @@ async def _client(db_session: AsyncSession) -> httpx.AsyncClient:
         yield db_session
 
     app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[get_embedder] = lambda: FakeEmbeddingClient()
+    app.dependency_overrides[get_reranker] = lambda: FakeReranker()
     transport = ASGITransport(app=app)
     return httpx.AsyncClient(transport=transport, base_url="http://test")
 
@@ -117,8 +124,9 @@ async def test_onboarding_persists_operational_prefs(db_session: AsyncSession) -
 
 
 async def test_onboarding_does_not_persist_memory_bound_signals(db_session: AsyncSession) -> None:
-    # mood/about se ACEPTAN en el body pero NO se persisten (G4, SAGRADO): solo lo
-    # operativo aterriza en ``preferences``.
+    # mood/about van a MEMORIA (G4), no a ``users.preferences``: solo lo operativo
+    # (interested_modes + a11y) aterriza en ``preferences``. El seed de memoria se
+    # cubre en ``test_onboarding_memory_seed.py``.
     user = await _seed_user(db_session)
     client = await _client(db_session)
     try:
