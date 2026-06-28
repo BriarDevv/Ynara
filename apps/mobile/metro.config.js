@@ -6,6 +6,6 @@ const { withNativeWind } = require("nativewind/metro");
 const config = getDefaultConfig(__dirname);
 
 // TODO: ajustar `watchFolders` para incluir packages/* del monorepo
-// cuando necesitemos hot reload sobre shared-types / ui.
+// cuando necesitemos hot reload sobre core / ui.
 
 module.exports = withNativeWind(config, { input: "./src/global.css" });
