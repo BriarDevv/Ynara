@@ -411,6 +411,15 @@ html.theme-dark {
      línea se vea sobre el navy; el azul plano de marca queda invisible acá. */
   --color-selected-ring: var(--color-celeste);
 
+  /* Error (§3.2): el ladrillo #c0392b sobre las superficies de Noche cae a
+     ~2.1-2.6:1 (falla AA como texto, y el error SÍ se usa como texto en
+     form fields/toasts). Se sube a un coral claro que cumple AA en las tres
+     superficies oscuras: 4.82:1 sobre bg-soft, 5.37:1 sobre bg, 5.94:1 sobre
+     canvas. El soft acompaña con alpha apenas mayor para que el tint del
+     fondo de error siga visible sobre el navy. */
+  --color-error: #ff8585;
+  --color-error-soft: rgb(255 133 133 / 0.15);
+
   /* Elevation (§7): card y canvas se separan por superficie + borde;
      las sombras quedan sutiles, con alphas recalibrados sobre Noche. */
   --shadow-soft:
