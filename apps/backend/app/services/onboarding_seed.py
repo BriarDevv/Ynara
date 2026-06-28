@@ -22,11 +22,16 @@ de persistir; ``audit_log`` solo guarda el ``record_hash`` (sha256), nunca el te
 Ningún contenido va a logs.
 
 Idempotencia (ADR-026 §4): re-onboarding NO duplica memoria.
-- **procedural**: ``upsert`` por ``key`` (ON CONFLICT) -> una sola fila.
-- **semantic**: no hay columna de hash y el ``content`` va cifrado, pero el
-  ``record_hash`` (sha256 del contenido) YA vive en ``audit_log``. El dedupe consulta
-  ``audit_log`` filtrando por el marcador del seed (``origin_tool``) -> no re-siembra
-  lo ya sembrado, sin descifrar nada.
+- **semantic** (skip-if-seeded): el seed semántico corre UNA sola vez por usuario. Si
+  ``audit_log`` ya tiene CUALQUIER fila del seed (``origin_tool``) en la capa semántica,
+  re-onboardear NO re-siembra (``_has_seeded_semantic``). Antes el dedupe era por hash
+  del ``content``, pero el free-text editado (hash distinto) se colaba y agregaba un
+  hecho nuevo dejando el viejo; el gate coarse lo evita. La memoria semántica queda
+  congelada en la del 1er onboarding y NO se tocan filas sagradas existentes.
+  Best-effort preservado: si el 1er seed no sembró semántico (embedder caído -> sin
+  marca de audit), un re-onboarding posterior SÍ lo siembra.
+- **procedural**: ``upsert`` por ``key`` (ON CONFLICT) -> una sola fila; el dedupe por
+  hash evita re-registrar un audit idéntico. Re-onboardear refleja el último valor.
 
 Atomicidad: corre dentro de la transacción del endpoint (un solo ``commit`` al
 final). Cada op + su fila de audit van en un ``begin_nested()`` (SAVEPOINT), espejo
@@ -143,6 +148,28 @@ async def _already_seeded(
     return (await session.execute(stmt)).first() is not None
 
 
+async def _has_seeded_semantic(session: AsyncSession, user_id: UUID) -> bool:
+    """¿El onboarding ya sembró ALGÚN hecho semántico para este usuario? (skip-if-seeded).
+
+    Idempotencia semántica (ADR-026 §4): el seed semántico corre una sola vez. Mira si
+    existe CUALQUIER fila de audit del seed (``origin_tool``) en la capa semántica; si la
+    hay, re-onboardear NO re-siembra (evita duplicar cuando el free-text cambió, que el
+    dedupe por hash no cazaba). REGLA #4: solo consulta metadata de ``audit_log``, no
+    descifra contenido. Best-effort: si el 1er seed no sembró semántico (embedder caído),
+    no hay marca y un re-onboarding posterior sí siembra.
+    """
+    stmt = (
+        select(AuditLog.id)
+        .where(
+            AuditLog.user_id == user_id,
+            AuditLog.target_layer == MemoryLayer.SEMANTIC,
+            AuditLog.origin_tool == ONBOARDING_AUDIT_ORIGIN,
+        )
+        .limit(1)
+    )
+    return (await session.execute(stmt)).first() is not None
+
+
 async def _seed_semantic(
     session: AsyncSession,
     semantic_store: SemanticMemoryStore,
@@ -229,13 +256,17 @@ async def seed_onboarding_memory(
     procedural_store = ProceduralMemoryStore(session, user_id)
     audit_store = AuditStore(session, user_id)
 
+    # Idempotencia semántica (skip-if-seeded): el seed semántico corre UNA vez por
+    # usuario. Si ya hay hechos semánticos del onboarding, re-onboardear NO re-siembra
+    # —evita duplicar cuando el free-text cambió (el dedupe por hash no lo cazaba)— y no
+    # toca las filas sagradas existentes. Best-effort: si el 1er seed no sembró semántico
+    # (embedder caído -> sin marca de audit), un re-onboarding posterior sí siembra.
     semantic_seeded = 0
-    for content in _semantic_facts(intake):
-        record_hash = compute_record_hash(content)
-        if await _already_seeded(session, user_id, MemoryLayer.SEMANTIC, record_hash):
-            continue
-        if await _seed_semantic(session, semantic_store, audit_store, content, record_hash):
-            semantic_seeded += 1
+    if not await _has_seeded_semantic(session, user_id):
+        for content in _semantic_facts(intake):
+            record_hash = compute_record_hash(content)
+            if await _seed_semantic(session, semantic_store, audit_store, content, record_hash):
+                semantic_seeded += 1
 
     procedural_seeded = 0
     dedication = intake.about.dedication if intake.about else None
