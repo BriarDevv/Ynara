@@ -21,6 +21,12 @@ export const A11yPrefsSchema = z.object({
 });
 export type A11yPrefs = z.infer<typeof A11yPrefsSchema>;
 
+/**
+ * @deprecated Usar `OnboardingIntakeSchema`. Era el contrato camelCase que solo
+ * gateaba validación local (no había endpoint que lo recibiera); ahora el intake
+ * viaja a `POST /v1/onboarding` con el shape extendido (incluye `about`). Se
+ * mantiene como base de `OnboardingIntakeSchema` y por compat de re-exports.
+ */
 export const OnboardRequestSchema = z.object({
   displayName: DisplayNameSchema,
   mood: z.array(z.string()).max(2),
@@ -29,6 +35,34 @@ export const OnboardRequestSchema = z.object({
   a11y: A11yPrefsSchema,
 });
 export type OnboardRequest = z.infer<typeof OnboardRequestSchema>;
+
+/**
+ * "Sobre vos" del onboarding (camelCase, FE-facing). Mirror de `AboutYou`
+ * (Pydantic) — el wire es snake_case y lo mapea `submitOnboarding` en
+ * `@ynara/core`. Señal **memory-bound**: el backend la acepta/valida pero NO la
+ * persiste todavía (seed de memoria = G4, SAGRADO). `dedication` nullable: el
+ * step puede dejarse sin elegir. Free-text acotado (anti-inflado, `<=200`).
+ */
+export const AboutYouSchema = z.object({
+  dedication: z.enum(["estudio", "trabajo", "ambos", "otro"]).nullable(),
+  studyWhat: z.string().max(200),
+  workWhat: z.string().max(200),
+  purpose: z.string().max(200),
+  interests: z.string().max(200),
+});
+export type AboutYou = z.infer<typeof AboutYouSchema>;
+
+/**
+ * Intake completo del onboarding (camelCase, FE-facing). Mirror de
+ * `OnboardingIntake` (Pydantic, fuente de verdad; el wire es snake_case) — ADR-026.
+ * Es lo que `submitOnboarding` (@ynara/core) valida antes de mapear al wire y
+ * mandar a `POST /v1/onboarding`. Reemplaza al `OnboardRequestSchema` huérfano:
+ * extiende su shape con `about` (sobre-vos).
+ */
+export const OnboardingIntakeSchema = OnboardRequestSchema.extend({
+  about: AboutYouSchema.nullable(),
+});
+export type OnboardingIntake = z.infer<typeof OnboardingIntakeSchema>;
 
 export const OnboardResponseSchema = z.object({
   ok: z.literal(true),
