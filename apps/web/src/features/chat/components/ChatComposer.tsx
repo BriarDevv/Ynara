@@ -12,6 +12,7 @@ import {
 } from "react";
 import { MODE_BY_ID, type ModeId } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
+import { ReasoningToggle } from "./ReasoningToggle";
 
 /**
  * Composer del chat: textarea vivo (plan §4.2). Componente nuevo — NO toca el
@@ -102,6 +103,11 @@ export function ChatComposer({ onSend, busy, mode, onStop, initialText = "" }: P
 
   return (
     <div className="flex flex-col gap-1">
+      {/* Toolbar del composer: por ahora solo el switch display-only de
+          "Ver razonamiento" (alineado a la derecha, sutil). */}
+      <div className="flex items-center justify-end px-1">
+        <ReasoningToggle />
+      </div>
       {/* Composer glassmorphism (mockup): borde teñido por modo + blur + sombra.
           El bg semitransparente deja ver el campo vivo por detrás. */}
       <div

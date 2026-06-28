@@ -106,6 +106,18 @@ export const StreamTokenSchema = z.object({
 });
 export type StreamToken = z.infer<typeof StreamTokenSchema>;
 
+/**
+ * `event: reasoning` — un fragmento del razonamiento post-hoc del modelo
+ * (Camino A). Llega ANTES de los `token` cuando el modelo razona (p. ej. modos
+ * agente Qwen). Mismo shape que `token`: el front concatena los `delta` en un
+ * campo aparte del mensaje y decide si renderizarlos según el toggle de
+ * "Ver razonamiento" (display-only; el backend SIEMPRE lo emite cuando hay).
+ */
+export const StreamReasoningSchema = z.object({
+  delta: z.string(),
+});
+export type StreamReasoning = z.infer<typeof StreamReasoningSchema>;
+
 /** `event: done` — evento terminal, análogo del `ChatResponse` no-streaming. */
 export const StreamDoneSchema = z.object({
   session_id: z.string(),

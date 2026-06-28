@@ -24,6 +24,13 @@ export type ChatUiMessage = {
   actions?: Action[];
   /** Código del error del backend (mapea a copy humano) si status==="error". */
   errorCode?: string;
+  /**
+   * Razonamiento post-hoc del modelo (evento SSE `reasoning`), acumulado token
+   * a token. EFÍMERO: se recibe por stream y se EXCLUYE de la persistencia
+   * (`partialize`) para no inflar localStorage con cadenas largas. El front lo
+   * muestra (colapsable "Pensando…") solo si el toggle web está ON.
+   */
+  reasoning?: string;
 };
 
 /** Metadata de una sesión (una sesión = un modo). */
@@ -77,6 +84,12 @@ type ChatActions = {
   startAssistantStream: (sessionId: string, userMessageId: string) => string;
   /** Concatena un delta al texto del mensaje de assistant en curso (corre por token). */
   appendStreamDelta: (sessionId: string, assistantId: string, delta: string) => void;
+  /**
+   * Concatena un delta al RAZONAMIENTO del assistant en curso (espejo de
+   * `appendStreamDelta`, corre por cada evento `reasoning`). Acumula en
+   * `m.reasoning` sin tocar `m.text`. Efímero: no se persiste (ver partialize).
+   */
+  appendReasoningDelta: (sessionId: string, assistantId: string, delta: string) => void;
   /**
    * Cierra el stream OK: assistant "streaming" → "done", adjunta `actions`
    * si hay, `streamStatus:"idle"` y toca `updatedAt`.
@@ -244,6 +257,9 @@ export function createChatStore(storage: StateStorage) {
               id: assistantId,
               role: "assistant",
               text: "",
+              // Razonamiento arranca vacío: si el modelo razona, los eventos
+              // `reasoning` lo van llenando vía appendReasoningDelta (efímero).
+              reasoning: "",
               status: "streaming",
             };
             const session = s.sessions[sessionId];
@@ -267,6 +283,20 @@ export function createChatStore(storage: StateStorage) {
                 ...s.messages,
                 [sessionId]: list.map((m) =>
                   m.id === assistantId ? { ...m, text: m.text + delta } : m,
+                ),
+              },
+            };
+          }),
+
+        appendReasoningDelta: (sessionId, assistantId, delta) =>
+          set((s) => {
+            const list = s.messages[sessionId];
+            if (!list) return s;
+            return {
+              messages: {
+                ...s.messages,
+                [sessionId]: list.map((m) =>
+                  m.id === assistantId ? { ...m, reasoning: (m.reasoning ?? "") + delta } : m,
                 ),
               },
             };
@@ -372,7 +402,15 @@ export function createChatStore(storage: StateStorage) {
         storage: createJSONStorage(() => storage),
         // streamStatus es efímero: se omite de la persistencia (al rehidratar
         // toma su valor inicial "idle" de initialState), no se escribe a disco.
-        partialize: (s) => ({ sessions: s.sessions, messages: s.messages }),
+        // `reasoning` también se excluye por mensaje (`stripReasoning`): es
+        // efímero (se recibe por stream) y puede ser largo — no inflamos el
+        // localStorage con la cadena de pensamiento.
+        partialize: (s) => ({
+          sessions: s.sessions,
+          messages: Object.fromEntries(
+            Object.entries(s.messages).map(([sid, list]) => [sid, list.map(stripReasoning)]),
+          ),
+        }),
         // Reconciliación post-rehidratación: si la app se cerró/crasheó con un
         // stream en vuelo, el status del mensaje (que vive en `messages`, SÍ
         // persistido) quedó en "streaming"/"sending". `streamStatus` se resetea a
@@ -396,6 +434,18 @@ export function createChatStore(storage: StateStorage) {
       },
     ),
   );
+}
+
+/**
+ * Devuelve una copia del mensaje SIN `reasoning` (para la persistencia). Si el
+ * mensaje no tiene `reasoning`, lo devuelve tal cual (sin copia innecesaria).
+ * Inmutable: nunca muta el mensaje original del store.
+ */
+function stripReasoning(message: ChatUiMessage): ChatUiMessage {
+  if (message.reasoning === undefined) return message;
+  const copy = { ...message };
+  copy.reasoning = undefined;
+  return copy;
 }
 
 /** Agrega un mensaje a una sesión y toca su `updatedAt` (usa `Date.now()`). */

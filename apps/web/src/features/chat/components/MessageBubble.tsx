@@ -4,9 +4,11 @@ import { chatErrorCopy } from "@ynara/shared-schemas";
 import { Button } from "@/components/ui/Button";
 import { MODE_BY_ID, type ModeId } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
+import { useShowReasoningStore } from "@/stores/showReasoning";
 import type { ChatUiMessage } from "../store";
 import { Markdown } from "./Markdown";
 import { MessageActions } from "./MessageActions";
+import { ThinkingDisclosure } from "./ThinkingDisclosure";
 
 /**
  * Una burbuja de la conversación.
@@ -31,6 +33,11 @@ type Props = {
 };
 
 export function MessageBubble({ message, mode, onRetry }: Props) {
+  // Toggle display-only: SOLO decide si se renderiza el colapsable de
+  // razonamiento (no controla el thinking del modelo). Se lee acá arriba, antes
+  // de los early returns, para no romper el orden de hooks.
+  const showReasoning = useShowReasoningStore((s) => s.enabled);
+
   if (message.status === "error") {
     return (
       <div role="alert" className="flex flex-col items-start gap-2">
@@ -80,6 +87,14 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
           style={{ backgroundColor: MODE_BY_ID[mode].tintVar }}
         />
         <div className="text-body text-[var(--color-ink)]">
+          {showReasoning && message.reasoning && message.reasoning.length > 0 ? (
+            <ThinkingDisclosure
+              reasoning={message.reasoning}
+              // "Pensando…" mientras el stream sigue abierto y la respuesta aún
+              // no empezó; al llegar el primer token de la respuesta, colapsa.
+              streaming={message.status === "streaming" && message.text.length === 0}
+            />
+          ) : null}
           <Markdown>{message.text}</Markdown>
           {message.actions && message.actions.length > 0 ? (
             <MessageActions actions={message.actions} mode={mode} />

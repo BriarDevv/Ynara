@@ -55,6 +55,7 @@ export type UseChatStream = {
 export function useChatStream(sessionId: string): UseChatStream {
   const startAssistantStream = useChatStore((s) => s.startAssistantStream);
   const appendStreamDelta = useChatStore((s) => s.appendStreamDelta);
+  const appendReasoningDelta = useChatStore((s) => s.appendReasoningDelta);
   const finishAssistantStream = useChatStore((s) => s.finishAssistantStream);
   const failAssistantStream = useChatStore((s) => s.failAssistantStream);
   const cancelAssistantStream = useChatStore((s) => s.cancelAssistantStream);
@@ -116,6 +117,11 @@ export function useChatStream(sessionId: string): UseChatStream {
           for (const event of events) {
             if (event.type === "token") {
               appendStreamDelta(sessionId, assistantId, event.data.delta);
+            } else if (event.type === "reasoning") {
+              // Razonamiento post-hoc (Camino A): llega ANTES de los token. Lo
+              // acumulamos aparte (no toca el texto de la respuesta); la UI lo
+              // muestra (o no) según el toggle display-only. No corta el stream.
+              appendReasoningDelta(sessionId, assistantId, event.data.delta);
             } else if (event.type === "done") {
               // Adoptamos el `session_id` REAL que el backend resolvió/creó: en el
               // primer turno mandamos `null` y el backend devuelve acá el id de la
@@ -196,6 +202,7 @@ export function useChatStream(sessionId: string): UseChatStream {
       sessionId,
       startAssistantStream,
       appendStreamDelta,
+      appendReasoningDelta,
       finishAssistantStream,
       failAssistantStream,
       setBackendSessionId,
