@@ -34,7 +34,11 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.enums import Mode
+from app.memory.procedural import ProceduralMemoryStore
+from app.models.user import User
 from app.schemas.today import RecapOut, SuggestionOut
+from app.services.onboarding_seed import DEDICATION_KEY
 from app.services.tasks import TaskStore
 
 # Cuántos nudges de preparación surfaceamos (las próximas, no toda la agenda).
@@ -45,6 +49,43 @@ _MAX_RECAP_DONE = 3
 # Namespace estable para derivar el ``id`` (uuid5) de cada sugerencia desde el id
 # de su tarea: misma tarea -> mismo id de sugerencia entre requests (key de React).
 _SUGGESTION_NS = uuid5(NAMESPACE_URL, "ynara:today:suggestion")
+
+# Nudges de arranque por modo (G5, ADR-026): copy fiel a los descriptores canónicos
+# (``@ynara/core/features/modes``). ``why`` honesto — referencia que el usuario lo
+# eligió en el onboarding (no es una orden arbitraria).
+_MODE_NUDGE: dict[Mode, tuple[str, str]] = {
+    Mode.PRODUCTIVIDAD: (
+        "Organizá tu día con Productividad",
+        "Lo elegiste para agendar, recordar y ejecutar.",
+    ),
+    Mode.ESTUDIO: (
+        "Arrancá una sesión de Estudio",
+        "Lo elegiste para que te explique y te acompañe a estudiar.",
+    ),
+    Mode.BIENESTAR: (
+        "Date un momento en Bienestar",
+        "Lo elegiste para descargar y que te acompañe.",
+    ),
+    Mode.VIDA: (
+        "Charlá un rato en Vida",
+        "Lo elegiste para charlas casuales y recomendaciones.",
+    ),
+    Mode.MEMORIA: (
+        "Mirá lo que Ynara va recordando",
+        "Lo elegiste para no perder el hilo de tus charlas.",
+    ),
+}
+
+# Dedicación sembrada (memoria procedural) -> modo(s) que se priorizan en el cold-start.
+# "otro"/ausente: sin preferencia (se respeta el orden de ``interested_modes``).
+_DEDICATION_PREFERRED_MODES: dict[str, tuple[Mode, ...]] = {
+    "estudio": (Mode.ESTUDIO,),
+    "trabajo": (Mode.PRODUCTIVIDAD,),
+    "ambos": (Mode.ESTUDIO, Mode.PRODUCTIVIDAD),
+}
+
+# Valores válidos del enum ``Mode`` para parsear ``interested_modes`` (JSONB) defensivamente.
+_MODE_VALUES: frozenset[str] = frozenset(m.value for m in Mode)
 
 
 def _local_now(now: datetime | None, tz: str) -> datetime:
@@ -65,13 +106,16 @@ def _local_now(now: datetime | None, tz: str) -> datetime:
 async def build_suggestions(
     session: AsyncSession, user_id: UUID, *, now: datetime | None = None, tz: str = "UTC"
 ) -> list[SuggestionOut]:
-    """Sugerencias v1: nudges de preparación de las próximas prioridades del usuario.
+    """Sugerencias v1: nudges de preparación de tareas + relleno de cold-start por modo.
 
-    Toma (vía SQL acotado) las tareas PENDIENTES con ``scheduled_at`` a futuro
+    Primero toma (vía SQL acotado) las tareas PENDIENTES con ``scheduled_at`` a futuro
     respecto de ``now``, en orden de horario, hasta ``_MAX_SUGGESTIONS``, y arma una
-    sugerencia "Preparate para X" por cada una. El ``id`` es estable por tarea
-    (uuid5). ``mode=None`` (transversal): la v1 no deriva el modo real. Si no hay
-    nada agendado a futuro, devuelve ``[]`` (la web oculta la sección).
+    sugerencia "Preparate para X" por cada una (``mode=None`` transversal; ``id`` estable
+    por tarea). Si quedan slots (pocas/ninguna tarea agendada), los **rellena con nudges
+    de arranque por modo** derivados de los modos elegidos en el onboarding
+    (``users.preferences.interested_modes``) y ordenados por la dedicación sembrada
+    (memoria procedural) — G5/ADR-026: primeras recomendaciones aunque no haya tasks. Si
+    el usuario no tiene tareas a futuro NI modos (fila pre-onboarding), devuelve ``[]``.
 
     NO usa LLM: la generación con voz propia es la próxima fase (roadmap F).
     """
@@ -79,7 +123,7 @@ async def build_suggestions(
     upcoming = await TaskStore(session, user_id).list_upcoming_pending(
         after=now, limit=_MAX_SUGGESTIONS
     )
-    return [
+    suggestions = [
         SuggestionOut(
             id=uuid5(_SUGGESTION_NS, str(task["id"])),
             title=f"Preparate para {task['title']}",
@@ -88,6 +132,69 @@ async def build_suggestions(
         )
         for task in upcoming
     ]
+
+    remaining = _MAX_SUGGESTIONS - len(suggestions)
+    if remaining > 0:
+        suggestions.extend(await _mode_suggestions(session, user_id, limit=remaining))
+    return suggestions
+
+
+async def _read_dedication(session: AsyncSession, user_id: UUID) -> str | None:
+    """Dedicación sembrada (memoria procedural) para ordenar los nudges de modo.
+
+    Lee la entrada ``onboarding.dedication`` del ``ProceduralMemoryStore``; no descifra
+    nada (procedural es JSONB plano). ``None`` si el usuario no la sembró (saltó el step).
+    """
+    entry = await ProceduralMemoryStore(session, user_id).get(DEDICATION_KEY)
+    if entry is None:
+        return None
+    value = entry.value.get("dedication")
+    return value if isinstance(value, str) else None
+
+
+async def _mode_suggestions(
+    session: AsyncSession, user_id: UUID, *, limit: int
+) -> list[SuggestionOut]:
+    """Nudges de arranque por modo para el cold-start (G5, ADR-026).
+
+    Deriva de los modos que el usuario eligió en el onboarding
+    (``users.preferences.interested_modes``, prefs operativas) y los ordena poniendo
+    primero el que matchea su dedicación sembrada (memoria procedural). ``why`` honesto
+    (lo eligió él); ``mode`` seteado para el tint; ``id`` estable por modo. Devuelve hasta
+    ``limit``; ``[]`` si el usuario no tiene modos (fila pre-onboarding).
+    """
+    user = await session.get(User, user_id)
+    if user is None:
+        return []
+    raw_modes = (user.preferences or {}).get("interested_modes", [])
+    modes = [Mode(m) for m in raw_modes if isinstance(m, str) and m in _MODE_VALUES]
+    if not modes:
+        return []
+
+    dedication = await _read_dedication(session, user_id)
+    preferred = _DEDICATION_PREFERRED_MODES.get(dedication or "", ())
+    # Orden estable: primero los modos que matchean la dedicación sembrada (los demás
+    # conservan el orden en que el usuario los eligió).
+    modes.sort(key=lambda m: 0 if m in preferred else 1)
+
+    out: list[SuggestionOut] = []
+    seen: set[Mode] = set()
+    for mode in modes:
+        if len(out) >= limit:
+            break
+        if mode in seen:
+            continue
+        seen.add(mode)
+        title, why = _MODE_NUDGE[mode]
+        out.append(
+            SuggestionOut(
+                id=uuid5(_SUGGESTION_NS, f"mode:{mode.value}"),
+                title=title,
+                why=why,
+                mode=mode,
+            )
+        )
+    return out
 
 
 def _recap_headline(*, done_count: int, pending_count: int) -> str:
