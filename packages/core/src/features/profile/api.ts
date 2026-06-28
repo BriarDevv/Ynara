@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type UserOut,
   UserOutSchema,
@@ -42,11 +42,18 @@ export function useMe(options?: { enabled?: boolean }) {
  * así que el caller usa el `UserOut` devuelto para actualizar su store.
  */
 export function useUpdateMe() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (update: UserUpdate): Promise<UserOut> => {
       const body = UserUpdateSchema.parse(update);
       const raw = await api.patch<unknown>("/v1/users/me", body);
       return UserOutSchema.parse(raw);
+    },
+    // Invalida `me` por default: cualquier caller refresca el perfil sin tener que
+    // acordarse (pit-of-failure que marcó la auditoría). Un caller puede sumar su
+    // propio `onSuccess` en `.mutate()`; react-query corre ambos.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.profile.me() });
     },
   });
 }
