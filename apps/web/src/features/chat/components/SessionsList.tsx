@@ -46,7 +46,10 @@ export function SessionsList() {
                   {relativeTime(session.updatedAt)}
                 </span>
               </span>
-              <span className="truncate text-body-sm text-[var(--color-ink-soft)]">
+              <span
+                title={preview(session.id)}
+                className="truncate text-body-sm text-[var(--color-ink-soft)]"
+              >
                 {preview(session.id)}
               </span>
             </button>
