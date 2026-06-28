@@ -6,12 +6,14 @@ import { z } from "zod";
  */
 const ClientEnvSchema = z.object({
   NEXT_PUBLIC_API_URL: z.string().url().default("http://localhost:8080"),
-  // Default ON: la web desarrolla offline-first sobre fixtures (MSW). Para
-  // apuntar al backend real se opta por salir con NEXT_PUBLIC_ENABLE_MOCKS=false
-  // (más NEXT_PUBLIC_API_URL al FastAPI) en .env.local. Mismo patrón que admin.
+  // Default OFF: la web pega al backend real (NEXT_PUBLIC_API_URL). Los mocks
+  // (MSW) son OPT-IN para desarrollo offline-first / pruebas: prendelos con
+  // NEXT_PUBLIC_ENABLE_MOCKS=true en .env.local. Antes defaulteaba ON (no había
+  // backend); con G2–G6 el backend ya es real, así que una cuenta nueva debe ver
+  // SU data real (vacía), no fixtures.
   NEXT_PUBLIC_ENABLE_MOCKS: z
     .enum(["true", "false"])
-    .default("true")
+    .default("false")
     .transform((v) => v === "true"),
 });
 
@@ -39,11 +41,11 @@ export const env: ClientEnv = parsed.data;
 /**
  * True si los mocks de MSW deben prenderse en este runtime.
  *
- * **Flag-driven con default ON** (mismo patrón que apps/admin): los mocks se
- * controlan exclusivamente con `NEXT_PUBLIC_ENABLE_MOCKS`, que default-ea a
- * `true` en el schema. Resultado: `pnpm dev` sin `.env.local` sigue mockeando
- * (offline-first), y se apunta al backend real opt-out con
- * `NEXT_PUBLIC_ENABLE_MOCKS=false`.
+ * **Flag-driven con default OFF**: los mocks se controlan con
+ * `NEXT_PUBLIC_ENABLE_MOCKS`, que default-ea a `false`. Resultado: `pnpm dev`
+ * sin `.env.local` pega al backend real (una cuenta nueva ve SU data, no
+ * fixtures); para desarrollar offline-first sobre mocks se opta-IN con
+ * `NEXT_PUBLIC_ENABLE_MOCKS=true`.
  *
  * **Hard-gate por NODE_ENV**: en `production` los mocks SIEMPRE están off
  * sin importar el flag, para evitar accidentes que filtren MSW al bundle
