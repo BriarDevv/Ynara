@@ -247,6 +247,54 @@ async def test_seed_is_idempotent_on_reonboarding(db_session: AsyncSession) -> N
 
 
 # ---------------------------------------------------------------------------
+# 3b. skip-if-seeded: re-onboarding con free-text EDITADO no duplica memoria
+# ---------------------------------------------------------------------------
+
+
+async def test_seed_skips_reseed_on_edited_free_text(db_session: AsyncSession) -> None:
+    """El dedupe por hash NO cazaba el free-text editado (hash distinto) y agregaba un
+    hecho nuevo dejando el viejo. Con skip-if-seeded, si el usuario YA tiene hechos
+    semánticos del onboarding, el 2do seed NO re-siembra: la memoria semántica queda
+    congelada en la del 1er onboarding (no se duplica) y NO se tocan filas sagradas.
+    """
+    user = await _seed_user(db_session)
+    client = await _client(db_session)
+    try:
+        async with client:
+            first = await client.post("/v1/onboarding", headers=_bearer(user.id), json=_intake())
+            assert first.status_code == 200
+            # Re-onboarding con free-text EDITADO (mismo usuario, misma dedicación).
+            edited = await client.post(
+                "/v1/onboarding",
+                headers=_bearer(user.id),
+                json=_intake(
+                    mood_free_text="ahora con mas claridad",
+                    about={
+                        "dedication": "ambos",
+                        "study_what": "ingenieria de sistemas",
+                        "work_what": "freelance",
+                        "purpose": "organizarme",
+                        "interests": "musica, running",
+                    },
+                ),
+            )
+            assert edited.status_code == 200
+
+        semantic, _procedural = _read_stores(db_session, user.id)
+        # NO se duplicó: siguen los 5 hechos del 1er onboarding (no 5 + los editados).
+        assert await semantic.count() == 5
+        facts = " || ".join(f.content for f in await semantic.list_all())
+        # Quedó el texto ORIGINAL; el editado NO se sembró (memoria semántica congelada).
+        assert "ingenieria de sistemas" not in facts
+        assert "ahora con mas claridad" not in facts
+        # Audit: solo las 6 filas del 1er seed (el 2do no agregó semánticas).
+        rows = await _audit_rows(db_session, user.id)
+        assert len(rows) == 6
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
 # 4. Sin señales memory-bound -> 0 sembrado, operativo igual persiste
 # ---------------------------------------------------------------------------
 
