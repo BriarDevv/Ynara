@@ -86,6 +86,9 @@ def build_llm_client(settings: Settings, config: LlmRuntimeConfig) -> LLMClient:
             http_client=httpx.AsyncClient(),
             parser=parser,
             default_timeout_s=timeout_s,
+            # Motor del endpoint (ADR-014 D4): "ollama" rutea el thinking por la API
+            # nativa /api/chat; "vllm" (default) usa el OpenAI-compat. Ver ServingEndpoint.
+            engine=ep.engine,
         )
         for ep in config.serving_endpoints
     }

@@ -100,6 +100,7 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers -m 'not integration'"
 markers = [
     "integration: requiere servicios externos (DB real, etc.); excluido del run default",
+    "llm_smoke: smoke contra un Ollama real (opt-in via YNARA_OLLAMA_SMOKE=1); skippeado por defecto, no hace red en el run default",
 ]
 
 # -------------------- Coverage --------------------
