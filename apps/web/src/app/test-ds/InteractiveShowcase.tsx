@@ -151,7 +151,7 @@ export function InteractiveShowcase() {
   return (
     <div className="flex flex-col gap-16">
       <section>
-        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">
+        <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">
           OptionCard (multi-select)
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -168,7 +168,7 @@ export function InteractiveShowcase() {
       </section>
 
       <section>
-        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">
+        <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">
           OptionCard con leading (ModeChip)
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -184,7 +184,7 @@ export function InteractiveShowcase() {
       </section>
 
       <section>
-        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">TextField + Textarea</h2>
+        <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">TextField + Textarea</h2>
         <div className="flex max-w-[480px] flex-col gap-6">
           <TextField
             label="TU NOMBRE"
@@ -213,7 +213,7 @@ export function InteractiveShowcase() {
       </section>
 
       <section>
-        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">Toggle + ChipGroup</h2>
+        <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">Toggle + ChipGroup</h2>
         <div className="flex max-w-[480px] flex-col gap-6">
           <Toggle
             label="Contraste alto"
@@ -241,7 +241,7 @@ export function InteractiveShowcase() {
       </section>
 
       <section>
-        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">ProgressDots</h2>
+        <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">ProgressDots</h2>
         <div className="flex flex-col gap-4">
           <ProgressDots total={5} current={state.step} />
           <div className="flex gap-3">
@@ -256,7 +256,7 @@ export function InteractiveShowcase() {
       </section>
 
       <section>
-        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">
+        <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">
           ModeChip (todos los modos)
         </h2>
         <div className="flex flex-wrap gap-2">
@@ -267,7 +267,7 @@ export function InteractiveShowcase() {
       </section>
 
       <section>
-        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">
+        <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">
           SuggestionCard (por modo)
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -306,7 +306,7 @@ export function InteractiveShowcase() {
       </section>
 
       <section>
-        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">
+        <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">
           PromptChip (empty state de chat)
         </h2>
         <div className="flex flex-wrap gap-2">
@@ -328,7 +328,7 @@ export function InteractiveShowcase() {
       </section>
 
       <section>
-        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">EmptyStateCard</h2>
+        <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">EmptyStateCard</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <EmptyStateCard
             title="Todavía no hay conversaciones"
@@ -343,7 +343,7 @@ export function InteractiveShowcase() {
       </section>
 
       <section>
-        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">Toast</h2>
+        <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">Toast</h2>
         <Card>
           <div className="flex flex-wrap items-center gap-3">
             <Button
@@ -378,7 +378,7 @@ export function InteractiveShowcase() {
       </section>
 
       <section>
-        <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">
+        <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">
           Sheet (bottom-sheet mobile / modal desktop)
         </h2>
         <Card>

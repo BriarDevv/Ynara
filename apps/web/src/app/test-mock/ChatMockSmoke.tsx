@@ -29,7 +29,7 @@ export function ChatMockSmoke() {
   return (
     <Card>
       <div className="flex flex-col gap-4">
-        <p className="text-caption text-[var(--color-ink-muted)]">POST /v1/chat</p>
+        <p className="text-caption text-[var(--color-ink-soft)]">POST /v1/chat</p>
         <div className="flex flex-wrap gap-2">
           {MODES.map((m) => (
             <Button
