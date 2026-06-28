@@ -61,10 +61,12 @@ export const VARIANTS: Record<LivingFieldVariant, VariantConfig> = {
     aura: 0.9,
     concentrate: "full",
   },
-  // Agenda: limpio, casi quieto, sin cursor.
+  // Agenda: limpio, casi quieto, sin cursor. Sin partículas: el fondo detrás
+  // de la grilla Semana va plano (solo grano + aura) para no meter ruido bajo
+  // la cuadrícula (follow-up del rediseño de Agenda).
   paper: {
     waves: false,
-    particles: true,
+    particles: false,
     pointer: false,
     density: "sutil",
     link: 0.25,
