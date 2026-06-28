@@ -7,8 +7,9 @@ gana, Zod sigue". Las prioridades del día (``/v1/tasks``) ya viven en
 que la web consumía contra mocks (``/v1/suggestions`` y ``/v1/recap``).
 
 NO sagrado, NO es una tabla: estas respuestas se DERIVAN de las tareas del usuario
-(``app/services/today.py``), no se persisten. La generación por LLM real (que la
-web documenta como roadmap F) es la próxima fase; esta es la v1 derivada.
+(``app/services/today.py``) —y ``suggestions`` además de sus prefs + memoria sembrada
+para el cold-start (G5)—, no se persisten. La generación por LLM real (que la web
+documenta como roadmap F) es la próxima fase; esta es la v1 derivada.
 """
 
 from __future__ import annotations

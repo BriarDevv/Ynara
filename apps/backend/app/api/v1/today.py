@@ -1,9 +1,10 @@
 """Lecturas derivadas del dashboard **Hoy**: ``GET /v1/suggestions`` + ``GET /v1/recap``.
 
 Completa las dos superficies que la web consumía contra mocks (las prioridades
-``/v1/tasks`` ya eran reales). No hay tabla ni persistencia: ambas se DERIVAN de las
-tareas reales del usuario (``app/services/today.py``); la generación por LLM real es
-la próxima fase (roadmap F, ver ``shared-schemas/today.ts``).
+``/v1/tasks`` ya eran reales). No hay tabla ni persistencia: se DERIVAN de las tareas
+reales del usuario (``app/services/today.py``); ``suggestions`` además rellena el
+cold-start con prefs + memoria sembrada (G5). La generación por LLM real es la próxima
+fase (roadmap F, ver ``shared-schemas/today.ts``).
 
 Mismo aislamiento + rate-limit que ``/v1/tasks`` (son parte del MISMO dashboard, que
 ya carga ``/tasks``): el ``user_id`` sale del JWT (``CurrentUser``) y todo query
@@ -44,10 +45,13 @@ async def get_suggestions(
     user_id: CurrentUser,
     store: TokenStoreDep,
 ) -> SuggestionsResponse:
-    """Sugerencias proactivas ("Ynara sugiere") derivadas de las tareas del usuario.
+    """Sugerencias proactivas ("Ynara sugiere") derivadas de las tareas + el perfil.
 
     - AISLAMIENTO: ``build_suggestions`` deriva del ``TaskStore`` ligado al ``user_id``
       del JWT; solo ve las tareas del usuario.
+    - COLD-START (G5): si faltan nudges de tareas, rellena con nudges de arranque por
+      modo, de los ``interested_modes`` (prefs) ordenados por la dedicación sembrada
+      (memoria procedural) — primeras recomendaciones aunque el usuario no tenga tasks.
     - Rate-limit: bucket por ``user_id`` del dashboard Hoy, ANTES de tocar la DB.
       fail-open si Redis cae. 429 + ``Retry-After`` al cruzar.
     - ``items`` vacío es válido (la web oculta la sección): no se inventa contenido.

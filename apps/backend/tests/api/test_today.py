@@ -24,10 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_db
 from app.core.security import create_access_token
-from app.enums import TaskStatus
+from app.enums import Mode, TaskStatus
 from app.main import app
+from app.memory.procedural import ProceduralMemoryStore
 from app.models.task import Task
 from app.models.user import User
+from app.schemas.memory import ProceduralMemoryUpsert
+from app.services.onboarding_seed import DEDICATION_KEY
 from app.services.today import build_recap, build_suggestions
 
 pytestmark = pytest.mark.integration
@@ -38,6 +41,15 @@ _NOW = datetime(2026, 6, 22, 12, 0, tzinfo=UTC)
 
 async def _seed_user(session: AsyncSession) -> User:
     user = User()
+    session.add(user)
+    await session.flush()
+    await session.refresh(user)
+    return user
+
+
+async def _seed_user_with_modes(session: AsyncSession, modes: list[str]) -> User:
+    """User onboardeado con ``interested_modes`` en ``preferences`` (para el cold-start G5)."""
+    user = User(preferences={"interested_modes": modes})
     session.add(user)
     await session.flush()
     await session.refresh(user)
@@ -157,6 +169,98 @@ async def test_suggestions_isolation(db_session: AsyncSession) -> None:
     )
 
     assert await build_suggestions(db_session, user_a.id, now=_NOW) == []
+
+
+# ---------------------------------------------------------------------------
+# Suggestions — cold-start desde prefs + memoria (G5, ADR-026)
+# ---------------------------------------------------------------------------
+
+
+async def test_suggestions_cold_start_from_interested_modes(db_session: AsyncSession) -> None:
+    """Sin tareas pero con modos elegidos → nudges de arranque por modo (con tint + why)."""
+    user = await _seed_user_with_modes(db_session, ["estudio", "vida"])
+
+    out = await build_suggestions(db_session, user.id, now=_NOW)
+
+    assert len(out) == 2  # cap _MAX_SUGGESTIONS
+    assert [s.mode for s in out] == [Mode.ESTUDIO, Mode.VIDA]  # orden de interested_modes
+    assert all(s.mode is not None for s in out)  # tinteadas (≠ los nudges de tareas)
+    assert all(s.why for s in out)  # porqué honesto no vacío
+
+
+async def test_suggestions_dedication_orders_modes(db_session: AsyncSession) -> None:
+    """La dedicación SEMBRADA (memoria procedural) prioriza su modo en el cold-start.
+
+    interested_modes viene [vida, estudio] pero la dedicación es "estudio": estudio va
+    primero. Prueba que el cold-start lee la MEMORIA, no solo las prefs.
+    """
+    user = await _seed_user_with_modes(db_session, ["vida", "estudio"])
+    await ProceduralMemoryStore(db_session, user.id).upsert(
+        ProceduralMemoryUpsert(key=DEDICATION_KEY, value={"dedication": "estudio"})
+    )
+    await db_session.flush()
+
+    out = await build_suggestions(db_session, user.id, now=_NOW)
+
+    assert [s.mode for s in out] == [Mode.ESTUDIO, Mode.VIDA]
+
+
+async def test_suggestions_tasks_first_then_mode_fill(db_session: AsyncSession) -> None:
+    """Con 1 tarea a futuro + modos: el nudge de tarea va primero y el modo rellena el slot."""
+    user = await _seed_user_with_modes(db_session, ["estudio"])
+    await _seed_task(
+        db_session, user_id=user.id, title="Reunión", scheduled_at="2026-06-22T18:00:00+00:00"
+    )
+
+    out = await build_suggestions(db_session, user.id, now=_NOW)
+
+    assert len(out) == 2
+    assert out[0].title == "Preparate para Reunión"
+    assert out[0].mode is None  # nudge de tarea, transversal
+    assert out[1].mode == Mode.ESTUDIO  # relleno por modo en el slot restante
+
+
+async def test_suggestions_full_tasks_no_mode_fill(db_session: AsyncSession) -> None:
+    """Con el cap lleno de nudges de tareas, NO se rellena con modos (cap respetado)."""
+    user = await _seed_user_with_modes(db_session, ["estudio", "vida"])
+    for hour, title in ((14, "Una"), (16, "Dos")):
+        await _seed_task(
+            db_session, user_id=user.id, title=title, scheduled_at=f"2026-06-22T{hour}:00:00+00:00"
+        )
+
+    out = await build_suggestions(db_session, user.id, now=_NOW)
+
+    assert [s.title for s in out] == ["Preparate para Una", "Preparate para Dos"]
+    assert all(s.mode is None for s in out)
+
+
+async def test_suggestions_mode_id_stable(db_session: AsyncSession) -> None:
+    """El id del nudge por modo es estable entre requests (key de React)."""
+    user = await _seed_user_with_modes(db_session, ["estudio"])
+
+    first = await build_suggestions(db_session, user.id, now=_NOW)
+    second = await build_suggestions(db_session, user.id, now=_NOW)
+
+    assert first[0].id == second[0].id
+    assert first[0].mode == Mode.ESTUDIO
+
+
+async def test_get_suggestions_cold_start_http(db_session: AsyncSession) -> None:
+    """GET /v1/suggestions de un usuario onboardeado sin tareas → nudge por modo tinteado."""
+    user = await _seed_user_with_modes(db_session, ["estudio"])
+
+    client = await _client(db_session)
+    try:
+        async with client:
+            resp = await client.get("/v1/suggestions", headers=_bearer(user.id))
+
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+        assert len(items) == 1
+        assert items[0]["mode"] == "estudio"  # tinteada por el modo elegido
+        assert items[0]["why"]
+    finally:
+        app.dependency_overrides.clear()
 
 
 # ---------------------------------------------------------------------------
