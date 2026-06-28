@@ -1,6 +1,6 @@
 import { type UserOut, UserOutSchema } from "@ynara/shared-schemas";
 import { api } from "../../api";
-import { type AuthUser, AuthUserSchema, type TokenResponse, TokenResponseSchema } from "./schemas";
+import { type TokenResponse, TokenResponseSchema } from "./schemas";
 
 /*
  * Llamadas de auth contra el backend real, compartibles web + mobile (ADR-012).
@@ -27,12 +27,16 @@ export type AuthSession = { userId: string; token: string };
  */
 export type LoginResult = AuthSession & { user: UserOut };
 
-/** `POST /v1/auth/register` — crea el user. No devuelve token (se pide aparte). */
-export async function register(input: Credentials & { displayName?: string }): Promise<AuthUser> {
+/**
+ * `POST /v1/auth/register` — crea el user. No devuelve token (se pide aparte). El
+ * backend responde el `UserOut` completo (`UserOut.model_validate`), así que se
+ * parsea con `UserOutSchema` (la fuente canónica) en vez de un subset divergente.
+ */
+export async function register(input: Credentials & { displayName?: string }): Promise<UserOut> {
   const body: Record<string, unknown> = { email: input.email, password: input.password };
   if (input.displayName) body.display_name = input.displayName;
   const raw = await api.post<unknown>("/v1/auth/register", body, { skipAuth: true });
-  return AuthUserSchema.parse(raw);
+  return UserOutSchema.parse(raw);
 }
 
 /** `POST /v1/auth/token` — login con credenciales: access + refresh. */
@@ -51,10 +55,10 @@ export async function signUp(input: Credentials & { displayName?: string }): Pro
 /**
  * Login: `token` + `GET /v1/auth/me`. Devuelve la sesión + el `UserOut` completo.
  *
- * Parsea el `me` con `UserOutSchema` (incluye `preferences`/`retention`), no con
- * `AuthUserSchema` (subset): G3b necesita el perfil completo para recuperar el
- * estado del usuario en un dispositivo nuevo. El Bearer va explícito porque el
- * user store todavía no tiene sesión durante el onboarding.
+ * Parsea el `me` con `UserOutSchema` (incluye `preferences`/`retention`): G3b
+ * necesita el perfil completo para recuperar el estado del usuario en un
+ * dispositivo nuevo. El Bearer va explícito porque el user store todavía no tiene
+ * sesión durante el onboarding.
  */
 export async function logIn(input: Credentials): Promise<LoginResult> {
   const token = await login(input);
