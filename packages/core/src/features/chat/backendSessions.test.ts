@@ -46,4 +46,12 @@ describe("createBackendSessionStore", () => {
     store.getState().reset();
     expect(store.getState().getBackendSessionId("local-1")).toBeNull();
   });
+
+  it("es idempotente: no muta el estado si el id ya coincide", () => {
+    store.getState().setBackendSessionId("local-1", "backend-1");
+    const stateBefore = store.getState();
+    store.getState().setBackendSessionId("local-1", "backend-1");
+    // Misma referencia: el guard evita el set (y el re-render que dispararía).
+    expect(store.getState()).toBe(stateBefore);
+  });
 });
