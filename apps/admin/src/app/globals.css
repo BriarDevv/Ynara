@@ -163,6 +163,12 @@ html.theme-dark {
   --color-ink-faint: rgb(243 240 234 / 0.18);
   --color-border: rgb(243 240 234 / 0.10);
   --color-border-strong: rgb(243 240 234 / 0.18);
+  /* Error (a11y): el ladrillo #c0392b cae a ~2.1-2.6:1 sobre las superficies de
+     Noche (falla AA como texto, y el error se usa como texto en form fields). Se
+     sube a un coral claro que cumple AA en las tres: 4.82:1 sobre bg-soft, 5.37:1
+     sobre bg, 5.94:1 sobre canvas. Espeja el fix de apps/web. */
+  --color-error: #ff8585;
+  --color-error-soft: rgb(255 133 133 / 0.15);
   --color-selected-ring: var(--color-celeste);
   --color-memory: var(--color-lavanda); /* texto de modo claro sobre oscuro */
   --layer-procedural: var(--color-lavanda);
