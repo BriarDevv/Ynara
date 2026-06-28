@@ -21,7 +21,9 @@ let currentUser: UserOut = {
   id: "0193f010-0000-7000-8000-000000000001",
   email: "mateo@ynara.app",
   display_name: "Mateo",
+  is_ephemeral: false,
   onboarding_completed: true,
+  time_zone: "America/Argentina/Buenos_Aires",
   retention_sensitive_days: 365,
   preferences: {
     interested_modes: ["productividad", "estudio"],

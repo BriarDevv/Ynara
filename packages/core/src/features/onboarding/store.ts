@@ -1,13 +1,12 @@
+import type { Dedication } from "@ynara/shared-schemas";
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import type { OnboardingStep } from "./steps";
 
-/**
- * A qué se dedica el user (step "sobre-vos").
- * TODO(backend): sobre-vos es client-side todavía; cuando exista la columna/
- * contrato, espejar esta unión en @ynara/shared-schemas (Pydantic gana, Zod sigue).
- */
-export type Dedication = "estudio" | "trabajo" | "ambos" | "otro";
+// A qué se dedica el user (step "sobre-vos"). La unión canónica vive en
+// @ynara/shared-schemas (`DedicationSchema`, mirror de Pydantic); se importa para
+// el draft y se re-exporta para que el user store la consuma sin duplicar la unión.
+export type { Dedication };
 
 /**
  * Store del draft del onboarding, compartido web + mobile (ADR-012). Estado

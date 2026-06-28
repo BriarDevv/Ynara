@@ -19,7 +19,9 @@ function makeMe(overrides: Partial<UserOut> = {}): UserOut {
     id: "0193aaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
     email: "mateo@ynara.app",
     display_name: "Mateo",
+    is_ephemeral: false,
     onboarding_completed: true,
+    time_zone: "UTC",
     retention_sensitive_days: 365,
     preferences: {
       interested_modes: ["productividad", "estudio"],
