@@ -83,13 +83,11 @@ export function useCompleteOnboarding(): Returns {
         return;
       }
       const user = useUserStore.getState();
-      // El onboarding solo crea cuentas reales (signup): ya no hay entrada
-      // efímera, así que isEphemeral va en false. (El flag existe en el backend
-      // pero el front todavía no lo consume.)
+      // El onboarding solo crea cuentas reales (signup). El backend hardcodea
+      // is_ephemeral=False y el front no consume ese flag.
       user.setAuth({
         userId: d.authedUserId,
         token: d.authedToken,
-        isEphemeral: false,
       });
       user.setDisplayName(data.displayName);
       user.setMood(data.mood, data.moodFreeText ?? "");

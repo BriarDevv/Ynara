@@ -35,7 +35,7 @@ describe("api — inyección de auth (Bearer)", () => {
   });
 
   it("adjunta Authorization: Bearer cuando hay token en el store", async () => {
-    useUserStore.getState().setAuth({ userId: "u1", token: "tok-123", isEphemeral: false });
+    useUserStore.getState().setAuth({ userId: "u1", token: "tok-123" });
     await api.get("/v1/sessions");
     expect(authHeaderOf(fetchMock)).toBe("Bearer tok-123");
   });
@@ -46,13 +46,13 @@ describe("api — inyección de auth (Bearer)", () => {
   });
 
   it("respeta skipAuth aunque haya token (endpoints públicos)", async () => {
-    useUserStore.getState().setAuth({ userId: "u1", token: "tok-123", isEphemeral: false });
+    useUserStore.getState().setAuth({ userId: "u1", token: "tok-123" });
     await api.post("/v1/auth/token", { email: "a@b.com" }, { skipAuth: true });
     expect(authHeaderOf(fetchMock)).toBeNull();
   });
 
   it("NO manda el Bearer a un host ajeno (perímetro)", async () => {
-    useUserStore.getState().setAuth({ userId: "u1", token: "tok-123", isEphemeral: false });
+    useUserStore.getState().setAuth({ userId: "u1", token: "tok-123" });
     await api.get("https://evil.example.com/steal");
     expect(authHeaderOf(fetchMock)).toBeNull();
   });

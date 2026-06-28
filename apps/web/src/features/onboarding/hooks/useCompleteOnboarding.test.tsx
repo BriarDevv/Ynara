@@ -63,20 +63,6 @@ describe("useCompleteOnboarding", () => {
     expect(result.current.error).toBeNull();
   });
 
-  it("cuenta registrada (signup): isEphemeral queda en false", async () => {
-    seedDraft({ auth: "signup" });
-    patch.mockResolvedValue({ id: "u1", onboarding_completed: true });
-    // Forzamos el previo a true para que el assert distinga "seteado a false"
-    // de "nunca tocado" (no tautológico).
-    useUserStore.getState().setAuth({ userId: "x", token: "x", isEphemeral: true });
-
-    const { result } = renderHook(() => useCompleteOnboarding(), { wrapper });
-    act(() => result.current.complete());
-
-    await waitFor(() => expect(result.current.isCelebrating).toBe(true));
-    expect(useUserStore.getState().isEphemeral).toBe(false);
-  });
-
   it("sin auth en el draft: error 'Sesión inválida' y NO completa el onboarding", async () => {
     seedDraft({ auth: null });
     patch.mockResolvedValue({ id: "u1", onboarding_completed: true });

@@ -22,7 +22,6 @@ export type UserProfile = {
    */
   token: string | null;
   displayName: string;
-  isEphemeral: boolean;
   /** Resultado del step de mood. */
   mood: string[];
   moodFreeText: string;
@@ -43,7 +42,7 @@ export type UserProfile = {
 };
 
 type UserActions = {
-  setAuth: (input: { userId: string; token: string; isEphemeral: boolean }) => void;
+  setAuth: (input: { userId: string; token: string }) => void;
   setDisplayName: (name: string) => void;
   setMood: (mood: string[], freeText: string) => void;
   setInterestedModes: (modes: Mode[]) => void;
@@ -62,7 +61,6 @@ const initialState: UserProfile = {
   userId: null,
   token: null,
   displayName: "",
-  isEphemeral: false,
   mood: [],
   moodFreeText: "",
   interestedModes: [],
@@ -84,7 +82,7 @@ export function createUserStore(storage: StateStorage) {
     persist(
       (set) => ({
         ...initialState,
-        setAuth: ({ userId, token, isEphemeral }) => set({ userId, token, isEphemeral }),
+        setAuth: ({ userId, token }) => set({ userId, token }),
         setDisplayName: (displayName) => set({ displayName }),
         setMood: (mood, moodFreeText) => set({ mood, moodFreeText }),
         setInterestedModes: (interestedModes) => set({ interestedModes }),

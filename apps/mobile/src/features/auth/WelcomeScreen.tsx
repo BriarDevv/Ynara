@@ -41,7 +41,7 @@ export function WelcomeScreen() {
   const [pending, setPending] = useState(false);
 
   const enterApp = (session: { userId: string; token: string }) => {
-    setAuth({ userId: session.userId, token: session.token, isEphemeral: false });
+    setAuth({ userId: session.userId, token: session.token });
     completeOnboarding();
     router.replace("/");
   };

@@ -52,7 +52,6 @@ export function TuScreen() {
   const displayNameStored = useUserStore((s) => s.displayName);
   const setDisplayName = useUserStore((s) => s.setDisplayName);
   const reset = useUserStore((s) => s.reset);
-  const isEphemeral = useUserStore((s) => s.isEphemeral);
 
   // ----- A11y store -----
   const textSize = useA11yStore((s) => s.textSize);
@@ -272,7 +271,6 @@ export function TuScreen() {
         {/* Confirmación de cierre de sesión (auditoría H4) */}
         <LogoutSheet
           open={logoutOpen}
-          isEphemeral={isEphemeral}
           onClose={() => setLogoutOpen(false)}
           onConfirm={handleLogout}
         />
