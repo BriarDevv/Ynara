@@ -16,7 +16,7 @@
  */
 export default function AppLoading() {
   return (
-    <div className="flex flex-1 items-center justify-center py-20">
+    <div aria-busy="true" className="flex flex-1 items-center justify-center py-20">
       <p role="status" className="text-body text-[var(--color-ink-soft)]">
         Cargando…
       </p>
