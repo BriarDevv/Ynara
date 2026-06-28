@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, CheckConstraint, Index, Integer, String, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPKMixin
@@ -67,6 +68,14 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     # La validación IANA vive en el boundary Pydantic (``validate_iana_tz``), no acá: el
     # modelo solo declara la columna.
     time_zone: Mapped[str] = mapped_column(String(64), nullable=False, server_default=text("'UTC'"))
+    # Prefs OPERATIVAS del onboarding (modos de interés + a11y): "cómo configuro la app para
+    # este usuario", NO "quién es" (eso es memoria sagrada — ADR-026, sembrada en G4 aparte).
+    # JSONB en vez de N columnas: la forma la fija el contrato Pydantic (``UserPreferences``),
+    # no el schema SQL. ``server_default='{}'::jsonb`` para no romper filas existentes en la
+    # migración (tabla sensible, sin backfill); las filas viejas quedan con ``{}``.
+    preferences: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
     retention_sensitive_days: Mapped[int] = mapped_column(Integer, nullable=False, default=180)
 
     sessions: Mapped[list[ChatSession]] = relationship(
