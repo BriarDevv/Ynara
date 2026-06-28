@@ -126,7 +126,7 @@ export function Sheet({
               type="button"
               onClick={onClose}
               aria-label="Cerrar"
-              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-ink-soft)] transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-bg-soft)] hover:text-[var(--color-ink)]"
+              className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-ink-soft)] transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-bg-soft)] hover:text-[var(--color-ink)]"
             >
               <Icon name="cerrar" size={18} />
             </button>
