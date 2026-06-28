@@ -93,7 +93,7 @@ class OnboardingIntake(YnaraBaseModel):
     # ``>= 1``: el onboarding exige al menos un modo de interés (gate del step "modos").
     interested_modes: list[Mode] = Field(min_length=1)
     a11y: A11yPrefs
-    # memory-bound (G4): se acepta/valida, NO se persiste todavía.
+    # memory-bound: G4 lo siembra en memoria (semantic) vía seed_onboarding_memory.
     mood: list[str] = Field(default_factory=list, max_length=2)
     mood_free_text: str | None = Field(default=None, max_length=160)
     about: AboutYou | None = None
