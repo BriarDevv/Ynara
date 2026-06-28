@@ -15,12 +15,18 @@ import { env } from "@/lib/env";
 const apiUrl = (path: string) => `${env.NEXT_PUBLIC_API_URL}${path}`;
 
 // Usuario de demo seedeado. UUID estable para que los links de prueba no roten.
+// `preferences` espeja la columna JSONB operativa (modos + a11y) que el backend
+// devuelve desde G2: un usuario demo ya onboardeado tiene modos y a11y elegidos.
 let currentUser: UserOut = {
   id: "0193f010-0000-7000-8000-000000000001",
   email: "mateo@ynara.app",
   display_name: "Mateo",
   onboarding_completed: true,
   retention_sensitive_days: 365,
+  preferences: {
+    interested_modes: ["productividad", "estudio"],
+    a11y: { text_size: "md", high_contrast: false, motion: "auto" },
+  },
   created_at: "2025-01-01T00:00:00+00:00",
   updated_at: new Date().toISOString(),
 };

@@ -3,7 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { DisplayNameSchema } from "@ynara/shared-schemas";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ChipGroup } from "@/components/ui/ChipGroup";
 import { HeroReveal } from "@/components/ui/HeroReveal";
@@ -15,9 +15,10 @@ import { Toggle } from "@/components/ui/Toggle";
 import { useChatStore } from "@/features/chat/store";
 import { useMemoryExport } from "@/features/memory/api";
 import { useOnboardingStore } from "@/features/onboarding/store";
-import { useUpdateMe } from "@/features/profile/api";
+import { useMe, useUpdateMe } from "@/features/profile/api";
 import { useAvisosStore } from "@/features/today/avisosStore";
 import { useActiveMode } from "@/hooks/useActiveMode";
+import { qk } from "@/lib/queryKeys";
 import { applyA11yClasses, type TextSize, useA11yStore } from "@/stores/a11y";
 import { useActiveModeStore } from "@/stores/mode";
 import { applyThemeClass, type ThemePreference, useThemeStore } from "@/stores/theme";
@@ -86,6 +87,11 @@ export function TuView() {
   const displayName = useUserStore((s) => s.displayName);
   const setDisplayName = useUserStore((s) => s.setDisplayName);
   const resetUser = useUserStore((s) => s.reset);
+  const token = useUserStore((s) => s.token);
+
+  // Perfil real del backend (G3): trae la retención persistida. Solo con sesión
+  // (sin token el endpoint da 401). Hidrata el chip de retención más abajo.
+  const meQuery = useMe({ enabled: Boolean(token) });
 
   // Store de tema
   const theme = useThemeStore((s) => s.theme);
@@ -103,8 +109,19 @@ export function TuView() {
   const [nameValue, setNameValue] = useState(displayName ?? "");
   const [nameError, setNameError] = useState<string | null>(null);
 
-  // Retención
+  // Retención. Arranca en el default y se hidrata con el valor real del backend
+  // cuando llega `me` (G3: antes quedaba clavado en 365). Solo se adopta si el
+  // valor cae en las opciones del chip (el backend lo acota a 30..365 y el FE
+  // solo escribe esas 4; un valor fuera de set mantiene el default visible).
   const [retention, setRetention] = useState<RetentionValue>("365");
+  const serverRetention = meQuery.data?.retention_sensitive_days;
+  useEffect(() => {
+    if (serverRetention == null) return;
+    const value = String(serverRetention);
+    if (RETENTION_OPTIONS.some((o) => o.value === value)) {
+      setRetention(value as RetentionValue);
+    }
+  }, [serverRetention]);
 
   // Dialog de wipe
   const [wipeOpen, setWipeOpen] = useState(false);
@@ -176,6 +193,9 @@ export function TuView() {
       // display_name puede ser null si el backend aún no lo guardó; el
       // fallback vacío evita propagar null al store (setDisplayName: string).
       setDisplayName(updated.display_name ?? "");
+      // El perfil cambió server-side: refrescamos la query `me` para que la
+      // próxima lectura (o re-montaje) traiga el valor persistido, no el cacheado.
+      queryClient.invalidateQueries({ queryKey: qk.profile.me() });
       setToast({ message: "Nombre guardado.", variant: "success" });
     } catch {
       setToast({ message: "No se pudo guardar el nombre. Intentá de nuevo.", variant: "error" });
@@ -190,12 +210,13 @@ export function TuView() {
     // Optimista con revert: mostramos el valor elegido ya, pero si el server lo
     // rechaza volvemos al previo — si no, el chip quedaba mostrando una
     // retención que el backend no aceptó (UI mentirosa sobre un control de
-    // privacidad). (La hidratación del valor real depende de un GET /me que aún
-    // no existe; el default sigue siendo 365 hasta entonces.)
+    // privacidad). El valor real se hidrata de `me` (G3); tras el PATCH OK
+    // invalidamos esa query para que quede consistente con el backend.
     const previous = retention;
     setRetention(value);
     try {
       await updateMe.mutateAsync({ retention_sensitive_days: Number(value) });
+      queryClient.invalidateQueries({ queryKey: qk.profile.me() });
       setToast({ message: "Retención actualizada.", variant: "success" });
     } catch {
       setRetention(previous);

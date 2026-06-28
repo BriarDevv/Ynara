@@ -1,9 +1,11 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemoryExport } from "@ynara/core/features/memory";
-import { useUpdateMe } from "@ynara/core/features/profile";
+import { useMe, useUpdateMe } from "@ynara/core/features/profile";
+import { qk } from "@ynara/core/query-keys";
 import type { TextSize } from "@ynara/core/stores";
 import { DisplayNameSchema } from "@ynara/shared-schemas";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Share, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "@/components/ui/Button";
@@ -48,10 +50,17 @@ const TEXT_SIZE_OPTIONS: readonly { value: TextSize; label: string }[] = [
 export function TuScreen() {
   const router = useRouter();
 
+  const queryClient = useQueryClient();
+
   // ----- User store -----
   const displayNameStored = useUserStore((s) => s.displayName);
   const setDisplayName = useUserStore((s) => s.setDisplayName);
   const reset = useUserStore((s) => s.reset);
+  const token = useUserStore((s) => s.token);
+
+  // Perfil real del backend (G3): trae la retención persistida. Solo con sesión
+  // (sin token el endpoint da 401). Hidrata el chip de retención más abajo.
+  const meQuery = useMe({ enabled: Boolean(token) });
 
   // ----- A11y store -----
   const textSize = useA11yStore((s) => s.textSize);
@@ -80,6 +89,8 @@ export function TuScreen() {
       // display_name puede venir null del backend; el store espera string.
       // Fallback vacío, igual que el TuView web.
       setDisplayName(out.display_name ?? "");
+      // Refrescamos `me` para que la próxima lectura traiga el valor persistido.
+      queryClient.invalidateQueries({ queryKey: qk.profile.me() });
       setNameSaved(true);
     } catch {
       setNameError("No pudimos guardar el nombre. Intentá de nuevo.");
@@ -88,16 +99,33 @@ export function TuScreen() {
 
   // ----- Retención -----
   // El ChipGroup es string-genérico; convertimos a número antes de la API.
+  // Arranca en el default y se hidrata con el valor real del backend cuando llega
+  // `me` (G3: antes quedaba clavado en 365). Solo se adopta si cae en las opciones
+  // del chip (el backend lo acota a 30..365 y el FE solo escribe esas 4).
   const [retention, setRetention] = useState<RetentionStr>("365");
   const [retentionSaved, setRetentionSaved] = useState(false);
   const [retentionError, setRetentionError] = useState<string | null>(null);
+  const serverRetention = meQuery.data?.retention_sensitive_days;
+  useEffect(() => {
+    if (serverRetention == null) return;
+    const value = String(serverRetention);
+    if (RETENTION_OPTIONS.some((o) => o.value === value)) {
+      setRetention(value as RetentionStr);
+    }
+  }, [serverRetention]);
 
   async function handleRetentionChange(days: RetentionStr) {
+    // Guard de pending (paridad con TuView web): con un PATCH en vuelo ignoramos
+    // un segundo cambio — si no, dos toques rápidos encadenan mutation + invalidación
+    // + refetch y pueden dejar el chip en un valor transitorio inconsistente.
+    if (updateMe.isPending) return;
     setRetention(days);
     setRetentionSaved(false);
     setRetentionError(null);
     try {
       await updateMe.mutateAsync({ retention_sensitive_days: Number(days) });
+      // Refrescamos `me` para que la próxima lectura traiga el valor persistido.
+      queryClient.invalidateQueries({ queryKey: qk.profile.me() });
       setRetentionSaved(true);
     } catch {
       setRetentionError("No pudimos guardar. Intentá de nuevo.");
@@ -182,7 +210,6 @@ export function TuScreen() {
               <Text className="text-caption text-ink-soft">RETENCIÓN</Text>
               <Text className="text-body-sm text-ink-soft">
                 Tiempo que Ynara guarda tus recuerdos sensibles.
-                {/* Nota: sin GET /me el valor reflejado es la selección local de esta sesión. */}
               </Text>
             </View>
             <ChipGroup

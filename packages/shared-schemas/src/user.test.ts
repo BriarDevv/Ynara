@@ -37,12 +37,31 @@ describe("UserOutSchema", () => {
     display_name: "Mateo",
     onboarding_completed: true,
     retention_sensitive_days: 365,
+    preferences: {
+      interested_modes: ["productividad", "estudio"],
+      a11y: { text_size: "md", high_contrast: false, motion: "auto" },
+    },
     created_at: ISO,
     updated_at: ISO,
   };
 
-  it("acepta un UserOut válido", () => {
+  it("acepta un UserOut válido con preferences pobladas", () => {
     expect(UserOutSchema.parse(valid)).toEqual(valid);
+  });
+
+  it("default preferences a {} cuando la clave falta (defensivo)", () => {
+    const { preferences: _omit, ...rest } = valid;
+    expect(UserOutSchema.parse(rest).preferences).toEqual({});
+  });
+
+  it("acepta preferences vacío (filas pre-onboarding)", () => {
+    expect(UserOutSchema.parse({ ...valid, preferences: {} }).preferences).toEqual({});
+  });
+
+  it("rechaza un modo inválido en preferences.interested_modes", () => {
+    expect(
+      UserOutSchema.safeParse({ ...valid, preferences: { interested_modes: ["nope"] } }).success,
+    ).toBe(false);
   });
 
   it("rechaza email inválido", () => {
