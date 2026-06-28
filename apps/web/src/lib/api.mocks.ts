@@ -107,7 +107,7 @@ export const handlers = [
       );
     }
     const now = new Date().toISOString();
-    // Shape de UserOut (snake_case) que parsea AuthUserSchema de core.
+    // Shape de UserOut (snake_case) que parsea UserOutSchema de core.
     return HttpResponse.json(
       {
         id: `mock-user-${Date.now()}`,
