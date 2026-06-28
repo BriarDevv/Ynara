@@ -127,7 +127,16 @@ export function ChatComposer({ onSend, busy, mode, onStop, initialText = "" }: P
           aria-label="Escribí tu mensaje"
           placeholder="Escribile a Ynara…"
           style={{ maxHeight: `${MAX_HEIGHT_PX}px` }}
-          className="text-body flex-1 resize-none bg-transparent px-2 py-1.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-soft)] outline-none disabled:opacity-60"
+          // `py-2.5` (10px) iguala el alto del textarea de una línea (24px de
+          // line-height + 20px) al del botón redondo (`h-11` = 44px). Con el
+          // contenedor en `items-end`, ambos miden lo mismo y el placeholder
+          // queda centrado; al crecer el textarea, el botón sigue anclado abajo.
+          // Sin focus ring en el composer (decisión de producto, igual que
+          // ChatGPT): la clase `composer-field` (regla en globals.css) mata el
+          // ring de marca global, que es unlayered y le gana a las utilities de
+          // Tailwind. Al escribir solo se ve el caret; el resto de la app
+          // conserva su focus ring accesible.
+          className="composer-field text-body flex-1 resize-none bg-transparent px-2 py-2.5 text-[var(--color-ink)] placeholder:text-[var(--color-ink-soft)] outline-none disabled:opacity-60"
         />
         {busy && onStop ? (
           <button

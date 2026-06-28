@@ -521,3 +521,12 @@ html.motion-off *::after {
      propio del elemento. Forzar --radius-sm cuadraba los pills (chips, switch)
      a 8px al recibir foco de teclado. */
 }
+
+/* El composer del chat va SIN focus ring (decisión de producto, como ChatGPT):
+   el caret ya comunica el foco al escribir. Regla unlayered + mayor
+   especificidad para ganarle al `:focus-visible` global de arriba — las
+   utilities de Tailwind viven en `@layer` y la cascada de capas las deja por
+   debajo de lo no-capado. El resto de la app conserva su focus ring accesible. */
+.composer-field:focus-visible {
+  box-shadow: none;
+}
