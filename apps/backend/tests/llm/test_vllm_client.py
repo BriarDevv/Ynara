@@ -10,6 +10,7 @@ health.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,19 @@ def _client(handler: Any) -> VllmClient:
         served_models=frozenset({_MODEL}),
         http_client=http,
         parser=OpenAIToolCallParser(),
+    )
+
+
+def _ollama_client(handler: Any) -> VllmClient:
+    """Cliente con ``engine="ollama"``: rutea por la API nativa ``/api/chat`` (ADR-014 D4)."""
+    transport = httpx.MockTransport(handler)
+    http = httpx.AsyncClient(transport=transport)
+    return VllmClient(
+        base_url=_BASE_URL,
+        served_models=frozenset({_MODEL}),
+        http_client=http,
+        parser=OpenAIToolCallParser(),
+        engine="ollama",
     )
 
 
@@ -221,9 +235,11 @@ async def test_complete_propagates_tool_parsing_error() -> None:
         await client.complete(model=_MODEL, messages=_messages())
 
 
-# ---------- thinking por rol: reasoning_effort + chat_template_kwargs (#205) ----------
-# reasoning_effort es el param que honra Ollama (motor 16GB, ADR-014); chat_template_kwargs
-# cubre vLLM. Se emiten ambos; verificado contra Ollama real.
+# ---------- thinking por rol (camino vLLM): reasoning_effort + chat_template_kwargs ----------
+# Estos tests cubren el camino OpenAI-compat (engine="vllm", default, #205): reasoning_effort
+# lo honra vLLM (y qwen via Ollama por su canal reasoning) + chat_template_kwargs cubre vLLM
+# sin reasoning-parser. El control de thinking de gemma4 en Ollama va por la API nativa
+# /api/chat (engine="ollama"), cubierto en la sección "Ollama engine" más abajo (ADR-014 D4).
 
 
 @pytest.mark.asyncio
@@ -354,6 +370,310 @@ async def test_stream_thinking_none_omits_chat_template_kwargs() -> None:
         pass
     assert "chat_template_kwargs" not in captured["payload"]
     assert "reasoning_effort" not in captured["payload"]
+
+
+# ---------- Ollama engine: ruteo por la API nativa /api/chat (ADR-014 D4) ----------
+# Con engine="ollama" el cliente NO usa el OpenAI-compat (que ignora el thinking de
+# gemma4, upstream Ollama #15288/#15293/#15635): rutea por la API nativa /api/chat con el
+# top-level `think`. Estos tests usan MockTransport y afirman la FORMA del request nativo +
+# el parseo de la respuesta nativa (content/thinking/tool_calls/streaming).
+
+
+def _native_done_body(
+    *, content: str = "ok", thinking: str = "", done_reason: str = "stop"
+) -> dict[str, Any]:
+    """Respuesta nativa no-stream mínima de Ollama (``/api/chat`` con ``done:true``)."""
+    message: dict[str, Any] = {"role": "assistant", "content": content}
+    if thinking:
+        message["thinking"] = thinking
+    return {
+        "model": "gemma4",
+        "message": message,
+        "done": True,
+        "done_reason": done_reason,
+        "prompt_eval_count": 12,
+        "eval_count": 5,
+    }
+
+
+@pytest.mark.asyncio
+async def test_ollama_complete_routes_to_native_api_chat_with_think_false() -> None:
+    """``engine="ollama"`` + ``thinking=False`` -> POST a ``/api/chat`` con ``think:false``.
+
+    El fix del gotcha de gemma4: el control de thinking va por la API nativa, NO por el
+    OpenAI-compat (que lo ignora). Las claves OpenAI de thinking NUNCA viajan por acá.
+    """
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(200, json=_native_done_body(content="Hola"))
+
+    client = _ollama_client(handler)
+    result = await client.complete(model=_MODEL, messages=_messages(), thinking=False)
+
+    # Ruteo: el /v1 del base_url se cae; el request va a la API nativa.
+    assert captured["path"] == "/api/chat"
+    payload = captured["payload"]
+    assert payload["think"] is False
+    assert payload["stream"] is False
+    # Las claves del OpenAI-compat NO se filtran al camino nativo.
+    assert "chat_template_kwargs" not in payload
+    assert "reasoning_effort" not in payload
+    # El sampling va en ``options`` (num_predict = max_tokens nativo).
+    assert payload["options"]["num_predict"] == 1024
+    assert payload["options"]["temperature"] == 0.7
+    # Parseo de la respuesta nativa.
+    assert result.text == "Hola"
+    assert result.finish_reason == "stop"
+    assert result.prompt_tokens == 12
+    assert result.completion_tokens == 5
+    assert result.model_name == "gemma4"
+
+
+@pytest.mark.asyncio
+async def test_ollama_complete_think_true() -> None:
+    """``engine="ollama"`` sin tools + ``thinking=True`` -> ``think:true`` en el body nativo."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(200, json=_native_done_body())
+
+    client = _ollama_client(handler)
+    await client.complete(model=_MODEL, messages=_messages(), thinking=True)
+    assert captured["payload"]["think"] is True
+
+
+@pytest.mark.asyncio
+async def test_ollama_complete_thinking_none_omits_think() -> None:
+    """Sin ``thinking`` (None) -> NO se emite ``think`` (usa el default del modelo)."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(200, json=_native_done_body())
+
+    client = _ollama_client(handler)
+    await client.complete(model=_MODEL, messages=_messages())
+    assert "think" not in captured["payload"]
+
+
+@pytest.mark.asyncio
+async def test_ollama_complete_maps_thinking_channel_to_reasoning() -> None:
+    """La respuesta nativa mapea ``message.thinking`` -> ``CompletionResult.reasoning``."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json=_native_done_body(content="respuesta", thinking="razonando...")
+        )
+
+    client = _ollama_client(handler)
+    result = await client.complete(model=_MODEL, messages=_messages(), thinking=True)
+    assert result.text == "respuesta"
+    assert result.reasoning == "razonando..."
+
+
+@pytest.mark.asyncio
+async def test_ollama_with_tools_routes_to_openai_compat() -> None:
+    """``engine="ollama"`` + tools presentes -> camino OpenAI-compat (NO nativo).
+
+    El agent-loop de qwen (productividad/memoria) requiere tool-calling que funciona
+    correctamente en el OpenAI-compat de Ollama. Rutear por el nativo rompe el loop:
+    el streaming nativo emite tool_calls completas (incompatible con el accumulator de
+    deltas del agente, ADR-021/022). Solo los requests SIN tools van por el nativo
+    (gemma4 conversacional, thinking off). El thinking con tools va por
+    ``reasoning_effort`` (qwen sí lo honra en el OpenAI-compat).
+    """
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["payload"] = json.loads(request.content)
+        # Respuesta en formato OpenAI-compat (no nativa).
+        body = {
+            "id": "chatcmpl-1",
+            "model": _MODEL,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "get_weather",
+                                    "arguments": '{"city": "Rosario"}',
+                                },
+                            }
+                        ],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ],
+            "usage": {"prompt_tokens": 20, "completion_tokens": 10},
+        }
+        return httpx.Response(200, json=body)
+
+    client = _ollama_client(handler)
+    tools = [
+        ToolSpec(
+            name="get_weather",
+            description="clima",
+            parameters={"type": "object", "properties": {}},
+        )
+    ]
+    result = await client.complete(model=_MODEL, messages=_messages(), tools=tools, thinking=True)
+    # Con tools -> camino OpenAI-compat (/v1/chat/completions), no el nativo.
+    assert captured["path"] == "/v1/chat/completions"
+    # El control de thinking NO va por ``think`` (nativo), sino por reasoning_effort.
+    assert "think" not in captured["payload"]
+    assert captured["payload"]["reasoning_effort"] == "medium"
+    # Tools y tool_choice en el wire OpenAI.
+    assert captured["payload"]["tool_choice"] == "auto"
+    assert captured["payload"]["tools"][0]["function"]["name"] == "get_weather"
+    # Parseo correcto de la respuesta OpenAI.
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].name == "get_weather"
+    assert result.tool_calls[0].arguments == {"city": "Rosario"}
+    assert result.finish_reason == "tool_calls"
+
+
+@pytest.mark.asyncio
+async def test_ollama_complete_encodes_native_messages() -> None:
+    """El wire nativo: ``content:null`` -> ``""`` y tool_calls con ``arguments`` como dict."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(200, json=_native_done_body())
+
+    client = _ollama_client(handler)
+    messages = [
+        ChatMessage(role="user", content="recordame algo"),
+        ChatMessage(
+            role="assistant",
+            content=None,
+            tool_calls=[
+                ToolCall(id="call_1", name="crear_recordatorio", arguments={"titulo": "x"})
+            ],
+        ),
+        ChatMessage(
+            role="tool", tool_call_id="call_1", name="crear_recordatorio", content='{"ok": true}'
+        ),
+    ]
+    await client.complete(model=_MODEL, messages=messages, thinking=True)
+    wire = captured["payload"]["messages"]
+    # content:null -> "" (la API nativa no acepta null).
+    assert wire[1]["content"] == ""
+    # tool_calls nativas: arguments como objeto (dict), NO JSON string.
+    assert wire[1]["tool_calls"][0]["function"]["arguments"] == {"titulo": "x"}
+    # el rol tool lleva tool_name (nativo).
+    assert wire[2]["role"] == "tool"
+    assert wire[2]["tool_name"] == "crear_recordatorio"
+
+
+@pytest.mark.asyncio
+async def test_ollama_stream_native_ndjson_content_and_thinking() -> None:
+    """El streaming nativo (NDJSON) acumula ``message.content`` + ``message.thinking`` y cierra."""
+    events: list[dict[str, Any]] = [
+        {"message": {"role": "assistant", "content": "", "thinking": "pien"}, "done": False},
+        {"message": {"role": "assistant", "content": "Hola", "thinking": ""}, "done": False},
+        {"message": {"role": "assistant", "content": " mundo"}, "done": False},
+        {"message": {"role": "assistant", "content": ""}, "done": True, "done_reason": "stop"},
+    ]
+    lines = "".join(json.dumps(event) + "\n" for event in events)
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(
+            200, content=lines.encode("utf-8"), headers={"content-type": "application/x-ndjson"}
+        )
+
+    client = _ollama_client(handler)
+    chunks = [
+        chunk async for chunk in client.stream(model=_MODEL, messages=_messages(), thinking=False)
+    ]
+    assert captured["path"] == "/api/chat"
+    assert captured["payload"]["stream"] is True
+    assert captured["payload"]["think"] is False
+    texts = "".join(c.delta_text for c in chunks if c.delta_text)
+    assert texts == "Hola mundo"
+    reasoning = "".join(c.reasoning_delta for c in chunks if c.reasoning_delta)
+    assert reasoning == "pien"
+    assert chunks[-1].finish_reason == "stop"
+
+
+@pytest.mark.asyncio
+async def test_ollama_complete_http_error_mapped() -> None:
+    """El camino nativo reusa el mapeo de errores HTTP (503 -> LlmUnavailableError)."""
+    client = _ollama_client(lambda req: httpx.Response(503, json={"error": "x"}))
+    with pytest.raises(LlmUnavailableError):
+        await client.complete(model=_MODEL, messages=_messages(), thinking=False)
+
+
+@pytest.mark.asyncio
+async def test_ollama_stream_timeout_mapped() -> None:
+    """El streaming nativo mapea timeout a ``LlmTimeoutError`` (igual que el camino vLLM)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException("timed out", request=request)
+
+    client = _ollama_client(handler)
+    with pytest.raises(LlmTimeoutError):
+        async for _ in client.stream(model=_MODEL, messages=_messages(), thinking=False):
+            pass
+
+
+# ---------- smoke contra Ollama real (opt-in, ADR-014 D4) ----------
+
+
+@pytest.mark.llm_smoke
+@pytest.mark.skipif(
+    not os.getenv("YNARA_OLLAMA_SMOKE"),
+    reason="smoke contra Ollama real: setear YNARA_OLLAMA_SMOKE=1 (con gemma4 en :11434)",
+)
+@pytest.mark.asyncio
+async def test_ollama_smoke_gemma4_thinking_off_returns_content() -> None:
+    """Smoke (opt-in) contra un Ollama REAL: gemma4 con thinking OFF responde con content.
+
+    Reproduce el gotcha y prueba el fix end-to-end: sin el ruteo nativo /api/chat con
+    ``think:false``, gemma4 devuelve ``content:""`` + ``finish_reason:"length"`` (todo en
+    reasoning). Con el fix, ``content`` NO está vacío y ``finish_reason != "length"``.
+
+    Opt-in: corre solo con ``YNARA_OLLAMA_SMOKE=1`` (skippeado por defecto, sin red en CI).
+    Config por env: ``YNARA_OLLAMA_BASE_URL`` (default http://localhost:11434/v1),
+    ``YNARA_OLLAMA_GEMMA_MODEL`` (default ``gemma4``).
+    """
+    base_url = os.getenv("YNARA_OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    model = os.getenv("YNARA_OLLAMA_GEMMA_MODEL", "gemma4")
+    client = VllmClient(
+        base_url=base_url,
+        served_models=frozenset({model}),
+        http_client=httpx.AsyncClient(),
+        parser=OpenAIToolCallParser(),
+        engine="ollama",
+        default_timeout_s=120.0,
+    )
+    try:
+        result = await client.complete(
+            model=model,
+            messages=[ChatMessage(role="user", content="Decime hola en una sola palabra.")],
+            thinking=False,
+            max_tokens=64,
+        )
+    finally:
+        await client.aclose()
+    assert result.text.strip() != "", "gemma4 con thinking OFF debe devolver content NO vacío"
+    assert result.finish_reason != "length", (
+        "content vacío + finish_reason='length' = el thinking no se apagó (regresión del gotcha)"
+    )
 
 
 # ---------- timeout configurable (#27) ----------

@@ -85,13 +85,36 @@ La regla práctica: en 16 GB, vLLM tolera **un** LLM grande (+ bge), no dos.
 
 El agente (Qwen) hace tool-calling vía la API de Ollama (ya es lo que usa el
 smoke de dev). Los `--tool-call-parser` de ADR-009 D2 (`hermes`/`gemma4`) son
-flags de vLLM; en Ollama el template del modelo aplica internamente. El control
-de thinking de ADR-012 D4 / #205 se mapea en el endpoint OpenAI-compatible de
-Ollama a **`reasoning_effort`** (`"none"` = OFF, `"medium"`/`"high"` = ON), NO al
-`think` top-level de la API nativa: el endpoint OpenAI-compat de Ollama ignora
-`chat_template_kwargs` (verificado contra Ollama real). El cliente emite **ambos**
-params —`reasoning_effort` (lo honra Ollama y también vLLM) + `chat_template_kwargs`
-(vLLM sin reasoning-parser)— para funcionar en los dos motores.
+flags de vLLM; en Ollama el template del modelo aplica internamente.
+
+El control de thinking de ADR-012 D4 / #205 depende del **motor del endpoint**
+(`ServingEndpoint.engine`, ADR-013):
+
+- **vLLM (24GB+, `engine="vllm"`)**: el endpoint OpenAI-compat honra
+  **`reasoning_effort`** (`"none"` = OFF, `"medium"`/`"high"` = ON) y
+  **`chat_template_kwargs.enable_thinking`** (vLLM sin reasoning-parser). El cliente
+  emite ambos params. Verificado contra vLLM real (#205/#207): `enable_thinking:
+  false` devolvió `reasoning: null` y `content` limpio.
+
+- **Ollama (16GB, `engine="ollama"`)**: el endpoint OpenAI-compat de Ollama
+  **IGNORA `chat_template_kwargs`** y, para **gemma4**, también **`reasoning_effort`**
+  (upstream Ollama [#15288](https://github.com/ollama/ollama/issues/15288),
+  [#15293](https://github.com/ollama/ollama/issues/15293),
+  [#15635](https://github.com/ollama/ollama/issues/15635)): gemma4 responde con
+  `content:""`, todo el texto en `reasoning` y `finish_reason:"length"` (parece roto,
+  pero el thinking nunca se apagó). El **único mecanismo confiable** es la API
+  **NATIVA** `{base sin /v1}/api/chat` con el top-level **`"think": false`**. Por eso
+  el cliente rutea los endpoints `engine="ollama"` por `/api/chat` (con `think`
+  derivado de la decisión de thinking del router: `false` para gemma4 conversacional,
+  `true` para qwen agente) y mapea la respuesta nativa (`message.content` +
+  `message.thinking`; streaming NDJSON con deltas de `message.content`/`thinking`).
+  `reasoning_effort` solo apaga el thinking en qwen vía su canal `reasoning`, no en
+  gemma4.
+
+El path vLLM (OpenAI-compat + `chat_template_kwargs` + `reasoning_effort`) queda
+**intacto**: el ruteo nativo es aditivo y solo se activa con `engine="ollama"`. El
+`engine` se setea por entrada de `LLM_SERVING` (`"engine":"ollama"`) o se deriva del
+`base_url` (puerto 11434 → `ollama`).
 
 ### D5 — Cuantización
 

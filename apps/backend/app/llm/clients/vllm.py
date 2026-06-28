@@ -1,11 +1,27 @@
-"""Cliente HTTP contra un endpoint OpenAI-compatible (vLLM o Ollama,
-ADR-014 D1/D2). En 16GB apunta a Ollama; en 24GB+ a vLLM.
+"""Cliente HTTP contra un endpoint de serving (vLLM o Ollama, ADR-014 D1/D2).
+En 16GB apunta a Ollama; en 24GB+ a vLLM.
 
-``VllmClient`` habla el endpoint ``/v1/chat/completions`` de un unico
-proceso de serving (un modelo por proceso vLLM, ADR-009 D1; Ollama puede
+``VllmClient`` habla el endpoint ``/v1/chat/completions`` (OpenAI-compat) de un
+unico proceso de serving (un modelo por proceso vLLM, ADR-009 D1; Ollama puede
 servir varios modelos por endpoint). Recibe el ``httpx.AsyncClient`` por
 constructor, asi que es testeable con ``httpx.MockTransport`` sin red real.
 Nunca importa FastAPI ni vLLM.
+
+``engine`` (ADR-014 D4) decide CÓMO se controla el thinking:
+
+- ``"vllm"`` (default): camino OpenAI-compat (``/v1/chat/completions`` +
+  ``reasoning_effort`` / ``chat_template_kwargs``). Path INTACTO, byte-equivalente.
+- ``"ollama"`` SIN tools: el OpenAI-compat de Ollama IGNORA ``chat_template_kwargs``
+  y, para gemma4, también ``reasoning_effort`` (upstream Ollama #15288/#15293/#15635)
+  -> el cliente rutea por la API NATIVA ``{base sin /v1}/api/chat`` con el top-level
+  ``"think"`` (único mecanismo que apaga el thinking de gemma4) y mapea la respuesta
+  nativa (``message.content`` + ``message.thinking``). El streaming nativo es NDJSON
+  (no SSE).
+- ``"ollama"`` CON tools: vuelve al camino OpenAI-compat, que maneja el tool-calling
+  de qwen correctamente. El thinking en ese caso va por ``reasoning_effort`` (qwen sí
+  lo honra). El ruteo por el nativo cuando hay tools rompería el agent-loop (herramienta
+  qwen) porque la API nativa en streaming emite tool_calls completas, incompatibles con
+  el accumulator de deltas del agente (ADR-021/022).
 
 Mapeo de errores HTTP a la taxonomia (``app/llm/errors.py``):
 
@@ -23,7 +39,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -47,6 +63,9 @@ from app.llm.schemas import (
 
 _CHAT_PATH = "/chat/completions"
 _MODELS_PATH = "/models"
+# API NATIVA de Ollama (cuelga de la raíz del server, NO de ``/v1``): el control de
+# thinking de gemma4 solo funciona acá con el top-level ``"think"`` (ADR-014 D4).
+_OLLAMA_NATIVE_CHAT_PATH = "/api/chat"
 
 # Esfuerzo de razonamiento para thinking=True (param OpenAI-standard
 # ``reasoning_effort``). "none" desactiva el thinking; "medium" es un default
@@ -91,8 +110,9 @@ class VllmClient:
         http_client: httpx.AsyncClient,
         parser: ToolCallParser,
         default_timeout_s: float = 30.0,
+        engine: Literal["ollama", "vllm"] = "vllm",
     ) -> None:
-        """Un ``VllmClient`` = un proceso vLLM.
+        """Un ``VllmClient`` = un proceso de serving (vLLM u Ollama).
 
         ``served_models`` normalmente tiene un solo ``served_name``: vLLM
         sirve un modelo por proceso (ADR-009 D1). Se modela como
@@ -103,12 +123,18 @@ class VllmClient:
         ``default_timeout_s`` es el timeout por request cuando el caller no
         pasa uno explicito; el router (M8) construye el cliente con
         ``config.serving.request_timeout_s`` (ver ynara.config.json).
+
+        ``engine`` (ADR-014 D4): ``"vllm"`` (default) usa el OpenAI-compat;
+        ``"ollama"`` rutea el thinking por la API nativa ``/api/chat`` (``think``
+        top-level), único mecanismo que apaga el thinking de gemma4. Lo setea la
+        factory desde ``ServingEndpoint.engine``.
         """
         self._base_url = base_url.rstrip("/")
         self._served_models = served_models
         self._http = http_client
         self._parser = parser
         self._default_timeout_s = default_timeout_s
+        self._engine = engine
 
     def serves_model(self, model: str) -> bool:
         return model in self._served_models
@@ -134,6 +160,20 @@ class VllmClient:
         timeout_s: float | None = None,
     ) -> CompletionResult:
         self._ensure_served(model)
+        if self._engine == "ollama" and not tools:
+            # Camino NATIVO de Ollama (ADR-014 D4): /api/chat + think top-level.
+            # Solo para requests SIN tools (gemma4 conversacional, etc.). Con tools
+            # el tool-calling de qwen funciona en el OpenAI-compat; el nativo rompería
+            # el agent-loop (ver docstring del módulo).
+            return await self._complete_native(
+                model=model,
+                messages=messages,
+                tools=tools,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                thinking=thinking,
+                timeout_s=timeout_s,
+            )
         payload = self._build_payload(
             model=model,
             messages=messages,
@@ -144,7 +184,9 @@ class VllmClient:
             stream=False,
         )
         started = time.perf_counter()
-        response = await self._post(payload, self._resolve_timeout(timeout_s))
+        response = await self._post(
+            f"{self._base_url}{_CHAT_PATH}", payload, self._resolve_timeout(timeout_s)
+        )
         latency_ms = (time.perf_counter() - started) * 1000.0
         # En no-streaming la response ya esta leida: pasamos el body para que
         # un 400 de overflow se mapee a LlmContextOverflowError (P2.4).
@@ -163,6 +205,21 @@ class VllmClient:
         timeout_s: float | None = None,
     ) -> AsyncIterator[CompletionChunk]:
         self._ensure_served(model)
+        if self._engine == "ollama" and not tools:
+            # Camino NATIVO de Ollama (ADR-014 D4): /api/chat + think top-level,
+            # streaming NDJSON (no SSE). Solo para requests SIN tools; con tools el
+            # OpenAI-compat maneja el tool-calling del agente (ver docstring módulo).
+            async for chunk in self._stream_native(
+                model=model,
+                messages=messages,
+                tools=tools,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                thinking=thinking,
+                timeout_s=timeout_s,
+            ):
+                yield chunk
+            return
         payload = self._build_payload(
             model=model,
             messages=messages,
@@ -237,16 +294,19 @@ class VllmClient:
         if tools:
             payload["tools"] = [self._encode_tool(t) for t in tools]
             payload["tool_choice"] = "auto"
-        # Control del modo de razonamiento por request (ADR-012 D4). Solo se emite
-        # si el caller decide (True/False); con ``None`` no se agrega nada y se
-        # preserva el default del server (comportamiento previo exacto). Se emiten
-        # DOS params por compatibilidad de motor (ADR-014: 16GB=Ollama, 24GB+=vLLM):
-        #  - ``reasoning_effort`` (OpenAI-standard): el UNICO que honra el endpoint
-        #    OpenAI-compatible de Ollama ("none"=OFF, "medium"=ON); vLLM tambien lo
-        #    soporta. Verificado contra Ollama real: ignora chat_template_kwargs y
-        #    suprime el thinking solo con reasoning_effort.
+        # Control del modo de razonamiento por request (ADR-012 D4) para el camino
+        # vLLM (OpenAI-compat). Solo se emite si el caller decide (True/False); con
+        # ``None`` no se agrega nada y se preserva el default del server (comportamiento
+        # previo exacto). Se emiten DOS params:
+        #  - ``reasoning_effort`` (OpenAI-standard): apaga/prende el thinking en vLLM
+        #    ("none"=OFF, "medium"=ON) y también lo honra qwen vía el OpenAI-compat de
+        #    Ollama (su canal ``reasoning``).
         #  - ``chat_template_kwargs.enable_thinking`` (vLLM-native): cubre vLLM sin
         #    reasoning-parser, donde el flag va directo al chat template.
+        # OJO (ADR-014 D4): el OpenAI-compat de Ollama IGNORA ``chat_template_kwargs`` y,
+        # para gemma4, también ``reasoning_effort`` (upstream Ollama #15288/#15293/#15635)
+        # -> los endpoints ``engine="ollama"`` NO pasan por acá: rutean el thinking por la
+        # API nativa ``/api/chat`` (top-level ``think``), ver ``_build_native_payload``.
         # Regla #4 intacta: esto solo gobierna el modo de razonamiento on-prem.
         if thinking is not None:
             payload["reasoning_effort"] = _THINKING_ON_EFFORT if thinking else "none"
@@ -295,8 +355,7 @@ class VllmClient:
             },
         }
 
-    async def _post(self, payload: dict[str, Any], timeout_s: float) -> httpx.Response:
-        url = f"{self._base_url}{_CHAT_PATH}"
+    async def _post(self, url: str, payload: dict[str, Any], timeout_s: float) -> httpx.Response:
         try:
             return await self._http.post(url, json=payload, timeout=timeout_s)
         except httpx.TimeoutException as exc:
@@ -370,4 +429,182 @@ class VllmClient:
             # Delta del canal de razonamiento (qwen via Ollama: ``delta.reasoning``,
             # APARTE del ``content`` que queda vacio durante el thinking).
             reasoning_delta=delta.get("reasoning") or None,
+        )
+
+    # ---------- camino NATIVO de Ollama (ADR-014 D4) ----------
+    # Solo se usa cuando ``engine == "ollama"``. El OpenAI-compat de Ollama ignora el
+    # control de thinking de gemma4 (chat_template_kwargs + reasoning_effort, upstream
+    # Ollama #15288/#15293/#15635); la API nativa ``/api/chat`` con ``think`` top-level
+    # es el único mecanismo confiable. El path vLLM (arriba) queda intacto.
+
+    def _native_base(self) -> str:
+        """Base de la API nativa de Ollama: el ``base_url`` sin el sufijo ``/v1``.
+
+        El ``base_url`` apunta al endpoint OpenAI-compat (``.../v1``); la API nativa
+        (``/api/chat``) cuelga de la raíz del server, así que se le saca el ``/v1`` final.
+        """
+        base = self._base_url
+        if base.endswith("/v1"):
+            base = base[: -len("/v1")]
+        return base
+
+    async def _complete_native(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec] | None,
+        max_tokens: int,
+        temperature: float,
+        thinking: bool | None,
+        timeout_s: float | None,
+    ) -> CompletionResult:
+        payload = self._build_native_payload(
+            model=model,
+            messages=messages,
+            tools=tools,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            thinking=thinking,
+            stream=False,
+        )
+        url = f"{self._native_base()}{_OLLAMA_NATIVE_CHAT_PATH}"
+        started = time.perf_counter()
+        response = await self._post(url, payload, self._resolve_timeout(timeout_s))
+        latency_ms = (time.perf_counter() - started) * 1000.0
+        self._raise_for_status(response, body_text=response.text)
+        return self._parse_native_completion(response.json(), model, latency_ms)
+
+    async def _stream_native(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec] | None,
+        max_tokens: int,
+        temperature: float,
+        thinking: bool | None,
+        timeout_s: float | None,
+    ) -> AsyncIterator[CompletionChunk]:
+        payload = self._build_native_payload(
+            model=model,
+            messages=messages,
+            tools=tools,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            thinking=thinking,
+            stream=True,
+        )
+        url = f"{self._native_base()}{_OLLAMA_NATIVE_CHAT_PATH}"
+        effective_timeout = self._resolve_timeout(timeout_s)
+        try:
+            async with self._http.stream(
+                "POST", url, json=payload, timeout=effective_timeout
+            ) as response:
+                self._raise_for_status(response)
+                async for line in response.aiter_lines():
+                    chunk = self._parse_native_stream_line(line)
+                    if chunk is not None:
+                        yield chunk
+        except httpx.TimeoutException as exc:
+            raise LlmTimeoutError("timeout HTTP") from exc
+        except httpx.ConnectError as exc:
+            raise LlmUnavailableError("connect error") from exc
+
+    def _build_native_payload(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage],
+        tools: list[ToolSpec] | None,
+        max_tokens: int,
+        temperature: float,
+        thinking: bool | None,
+        stream: bool,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": [self._encode_native_message(m) for m in messages],
+            "stream": stream,
+            # En la API nativa el sampling va en ``options`` (``num_predict`` = tope de
+            # tokens de salida, equivalente a ``max_tokens`` del OpenAI-compat).
+            "options": {"temperature": temperature, "num_predict": max_tokens},
+        }
+        if tools:
+            # La API nativa acepta el mismo shape OpenAI de tools (``type/function``).
+            payload["tools"] = [self._encode_tool(t) for t in tools]
+        # Control de thinking por el top-level ``think`` (ADR-014 D4): el ÚNICO mecanismo
+        # que apaga el thinking de gemma4 en Ollama. Con ``None`` no se emite -> usa el
+        # default del modelo (preserva la semántica de ``thinking=None`` del OpenAI-compat).
+        if thinking is not None:
+            payload["think"] = thinking
+        return payload
+
+    @staticmethod
+    def _encode_native_message(message: ChatMessage) -> dict[str, Any]:
+        """Codifica un ``ChatMessage`` al wire NATIVO de Ollama.
+
+        Diferencias con el OpenAI-compat (``_encode_message``): ``content`` no puede ser
+        ``null`` (un assistant que solo emite tool_calls viaja con ``""``); el rol
+        ``tool`` lleva ``tool_name`` (nativo); y en las tool_calls del assistant el
+        ``arguments`` va como objeto (dict), NO como JSON string.
+        """
+        encoded: dict[str, Any] = {"role": message.role, "content": message.content or ""}
+        if message.name is not None:
+            encoded["tool_name"] = message.name
+        if message.tool_calls:
+            encoded["tool_calls"] = [
+                {"function": {"name": tc.name, "arguments": tc.arguments}}
+                for tc in message.tool_calls
+            ]
+        return encoded
+
+    def _parse_native_completion(
+        self, body: dict[str, Any], model: str, latency_ms: float
+    ) -> CompletionResult:
+        message = body.get("message") or {}
+        # El shape nativo de tool_calls (``{"function": {"name", "arguments": <dict>}}``)
+        # ya es compatible con ``OpenAIToolCallParser.parse`` (tolera ``arguments`` dict y
+        # cae al ``name`` cuando falta ``id``), así que reusamos el mismo parser.
+        return CompletionResult(
+            text=message.get("content") or "",
+            tool_calls=self._parser.parse(message),
+            finish_reason=body.get("done_reason") or "stop",
+            prompt_tokens=int(body.get("prompt_eval_count", 0) or 0),
+            completion_tokens=int(body.get("eval_count", 0) or 0),
+            model_name=body.get("model") or model,
+            latency_ms=latency_ms,
+            # En la API nativa el razonamiento viene en ``message.thinking`` (no
+            # ``message.reasoning`` como en el OpenAI-compat). Vacío/ausente -> None.
+            reasoning=message.get("thinking") or None,
+        )
+
+    @staticmethod
+    def _parse_native_stream_line(line: str) -> CompletionChunk | None:
+        """Parsea una línea del stream NATIVO de Ollama (NDJSON, un objeto por línea).
+
+        A diferencia del SSE ``data:`` del OpenAI-compat, cada línea es un objeto JSON con
+        ``message.content`` y/o ``message.thinking`` (canal de razonamiento); la última
+        trae ``done:true`` + ``done_reason``. Las tool_calls del streaming nativo NO se
+        exponen como ``tool_call_delta`` (el agente las resuelve por el path no-stream,
+        ADR-021/022): el accumulator espera fragmentos OpenAI con ``index`` y el nativo
+        emite la call completa de una.
+        """
+        stripped = line.strip()
+        if not stripped:
+            return None
+        try:
+            event = json.loads(stripped)
+        except json.JSONDecodeError:
+            return None
+        message = event.get("message") or {}
+        delta_text = message.get("content") or ""
+        reasoning_delta = message.get("thinking") or None
+        finish_reason = (event.get("done_reason") or "stop") if event.get("done") else None
+        if not delta_text and reasoning_delta is None and finish_reason is None:
+            return None
+        return CompletionChunk(
+            delta_text=delta_text,
+            finish_reason=finish_reason,
+            reasoning_delta=reasoning_delta,
         )
