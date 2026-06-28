@@ -11,9 +11,12 @@ import { TextField } from "@/components/ui/TextField";
 // Side-effect: asegura configureApi (baseUrl + token) antes del primer request.
 import "@/lib/api";
 import { env } from "@/lib/env";
+import { useOnboardingStore } from "@/stores/onboarding";
+import { useOnboardingStepStore } from "@/stores/onboardingStep";
 import { useUserStore } from "@/stores/user";
 import logo from "../../../assets/splash-icon.png";
 import { authErrorMessage } from "./errors";
+import { recoverProfileFromLogin } from "./recoverProfileFromLogin";
 
 /** Usuario fake para el OAuth de maqueta (dev, ENABLE_MOCKS). */
 const MOCK_OAUTH_USER_ID = "0193f000-0000-7000-8000-0000000000bb";
@@ -40,6 +43,8 @@ export function WelcomeScreen() {
   const [submitError, setSubmitError] = useState<string>();
   const [pending, setPending] = useState(false);
 
+  // Entrada del OAuth de maqueta (sin LoginResult del backend): trata al usuario
+  // como ya onboardeado y entra. El login real usa la rama de `onLogin`.
   const enterApp = (session: { userId: string; token: string }) => {
     setAuth({ userId: session.userId, token: session.token });
     completeOnboarding();
@@ -59,8 +64,25 @@ export function WelcomeScreen() {
     }
     setPending(true);
     try {
-      const session = await logIn(parsed.data);
-      enterApp(session);
+      const result = await logIn(parsed.data);
+      if (result.user.onboarding_completed) {
+        // Usuario que YA onboardeó (otro dispositivo): hidratar perfil + a11y
+        // desde el `me` (gap-fill, sin pisar lo local) y entrar sin rehacerlo.
+        recoverProfileFromLogin(result);
+        router.replace("/");
+        return;
+      }
+      // Cuenta sin onboarding terminado: NO marcar completo (el guard de
+      // `(tabs)/_layout` rebota a /welcome). Se pasa el token al draft y se manda a
+      // completar el wizard, saltando el paso de signup (ya tiene cuenta) → arranca
+      // en "nombre".
+      useOnboardingStore.getState().setAuth({
+        userId: result.userId,
+        token: result.token,
+        mode: "login",
+      });
+      useOnboardingStepStore.getState().setStep("nombre");
+      router.replace("/onboarding");
     } catch (error) {
       setSubmitError(authErrorMessage(error, "login"));
       setPending(false);
