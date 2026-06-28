@@ -2,13 +2,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock del cliente HTTP: el cierre del onboarding hace `PATCH /v1/users/me`
-// (no existe `/v1/user/onboard` en el backend real). ApiError real para el
-// instanceof del onError.
-const patch = vi.fn();
-vi.mock("@/lib/api", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
-  return { ...actual, api: { patch } };
+// La lógica de validación + `PATCH /v1/users/me` vive ahora en
+// `submitOnboarding` (@ynara/core), testeada en core. Acá testeamos lo que
+// aporta el HOOK: el `onSuccess` (commit al user store, celebración) y el
+// mapeo de errores. Por eso mockeamos `submitOnboarding`, NO el cliente HTTP.
+const submitOnboarding = vi.fn();
+vi.mock("@ynara/core/features/onboarding", async () => {
+  const actual = await vi.importActual<typeof import("@ynara/core/features/onboarding")>(
+    "@ynara/core/features/onboarding",
+  );
+  return { ...actual, submitOnboarding: (...args: unknown[]) => submitOnboarding(...args) };
 });
 
 const replace = vi.fn();
@@ -25,47 +28,63 @@ function wrapper({ children }: { children: React.ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
-function seedDraft({ auth }: { auth: "signup" | "login" | null }) {
+// El `onSuccess` del hook lee `authedUserId`/`authedToken` del draft para el
+// commit al user store; sembramos auth para que no corte ahí.
+function seedDraftAuth() {
   const ob = useOnboardingStore.getState();
   ob.reset();
   ob.setDisplayName("Mateo");
-  ob.setMood(["tranquilo"], "");
-  ob.setInterestedModes(["productividad"]);
-  if (auth) ob.setAuth({ userId: "u1", token: "t1", mode: auth });
+  ob.setAuth({ userId: "u1", token: "t1", mode: "signup" });
 }
 
+// Lo que `submitOnboarding` devuelve (payload validado por core). El hook lo
+// usa para poblar el user store en `onSuccess`.
+const parsedData = {
+  displayName: "Mateo",
+  mood: ["tranquilo"],
+  moodFreeText: undefined,
+  interestedModes: ["productividad"],
+  a11y: { textSize: "md" as const, highContrast: false, motion: "auto" as const },
+};
+
 beforeEach(() => {
-  patch.mockReset();
+  submitOnboarding.mockReset();
   replace.mockClear();
   useUserStore.getState().reset();
   useOnboardingStore.getState().reset();
 });
 
 describe("useCompleteOnboarding", () => {
-  it("éxito: PATCH /v1/users/me snake_case y flipea onboardingCompleted", async () => {
-    seedDraft({ auth: "signup" });
-    patch.mockResolvedValue({ id: "u1", onboarding_completed: true });
+  it("éxito: submitOnboarding resuelve → flipea onboardingCompleted y setea isCelebrating", async () => {
+    seedDraftAuth();
+    submitOnboarding.mockResolvedValue(parsedData);
 
     const { result } = renderHook(() => useCompleteOnboarding(), { wrapper });
     act(() => result.current.complete());
 
     await waitFor(() => expect(result.current.isCelebrating).toBe(true));
-    // Contrato real: PATCH /v1/users/me con SOLO los campos que UserUpdate acepta
-    // (snake_case, extra='forbid'). mood/interestedModes/a11y NO viajan al backend.
-    expect(patch).toHaveBeenCalledWith(
-      "/v1/users/me",
-      { display_name: "Mateo", onboarding_completed: true },
-      // Fix mocks-off: el token del draft viaja EXPLÍCITO en el PATCH (durante el
-      // onboarding el cliente no adjunta el Bearer solo); sin esto el backend real da 401.
-      { headers: { Authorization: "Bearer t1" } },
-    );
+    expect(submitOnboarding).toHaveBeenCalledTimes(1);
     expect(useUserStore.getState().onboardingCompleted).toBe(true);
     expect(result.current.error).toBeNull();
   });
 
-  it("sin auth en el draft: error 'Sesión inválida' y NO completa el onboarding", async () => {
-    seedDraft({ auth: null });
-    patch.mockResolvedValue({ id: "u1", onboarding_completed: true });
+  it("ApiError: mapea body.detail al mensaje de error y no completa", async () => {
+    seedDraftAuth();
+    submitOnboarding.mockRejectedValue(new ApiError(500, { detail: "Backend caído" }));
+
+    const { result } = renderHook(() => useCompleteOnboarding(), { wrapper });
+    act(() => result.current.complete());
+
+    await waitFor(() => expect(result.current.error).toBe("Backend caído"));
+    expect(useUserStore.getState().onboardingCompleted).toBe(false);
+    expect(result.current.isCelebrating).toBe(false);
+  });
+
+  it("Error normal: mapea el message y no completa", async () => {
+    seedDraftAuth();
+    submitOnboarding.mockRejectedValue(
+      new Error("Sesión inválida. Volvé a empezar el onboarding."),
+    );
 
     const { result } = renderHook(() => useCompleteOnboarding(), { wrapper });
     act(() => result.current.complete());
@@ -73,20 +92,5 @@ describe("useCompleteOnboarding", () => {
     await waitFor(() => expect(result.current.error).toMatch(/sesión inválida/i));
     expect(useUserStore.getState().onboardingCompleted).toBe(false);
     expect(result.current.isCelebrating).toBe(false);
-    // Fix mocks-off: el guard de auth ahora corre ANTES del PATCH (en la mutationFn),
-    // así que sin token en el draft NO se manda el request (evita el 401 espurio contra
-    // el backend real). Antes el guard vivía solo en onSuccess y el PATCH corría igual.
-    expect(patch).not.toHaveBeenCalled();
-  });
-
-  it("ApiError: mapea body.detail al mensaje de error y no completa", async () => {
-    seedDraft({ auth: "signup" });
-    patch.mockRejectedValue(new ApiError(500, { detail: "Backend caído" }));
-
-    const { result } = renderHook(() => useCompleteOnboarding(), { wrapper });
-    act(() => result.current.complete());
-
-    await waitFor(() => expect(result.current.error).toBe("Backend caído"));
-    expect(useUserStore.getState().onboardingCompleted).toBe(false);
   });
 });
