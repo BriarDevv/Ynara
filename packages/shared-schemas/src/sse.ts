@@ -3,6 +3,8 @@ import {
   StreamDoneSchema,
   type StreamError,
   StreamErrorSchema,
+  type StreamReasoning,
+  StreamReasoningSchema,
   type StreamToken,
   StreamTokenSchema,
 } from "./chat";
@@ -22,6 +24,9 @@ import {
  *
  * Contrato del stream (cerrado en #61, ver `RESPUESTAS-CONTRATO-CHAT.md`):
  *
+ *   event: reasoning
+ *   data: {"delta": "Estoy pensando…"}
+ *
  *   event: token
  *   data: {"delta": "Hola"}
  *
@@ -39,6 +44,7 @@ import {
 /** Un evento del stream del chat, ya parseado y validado. */
 export type ChatStreamEvent =
   | { type: "token"; data: StreamToken }
+  | { type: "reasoning"; data: StreamReasoning }
   | { type: "done"; data: StreamDone }
   | { type: "error"; data: StreamError };
 
@@ -58,10 +64,10 @@ export class SseParseError extends Error {
   }
 }
 
-type KnownEventName = "token" | "done" | "error";
+type KnownEventName = "token" | "reasoning" | "done" | "error";
 
 function isKnownEvent(name: string): name is KnownEventName {
-  return name === "token" || name === "done" || name === "error";
+  return name === "token" || name === "reasoning" || name === "done" || name === "error";
 }
 
 /**
@@ -113,6 +119,14 @@ function parseBlock(block: string): ChatStreamEvent | null {
       throw new SseParseError("data no matchea el contrato (event: token)", block);
     }
     return { type: "token", data: parsed.data };
+  }
+
+  if (eventName === "reasoning") {
+    const parsed = StreamReasoningSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new SseParseError("data no matchea el contrato (event: reasoning)", block);
+    }
+    return { type: "reasoning", data: parsed.data };
   }
 
   if (eventName === "done") {

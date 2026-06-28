@@ -133,6 +133,44 @@ describe("useChatStore — streaming (W3)", () => {
     expect(useChatStore.getState().streamStatus).toBe("streaming");
   });
 
+  it("startAssistantStream inicializa reasoning vacío", () => {
+    const sid = useChatStore.getState().createSession("memoria");
+    const userId = useChatStore.getState().appendUserMessage(sid, "acordate de esto");
+
+    useChatStore.getState().startAssistantStream(sid, userId);
+
+    expect(useChatStore.getState().messages[sid]?.at(-1)?.reasoning).toBe("");
+  });
+
+  it("appendReasoningDelta acumula el razonamiento sin tocar el texto", () => {
+    const sid = useChatStore.getState().createSession("productividad");
+    const userId = useChatStore.getState().appendUserMessage(sid, "agendá algo");
+    const aid = useChatStore.getState().startAssistantStream(sid, userId);
+
+    useChatStore.getState().appendReasoningDelta(sid, aid, "Primero ");
+    useChatStore.getState().appendReasoningDelta(sid, aid, "reviso ");
+    useChatStore.getState().appendReasoningDelta(sid, aid, "el calendario");
+
+    const assistant = useChatStore.getState().messages[sid]?.at(-1);
+    expect(assistant?.reasoning).toBe("Primero reviso el calendario");
+    // El razonamiento es un canal aparte: no contamina el texto de la respuesta.
+    expect(assistant?.text).toBe("");
+    expect(assistant?.status).toBe("streaming");
+  });
+
+  it("reasoning no se persiste en el storage (efímero)", () => {
+    const sid = useChatStore.getState().createSession("memoria");
+    const userId = useChatStore.getState().appendUserMessage(sid, "hola");
+    const aid = useChatStore.getState().startAssistantStream(sid, userId);
+    useChatStore.getState().appendReasoningDelta(sid, aid, "RAZONAMIENTO_LARGO_SECRETO");
+
+    const persisted = localStorage.getItem("ynara.chat");
+    expect(persisted).not.toBeNull();
+    // Ni la cadena de razonamiento ni la clave `reasoning` llegan al disco.
+    expect(persisted as string).not.toContain("RAZONAMIENTO_LARGO_SECRETO");
+    expect(persisted as string).not.toContain("reasoning");
+  });
+
   it("appendStreamDelta acumula el texto en orden", () => {
     const sid = useChatStore.getState().createSession("estudio");
     const userId = useChatStore.getState().appendUserMessage(sid, "tema");

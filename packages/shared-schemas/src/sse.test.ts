@@ -32,6 +32,27 @@ describe("parseSseText", () => {
     }
   });
 
+  it("parsea un evento reasoning", () => {
+    const text = 'event: reasoning\ndata: {"delta": "Estoy pensando…"}\n\n';
+
+    expect(parseSseText(text)).toEqual([{ type: "reasoning", data: { delta: "Estoy pensando…" } }]);
+  });
+
+  it("el reasoning llega antes de los token y se acumula en orden", () => {
+    const text =
+      'event: reasoning\ndata: {"delta": "primer paso"}\n\n' +
+      'event: reasoning\ndata: {"delta": ", segundo paso"}\n\n' +
+      'event: token\ndata: {"delta": "Listo"}\n\n';
+
+    const events = parseSseText(text);
+
+    expect(events).toEqual([
+      { type: "reasoning", data: { delta: "primer paso" } },
+      { type: "reasoning", data: { delta: ", segundo paso" } },
+      { type: "token", data: { delta: "Listo" } },
+    ]);
+  });
+
   it("parsea un evento error", () => {
     const text = 'event: error\ndata: {"code": "LlmTimeoutError", "message": "timeout"}\n\n';
 
@@ -132,6 +153,11 @@ describe("errores de parseo", () => {
   it("lanza SseParseError si data no matchea el contrato", () => {
     // token sin delta
     expect(() => parseSseText('event: token\ndata: {"foo": 1}\n\n')).toThrow(SseParseError);
+  });
+
+  it("lanza SseParseError si el reasoning no matchea el contrato", () => {
+    // reasoning sin delta
+    expect(() => parseSseText('event: reasoning\ndata: {"foo": 1}\n\n')).toThrow(SseParseError);
   });
 
   it("no expone el contenido en el message, solo en raw", () => {

@@ -6,6 +6,7 @@ import {
   ChatRequestSchema,
   ChatResponseSchema,
   SessionSchema,
+  StreamReasoningSchema,
 } from "./chat";
 import { CHAT_ERROR_FALLBACK, chatErrorCopy } from "./chat-copy";
 
@@ -134,6 +135,16 @@ describe("SessionSchema", () => {
       updated_at: "2026-05-30T12:00:00Z",
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("StreamReasoningSchema", () => {
+  it("acepta un delta string", () => {
+    expect(StreamReasoningSchema.parse({ delta: "pensando" }).delta).toBe("pensando");
+  });
+
+  it("rechaza si falta delta", () => {
+    expect(StreamReasoningSchema.safeParse({}).success).toBe(false);
   });
 });
 
