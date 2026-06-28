@@ -20,7 +20,6 @@
     "@tanstack/react-query": "^5.0.0",
     "@ynara/core": "workspace:*",
     "@ynara/shared-schemas": "workspace:*",
-    "@ynara/shared-types": "workspace:*",
     "expo": "~54.0.0",
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.9",

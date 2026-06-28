@@ -13,8 +13,7 @@
     "clean": "rm -rf node_modules .turbo"
   },
   "dependencies": {
-    "zod": "^3.23.0",
-    "@ynara/shared-types": "workspace:*"
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
