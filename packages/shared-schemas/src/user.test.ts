@@ -35,7 +35,9 @@ describe("UserOutSchema", () => {
     id: UUID,
     email: "mateo@example.com",
     display_name: "Mateo",
+    is_ephemeral: false,
     onboarding_completed: true,
+    time_zone: "UTC",
     retention_sensitive_days: 365,
     preferences: {
       interested_modes: ["productividad", "estudio"],
@@ -47,6 +49,13 @@ describe("UserOutSchema", () => {
 
   it("acepta un UserOut válido con preferences pobladas", () => {
     expect(UserOutSchema.parse(valid)).toEqual(valid);
+  });
+
+  it("default is_ephemeral=false y time_zone=UTC cuando faltan (defensivo)", () => {
+    const { is_ephemeral: _e, time_zone: _t, ...rest } = valid;
+    const parsed = UserOutSchema.parse(rest);
+    expect(parsed.is_ephemeral).toBe(false);
+    expect(parsed.time_zone).toBe("UTC");
   });
 
   it("default preferences a {} cuando la clave falta (defensivo)", () => {

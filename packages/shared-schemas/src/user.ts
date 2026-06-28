@@ -37,6 +37,14 @@ export const OnboardRequestSchema = z.object({
 export type OnboardRequest = z.infer<typeof OnboardRequestSchema>;
 
 /**
+ * A qué se dedica el usuario (step "sobre-vos"). **Fuente canónica** (mirror del
+ * `Literal` de `AboutYou.dedication` en Pydantic). `@ynara/core` re-exporta este
+ * tipo para el draft del onboarding en vez de duplicar la unión.
+ */
+export const DedicationSchema = z.enum(["estudio", "trabajo", "ambos", "otro"]);
+export type Dedication = z.infer<typeof DedicationSchema>;
+
+/**
  * "Sobre vos" del onboarding (camelCase, FE-facing). Mirror de `AboutYou`
  * (Pydantic) — el wire es snake_case y lo mapea `submitOnboarding` en
  * `@ynara/core`. Señal **memory-bound**: el backend la acepta/valida pero NO la
@@ -44,7 +52,7 @@ export type OnboardRequest = z.infer<typeof OnboardRequestSchema>;
  * step puede dejarse sin elegir. Free-text acotado (anti-inflado, `<=200`).
  */
 export const AboutYouSchema = z.object({
-  dedication: z.enum(["estudio", "trabajo", "ambos", "otro"]).nullable(),
+  dedication: DedicationSchema.nullable(),
   studyWhat: z.string().max(200),
   workWhat: z.string().max(200),
   purpose: z.string().max(200),
@@ -136,7 +144,13 @@ export const UserOutSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
   display_name: z.string().nullable(),
+  // El backend (UserBase) SIEMPRE serializa estos dos; `.default()` los hace
+  // tolerantes a respuestas/fixtures que los omitan (mismo criterio defensivo que
+  // `preferences`). `is_ephemeral` es vestigial en el FE pero el backend lo manda;
+  // `time_zone` queda disponible para hidratación futura.
+  is_ephemeral: z.boolean().default(false),
   onboarding_completed: z.boolean(),
+  time_zone: z.string().default("UTC"),
   retention_sensitive_days: z.number().int(),
   preferences: UserPreferencesSchema.default({}),
   created_at: z.string().datetime({ offset: true }),
