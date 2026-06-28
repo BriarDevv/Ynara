@@ -2,7 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query";
-import { type AuthSession, logIn, signUp } from "@ynara/core/features/auth";
+import { type AuthSession, type LoginResult, logIn, signUp } from "@ynara/core/features/auth";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import type { z } from "zod";
@@ -16,6 +17,7 @@ import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
 import { AUTH_STEP_COPY } from "../constants";
 import { useOnboardingNav } from "../hooks/useOnboardingNav";
+import { recoverProfileFromLogin } from "../recoverProfileFromLogin";
 import { type ApiErrorBody, LoginRequestSchema, SignupRequestSchema } from "../schemas";
 import { useOnboardingStore } from "../store";
 
@@ -135,6 +137,7 @@ function SignupForm({ onSwitch }: { onSwitch: () => void }) {
 // ============================================================
 
 function LoginForm({ onSwitch }: { onSwitch: () => void }) {
+  const router = useRouter();
   const { next } = useOnboardingNav("auth");
   const queryClient = useQueryClient();
   const setAuth = useOnboardingStore((s) => s.setAuth);
@@ -145,17 +148,29 @@ function LoginForm({ onSwitch }: { onSwitch: () => void }) {
     mode: "onSubmit",
   });
 
-  // logIn de core = token() + me() (para resolver el userId). Devuelve la
-  // AuthSession lista para el draft store; el refresh_token se ignora por ahora.
-  // La invalidación de cache vive en onSuccess vía `invalidateUserScopedQueries`
-  // (helper); react-doctor no la ve a través del wrapper → falso positivo.
+  // logIn de core = token() + GET /v1/auth/me. Devuelve la sesión + el `UserOut`
+  // completo. La invalidación de cache vive en onSuccess vía
+  // `invalidateUserScopedQueries` (helper); react-doctor no la ve a través del
+  // wrapper → falso positivo.
   // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
   const mutation = useMutation({
-    mutationFn: (values: LoginValues): Promise<AuthSession> => logIn(values),
+    mutationFn: (values: LoginValues): Promise<LoginResult> => logIn(values),
     onSuccess: (session) => {
+      // G3b — recuperación de perfil: un usuario que YA completó el onboarding
+      // (otro dispositivo) no debe rehacerlo. Hidratamos el user store + a11y
+      // desde el `me` (gap-fill, sin pisar lo local) y vamos directo a la app.
+      if (session.user.onboarding_completed) {
+        recoverProfileFromLogin(session);
+        // Invalidar DESPUÉS de que recoverProfileFromLogin setee el token: así un
+        // refetch posterior usa el Bearer del usuario, no el vacío.
+        invalidateUserScopedQueries(queryClient);
+        router.replace("/hoy");
+        return;
+      }
+      // No completó: el token va al draft, el wizard continúa y al cerrar
+      // `submitOnboarding` persiste todo. Login cruza el borde de identidad:
+      // limpiamos los caches por usuario para no mostrar datos de otra sesión.
       setAuth({ userId: session.userId, token: session.token, mode: "login" });
-      // Login cruza el borde de identidad: limpiamos los caches por usuario
-      // para que las vistas posteriores no muestren datos de otra sesión.
       invalidateUserScopedQueries(queryClient);
       next();
     },
