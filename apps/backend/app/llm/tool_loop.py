@@ -43,6 +43,12 @@ TOOL_RESULT_MAX_BYTES: int = 32_768
 # finish_reason que indica que el loop debe terminar (con o sin tool_calls).
 _TERMINAL_REASONS = frozenset({"stop", "length", "degraded"})
 
+# Ack determinista cuando el modelo EJECUTO tools pero no devolvio texto en lenguaje
+# natural (ni siquiera tras la completion forzada): el usuario no debe ver el
+# ``fallback_text`` generico (lee como error) tras una accion exitosa. Solo se usa si
+# hay ``actions``; una respuesta vacia SIN acciones cae al ``fallback_text``.
+_ACTIONS_DONE_TEXT: str = "Listo, hecho."
+
 
 @dataclass(frozen=True)
 class ToolLoopResult:
@@ -51,7 +57,8 @@ class ToolLoopResult:
     Contenedor con campos nombrados (coding-style del repo) en vez de una tupla
     posicional:
 
-    - ``text``: respuesta final del modelo (nunca vacia: usa ``fallback_text``).
+    - ``text``: respuesta final (nunca vacia): el texto del modelo; si hubo tools sin
+      texto y el turno corto limpio, ``_ACTIONS_DONE_TEXT``; si no, ``fallback_text``.
     - ``actions``: tools ejecutadas, en orden, como dicts
       ``{'id', 'name', 'arguments', 'result'}``.
     - ``finish_reason``: ``finish_reason`` del ultimo ``CompletionResult`` procesado,
@@ -120,7 +127,8 @@ async def run_tool_loop(
        como texto final; si esta vacio, fuerza UNA completion final SIN tools para
        que el modelo responda en lenguaje natural (en vez de seguir tool-calleando) y
        el usuario vea una respuesta real, no el ``fallback_text`` generico. Si esa
-       completion forzada tambien vuelve vacia, recien ahi se usa ``fallback_text``.
+       completion forzada tambien vuelve vacia: ``_ACTIONS_DONE_TEXT`` (ack) cuando hubo una
+       tool EXITOSA y el turno corto limpio, y recien sin eso, ``fallback_text``.
        finish_reason reportado sera ``'max_iterations'`` (parada forzada por el guard;
        un sentinel honesto para telemetria, no se confunde con un ``'stop'`` real).
 
@@ -239,11 +247,15 @@ async def run_tool_loop(
     # Se gatea en ``actions`` (no en ``not last_text`` a secas) para no forzar una segunda
     # vuelta ante una respuesta conversacional normal que legitimamente vino vacia.
     if not last_text and actions:
+        # thinking=False a proposito: (1) la confirmacion no necesita razonar; (2) esquiva
+        # el gotcha de qwen que con thinking ON vuelca el texto al canal de reasoning y deja
+        # el content VACIO -> con think:false la confirmacion cae en content. La forzada va
+        # SIN tools, asi que rutea por el /api/chat nativo de Ollama que honra think:false.
         forced = await llm_client.complete(
             model=served_name,
             messages=messages,
             tools=None,
-            thinking=thinking,
+            thinking=False,
         )
         last_text = forced.text
         if forced.reasoning:
@@ -251,7 +263,19 @@ async def run_tool_loop(
         if last_text:
             last_finish_reason = forced.finish_reason
 
-    final_text = last_text if last_text else fallback_text
+    # Texto final: el del modelo si vino. Si no: ack determinista cuando hubo una tool
+    # EXITOSA y el turno corto LIMPIO (no se agoto el guard) — no mostrar el fallback-error
+    # tras una accion exitosa que solo quedo sin confirmacion en lenguaje natural. Se
+    # EXCLUYEN las acciones con error (``{"error": ...}``, ver tool_error): tras un fallo de
+    # tool el ack mentiria exito, ahi se usa el fallback. En max_iterations (loop trabado) o
+    # sin acciones exitosas, el ``fallback_text`` honesto.
+    successful_actions = [a for a in actions if "error" not in a["result"]]
+    if last_text:
+        final_text = last_text
+    elif successful_actions and last_finish_reason != "max_iterations":
+        final_text = _ACTIONS_DONE_TEXT
+    else:
+        final_text = fallback_text
     reasoning = "".join(reasoning_parts) or None
     return ToolLoopResult(
         text=final_text,
