@@ -28,6 +28,12 @@ class UserBase(YnaraBaseModel):
     # server_default). La validación IANA real se aplica en ``UserUpdate`` (la vía de
     # mutación desde el wire); ``UserOut`` se construye desde el ORM (valor ya válido).
     time_zone: str = Field(default="UTC")
+    # Prefs OPERATIVAS del onboarding (modos de interés + a11y) — espeja
+    # ``users.preferences`` (JSONB). Viaja como ``dict`` RAW, NO tipado contra
+    # ``UserPreferences`` (ADR-026): las filas pre-onboarding tienen ``{}`` y no validarían
+    # contra el shape tipado; el FE le da forma con Zod. Default ``{}`` (espeja el
+    # server_default de la columna).
+    preferences: dict = Field(default_factory=dict)
     retention_sensitive_days: int = Field(default=180, ge=30, le=365)
 
 
