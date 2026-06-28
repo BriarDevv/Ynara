@@ -13,6 +13,10 @@
  * (Memoria → Fase C; Sesiones ya existen; Tareas/Agenda → mock primero).
  */
 export const qk = {
+  profile: {
+    /** Perfil propio (`GET /v1/auth/me`). Singleton por sesión. */
+    me: () => ["profile", "me"] as const,
+  },
   sessions: {
     all: () => ["sessions"] as const,
     detail: (id: string) => ["sessions", id] as const,

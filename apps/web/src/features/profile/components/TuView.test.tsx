@@ -9,8 +9,14 @@ const updateMe = vi.hoisted(() => ({
   isPending: false,
   reset: vi.fn(),
 }));
+// Mock mutable de useMe (G3): por defecto sin data (la retención arranca en el
+// default 365); los tests que ejercitan la hidratación setean `meQuery.data`.
+const meQuery = vi.hoisted(() => ({
+  data: undefined as { retention_sensitive_days: number } | undefined,
+}));
 vi.mock("@/features/profile/api", () => ({
   useUpdateMe: () => updateMe,
+  useMe: () => meQuery,
 }));
 
 vi.mock("@/features/memory/api", () => ({
@@ -40,6 +46,7 @@ vi.mock("@/stores/user", () => ({
     selector({
       displayName: "Mateo",
       interestedModes: ["productividad"],
+      token: "t1",
       setDisplayName: vi.fn(),
       reset: vi.fn(),
     }),
@@ -114,8 +121,9 @@ function renderTuView() {
 describe("TuView — smoke", () => {
   beforeEach(() => {
     // Reset entre tests: por defecto el PATCH resuelve (los tests que quieren
-    // fallo lo sobrescriben).
+    // fallo lo sobrescriben) y `me` sin data (retención en el default 365).
     updateMe.mutateAsync = vi.fn().mockResolvedValue({ display_name: "Mateo" });
+    meQuery.data = undefined;
   });
 
   it("renderiza el nombre del usuario como heading principal", () => {
@@ -171,6 +179,20 @@ describe("TuView — smoke", () => {
   it("muestra el botón de exportar memoria", () => {
     renderTuView();
     expect(screen.getByRole("button", { name: /exportar mi memoria/i })).toBeInTheDocument();
+  });
+
+  it("hidrata la retención con el valor real del backend (me)", async () => {
+    // G3: `me` trae la retención persistida → el chip arranca en ese valor, no en
+    // el default 365.
+    meQuery.data = { retention_sensitive_days: 90 };
+    renderTuView();
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: /90 días/i })).toHaveAttribute(
+        "aria-checked",
+        "true",
+      ),
+    );
+    expect(screen.getByRole("radio", { name: /1 año/i })).toHaveAttribute("aria-checked", "false");
   });
 
   it("revierte la retención al valor previo si el PATCH falla", async () => {
