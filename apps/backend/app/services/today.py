@@ -77,8 +77,11 @@ _MODE_NUDGE: dict[Mode, tuple[str, str]] = {
 }
 
 # Exhaustividad: cada modo del enum debe tener su nudge. Un modo nuevo sin copy es un
-# bug (daría KeyError en el cold-start); esto lo caza al importar, no en runtime.
-assert set(_MODE_NUDGE) == set(Mode), "falta el nudge de cold-start de algún Mode"
+# bug (daría KeyError en el cold-start). Se chequea al importar con un `raise` (NO un
+# `assert`, que `python -O` / PYTHONOPTIMIZE eliminan en compile-time: dejarían el bug
+# para runtime sobre un usuario real, justo lo que este guardián evita).
+if set(_MODE_NUDGE) != set(Mode):  # pragma: no cover - guardián de invariante de import
+    raise RuntimeError("falta el nudge de cold-start de algún Mode")
 
 # Dedicación sembrada (memoria procedural) -> modo(s) que se priorizan en el cold-start.
 # "otro"/ausente: sin preferencia (se respeta el orden de ``interested_modes``).
