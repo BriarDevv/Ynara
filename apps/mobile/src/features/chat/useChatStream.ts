@@ -36,6 +36,7 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export function useChatStream(sessionId: string): UseChatStream {
   const startAssistantStream = useChatStore((s) => s.startAssistantStream);
   const appendStreamDelta = useChatStore((s) => s.appendStreamDelta);
+  const appendReasoningDelta = useChatStore((s) => s.appendReasoningDelta);
   const finishAssistantStream = useChatStore((s) => s.finishAssistantStream);
   const failAssistantStream = useChatStore((s) => s.failAssistantStream);
   const cancelAssistantStream = useChatStore((s) => s.cancelAssistantStream);
@@ -103,6 +104,13 @@ export function useChatStream(sessionId: string): UseChatStream {
             for (const event of events) {
               if (event.type === "token") {
                 appendStreamDelta(sessionId, assistantId, event.data.delta);
+              } else if (event.type === "reasoning") {
+                // Razonamiento post-hoc (Camino A): llega ANTES de los token. Se
+                // acumula aparte (no toca el texto de la respuesta) y NO corta el
+                // stream; la UI lo muestra (o no) según el toggle display-only.
+                // Espeja web: sin esta rama el `reasoning` caía al `else` y se
+                // trataba como error fatal (y `event.data.code` no tipa).
+                appendReasoningDelta(sessionId, assistantId, event.data.delta);
               } else if (event.type === "done") {
                 finishAssistantStream(sessionId, assistantId, { actions: event.data.actions });
                 return true;
@@ -156,6 +164,7 @@ export function useChatStream(sessionId: string): UseChatStream {
       sessionId,
       startAssistantStream,
       appendStreamDelta,
+      appendReasoningDelta,
       finishAssistantStream,
       failAssistantStream,
     ],
