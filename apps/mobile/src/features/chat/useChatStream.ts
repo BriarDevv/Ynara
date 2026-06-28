@@ -4,6 +4,7 @@ import { type ChatRequest, createSseParser, SseParseError } from "@ynara/shared-
 import { fetch as expoFetch } from "expo/fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { env } from "@/lib/env";
+import { useBackendSessionStore } from "@/stores/backendSessions";
 import { useChatStore } from "@/stores/chat";
 
 /**
@@ -40,6 +41,7 @@ export function useChatStream(sessionId: string): UseChatStream {
   const finishAssistantStream = useChatStore((s) => s.finishAssistantStream);
   const failAssistantStream = useChatStore((s) => s.failAssistantStream);
   const cancelAssistantStream = useChatStore((s) => s.cancelAssistantStream);
+  const setBackendSessionId = useBackendSessionStore((s) => s.setBackendSessionId);
 
   const [isStreaming, setIsStreaming] = useState(false);
   const inflightRef = useRef<{ controller: AbortController; assistantId: string } | null>(null);
@@ -112,6 +114,11 @@ export function useChatStream(sessionId: string): UseChatStream {
                 // trataba como error fatal (y `event.data.code` no tipa).
                 appendReasoningDelta(sessionId, assistantId, event.data.delta);
               } else if (event.type === "done") {
+                // Adopta el session_id REAL que el backend creó: el 1er turno manda
+                // null y el backend devuelve acá el id de la ChatSession nueva.
+                // Guardarlo encadena los turnos siguientes (sin esto el backend
+                // 404eaba el id local y fragmentaba la conversación). Espeja web.
+                setBackendSessionId(sessionId, event.data.session_id);
                 finishAssistantStream(sessionId, assistantId, { actions: event.data.actions });
                 return true;
               } else {
@@ -167,6 +174,7 @@ export function useChatStream(sessionId: string): UseChatStream {
       appendReasoningDelta,
       finishAssistantStream,
       failAssistantStream,
+      setBackendSessionId,
     ],
   );
 
