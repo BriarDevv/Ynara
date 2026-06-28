@@ -12,15 +12,15 @@ import { useUserStore } from "@/stores/user";
 type Returns = {
   /** Llamar desde A11yStep al submit. Dispara el flujo entero. */
   complete: () => void;
-  /** True mientras el PATCH corre. La UI deshabilita el botón. */
+  /** True mientras el POST corre. La UI deshabilita el botón. */
   isPending: boolean;
   /** Mensaje de error si la mutation falla. */
   error: string | null;
 };
 
 /**
- * Cierre del onboarding (mobile). La validación del draft y el `PATCH
- * /v1/users/me` viven en `submitOnboarding` (@ynara/core), compartido con web
+ * Cierre del onboarding (mobile). La validación del draft y el `POST
+ * /v1/onboarding` viven en `submitOnboarding` (@ynara/core), compartido con web
  * (única fuente de verdad, testeada en core; el contrato del backend vive en su
  * docstring). Acá queda lo específico de mobile: el `onSuccess` que commitea al
  * user store, resetea los stores de onboarding y navega a "/".
@@ -57,9 +57,9 @@ export function useCompleteOnboarding(): Returns {
       user.setDisplayName(data.displayName);
       user.setMood(data.mood, data.moodFreeText ?? "");
       user.setInterestedModes(data.interestedModes as Mode[]);
-      // Sobre-vos: igual que mood/modos, no tiene columna en el backend y queda
-      // client-side. Se lee del draft (no del payload validado, que solo lleva
-      // lo que `OnboardRequestSchema` conoce).
+      // Sobre-vos: ahora viaja en el intake (`about`) pero el backend lo descarta
+      // hasta G4 (memoria, SAGRADO), así que sigue siendo client-side acá. Se lee
+      // del draft (no del payload) porque el commit al user store es local.
       user.setProfileContext({
         dedication: d.dedication,
         studyWhat: d.studyWhat,

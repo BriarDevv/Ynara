@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { UserOutSchema, UserUpdateSchema } from "./user";
+import { AboutYouSchema, OnboardingIntakeSchema, UserOutSchema, UserUpdateSchema } from "./user";
 
 const ISO = "2026-05-08T09:42:00+00:00";
 const UUID = "0193aaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
@@ -51,5 +51,74 @@ describe("UserOutSchema", () => {
 
   it("rechaza id no-UUID", () => {
     expect(UserOutSchema.safeParse({ ...valid, id: "123" }).success).toBe(false);
+  });
+});
+
+describe("AboutYouSchema", () => {
+  const valid = {
+    dedication: "ambos",
+    studyWhat: "ingenieria",
+    workWhat: "freelance",
+    purpose: "organizarme",
+    interests: "musica",
+  };
+
+  it("acepta un about completo", () => {
+    expect(AboutYouSchema.parse(valid)).toEqual(valid);
+  });
+
+  it("acepta dedication null + free-text vacío (sobre-vos en blanco)", () => {
+    const blank = {
+      dedication: null,
+      studyWhat: "",
+      workWhat: "",
+      purpose: "",
+      interests: "",
+    };
+    expect(AboutYouSchema.parse(blank)).toEqual(blank);
+  });
+
+  it("rechaza dedication fuera del enum", () => {
+    expect(AboutYouSchema.safeParse({ ...valid, dedication: "vacaciones" }).success).toBe(false);
+  });
+
+  it("rechaza free-text > 200 (anti-inflado del body)", () => {
+    expect(AboutYouSchema.safeParse({ ...valid, purpose: "a".repeat(201) }).success).toBe(false);
+  });
+});
+
+describe("OnboardingIntakeSchema", () => {
+  const valid = {
+    displayName: "Mateo",
+    mood: ["tranquilo"],
+    moodFreeText: "arrancando",
+    interestedModes: ["productividad", "estudio"],
+    a11y: { textSize: "md", highContrast: false, motion: "auto" },
+    about: {
+      dedication: "estudio",
+      studyWhat: "ingenieria",
+      workWhat: "",
+      purpose: "organizarme",
+      interests: "running",
+    },
+  };
+
+  it("acepta un intake completo", () => {
+    expect(OnboardingIntakeSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("acepta about null (sobre-vos saltado) y moodFreeText ausente", () => {
+    const { moodFreeText: _omit, ...rest } = valid;
+    expect(OnboardingIntakeSchema.safeParse({ ...rest, about: null }).success).toBe(true);
+  });
+
+  it("rechaza interestedModes vacío (gate del step modos)", () => {
+    expect(OnboardingIntakeSchema.safeParse({ ...valid, interestedModes: [] }).success).toBe(false);
+  });
+
+  it("rechaza un modo inexistente", () => {
+    expect(
+      OnboardingIntakeSchema.safeParse({ ...valid, interestedModes: ["inventado"] }).success,
+    ).toBe(false);
   });
 });

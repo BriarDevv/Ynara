@@ -26,10 +26,10 @@ type Returns = {
 
 /**
  * Orquesta el cierre del onboarding:
- *  1. `submitOnboarding` (@ynara/core): valida el draft con `OnboardRequestSchema`
- *     y persiste el flag con `PATCH /v1/users/me`. Lógica compartida con mobile
- *     (única fuente de verdad, testeada en core); el contrato del backend vive
- *     en su docstring.
+ *  1. `submitOnboarding` (@ynara/core): valida el draft con `OnboardingIntakeSchema`
+ *     y manda el intake completo a `POST /v1/onboarding` (ADR-026). Lógica
+ *     compartida con mobile (única fuente de verdad, testeada en core); el
+ *     contrato del backend vive en su docstring.
  *  2. Traslada datos al `useUserStore`.
  *  3. Resetea el draft del onboarding.
  *  4. Setea `isCelebrating=true` para que la UI monte `CelebrationOutro`.
@@ -86,9 +86,9 @@ export function useCompleteOnboarding(): Returns & {
       // resultado visible era que el modo activo arrancaba fijo en 'productividad'.
       const [primary] = data.interestedModes;
       if (primary) useActiveModeStore.getState().setMode(primary as ModeId);
-      // Sobre-vos: igual que mood/modes, no tiene columna en el backend y queda
-      // client-side. Se lee del draft (no del payload validado, que solo lleva
-      // lo que `OnboardRequestSchema` conoce).
+      // Sobre-vos: ahora viaja en el intake (`about`) pero el backend lo descarta
+      // hasta G4 (memoria, SAGRADO), así que sigue siendo client-side acá. Se lee
+      // del draft (no del payload) porque el commit al user store es local.
       useUserStore.getState().setProfileContext({
         dedication: d.dedication,
         studyWhat: d.studyWhat,
