@@ -1,8 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
-import { type Mode, OnboardRequestSchema, type UserOut } from "@ynara/shared-schemas";
+import { submitOnboarding } from "@ynara/core/features/onboarding";
+import type { Mode } from "@ynara/shared-schemas";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { ApiError, api } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { useA11yStore } from "@/stores/a11y";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { useOnboardingStepStore } from "@/stores/onboardingStep";
@@ -18,63 +19,27 @@ type Returns = {
 };
 
 /**
- * Cierre del onboarding (mobile). Espeja el contrato de web
- * (`apps/web/.../useCompleteOnboarding.ts`): valida el draft con
- * `OnboardRequestSchema` y persiste el flag de onboarding con
- * `PATCH /v1/users/me`. Antes era una función síncrona que solo escribía
- * stores; ahora también persiste `onboarding_completed` server-side (paridad
- * con web), si no la cuenta quedaba con el onboarding sin marcar en el backend.
- *
- * Contrato: el backend NO tiene endpoint `onboard`; marca el onboarding con
- * `PATCH /v1/users/me` (body `UserUpdate` snake_case, `extra='forbid'`, solo
- * `{display_name?, onboarding_completed?, retention_sensitive_days?}`). Por eso
- * al backend SOLO le mandamos `{ display_name, onboarding_completed: true }`;
- * `mood`/`moodFreeText`/`interestedModes`/`a11y` no tienen columna server-side y
- * quedan client-side (`useUserStore` + `useA11yStore`).
+ * Cierre del onboarding (mobile). La validación del draft y el `PATCH
+ * /v1/users/me` viven en `submitOnboarding` (@ynara/core), compartido con web
+ * (única fuente de verdad, testeada en core; el contrato del backend vive en su
+ * docstring). Acá queda lo específico de mobile: el `onSuccess` que commitea al
+ * user store, resetea los stores de onboarding y navega a "/".
  */
 export function useCompleteOnboarding(): Returns {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
-    mutationFn: async () => {
-      const d = useOnboardingStore.getState();
+    // El armado/validación/PATCH vive en `submitOnboarding` (@ynara/core), única
+    // fuente de verdad compartida con web (testeada en core). El `onSuccess` de
+    // abajo es lo específico de mobile (commit al user store, reset de stores,
+    // navegación).
+    mutationFn: () => {
       const a = useA11yStore.getState();
-      const payload = {
-        displayName: d.displayName,
-        mood: d.mood,
-        moodFreeText: d.moodFreeText.length > 0 ? d.moodFreeText : undefined,
-        interestedModes: d.interestedModes,
-        a11y: {
-          textSize: a.textSize,
-          highContrast: a.highContrast,
-          motion: a.motion,
-        },
-      };
-      const parsed = OnboardRequestSchema.safeParse(payload);
-      if (!parsed.success) {
-        const first = parsed.error.issues[0];
-        throw new Error(first?.message ?? "Revisá tus datos.");
-      }
-      // AUTH (paridad con web): durante el onboarding el token vive en el draft
-      // (`d.authedToken`), NO en `useUserStore` (`setAuth` recién corre en
-      // `onSuccess`, DESPUÉS de este PATCH). Por eso pasamos el token EXPLÍCITO
-      // acá: el cliente HTTP no adjunta el Bearer solo todavía y sin esto el
-      // backend real devuelve 401. Guard antes del PATCH para fallar con mensaje
-      // claro si el draft perdió la sesión.
-      if (!d.authedToken) {
-        throw new Error("Sesión inválida. Volvé a empezar el onboarding.");
-      }
-      // El backend solo persiste `display_name` y la flag; traducimos
-      // camelCase→snake_case y mandamos SOLO lo que `UserUpdate` acepta
-      // (extra='forbid' rechazaría cualquier campo de más). La response
-      // `UserOut` no se consume: `onSuccess` sigue con el draft local validado.
-      await api.patch<UserOut>(
-        "/v1/users/me",
-        { display_name: parsed.data.displayName, onboarding_completed: true },
-        { headers: { Authorization: `Bearer ${d.authedToken}` } },
-      );
-      return parsed.data;
+      return submitOnboarding({
+        draft: useOnboardingStore.getState(),
+        a11y: { textSize: a.textSize, highContrast: a.highContrast, motion: a.motion },
+      });
     },
     onSuccess: (data) => {
       const d = useOnboardingStore.getState();
