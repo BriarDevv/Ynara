@@ -10,6 +10,16 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+// `buildAnticipations()` (vía HoyHub) gatea su data demo por `shouldEnableMocks`
+// (features/today/anticipations.ts). En CI los tests corren con
+// NEXT_PUBLIC_ENABLE_MOCKS=false → sin este mock devolvería [] y los asserts del
+// badge ("N pendientes") fallarían. Forzamos el flag para que este test del badge
+// del acceso a Avisos sea determinista e independiente del entorno de mocks.
+vi.mock("@/lib/env", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/env")>("@/lib/env");
+  return { ...actual, shouldEnableMocks: true };
+});
+
 const { useAvisosStore } = await import("../avisosStore");
 const { HoyHub } = await import("./HoyHub");
 
