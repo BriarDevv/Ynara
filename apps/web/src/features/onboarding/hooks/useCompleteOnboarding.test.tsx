@@ -2,10 +2,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// La lógica de validación + `PATCH /v1/users/me` vive ahora en
-// `submitOnboarding` (@ynara/core), testeada en core. Acá testeamos lo que
-// aporta el HOOK: el `onSuccess` (commit al user store, celebración) y el
-// mapeo de errores. Por eso mockeamos `submitOnboarding`, NO el cliente HTTP.
+// La lógica de validación + `PATCH /v1/users/me` (incluido el huso horario) vive
+// ahora en `submitOnboarding` (@ynara/core), testeada en core
+// (`completion.test.ts`). Acá testeamos lo que aporta el HOOK: el `onSuccess`
+// (commit al user store, seed del modo activo, celebración) y el mapeo de
+// errores. Por eso mockeamos `submitOnboarding`, NO el cliente HTTP.
 const submitOnboarding = vi.fn();
 vi.mock("@ynara/core/features/onboarding", async () => {
   const actual = await vi.importActual<typeof import("@ynara/core/features/onboarding")>(
@@ -19,6 +20,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
 
 const { ApiError } = await import("@/lib/api");
 const { useUserStore } = await import("@/stores/user");
+const { useActiveModeStore } = await import("@/stores/mode");
 const { useOnboardingStore } = await import("../store");
 const { useCompleteOnboarding } = await import("./useCompleteOnboarding");
 
@@ -51,6 +53,7 @@ beforeEach(() => {
   submitOnboarding.mockReset();
   replace.mockClear();
   useUserStore.getState().reset();
+  useActiveModeStore.getState().reset();
   useOnboardingStore.getState().reset();
 });
 
@@ -66,6 +69,19 @@ describe("useCompleteOnboarding", () => {
     expect(submitOnboarding).toHaveBeenCalledTimes(1);
     expect(useUserStore.getState().onboardingCompleted).toBe(true);
     expect(result.current.error).toBeNull();
+  });
+
+  it("siembra el modo activo global con el primer modo de interés del onboarding", async () => {
+    seedDraftAuth();
+    // Primario deliberado distinto del default de marca ('productividad') para que
+    // el assert distinga "seteado desde el onboarding" de "fallback derivado".
+    submitOnboarding.mockResolvedValue({ ...parsedData, interestedModes: ["estudio", "vida"] });
+
+    const { result } = renderHook(() => useCompleteOnboarding(), { wrapper });
+    act(() => result.current.complete());
+
+    await waitFor(() => expect(result.current.isCelebrating).toBe(true));
+    expect(useActiveModeStore.getState().mode).toBe("estudio");
   });
 
   it("ApiError: mapea body.detail al mensaje de error y no completa", async () => {

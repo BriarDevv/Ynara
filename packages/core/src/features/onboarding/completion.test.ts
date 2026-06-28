@@ -41,6 +41,12 @@ const a11y: OnboardingA11yPrefs = { textSize: "md", highContrast: false, motion:
 
 beforeEach(() => {
   patch.mockReset();
+  // Huso determinístico: submitOnboarding inyecta el timeZone del browser en el
+  // PATCH. Lo fijamos a Buenos Aires para aislar el assert del huso real de la
+  // máquina/CI. Los casos que necesitan otro valor re-stubean el spy localmente.
+  vi.spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions").mockReturnValue({
+    timeZone: "America/Argentina/Buenos_Aires",
+  } as Intl.ResolvedDateTimeFormatOptions);
 });
 
 describe("submitOnboarding", () => {
@@ -54,7 +60,12 @@ describe("submitOnboarding", () => {
     // del draft viaja EXPLÍCITO (el cliente no adjunta el Bearer durante el onboarding).
     expect(patch).toHaveBeenCalledWith(
       "/v1/users/me",
-      { display_name: "Mateo", onboarding_completed: true },
+      {
+        display_name: "Mateo",
+        onboarding_completed: true,
+        // Huso del browser (IANA), viaja CRUDO (no pasa por Zod). Mockeado a BA.
+        time_zone: "America/Argentina/Buenos_Aires",
+      },
       { headers: { Authorization: "Bearer t1" } },
     );
     expect(result).toMatchObject({
@@ -62,6 +73,22 @@ describe("submitOnboarding", () => {
       interestedModes: ["productividad"],
       a11y: { textSize: "md", highContrast: false, motion: "auto" },
     });
+  });
+
+  it("huso indefinido: omite time_zone del PATCH", async () => {
+    patch.mockResolvedValue({ id: "u1", onboarding_completed: true });
+    // El runtime no resuelve un timeZone → el campo se omite (guard de submitOnboarding).
+    vi.spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions").mockReturnValue({
+      timeZone: undefined,
+    } as unknown as Intl.ResolvedDateTimeFormatOptions);
+
+    await submitOnboarding({ draft: makeDraft(), a11y });
+
+    expect(patch).toHaveBeenCalledWith(
+      "/v1/users/me",
+      { display_name: "Mateo", onboarding_completed: true },
+      { headers: { Authorization: "Bearer t1" } },
+    );
   });
 
   it("payload inválido (interestedModes vacío): throw y NO llama al backend", async () => {

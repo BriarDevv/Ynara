@@ -69,13 +69,24 @@ export async function submitOnboarding(params: {
   if (!draft.authedToken) {
     throw new Error("Sesión inválida. Volvé a empezar el onboarding.");
   }
-  // El backend solo persiste `display_name` y la flag; traducimos
+  // El backend solo persiste `display_name`, la flag y el huso; traducimos
   // camelCase→snake_case y mandamos SOLO lo que `UserUpdate` acepta
   // (extra='forbid' rechazaría cualquier campo de más). La response `UserOut`
   // no se consume: el caller sigue con el draft local validado.
+  //
+  // time_zone: huso del browser (IANA). El body va CRUDO (no pasa por
+  // `UserUpdateSchema`, que stripearía extras), así que el huso viaja tal cual
+  // y el backend lo valida/persiste. Guard por si el runtime no resuelve un
+  // timeZone: en ese caso se omite y la cuenta queda en el default 'UTC'.
+  // Compartido web+mobile (ADR-012): ambas plataformas capturan el huso acá.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   await api.patch<unknown>(
     "/v1/users/me",
-    { display_name: parsed.data.displayName, onboarding_completed: true },
+    {
+      display_name: parsed.data.displayName,
+      onboarding_completed: true,
+      ...(timeZone ? { time_zone: timeZone } : {}),
+    },
     { headers: { Authorization: `Bearer ${draft.authedToken}` } },
   );
   return parsed.data;
