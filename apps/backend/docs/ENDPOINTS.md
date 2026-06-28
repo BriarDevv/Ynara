@@ -114,6 +114,21 @@ seguridad en el docstring de [`../app/api/v1/auth.py`](../app/api/v1/auth.py).
   - **fail-open**: si Redis cae, el rate-limit se desactiva (auth sigue
     funcionando, sin throttling aplicativo).
 
+## /v1/onboarding
+
+Endpoint dedicado del intake de onboarding (ADR-026). Persiste las prefs **operativas**
+(`display_name` + `interested_modes` + `a11y`) en `users` y marca `onboarding_completed`.
+Contrato + decisiones en [`../app/api/v1/onboarding.py`](../app/api/v1/onboarding.py) y el
+mirror Pydantic en [`../app/schemas/onboarding.py`](../app/schemas/onboarding.py).
+
+- **POST** `/v1/onboarding` — completa el onboarding (intake operativo).
+  - Request: `OnboardingIntake = { display_name: string (<=40), interested_modes: Mode[] (>=1), a11y: { text_size: "sm"|"md"|"lg", high_contrast: bool, motion: "auto"|"reduce"|"normal" }, mood?: string[] (<=2), mood_free_text?: string|null (<=160), about?: { dedication: "estudio"|"trabajo"|"ambos"|"otro"|null, study_what: string (<=200), work_what: string (<=200), purpose: string (<=200), interests: string (<=200) }|null }`. `extra: forbid`. **Routing ADR-026 §2**: solo lo **operativo** (`display_name` + `interested_modes` + `a11y`) se persiste — en `users.display_name` + `users.preferences` (JSONB). `mood`/`mood_free_text`/`about` son **memory-bound** (SAGRADO, regla #3): se **aceptan y validan** pero NO se persisten todavía (seed de memoria = fase G4, PR aparte con aprobación humana).
+  - Response 200: `UserOut` (incluye `id` / `email` / `display_name` / `onboarding_completed: true` / `preferences: { interested_modes, a11y }` / timestamps; **nunca** `password_hash`). `preferences` viaja como `dict` RAW (las filas pre-onboarding tienen `{}`; el FE le da forma con Zod).
+  - Response 401: sin token / token inválido / expirado, **o** el `sub` válido ya no tiene fila (identidad propia caduca, mismo criterio que `/v1/auth/me`; **nunca** 404).
+  - Response 422: `interested_modes` vacío (`>=1`) o con un modo fuera del enum `Mode`, `a11y` mal formado, `display_name` > 40, o campo extra.
+  - **Idempotente** (upsert natural): re-llamar (re-onboarding) **pisa** `display_name` + `preferences` y deja `onboarding_completed=true`.
+  - Permisos: **usuario autenticado** (su propia identidad, Bearer del draft). **Sin rate-limit** (mismo criterio que `PATCH /v1/users/me` / `/v1/devices`: write de bajo costo sobre la propia fila). Tabla `users` (operativa, **no** sagrada).
+
 ## /v1/users
 
 - **PATCH** `/v1/users/me` — update parcial del perfil propio.

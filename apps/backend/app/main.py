@@ -26,6 +26,7 @@ from app.api.v1 import (
     health,
     memory,
     modes,
+    onboarding,
     reminders,
     sessions,
     tasks,
@@ -269,5 +270,6 @@ app.include_router(devices.router, prefix="/v1", tags=["devices"])
 app.include_router(today.router, prefix="/v1", tags=["today"])
 app.include_router(memory.router, prefix="/v1", tags=["memory"])
 app.include_router(modes.router, prefix="/v1", tags=["modes"])
+app.include_router(onboarding.router, prefix="/v1", tags=["onboarding"])
 app.include_router(users.router, prefix="/v1", tags=["users"])
 app.include_router(admin.router, prefix="/v1", tags=["admin"])
