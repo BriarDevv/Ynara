@@ -1,4 +1,5 @@
 import { KeyboardAvoidingView, Platform, View } from "react-native";
+import { useBackendSessionStore } from "@/stores/backendSessions";
 import { useChatStore } from "@/stores/chat";
 import { ChatComposer } from "./components/ChatComposer";
 import { MessageList } from "./components/MessageList";
@@ -14,19 +15,23 @@ export function ChatConversation({ sessionId }: { sessionId: string }) {
   const messages = useChatStore((s) => s.messages[sessionId]);
   const appendUserMessage = useChatStore((s) => s.appendUserMessage);
   const setMessageStatus = useChatStore((s) => s.setMessageStatus);
+  const getBackendSessionId = useBackendSessionStore((s) => s.getBackendSessionId);
   const stream = useChatStream(sessionId);
 
   if (!session) return null;
   const mode = session.mode;
 
+  // session_id que mandamos al backend: el id REAL ya confirmado para esta sesión
+  // local, o null en el 1er turno (el backend crea la ChatSession y devuelve su id
+  // en `done`, que el stream adopta). Mandar el id local hacía 404ear el turno.
   const handleSend = (text: string) => {
     const userMessageId = appendUserMessage(sessionId, text);
-    stream.send({ text, mode, session_id: sessionId }, userMessageId);
+    stream.send({ text, mode, session_id: getBackendSessionId(sessionId) }, userMessageId);
   };
 
   const handleRetry = (messageId: string, text: string) => {
     setMessageStatus(sessionId, messageId, "sending");
-    stream.send({ text, mode, session_id: sessionId }, messageId);
+    stream.send({ text, mode, session_id: getBackendSessionId(sessionId) }, messageId);
   };
 
   return (
