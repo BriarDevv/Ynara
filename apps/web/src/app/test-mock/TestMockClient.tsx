@@ -17,7 +17,7 @@ export function TestMockClient() {
     <Card>
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <p className="text-caption text-[var(--color-ink-muted)]">GET /v1/health</p>
+          <p className="text-caption text-[var(--color-ink-soft)]">GET /v1/health</p>
           <Button variant="secondary" onClick={() => refetch()} disabled={isFetching}>
             {isFetching ? "Pidiendo…" : "Refetch"}
           </Button>

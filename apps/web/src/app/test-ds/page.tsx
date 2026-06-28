@@ -114,7 +114,7 @@ export default function TestDsPage() {
         <div className="flex flex-col gap-4">
           {TYPE_TOKENS.map((t) => (
             <div key={t.className} className="flex items-baseline gap-6">
-              <span className="text-caption w-32 shrink-0 text-[var(--color-ink-muted)]">
+              <span className="text-caption w-32 shrink-0 text-[var(--color-ink-soft)]">
                 {t.label}
               </span>
               <span className={t.className}>Ynara aprende de vos.</span>
@@ -137,7 +137,7 @@ export default function TestDsPage() {
                 style={{ backgroundColor: c.value }}
               />
               <p className="text-body-sm">{c.name}</p>
-              <p className="text-caption text-[var(--color-ink-muted)]">{c.value}</p>
+              <p className="text-caption text-[var(--color-ink-soft)]">{c.value}</p>
             </Card>
           ))}
         </div>
@@ -193,7 +193,7 @@ export default function TestDsPage() {
               </div>
               <div className="border-t border-[var(--color-border)] px-4 py-3">
                 <p className="text-body-sm">{f.variant}</p>
-                <p className="text-caption text-[var(--color-ink-muted)]">{f.note}</p>
+                <p className="text-caption text-[var(--color-ink-soft)]">{f.note}</p>
               </div>
             </div>
           ))}
@@ -204,16 +204,16 @@ export default function TestDsPage() {
         <div className="flex flex-wrap items-end gap-10">
           <div className="flex flex-col items-center gap-3">
             <YnaraOrb size={72} />
-            <p className="text-caption text-[var(--color-ink-muted)]">calmo</p>
+            <p className="text-caption text-[var(--color-ink-soft)]">calmo</p>
           </div>
           <div className="flex flex-col items-center gap-3">
             <YnaraOrb size={72} thinking />
-            <p className="text-caption text-[var(--color-ink-muted)]">pensando</p>
+            <p className="text-caption text-[var(--color-ink-soft)]">pensando</p>
           </div>
           {MODES.map((mode) => (
             <div key={mode.id} className="flex flex-col items-center gap-3">
               <YnaraOrb size={44} modeId={mode.id} />
-              <p className="text-caption text-[var(--color-ink-muted)]">{mode.label}</p>
+              <p className="text-caption text-[var(--color-ink-soft)]">{mode.label}</p>
             </div>
           ))}
         </div>
@@ -241,14 +241,14 @@ export default function TestDsPage() {
       <Section title="Cards">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Card>
-            <p className="text-caption text-[var(--color-ink-muted)]">Card default</p>
+            <p className="text-caption text-[var(--color-ink-soft)]">Card default</p>
             <p className="text-subtitle mt-2">Estática</p>
             <p className="text-body-sm mt-1 text-[var(--color-ink-soft)]">
               Para contenido informativo sin interacción.
             </p>
           </Card>
           <Card variant="interactive">
-            <p className="text-caption text-[var(--color-ink-muted)]">Card interactive</p>
+            <p className="text-caption text-[var(--color-ink-soft)]">Card interactive</p>
             <p className="text-subtitle mt-2">Hover me</p>
             <p className="text-body-sm mt-1 text-[var(--color-ink-soft)]">
               Levita en hover. Para SuggestionCard, OptionCard, etc.
@@ -281,7 +281,7 @@ export default function TestDsPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-16">
-      <h2 className="text-caption mb-6 text-[var(--color-ink-muted)]">{title}</h2>
+      <h2 className="text-caption mb-6 text-[var(--color-ink-soft)]">{title}</h2>
       {children}
     </section>
   );
@@ -311,7 +311,7 @@ function LogoSwatch({
       >
         {children}
       </div>
-      <span className="text-caption text-[var(--color-ink-muted)]">{label}</span>
+      <span className="text-caption text-[var(--color-ink-soft)]">{label}</span>
     </div>
   );
 }
