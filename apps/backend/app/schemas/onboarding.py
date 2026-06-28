@@ -4,11 +4,11 @@ Contrato congelado en ADR-026. El **mirror Pydantic** (fuente de verdad) vive ac
 el Zod en ``packages/shared-schemas`` lo sigue ("Pydantic gana, Zod sigue"). El wire
 es snake_case.
 
-Routing de cada señal (ADR-026 §2): este endpoint solo persiste lo **OPERATIVO** —
-``display_name`` (tabla ``users``) + ``interested_modes``/``a11y`` (``users.preferences``
-JSONB). ``mood``/``mood_free_text``/``about`` viajan en el body pero son **memory-bound**
-(SAGRADO, regla #3): se ACEPTAN y validan acá, pero el seed de memoria es G4 (PR aparte
-con aprobación humana). Por eso se aceptan en el contrato pero NO se persisten todavía.
+Routing de cada señal (ADR-026 §2): lo **OPERATIVO** aterriza en ``users`` —
+``display_name`` + ``interested_modes``/``a11y`` (``users.preferences`` JSONB). Lo
+**memory-bound** (``mood``/``mood_free_text``/``about``, SAGRADO regla #3) lo consume
+G4 (``seed_onboarding_memory``): siembra hechos semánticos (ánimo + sobre-vos) y la
+dedicación como preferencia procedural, en la misma llamada al endpoint.
 
 ``UserPreferences`` es la forma TIPADA de ``users.preferences`` (lo que el endpoint
 escribe); ``UserOut.preferences`` viaja como ``dict`` RAW (las filas viejas tienen ``{}``
@@ -65,8 +65,9 @@ class UserPreferences(YnaraBaseModel):
 class AboutYou(YnaraBaseModel):
     """ "Sobre vos" — la señal memory-bound más rica (a qué se dedica, qué estudia, etc.).
 
-    Se ACEPTA y valida en el body, pero NO se persiste todavía: el seed de memoria es
-    SAGRADO (G4, PR aparte). ``null`` si el usuario saltó el step entero.
+    G4 la siembra en memoria: ``study_what``/``work_what``/``purpose``/``interests`` como
+    hechos semánticos y ``dedication`` como preferencia procedural. ``null`` si el usuario
+    saltó el step entero.
     """
 
     model_config = _WIRE_REQUEST_CONFIG
@@ -82,8 +83,8 @@ class OnboardingIntake(YnaraBaseModel):
     """Body de ``POST /v1/onboarding`` — el intake completo del onboarding (ADR-026).
 
     Mezcla OPERATIVO (``display_name`` + ``interested_modes`` + ``a11y``) con memory-bound
-    (``mood`` + ``mood_free_text`` + ``about``). El endpoint persiste solo lo operativo; lo
-    memory-bound se acepta pero se descarta hasta G4 (seed sagrado, PR aparte).
+    (``mood`` + ``mood_free_text`` + ``about``). El endpoint persiste lo operativo en
+    ``users`` y siembra lo memory-bound en memoria (G4, ``seed_onboarding_memory``).
     """
 
     model_config = _WIRE_REQUEST_CONFIG
