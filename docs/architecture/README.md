@@ -42,6 +42,7 @@ Acá vive el "porqué" detrás de las decisiones técnicas del proyecto.
 | 023 | Modelo de evento de calendario (recurrencia, timezone, all-day, multi-día) | Aceptado |
 | 024 | Streaming SSE cosmético — atomicidad transaccional del turno por encima del TTFB real (SCAL-01) | Aceptado |
 | 025 | Recall de HNSW a escala — índice global con post-filtro user_id y ef_search sin tunear (MEM-SACRED-02) | Propuesto — diferido |
+| 026 | Contrato de intake del onboarding (señales → operativo vs memoria) | Propuesto |
 
 > Nota de numeración: el ADR-016 era un segundo ADR-012 renumerado. El modelo de
 > evento de calendario —antes un ADR-018 "lógico" duplicado del file
