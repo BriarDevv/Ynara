@@ -111,22 +111,6 @@ export const DECK_SLIDES: readonly DeckSlideMeta[] = [
   },
   {
     id: 11,
-    section: "Funcionalidades principales",
-    title: "Tres pilares",
-    world: "ivory",
-    register: "calma",
-    field: 0.45,
-  },
-  {
-    id: 12,
-    section: "Funcionalidades principales",
-    title: "La app",
-    world: "ivory",
-    register: "calma",
-    field: 0.45,
-  },
-  {
-    id: 13,
     section: "Monetización",
     title: "Planes",
     world: "ivory",
@@ -134,17 +118,18 @@ export const DECK_SLIDES: readonly DeckSlideMeta[] = [
     field: 0.45,
   },
   {
-    id: 14,
+    id: 12,
     section: "Monetización",
     title: "Viabilidad",
     world: "ivory",
     register: "calma",
     field: 0.45,
   },
-  // ── Lanzamiento (Nerdearla 2026): piezas físicas → stand → escenario → demo →
-  //    equipo → folletería. Cada imagen en su propia lámina, grande y clara. ──
+  // ── Lanzamiento (Nerdearla 2026): piezas físicas → folletería → stand →
+  //    equipo acreditado → merch (remera + buzo → resto de objetos) →
+  //    escenario → demo. Cada imagen en su propia lámina, grande y clara. ──
   {
-    id: 15,
+    id: 13,
     section: "Lanzamiento",
     title: "Piezas",
     world: "dark",
@@ -152,7 +137,15 @@ export const DECK_SLIDES: readonly DeckSlideMeta[] = [
     field: 0.24,
   },
   {
-    id: 16,
+    id: 14,
+    section: "Lanzamiento",
+    title: "Folletería",
+    world: "dark",
+    register: "calma",
+    field: 0.3,
+  },
+  {
+    id: 15,
     section: "Lanzamiento",
     title: "El stand",
     world: "dark",
@@ -160,7 +153,42 @@ export const DECK_SLIDES: readonly DeckSlideMeta[] = [
     field: 0.26,
   },
   {
+    id: 16,
+    section: "Lanzamiento",
+    title: "El equipo",
+    world: "dark",
+    register: "calma",
+    field: 0.28,
+  },
+  // Merch: remera + buzo primero (los dos ítems que pidió Mateo), después el
+  // resto de objetos (3 renders). Section queda "Promoción" (categoría real
+  // del contenido) aunque narrativamente viven acá, pegados al equipo.
+  {
     id: 17,
+    section: "Promoción",
+    title: "Objetos",
+    world: "dark",
+    register: "calma",
+    field: 0.45,
+  },
+  {
+    id: 18,
+    section: "Promoción",
+    title: "Objetos",
+    world: "dark",
+    register: "calma",
+    field: 0.45,
+  },
+  {
+    id: 19,
+    section: "Promoción",
+    title: "Objetos",
+    world: "dark",
+    register: "calma",
+    field: 0.45,
+  },
+  {
+    id: 20,
     section: "Lanzamiento",
     title: "El escenario",
     world: "dark",
@@ -168,41 +196,17 @@ export const DECK_SLIDES: readonly DeckSlideMeta[] = [
     field: 0.28,
   },
   {
-    id: 18,
+    id: 21,
     section: "Lanzamiento",
     title: "La demo",
     world: "dark",
     register: "calma",
     field: 0.3,
   },
-  {
-    id: 19,
-    section: "Lanzamiento",
-    title: "El equipo",
-    world: "dark",
-    register: "calma",
-    field: 0.28,
-  },
-  {
-    id: 20,
-    section: "Lanzamiento",
-    title: "Folletería",
-    world: "dark",
-    register: "calma",
-    field: 0.3,
-  },
-  // ── Promoción: cada lámina muestra MÁXIMO 3 imágenes grandes (Redes 2+2,
-  //    Vía pública 2+2, Objetos 3+2+2). Las imágenes mandan; el rótulo dice qué es.
-  { id: 21, section: "Promoción", title: "Redes", world: "dark", register: "chaos", field: 0.05 },
+  // ── Promoción (resto): cada lámina muestra MÁXIMO 3 imágenes grandes
+  //    (Redes 2+2, Vía pública 2+2). Las imágenes mandan; el rótulo dice qué es.
   { id: 22, section: "Promoción", title: "Redes", world: "dark", register: "chaos", field: 0.05 },
-  {
-    id: 23,
-    section: "Promoción",
-    title: "Vía pública",
-    world: "dark",
-    register: "chaos",
-    field: 0.06,
-  },
+  { id: 23, section: "Promoción", title: "Redes", world: "dark", register: "chaos", field: 0.05 },
   {
     id: 24,
     section: "Promoción",
@@ -214,37 +218,21 @@ export const DECK_SLIDES: readonly DeckSlideMeta[] = [
   {
     id: 25,
     section: "Promoción",
-    title: "Objetos",
+    title: "Vía pública",
     world: "dark",
-    register: "calma",
-    field: 0.45,
+    register: "chaos",
+    field: 0.06,
   },
   {
     id: 26,
-    section: "Promoción",
-    title: "Objetos",
-    world: "dark",
-    register: "calma",
-    field: 0.45,
-  },
-  {
-    id: 27,
-    section: "Promoción",
-    title: "Objetos",
-    world: "dark",
-    register: "calma",
-    field: 0.45,
-  },
-  {
-    id: 28,
     section: "Próximas funcionalidades",
     title: "Roadmap",
     world: "dark",
     register: "calma",
     field: 0.45,
   },
-  { id: 29, section: "Cierre", title: "Cierre", world: "dark", register: "calma", field: 0.32 },
-  { id: 30, section: "Cierre", title: "Gracias", world: "dark", register: "calma", field: 0.9 },
+  { id: 27, section: "Cierre", title: "Cierre", world: "dark", register: "calma", field: 0.32 },
+  { id: 28, section: "Cierre", title: "Gracias", world: "dark", register: "calma", field: 0.9 },
 ] as const;
 
 export const TOTAL_SLIDES = DECK_SLIDES.length;
@@ -367,36 +355,6 @@ export const d07 = {
     { img: "/promo/tp3-22.png", alt: "Landing de Ynara — precio" },
     { img: "/promo/tp3-23.png", alt: "Landing de Ynara — cierre y CTA" },
   ],
-} as const;
-
-// L08 · Funcionalidades — los 3 pilares
-export const d08 = {
-  eyebrow: "Funcionalidades principales",
-  intro: "Tres cosas que ninguna app junta.",
-  // 3 pilares adelante (Productividad / Memoria / Bienestar). Los 5 modos son el
-  // mecanismo; acá van los pilares. Aconseja = la intersección.
-  pillars: problem.layers.slice(0, 3).map((l) => ({
-    title: l.title,
-    note: l.note,
-    features: l.features,
-  })),
-  intersection: "Y cuando las tres se encuentran, te aconseja qué hacer.",
-} as const;
-
-// L09 · Funcionalidades — la app. Los 4 verbos funcionando: los 3 chats canónicos
-// (Productividad/Memoria/Bienestar) + un 4to que ilustra Aconseja (la intersección).
-export const d09 = {
-  eyebrow: "La app",
-  statement: "Le hablás como a una persona y resuelve.",
-  chats: [
-    ...feel.chats,
-    {
-      mode: "Aconseja",
-      user: "tengo tres entregas y cero energía",
-      ynara: "Arrancá por la del martes, es la más corta. El resto puede esperar a mañana.",
-    },
-  ],
-  placeholder: "UI real de la app",
 } as const;
 
 // L10 · Monetización — planes
