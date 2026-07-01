@@ -162,6 +162,15 @@ Dos endpoints: uno no-streaming (JSON) y uno SSE. Contrato + justificación en
     `{ session_id, actions, finish_reason }`, `error` `{ code, message }`.
   - Sin fallback mid-stream (M3); la infra caída se sirve como respuesta
     degradada (texto degradado por `token` + `done`), no como `error`.
+- **`finish_reason="degraded"` = IA no disponible (ADR-027).** Cuando el LLM está
+  caído/apagado, `ResilientClient` absorbe el `LlmUnavailableError`/`LlmTimeoutError`
+  y **ambos** endpoints devuelven **200** (NO 500) con `finish_reason="degraded"` +
+  un `text` placeholder enlatado; el turno **no** persiste `conversation_turns` ni
+  consolida (la `ChatSession` ancla sí se commitea). El **cliente DEBE** tratar
+  `finish_reason="degraded"` como señal de "IA no disponible" y renderizar un estado
+  honesto (descartando el `text` placeholder), **no** mostrarlo como una respuesta
+  real. El 500 real queda reservado a `ModelNotServedError` (misconfig de deploy) y
+  al cliente fake sin respuestas encoladas — casos distintos de "LLM caído".
 - Permisos: usuario autenticado.
 - Rate limit: por `user_id` (del JWT), `CHAT_MAX_REQUESTS` (60) por `CHAT_WINDOW_SECONDS` (60s); 429 con `Retry-After` al cruzar el techo. fail-open si Redis cae. Aplica a `/chat` y `/chat/stream`.
 - Modos: todos.
