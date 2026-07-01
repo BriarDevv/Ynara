@@ -61,10 +61,16 @@ export function SobreVosStep() {
       subtitle={copy.subtitle}
       footer={<StepFooter onBack={back} onNext={onNext} nextLabel="Seguir" />}
     >
-      <fieldset className="flex flex-col gap-3 border-none p-0">
+      <fieldset className="flex flex-col border-none p-0">
         {/* Selección única: una fila de pills con aria-pressed (no OptionCard,
             que es para listas largas de una sola columna). */}
-        <legend className="text-caption text-[var(--color-ink-soft)]">¿A QUÉ TE DEDICÁS?</legend>
+        {/* mb-3 explícito en el legend: dentro de un fieldset display:flex el
+            <legend> es un elemento especial que NO participa del `gap` del flex,
+            así que el gap-3 quedaba sin efecto y el legend pegado a las pills. El
+            margin propio garantiza el aire (12px) de forma consistente. */}
+        <legend className="text-caption mb-3 text-[var(--color-ink-soft)]">
+          ¿A QUÉ TE DEDICÁS?
+        </legend>
         <div className="flex flex-wrap gap-2">
           {DEDICATION_OPTIONS.map((opt) => {
             const selected = dedication === opt.value;
