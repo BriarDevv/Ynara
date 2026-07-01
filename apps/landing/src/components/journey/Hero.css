@@ -65,7 +65,11 @@
     margin: 0;
     font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
     font-weight: 700;
-    font-size: clamp(5rem, 19vw, 21rem);
+    /* Bajado ~40% vs. el wordmark-solo (era clamp(5rem,19vw,21rem)): con el
+       isotipo delante a proporción de lockup (1.3125em + 0.625em de gap), la
+       fila entera pesa ~1.9375em más — sin este ajuste el margen derecho se
+       come esa diferencia y queda asimétrico contra el izquierdo. */
+    font-size: clamp(3rem, 11.5vw, 12.5rem);
     line-height: 0.82;
     letter-spacing: -0.05em;
     color: var(--c-text-bright);
@@ -73,6 +77,13 @@
   /* span visible del wordmark — caja de bloque para que SplitText mida líneas
      igual que el <h1> previo (el sr-only hermano queda fuera del split). */
   .hero-wordmark-text { display: block; }
+  /* fila isotipo + wordmark: MISMA proporción/disposición que YnaraLockup
+     (isotipo = 1.3125× el cuerpo del wordmark, baseline, gap = 0.625em) —
+     acá vía em puro para heredar el clamp() del font-size del <h1> y quedar
+     fluido en cualquier tamaño, igual que en nav/footer/deck. */
+  .hero-wordmark-row { display: flex; align-items: baseline; gap: 0.625em; }
+  .hero-wordmark-mark { display: block; flex-shrink: 0; width: 1.3125em; height: 1.3125em; }
+  .hero-wordmark-mark svg { display: block; width: 100%; height: 100%; }
   @media (max-width: 767px) {
     .hero-grid { padding-top: 14svh; }
     .hero-value { font-size: clamp(1.5rem, 6.5vw, 2.2rem); max-width: 100%; }
