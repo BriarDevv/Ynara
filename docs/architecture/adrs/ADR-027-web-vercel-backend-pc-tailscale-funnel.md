@@ -103,8 +103,16 @@ alcance:
 - **Dependencia de la PC prendida** para todo lo que no sea la cáscara. "Web 100%
   funcional con la PC apagada" no es posible sin **separar el backend-core de la
   IA** (fuera de alcance de este ADR).
-- **Degradación honesta de `/v1/chat`** (nivel 1) es trabajo nuevo: hoy con el LLM
-  caído el endpoint tira **500**, no un estado "IA pausada".
+- **Presentación honesta de "IA pausada"** (nivel 1) es trabajo nuevo.
+  **Corrección factual (2026-06-30):** este ADR afirmaba que `/v1/chat` "tira 500"
+  con la IA caída — es **inexacto**. La investigación (workflow, evidencia
+  `file:line`) probó que `ResilientClient` ya degrada a **200 + `finish_reason=
+  "degraded"`** + texto enlatado (el 500 real es solo `ModelNotServedError` o el
+  cliente fake). El gap NO es atrapar un 500 sino que el front **descarta**
+  `finish_reason` y muestra el texto enlatado como respuesta normal (deshonesto).
+  El trabajo real = consumir `finish_reason` y renderizar un estado honesto (ver
+  ENDPOINTS.md `/v1/chat`). El switch instantáneo (evitar el budget de ~90s) queda
+  como fase 1b.
 - **Latencia** extra: browser → edge de Funnel → PC. Aceptable para MVP.
 
 ## Alternativas descartadas
