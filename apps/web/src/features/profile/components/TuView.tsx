@@ -50,6 +50,7 @@ const RETENTION_OPTIONS = [
 const THEME_OPTIONS = [
   { value: "light" as const, label: "Claro" },
   { value: "dark" as const, label: "Oscuro" },
+  { value: "system" as const, label: "Sistema" },
 ] as const;
 
 type RetentionValue = "30" | "90" | "180" | "365";

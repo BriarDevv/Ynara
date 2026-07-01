@@ -35,20 +35,24 @@ else if(s.motion==='normal') root.classList.add('motion-on');
  * (`<html>` ya trae `.theme-dark` + `data-theme="dark"`). Si el usuario
  * eligió **claro**, esta rama le saca la clase antes del primer paint —
  * sin esto hay flash oscuro→claro en cada carga para ese usuario. Sin
- * preferencia persistida, no toca nada (queda en Noche).
+ * preferencia persistida, queda en Noche.
+ *
+ * `system`: resuelve `prefers-color-scheme` acá mismo (antes del paint) para
+ * que no haya flash al seguir el tema del SO. Debe quedar en sync con
+ * `resolveEffectiveTheme` de `stores/theme.ts`.
  */
 export const themeInitScript = `(function(){try{
 var raw = localStorage.getItem('ynara.theme');
-if(!raw) return;
-var parsed = JSON.parse(raw);
-var s = parsed && parsed.state ? parsed.state : null;
-if(!s) return;
+var theme = 'dark';
+if(raw){ var parsed = JSON.parse(raw); var s = parsed && parsed.state ? parsed.state : null; if(s && s.theme) theme = s.theme; }
+var effective = theme;
+if(theme==='system'){ effective = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'; }
 var root = document.documentElement;
-if(s.theme==='dark'){
-  root.classList.add('theme-dark');
-  root.setAttribute('data-theme','dark');
-}else if(s.theme==='light'){
+if(effective==='light'){
   root.classList.remove('theme-dark');
   root.setAttribute('data-theme','light');
+}else{
+  root.classList.add('theme-dark');
+  root.setAttribute('data-theme','dark');
 }
 }catch(e){}})();`;

@@ -1,13 +1,14 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type ThemePreference = "light" | "dark";
+export type ThemePreference = "light" | "dark" | "system";
 
 type ThemeState = {
   /**
-   * Tema visual de la app (DESIGN.md §3.1): marfil (light, default) o
-   * Noche (dark). Decisión del usuario vía store — sin depender de
-   * `prefers-color-scheme`.
+   * Tema visual de la app (DESIGN.md §3.1): marfil (light), Noche (dark, default)
+   * o `system` (sigue `prefers-color-scheme` del SO). `light`/`dark` son una
+   * decisión explícita del usuario; `system` delega en el SO y reacciona en vivo
+   * a sus cambios (ver `ThemeApplier` en providers.tsx).
    */
   theme: ThemePreference;
 };
@@ -42,13 +43,27 @@ export const useThemeStore = create<ThemeState & ThemeActions>()(
 );
 
 /**
- * Aplica el tema actual al <html> (clase `theme-dark` + `data-theme`).
+ * Resuelve la preferencia a un tema EFECTIVO (`light`/`dark`). `system` mira
+ * `prefers-color-scheme`; sin `matchMedia` (SSR / jsdom) cae a `dark` (el
+ * default dark-first), así nunca rompe ni hace flash.
+ */
+export function resolveEffectiveTheme(theme: ThemePreference): "light" | "dark" {
+  if (theme !== "system") return theme;
+  if (typeof window === "undefined" || !window.matchMedia) return "dark";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+/**
+ * Aplica el tema EFECTIVO al <html> (clase `theme-dark` + `data-theme`). El CSS
+ * solo entiende `light`/`dark`, así que `system` se resuelve antes; la
+ * preferencia `system` vive solo en el store (para saber qué pill marcar).
  * Llamar desde un componente client después de hidratar; el pre-paint
  * (`app/a11y-init.ts`) hace lo mismo antes del primer paint.
  */
 export function applyThemeClass(state: ThemeState): void {
   if (typeof document === "undefined") return;
+  const effective = resolveEffectiveTheme(state.theme);
   const html = document.documentElement;
-  html.classList.toggle("theme-dark", state.theme === "dark");
-  html.dataset.theme = state.theme;
+  html.classList.toggle("theme-dark", effective === "dark");
+  html.dataset.theme = effective;
 }
