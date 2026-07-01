@@ -129,7 +129,13 @@ export function useChatStream(sessionId: string): UseChatStream {
               // lo que permite encadenar los turnos siguientes; sin esto el 2do
               // turno volvería a crear sesión (memoria/historial fragmentados).
               setBackendSessionId(sessionId, event.data.session_id);
-              finishAssistantStream(sessionId, assistantId, { actions: event.data.actions });
+              // Pasamos `finish_reason` (antes se descartaba): si es "degraded"
+              // (ADR-027, IA no disponible) el store marca el turno degradado y
+              // la UI muestra un estado honesto en vez de la respuesta enlatada.
+              finishAssistantStream(sessionId, assistantId, {
+                actions: event.data.actions,
+                finishReason: event.data.finish_reason,
+              });
               return true;
             } else {
               failAssistantStream(sessionId, assistantId, event.data.code);

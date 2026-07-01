@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { chatPausedCopy } from "@ynara/shared-schemas";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatUiMessage } from "../store";
 import { MessageList } from "./MessageList";
@@ -111,6 +112,21 @@ describe("MessageList — a11y del streaming (PR #9)", () => {
     // Re-anuncio = nodo remontado (no el mismo nodo con texto repetido, que el
     // lector ignoraría por aria-atomic sin cambio de string).
     expect(screen.getByRole("status")).not.toBe(firstNode);
+  });
+
+  it("un turno degradado (IA no disponible) se anuncia en la región viva con el copy honesto", async () => {
+    const streaming = [
+      user,
+      msg({ id: "a", role: "assistant", status: "streaming", text: "Estoy con un problema" }),
+    ];
+    const { rerender } = render(<MessageList messages={streaming} mode="vida" onRetry={noop} />);
+    expect(screen.getByRole("status").textContent).toBe("");
+
+    // El turno cierra "degraded": el store ya vació el texto enlatado, así que la
+    // región persistente anuncia el copy honesto (no el enlatado, no vacío).
+    const degraded = [user, msg({ id: "a", role: "assistant", status: "degraded", text: "" })];
+    rerender(<MessageList messages={degraded} mode="vida" onRetry={noop} />);
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe(chatPausedCopy()));
   });
 
   it("un mensaje cancelado o con error NO se anuncia en la región viva", async () => {

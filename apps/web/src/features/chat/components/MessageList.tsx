@@ -1,5 +1,6 @@
 "use client";
 
+import { chatPausedCopy } from "@ynara/shared-schemas";
 import { useRef, useState } from "react";
 import type { ModeId } from "@/components/ui/modes";
 import type { ChatUiMessage } from "../store";
@@ -39,11 +40,18 @@ type Props = {
   onSend?: (text: string) => void;
 };
 
-/** El último mensaje de assistant que cerró en "done" (o undefined). */
-function lastDoneAssistant(messages: ChatUiMessage[]): ChatUiMessage | undefined {
+/**
+ * El último mensaje de assistant "asentado" (terminal anunciable): cerró en
+ * "done" o quedó "degraded" (IA no disponible, ADR-027). Ambos se anuncian por
+ * la región viva persistente (`<output>` de abajo) — ese es el patrón CONFIABLE:
+ * un `role="status"` recién montado en el bubble degradado no dispara el anuncio
+ * de forma confiable en varios lectores, así que la región persistente es la
+ * única fuente del anuncio. `canceled`/`error` NO se anuncian acá.
+ */
+function lastSettledAssistant(messages: ChatUiMessage[]): ChatUiMessage | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
-    if (m?.role === "assistant" && m.status === "done") return m;
+    if (m?.role === "assistant" && (m.status === "done" || m.status === "degraded")) return m;
   }
   return undefined;
 }
@@ -97,15 +105,20 @@ export function MessageList({ messages, mode, onRetry, isStreaming = false, onSe
   // un `key` que incrementa con cada nuevo "done" REMONTA el `<output>`: nodo
   // nuevo ⇒ el lector lo anuncia aunque el texto sea igual al anterior. Sin
   // efecto, sin rAF, sin render intermedio con la UI stale.
-  const [initialDoneId] = useState(() => lastDoneAssistant(messages)?.id ?? null);
+  const [initialSettledId] = useState(() => lastSettledAssistant(messages)?.id ?? null);
   const [announced, setAnnounced] = useState<{ id: string | null; text: string; key: number }>({
-    id: initialDoneId,
+    id: initialSettledId,
     text: "",
     key: 0,
   });
-  const done = lastDoneAssistant(messages);
-  if (done && done.id !== announced.id) {
-    setAnnounced({ id: done.id, text: done.text, key: announced.key + 1 });
+  const settled = lastSettledAssistant(messages);
+  if (settled && settled.id !== announced.id) {
+    // Un turno degradado tiene `text` vacío (el enlatado se descartó en el
+    // store): anunciamos el copy honesto para que el lector de pantalla sepa que
+    // la IA no respondió (honestidad también en a11y). Los "done" anuncian su
+    // texto real.
+    const text = settled.status === "degraded" ? chatPausedCopy() : settled.text;
+    setAnnounced({ id: settled.id, text, key: announced.key + 1 });
   }
 
   if (messages.length === 0) {

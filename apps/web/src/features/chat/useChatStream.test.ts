@@ -94,6 +94,36 @@ describe("useChatStream", () => {
     expect(result.current.isStreaming).toBe(false);
   });
 
+  it("un done con finish_reason='degraded' marca el turno degradado y descarta el texto enlatado", async () => {
+    // La IA no disponible (ADR-027): el backend degrada a 200, streamea el texto
+    // enlatado por `token` y cierra con finish_reason="degraded". El hook debe
+    // reenviar ese finish_reason al store, que marca "degraded" y borra el texto.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        okResponse([
+          'event: token\ndata: {"delta":"Estoy con un problema tecnico"}\n\n',
+          'event: done\ndata: {"session_id":"s1","actions":[],"finish_reason":"degraded"}\n\n',
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { sessionId, userMessageId } = setupSession();
+    const { result } = renderHook(() => useChatStream(sessionId));
+    await act(async () => {
+      await result.current.send(
+        { text: "hola", mode: "vida", session_id: sessionId },
+        userMessageId,
+      );
+    });
+
+    const assistant = assistantOf(sessionId);
+    expect(assistant?.status).toBe("degraded");
+    // El texto enlatado que llegó por token se descarta (no se muestra la mentira).
+    expect(assistant?.text).toBe("");
+    expect(useChatStore.getState().streamStatus).toBe("idle");
+  });
+
   it("adopta el session_id real del evento done (mapeo localId→backendId)", async () => {
     // El backend devuelve en `done` el id REAL de la ChatSession que creó (el
     // primer turno mandó session_id:null). El hook debe persistir ese id para que
