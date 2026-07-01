@@ -39,3 +39,19 @@ export function chatErrorCopy(code: string | null | undefined): string {
   }
   return CHAT_ERROR_COPY[code] ?? CHAT_ERROR_FALLBACK;
 }
+
+/**
+ * Copy honesto para un turno DEGRADADO (`finish_reason === "degraded"`): la IA
+ * no esta disponible ahora mismo (apagada a proposito o caida). A diferencia de
+ * un error, no es un fallo del turno del usuario: el resto de Ynara sigue
+ * andando. Generico-honesto a proposito: es verdad tanto si el LLM esta pausado
+ * como en el caso raro de contexto excedido, asi que NO menciona una causa
+ * concreta. El front descarta el texto enlatado del backend y muestra ESTE copy.
+ */
+export const CHAT_PAUSED_COPY =
+  "La IA no está disponible ahora mismo. El resto de Ynara sigue andando; probá de nuevo en un rato.";
+
+/** Devuelve el copy honesto para un turno degradado ("IA no disponible"). */
+export function chatPausedCopy(): string {
+  return CHAT_PAUSED_COPY;
+}
