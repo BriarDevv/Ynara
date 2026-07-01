@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useRef } from "react";
+import { YnaraMark } from "@/components/ui/YnaraMark";
 import { hero, site } from "@/content/ynara";
 import { gsap, reducedMotion, registerGsap, useGSAP } from "@/lib/motion";
 import { lineReveal } from "@/lib/reveal";
@@ -43,6 +44,7 @@ export function Hero() {
       // <h1> entero: así el <span class="sr-only"> con la propuesta de valor
       // (SEO/a11y) no entra en el SplitText ni rompe el mask de líneas.
       const word = root.querySelector(".hero-wordmark-text");
+      const mark = root.querySelector(".hero-wordmark-mark");
       const value = root.querySelector<HTMLElement>(".hero-value");
       const aux = gsap.utils.toArray<HTMLElement>(root.querySelectorAll(".hero-aux"));
 
@@ -55,6 +57,7 @@ export function Hero() {
 
       if (eyebrow) gsap.set(eyebrow, { opacity: 0, y: 18 });
       if (aux.length) gsap.set(aux, { opacity: 0, y: 18 });
+      if (mark) gsap.set(mark, { opacity: 0, scale: 0.82, transformOrigin: "center" });
       const valueTween = value
         ? lineReveal(value, { y: "130%", rot: 2.2, dur: 1.1, stagger: 0.12, immediate: true })
         : null;
@@ -69,6 +72,7 @@ export function Hero() {
         if (aux.length)
           tlIn.to(aux, { opacity: 1, y: 0, duration: 0.9, ease: "power3.out", stagger: 0.1 }, 0.5);
         tlIn.call(() => wordTween?.play(), undefined, 0.55);
+        if (mark) tlIn.to(mark, { opacity: 1, scale: 1, duration: 1.1, ease: "power3.out" }, 0.55);
       };
 
       let introSeen = false;
@@ -123,9 +127,20 @@ export function Hero() {
             <p className="hero-badge hero-aux">{hero.badge}</p>
           </div>
           {/* El <h1> incluye la propuesta de valor para SEO/a11y sin alterar el
-              look: "Ynara" sigue siendo lo único visible; el valor va en sr-only. */}
+              look: "Ynara" sigue siendo lo único visible; el valor va en sr-only.
+              El isotipo acompaña al wordmark (no reemplaza YnaraLockup — ese es
+              el lockup chico de UI; acá es tratamiento heroico, proporción propia). */}
           <h1 className="hero-wordmark">
-            <span className="hero-wordmark-text">{site.name}</span>
+            <span className="hero-wordmark-row">
+              {/* Decorativo: el nombre ya lo dice el texto de al lado. Misma
+                  proporción/disposición que YnaraLockup (isotipo 1.3125× el
+                  wordmark, baseline, gap 0.625em) — acá en ivory por ser sobre
+                  el mundo oscuro del hero (ver YnaraLockup tone="dark"). */}
+              <span aria-hidden="true" className="hero-wordmark-mark">
+                <YnaraMark size={160} variant="ivory" />
+              </span>
+              <span className="hero-wordmark-text">{site.name}</span>
+            </span>
             <span className="sr-only"> — tu asistente personal con memoria</span>
           </h1>
         </div>
