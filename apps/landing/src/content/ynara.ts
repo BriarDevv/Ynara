@@ -56,7 +56,8 @@ export const problem = {
   ],
   // Intro de la sección horizontal (lleva a las cards).
   pillarsEyebrow: "Lo que hace por vos",
-  pillarsIntro: "Una sola app. Tres pilares que ninguna otra junta — y un cuarto que nace donde se tocan.",
+  pillarsIntro:
+    "Una sola app. Tres pilares que ninguna otra junta — y un cuarto que nace donde se tocan.",
   layers: [
     {
       key: "productividad",

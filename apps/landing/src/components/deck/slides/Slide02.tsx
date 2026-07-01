@@ -66,9 +66,7 @@ export function Slide02({ index }: { index: number }) {
           <p className="s02__intersection" data-reveal>
             <span className="s02__intersection-diamond" aria-hidden />
             <span className="s02__intersection-text">
-              {introPart && (
-                <span className="s02__intersection-intro">{introPart} </span>
-              )}
+              {introPart && <span className="s02__intersection-intro">{introPart} </span>}
               <span className="s02__intersection-key">{keyPart}</span>
             </span>
           </p>
