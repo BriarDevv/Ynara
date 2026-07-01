@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { TextField } from "./TextField";
 
@@ -34,5 +34,37 @@ describe("TextField · wiring de accesibilidad", () => {
     render(<TextField placeholder="Escribí…" />);
     const input = screen.getByPlaceholderText("Escribí…");
     expect(input.getAttribute("aria-describedby")).toBeNull();
+  });
+});
+
+describe("TextField · toggle de contraseña (ojito)", () => {
+  it("arranca oculta y ofrece el botón 'Mostrar contraseña'", () => {
+    render(<TextField label="Contraseña" type="password" />);
+    const input = screen.getByLabelText("Contraseña");
+    expect(input.getAttribute("type")).toBe("password");
+    expect(screen.getByRole("button", { name: "Mostrar contraseña" })).toBeDefined();
+  });
+
+  it("revela y vuelve a ocultar la contraseña al clickear el ojito", () => {
+    render(<TextField label="Contraseña" type="password" />);
+    const input = screen.getByLabelText("Contraseña");
+
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar contraseña" }));
+    expect(input.getAttribute("type")).toBe("text");
+
+    fireEvent.click(screen.getByRole("button", { name: "Ocultar contraseña" }));
+    expect(input.getAttribute("type")).toBe("password");
+  });
+
+  it("el botón del ojito es type=button (no submitea el form)", () => {
+    render(<TextField label="Contraseña" type="password" />);
+    expect(screen.getByRole("button", { name: "Mostrar contraseña" }).getAttribute("type")).toBe(
+      "button",
+    );
+  });
+
+  it("no agrega el ojito a campos que no son de contraseña", () => {
+    render(<TextField label="Email" type="email" />);
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });
