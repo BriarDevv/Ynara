@@ -11,8 +11,22 @@ import { createJSONStorage, persist, type StateStorage } from "zustand/middlewar
  * `streamStatus` es efímero: no se persiste.
  */
 
-/** Estado de un mensaje individual en la UI. */
-export type ChatMessageStatus = "sending" | "streaming" | "done" | "error" | "canceled";
+/**
+ * Estado de un mensaje individual en la UI.
+ *
+ * `degraded`: turno en el que la IA NO estuvo disponible (`finish_reason ===
+ * "degraded"`, ADR-027). El backend degrada a 200 con un texto enlatado; el
+ * front lo DESCARTA y muestra un estado honesto "IA no disponible" (ver
+ * `chatPausedCopy`). Es terminal y NO es `error`: el turno del usuario no falló,
+ * la IA está pausada/caída.
+ */
+export type ChatMessageStatus =
+  | "sending"
+  | "streaming"
+  | "done"
+  | "error"
+  | "degraded"
+  | "canceled";
 
 /** Un mensaje de la conversación tal como lo renderiza la UI. */
 export type ChatUiMessage = {
@@ -91,13 +105,17 @@ type ChatActions = {
    */
   appendReasoningDelta: (sessionId: string, assistantId: string, delta: string) => void;
   /**
-   * Cierra el stream OK: assistant "streaming" → "done", adjunta `actions`
-   * si hay, `streamStatus:"idle"` y toca `updatedAt`.
+   * Cierra el stream: assistant "streaming" → "done", adjunta `actions` si hay,
+   * `streamStatus:"idle"` y toca `updatedAt`.
+   *
+   * `finishReason` viene del evento `done` del SSE. Si es `"degraded"` (ADR-027,
+   * IA no disponible), el mensaje queda `status:"degraded"` con el texto enlatado
+   * DESCARTADO (la UI muestra un estado honesto), no `"done"`.
    */
   finishAssistantStream: (
     sessionId: string,
     assistantId: string,
-    opts?: { actions?: Action[] },
+    opts?: { actions?: Action[]; finishReason?: string | null },
   ) => void;
   /**
    * Cierra el stream con error. `streamStatus:"error"`. Para que el retry
@@ -222,13 +240,17 @@ export function createChatStore(storage: StateStorage) {
             const userClosed = list.map((m) =>
               m.id === userMessageId ? { ...m, status: "done" as const } : m,
             );
-            // 2) Agregar la respuesta del assistant.
+            // 2) Agregar la respuesta del assistant. Paridad con el streaming
+            //    (finishAssistantStream): finish_reason="degraded" (ADR-027) => IA
+            //    no disponible; descartamos el texto enlatado y marcamos el turno
+            //    "degraded" (estado honesto), no "done".
+            const degraded = response.finish_reason === "degraded";
             const assistant: ChatUiMessage = {
               id: newId(),
               role: "assistant",
-              text: response.text,
-              status: "done",
-              actions: response.actions.length > 0 ? response.actions : undefined,
+              text: degraded ? "" : response.text,
+              status: degraded ? "degraded" : "done",
+              actions: !degraded && response.actions.length > 0 ? response.actions : undefined,
             };
             const session = s.sessions[sessionId];
             return {
@@ -307,15 +329,28 @@ export function createChatStore(storage: StateStorage) {
             const list = s.messages[sessionId];
             if (!list) return s;
             const actions = opts?.actions;
-            const closed = list.map((m) =>
-              m.id === assistantId
-                ? {
-                    ...m,
-                    status: "done" as const,
-                    actions: actions && actions.length > 0 ? actions : m.actions,
-                  }
-                : m,
-            );
+            // finish_reason="degraded" (ADR-027): la IA no estuvo disponible. El
+            // backend ya devolvió 200 con un texto enlatado (que durante el
+            // stream se acumuló en m.text); lo DESCARTAMOS —parece una respuesta
+            // real y sería mentira— y marcamos el turno "degraded" para que la UI
+            // muestre un estado honesto. No es "error": el turno del user no
+            // falló, la IA está pausada/caída.
+            // Micro-flicker aceptado (fase 1a): si el transporte entrega el texto
+            // enlatado y el `done` en reads separados, puede pintarse 1 frame del
+            // enlatado antes de que este descarte lo borre. El buffering fino (no
+            // pintar hasta el done) queda para una fase posterior.
+            const degraded = opts?.finishReason === "degraded";
+            const closed = list.map((m) => {
+              if (m.id !== assistantId) return m;
+              if (degraded) {
+                return { ...m, status: "degraded" as const, text: "", actions: undefined };
+              }
+              return {
+                ...m,
+                status: "done" as const,
+                actions: actions && actions.length > 0 ? actions : m.actions,
+              };
+            });
             const session = s.sessions[sessionId];
             return {
               messages: { ...s.messages, [sessionId]: closed },

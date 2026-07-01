@@ -96,6 +96,26 @@ describe("useChatStore", () => {
     expect(useChatStore.getState().messages[sid]?.at(-1)?.actions).toBeUndefined();
   });
 
+  it("applyChatResponse con finish_reason='degraded' marca degraded y descarta el texto enlatado", () => {
+    const sid = useChatStore.getState().createSession("vida");
+    const userMsgId = useChatStore.getState().appendUserMessage(sid, "hola");
+    useChatStore.getState().applyChatResponse(sid, userMsgId, {
+      text: "Estoy con un problema tecnico, proba en un ratito.",
+      session_id: sid,
+      actions: [],
+      finish_reason: "degraded",
+    });
+
+    const assistant = useChatStore.getState().messages[sid]?.at(-1);
+    expect(assistant?.role).toBe("assistant");
+    expect(assistant?.status).toBe("degraded");
+    // El texto enlatado del backend NO se conserva (sería una respuesta mentirosa).
+    expect(assistant?.text).toBe("");
+    expect(assistant?.actions).toBeUndefined();
+    // El user del turno igual queda cerrado (no es un error del usuario).
+    expect(useChatStore.getState().messages[sid]?.[0]?.status).toBe("done");
+  });
+
   it("appendMessage toca el updatedAt de la sesión", () => {
     const sid = useChatStore.getState().createSession("vida");
     const before = useChatStore.getState().sessions[sid]?.updatedAt ?? 0;
@@ -213,6 +233,44 @@ describe("useChatStore — streaming (W3)", () => {
     const assistant = useChatStore.getState().messages[sid]?.at(-1);
     expect(assistant?.status).toBe("done");
     expect(assistant?.actions).toBeUndefined();
+  });
+
+  it("finishAssistantStream con finishReason='degraded' marca degraded, descarta el texto y deja idle", () => {
+    const sid = useChatStore.getState().createSession("vida");
+    const userId = useChatStore.getState().appendUserMessage(sid, "hola");
+    const aid = useChatStore.getState().startAssistantStream(sid, userId);
+    // Durante el stream se acumuló el texto enlatado del backend degradado.
+    useChatStore.getState().appendStreamDelta(sid, aid, "Estoy con un problema tecnico");
+
+    useChatStore.getState().finishAssistantStream(sid, aid, {
+      actions: [],
+      finishReason: "degraded",
+    });
+
+    const assistant = useChatStore.getState().messages[sid]?.at(-1);
+    expect(assistant?.status).toBe("degraded");
+    // El texto enlatado se descarta (la UI muestra el copy honesto, no la mentira).
+    expect(assistant?.text).toBe("");
+    expect(assistant?.actions).toBeUndefined();
+    // Degradado NO es error: streamStatus vuelve a idle (composer habilitado).
+    expect(useChatStore.getState().streamStatus).toBe("idle");
+    // El user del turno queda "done" (lo cerró startAssistantStream), no error.
+    expect(useChatStore.getState().messages[sid]?.find((m) => m.id === userId)?.status).toBe(
+      "done",
+    );
+  });
+
+  it("finishAssistantStream con finishReason='stop' sigue cerrando en done (regresión)", () => {
+    const sid = useChatStore.getState().createSession("vida");
+    const userId = useChatStore.getState().appendUserMessage(sid, "hola");
+    const aid = useChatStore.getState().startAssistantStream(sid, userId);
+    useChatStore.getState().appendStreamDelta(sid, aid, "respuesta real");
+
+    useChatStore.getState().finishAssistantStream(sid, aid, { actions: [], finishReason: "stop" });
+
+    const assistant = useChatStore.getState().messages[sid]?.at(-1);
+    expect(assistant?.status).toBe("done");
+    expect(assistant?.text).toBe("respuesta real");
   });
 
   it("failAssistantStream SIN texto descarta el placeholder y marca el user error", () => {
@@ -360,5 +418,28 @@ describe("useChatStore — streaming (W3)", () => {
     const list = useChatStore.getState().messages[sid] ?? [];
     expect(list.find((m) => m.id === "a")).toBeUndefined();
     expect(list).toHaveLength(1);
+  });
+
+  it("onRehydrateStorage preserva un turno 'degraded' (terminal, no lo baja a error)", async () => {
+    const sid = "sess-rehydrate-degraded";
+    const persisted = {
+      state: {
+        sessions: { [sid]: { id: sid, mode: "vida", createdAt: 1, updatedAt: 1 } },
+        messages: {
+          [sid]: [
+            { id: "u", role: "user", text: "hola", status: "done" },
+            { id: "a", role: "assistant", text: "", status: "degraded" },
+          ],
+        },
+      },
+      version: 0,
+    };
+    localStorage.setItem("ynara.chat", JSON.stringify(persisted));
+    await useChatStore.persist.rehydrate();
+
+    const list = useChatStore.getState().messages[sid] ?? [];
+    // 'degraded' es terminal: NO es streaming/sending, así que sobrevive intacto.
+    expect(list.find((m) => m.id === "a")?.status).toBe("degraded");
+    expect(list).toHaveLength(2);
   });
 });
