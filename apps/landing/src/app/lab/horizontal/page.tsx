@@ -226,8 +226,9 @@ export default function HorizontalLabPage() {
         end: () => {
           const st = tl.scrollTrigger;
           if (!st) return "+=0";
-          const s = st.start + tl.labels.scaleStart * (st.end - st.start);
-          const e = st.start + tl.labels.scaleEnd * (st.end - st.start);
+          // Labels agregados más arriba en este mismo timeline (addLabel("scaleStart"/"scaleEnd")).
+          const s = st.start + tl.labels.scaleStart! * (st.end - st.start);
+          const e = st.start + tl.labels.scaleEnd! * (st.end - st.start);
           return s + (e - s) * 0.7;
         },
         pin: textPin,

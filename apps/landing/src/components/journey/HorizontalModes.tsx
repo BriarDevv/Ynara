@@ -206,8 +206,9 @@ export function HorizontalModes() {
         end: () => {
           const st = tl.scrollTrigger;
           if (!st) return "+=0";
-          const s = st.start + tl.labels.scaleStart * (st.end - st.start);
-          const e = st.start + tl.labels.scaleEnd * (st.end - st.start);
+          // Labels agregados más arriba en este mismo timeline (addLabel("scaleStart"/"scaleEnd")).
+          const s = st.start + tl.labels.scaleStart! * (st.end - st.start);
+          const e = st.start + tl.labels.scaleEnd! * (st.end - st.start);
           // Desanclar el titular ANTES (0.5 en vez de 0.7) de que la primera card
           // sea legible → el titular no queda solapado con la card que crece.
           return s + (e - s) * 0.5;
@@ -371,7 +372,8 @@ export function HorizontalModes() {
         <div className="horizontal-wrapper">
           <div className="track">
             {CARDS.map((card, ci) => {
-              const spacer = SPACERS[ci];
+              // SPACERS es paralelo a CARDS (mismo largo, mismo orden) — invariante de contenido.
+              const spacer = SPACERS[ci]!;
               const SpacerSvg = spacer.Svg;
               return (
                 <div key={card.word} style={{ display: "contents" }}>

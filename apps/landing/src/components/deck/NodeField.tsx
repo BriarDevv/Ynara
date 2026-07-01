@@ -62,10 +62,10 @@ export function NodeField({ className }: { className?: string }) {
         {LINKS.map(([a, b]) => (
           <line
             key={`l-${a}-${b}`}
-            x1={NODES[a][0]}
-            y1={NODES[a][1]}
-            x2={NODES[b][0]}
-            y2={NODES[b][1]}
+            x1={NODES[a]![0]}
+            y1={NODES[a]![1]}
+            x2={NODES[b]![0]}
+            y2={NODES[b]![1]}
           />
         ))}
       </g>
@@ -76,7 +76,7 @@ export function NodeField({ className }: { className?: string }) {
       </g>
       <g fill="currentColor">
         {DIAMONDS.map((i) => {
-          const [x, y] = NODES[i];
+          const [x, y] = NODES[i]!;
           return (
             <rect
               key={`d-${x}-${y}`}
