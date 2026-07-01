@@ -119,7 +119,13 @@ export function useChatStream(sessionId: string): UseChatStream {
                 // Guardarlo encadena los turnos siguientes (sin esto el backend
                 // 404eaba el id local y fragmentaba la conversación). Espeja web.
                 setBackendSessionId(sessionId, event.data.session_id);
-                finishAssistantStream(sessionId, assistantId, { actions: event.data.actions });
+                // Reenviamos finish_reason (antes se descartaba): si es "degraded"
+                // (ADR-027, IA no disponible) el store compartido marca el turno
+                // degradado y el bubble muestra el estado honesto. Espeja web.
+                finishAssistantStream(sessionId, assistantId, {
+                  actions: event.data.actions,
+                  finishReason: event.data.finish_reason,
+                });
                 return true;
               } else {
                 failAssistantStream(sessionId, assistantId, event.data.code);

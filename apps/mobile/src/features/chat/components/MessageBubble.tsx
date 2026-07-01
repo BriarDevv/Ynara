@@ -1,6 +1,6 @@
 import type { ChatUiMessage } from "@ynara/core/features/chat";
 import type { Mode } from "@ynara/shared-schemas";
-import { chatErrorCopy } from "@ynara/shared-schemas";
+import { chatErrorCopy, chatPausedCopy } from "@ynara/shared-schemas";
 import { Pressable, View } from "react-native";
 import { MODE_DOT_CLASS } from "@/components/ui/modes";
 import { Text } from "@/components/ui/Text";
@@ -38,6 +38,20 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
             <Text className="text-body-sm text-ink-soft underline">Reintentar</Text>
           </Pressable>
         ) : null}
+      </View>
+    );
+  }
+
+  if (message.status === "degraded") {
+    // IA no disponible (ADR-027): estado calmo/informativo, NO el rojo de error
+    // (no es un fallo del turno del usuario). `accessibilityLiveRegion="polite"`
+    // para que el lector lo anuncie sin urgencia. El texto enlatado del backend
+    // ya se descartó en el store compartido; mostramos el copy honesto.
+    return (
+      <View className="items-start" accessibilityLiveRegion="polite">
+        <View className="max-w-[85%] rounded-md border border-border bg-bg-soft px-4 py-3">
+          <Text className="text-body-sm text-ink-soft">{chatPausedCopy()}</Text>
+        </View>
       </View>
     );
   }
