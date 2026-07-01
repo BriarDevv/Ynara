@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 export function emphasizeYnara(text: string): ReactNode {
   return text.split(/(Ynara)/g).map((chunk, i) =>
     chunk === "Ynara" ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: split() de un string fijo es estable/no reordenable
       <strong className="deck-ynara" key={`yn-${i}`}>
         Ynara
       </strong>

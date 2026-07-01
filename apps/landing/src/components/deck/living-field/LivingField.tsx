@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import { cn } from "@/lib/cn";
+import { reducedMotion } from "@/lib/motion";
+import type { Mode } from "./field";
 import {
   advanceTime,
   buildBlooms,
@@ -28,10 +32,6 @@ import {
   threadY,
   VARIANTS,
 } from "./field";
-import { useEffect, useRef } from "react";
-import { cn } from "@/lib/cn";
-import { reducedMotion } from "@/lib/motion";
-import type { Mode } from "./field";
 import "./LivingField.css";
 
 /**
@@ -398,10 +398,7 @@ export function LivingField({
   return (
     <div
       aria-hidden
-      className={cn(
-        "pointer-events-none absolute inset-0 select-none overflow-hidden",
-        className,
-      )}
+      className={cn("pointer-events-none absolute inset-0 select-none overflow-hidden", className)}
     >
       {/* Capa canvas con fade-mask: baja opacidad por diseño — es atmósfera. */}
       <div

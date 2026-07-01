@@ -284,8 +284,7 @@ export default function CascadeField({ bare = false, endSelector }: CascadeField
     // vértice es lo caro. Al criterio de ancho le sumamos CPU/memoria para que
     // los equipos de baja potencia arranquen en la ruta liviana.
     const navInfo = navigator as Navigator & { deviceMemory?: number };
-    const lowPower =
-      (navInfo.hardwareConcurrency || 8) <= 4 || (navInfo.deviceMemory || 8) <= 4;
+    const lowPower = (navInfo.hardwareConcurrency || 8) <= 4 || (navInfo.deviceMemory || 8) <= 4;
     const coarse = window.innerWidth < 768 || lowPower;
     const RES = coarse ? 4 : 6;
     const MAX_DPR = coarse ? 1.5 : 1.75;

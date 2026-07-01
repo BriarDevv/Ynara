@@ -506,7 +506,10 @@ export const d14 = {
   caption: "@ynara.app — no publicita la solución, documenta el problema.",
   a: [
     { img: "/promo/tp2-08.jpg", alt: "Publicación de Instagram de Ynara — «Menos apps»" },
-    { img: "/promo/tp2-09.jpg", alt: "Publicación de Instagram de Ynara — «Tu agenda en contexto»" },
+    {
+      img: "/promo/tp2-09.jpg",
+      alt: "Publicación de Instagram de Ynara — «Tu agenda en contexto»",
+    },
   ],
   b: [
     { img: "/promo/tp2-10.jpg", alt: "Publicación de Instagram de Ynara — «Recordá mejor»" },
@@ -520,8 +523,16 @@ export const d15 = {
   eyebrow: "Promoción · Vía pública",
   caption: "Tu propio caos, en la calle.",
   a: [
-    { img: "/promo/tp2-12.jpg", label: "Cartel de autopista", alt: "Cartel de Ynara en una autopista" },
-    { img: "/promo/tp2-13.jpg", label: "Andén de subte", alt: "Gráfica de Ynara en un andén de subte" },
+    {
+      img: "/promo/tp2-12.jpg",
+      label: "Cartel de autopista",
+      alt: "Cartel de Ynara en una autopista",
+    },
+    {
+      img: "/promo/tp2-13.jpg",
+      label: "Andén de subte",
+      alt: "Gráfica de Ynara en un andén de subte",
+    },
   ],
   b: [
     {
@@ -541,7 +552,11 @@ export const d16 = {
   a: [
     { img: "/promo/tp2-01.jpg", label: "Funda negra", alt: "Funda de teléfono negra de Ynara" },
     { img: "/promo/tp2-02.jpg", label: "Funda marfil", alt: "Funda de teléfono marfil de Ynara" },
-    { img: "/promo/tp2-03.jpg", label: "Soporte-cargador", alt: "Soporte-cargador MagSafe de Ynara" },
+    {
+      img: "/promo/tp2-03.jpg",
+      label: "Soporte-cargador",
+      alt: "Soporte-cargador MagSafe de Ynara",
+    },
   ],
   b: [
     {

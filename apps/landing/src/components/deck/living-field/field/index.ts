@@ -6,8 +6,8 @@
 export {
   dotColor,
   hexToRgb,
-  type Mode,
   MODE_CLIMATE,
+  type Mode,
   type ModeClimate,
   type Rgb,
 } from "./climate";

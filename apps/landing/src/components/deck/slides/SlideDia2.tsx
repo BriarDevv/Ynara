@@ -15,7 +15,13 @@ export function SlideDia2({ index }: { index: number }) {
       <DeckEyebrow>{dDia2.eyebrow}</DeckEyebrow>
       <figure className="sd__figure" data-reveal>
         {dDia2.img ? (
-          <img className="sd__img" src={dDia2.img} alt={dDia2.alt} loading="lazy" decoding="async" />
+          <img
+            className="sd__img"
+            src={dDia2.img}
+            alt={dDia2.alt}
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <span className="sd__placeholder" aria-hidden>
             <span className="sd__placeholder-mark" />
