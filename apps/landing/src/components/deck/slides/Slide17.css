@@ -1,0 +1,97 @@
+/* L17 · Próximas funcionalidades — LISTA SIMPLE DE PROMESAS (mock editable).
+   MUNDO OSCURO, registro CALMA. Cada promesa es una tarjeta clara con un marcador
+   "+" (invita a sumar) + título + descripción. La grilla es auto-fit: agregar
+   promesas en deck.ts reacomoda solo. */
+.s17 {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.6rem, 4vh, 3rem);
+}
+.s17__head {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.9rem, 2vh, 1.4rem);
+}
+.s17__statement {
+  font-size: clamp(2rem, 1.2rem + 3.4vw, 4rem);
+  max-width: 18ch;
+}
+
+/* Lista: grilla auto-fit → 3 promesas = 3 columnas; sumar más reacomoda solo. */
+.s17__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: clamp(1rem, 2.4vw, 1.8rem);
+  align-items: stretch;
+}
+@media (max-width: 720px) {
+  .s17__list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tarjeta de promesa: superficie de vidrio enmarcada, barra de acento arriba. */
+.s17__promise {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  height: 100%;
+  padding: clamp(1.2rem, 2.6vh, 1.8rem) clamp(1.2rem, 2vw, 1.6rem);
+  border-radius: var(--r-lg);
+  border: 1px solid rgb(243 240 234 / 0.16);
+  border-top: 2px solid color-mix(in srgb, var(--register-accent, var(--c-blue-bright)) 70%, transparent);
+  background: var(--c-glass-2);
+}
+
+/* Marcador "+": señala "lo que viene" y que se pueden sumar promesas (mock). */
+.s17__plus {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  margin-bottom: 0.15rem;
+}
+.s17__plus::before,
+.s17__plus::after {
+  content: "";
+  position: absolute;
+  background: var(--register-accent, var(--c-blue-bright));
+  border-radius: 1px;
+  box-shadow: 0 0 12px -2px var(--register-accent, var(--c-blue-bright));
+}
+.s17__plus::before {
+  left: 0;
+  top: 50%;
+  width: 100%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+.s17__plus::after {
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+
+.s17__promise-title {
+  margin: 0;
+  font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.2rem, 0.95rem + 1vw, 1.7rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--c-ivory);
+  text-wrap: balance;
+}
+.s17__promise-body {
+  margin: 0;
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.95rem, 0.9rem + 0.3vw, 1.1rem);
+  line-height: 1.5;
+  color: rgb(243 240 234 / 0.86);
+  max-width: 34ch;
+}

@@ -1,0 +1,196 @@
+/* L07 · La landing — texto + recorrido a la izquierda; ventana de browser con la
+   captura HEROÍNA (inicio) y debajo las dos de apoyo (precio, CTA) a la derecha.
+   Mundo oscuro, registro CALMA. Las capturas reales de la landing son las
+   protagonistas y se muestran a sangre (cover, ancladas arriba) llenando el
+   marco: sin cajas negras de letterboxing. */
+.s07 {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 4rem);
+}
+@media (max-width: 860px) {
+  .s07 {
+    grid-template-columns: 1fr;
+    gap: clamp(1.25rem, 4vh, 2.25rem);
+  }
+}
+
+.s07__text {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.9rem, 2vh, 1.5rem);
+}
+
+/* El título vive en la columna izquierda (~0.82fr de la lámina): el tamaño
+   gigante del deck-title oscuro lo desbordaba (la última palabra se recortaba
+   contra la ventana). Lo acotamos para que entre completo y respire. Sube por
+   especificidad sobre la fundación `.deck-slide[data-world="dark"] .deck-title`. */
+.deck-slide[data-world="dark"] .s07 .deck-title {
+  font-size: clamp(1.9rem, 1.1rem + 2.6vw, 3.4rem);
+  line-height: 1.06;
+}
+
+/* ── Recorrido rotulado: inicio → precio → CTA (acompaña al mensaje) ───────── */
+.s07__journey {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(0.5rem, 1.4vw, 1rem);
+}
+.s07__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+/* flecha entre pasos (no antes del primero) */
+.s07__step + .s07__step::before {
+  content: "→";
+  margin-right: clamp(0.1rem, 0.6vw, 0.5rem);
+  /* marfil legible sobre oscuro */
+  color: var(--c-ivory);
+  opacity: 0.55;
+}
+.s07__step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  border-radius: var(--r-pill);
+  font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--register-accent, var(--c-blue-bright));
+  background: color-mix(in srgb, var(--register-accent, var(--c-blue-bright)) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--register-accent, var(--c-blue-bright)) 42%, transparent);
+}
+.s07__step-label {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.92rem, 0.88rem + 0.2vw, 1.02rem);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: capitalize;
+  /* estándar oscuro: marfil con opacidad alta, no azul-grisáceo tenue */
+  color: var(--c-ivory);
+  opacity: 0.9;
+}
+
+/* Columna derecha: marco principal + fila de capturas de apoyo. */
+.s07__gallery {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.55rem, 1.3vh, 1rem);
+  min-width: 0;
+}
+
+/* ── Marco tipo ventana / browser ─────────────────────────────────────────── */
+.s07__window {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--c-hair-2);
+  border-radius: var(--r-xl);
+  background: var(--c-glass);
+  box-shadow: 0 24px 60px -32px rgb(0 0 0 / 0.7);
+}
+
+.s07__chrome {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: clamp(0.5rem, 1vw, 0.75rem) clamp(0.7rem, 1.5vw, 1.1rem);
+  border-bottom: 1px solid var(--c-hair);
+  background: var(--c-glass-2);
+}
+.s07__dot {
+  width: clamp(8px, 0.9vw, 11px);
+  height: clamp(8px, 0.9vw, 11px);
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--c-hair-strong);
+}
+/* punto activo: el azul de marca (señal de calma) firma la ventana */
+.s07__dot:first-child {
+  background: var(--register-accent, var(--c-blue-bright));
+}
+.s07__addr {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  height: clamp(1rem, 2vw, 1.4rem);
+  margin-left: clamp(0.5rem, 1.4vw, 1rem);
+  padding: 0 clamp(0.5rem, 1.2vw, 0.85rem);
+  max-width: 20rem;
+  border-radius: var(--r-pill);
+  background: var(--c-glass-3);
+  border: 1px solid var(--c-hair);
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.7rem, 0.85vw, 0.84rem);
+  letter-spacing: 0.02em;
+  color: var(--c-ivory);
+  opacity: 0.62;
+}
+
+/* Pantalla heroína: la captura completa (contain) sobre fondo oscuro. */
+.s07__screen {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: var(--c-void);
+}
+.s07__shot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* La captura LLENA el marco mostrando el hero real (anclado arriba): sin cajas negras. */
+  object-fit: cover;
+  object-position: top center;
+}
+
+/* ── Fila de dos capturas de apoyo (precio, CTA) ─────────────────────────── */
+.s07__thumbs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(0.5rem, 1.2vw, 0.9rem);
+}
+.s07__thumb {
+  position: relative;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.s07__thumb-screen {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid var(--c-hair);
+  border-radius: var(--r-lg);
+  background: var(--c-void);
+}
+.s07__thumb-shot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Mismo criterio: llenan el marco ancladas arriba (la misma página, otro momento). */
+  object-fit: cover;
+  object-position: top center;
+}
+.s07__thumb-label {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  /* labels de galería >= 0.9rem */
+  font-size: clamp(0.9rem, 0.86rem + 0.2vw, 0.98rem);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: capitalize;
+  /* estándar oscuro: marfil legible */
+  color: var(--c-ivory);
+  opacity: 0.85;
+}

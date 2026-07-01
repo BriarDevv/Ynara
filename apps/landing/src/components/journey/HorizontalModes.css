@@ -1,0 +1,289 @@
+
+  .hm-text-pin {
+    padding: 10svh 6vw 6svh;
+  }
+  .hm-pin-label {
+    margin: 0 0 1rem;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--c-acc);
+  }
+  .hm-pin-text {
+    margin: 0;
+    max-width: 760px;
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.8rem, 1rem + 3.5vw, 3.8rem);
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+    color: var(--c-text-bright);
+  }
+  /* Señal de que el scroll se vuelve horizontal (el recorrido sigue al costado). */
+  .hm-pin-hint {
+    display: inline-flex;
+    align-items: center;
+    margin-top: clamp(1.4rem, 3vh, 2.4rem);
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--c-acc);
+    opacity: 0.82;
+  }
+  .hm-pin-hint::after {
+    content: "→";
+    margin-left: 0.6rem;
+    font-size: 1rem;
+    animation: hm-pin-nudge 1.6s ease-in-out infinite;
+  }
+  @keyframes hm-pin-nudge {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(7px); }
+  }
+
+  .horizontal-section {
+    width: 100vw;
+    height: 100svh;
+    margin-top: -50vh;
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .horizontal-wrapper {
+    transform-origin: 100% 100%;
+    width: 100vw;
+    height: 100svh;
+    position: relative;
+    overflow: hidden;
+  }
+  .track {
+    display: flex;
+    flex: none;
+    justify-content: flex-start;
+    align-items: stretch;
+    height: 100%;
+    position: relative;
+  }
+
+  .h-slide {
+    flex: 0 0 50vw;
+    height: 100%;
+    background-color: var(--c-ivory);
+    color: var(--c-navy);
+    display: flex;
+    flex-flow: column;
+    justify-content: space-between;
+    padding: 4.167vw 4.167vw 3.167vw;
+    overflow: hidden;
+  }
+  .h-slide.side {
+    background-color: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .h-slide__top {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-top: 5.5rem;
+  }
+  .h-slide__claim {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.9rem, 0.5rem + 1vw, 1.1rem);
+    font-weight: 400;
+    line-height: 1.55;
+    color: var(--c-ink-soft);
+    max-width: 360px;
+    margin: 0;
+  }
+  .h-slide__features {
+    list-style: none;
+    margin: 1.8rem 0 0;
+    padding: 0;
+    max-width: 380px;
+  }
+  .h-slide__features li {
+    padding: 0.6rem 0;
+    border-top: 1px solid var(--c-ink-hair-2);
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: var(--c-ink-soft);
+  }
+  .h-slide__bot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .h-slide__accent {
+    display: block;
+    width: 2.6rem;
+    height: 3px;
+    margin-bottom: 0.9rem;
+    background: var(--card-acc, var(--c-blue));
+  }
+  .h-slide__label {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--c-ink-muted);
+  }
+  .h-slide__word {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(3.2rem, 1rem + 6.4vw, 7rem);
+    line-height: 0.88;
+    letter-spacing: -0.05em;
+    color: var(--c-navy-deep);
+    margin: 0;
+  }
+
+  .slide-side__content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+  }
+  /* fondo transparente: se ve el campo OSCURO detrás → ivory legible, no ink */
+  .slide-side__label {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--c-text);
+  }
+  .slide-side__svg {
+    width: clamp(80px, 8vw, 130px);
+    height: clamp(80px, 8vw, 130px);
+    overflow: visible;
+  }
+  .slide-side__svg path,
+  .slide-side__svg circle,
+  .slide-side__svg line,
+  .slide-side__svg polyline {
+    fill: none;
+    stroke: var(--c-blue-violet);
+    stroke-width: 1.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* ── Stack vertical mobile / touch / reduced-motion ──────────────────────
+     El viaje horizontal de desktop usa un pin de ScrollTrigger que envuelve la
+     sección en un .pin-spacer y le escribe estilos INLINE (position, top/left,
+     width, height, max-width, max-height, transform). Al venir de desktop y
+     achicar, esos inline + el pin-spacer SOBREVIVEN; en particular el max-height
+     (~1 pantalla) clavaba la sección a una pantalla aunque pusiéramos height:auto,
+     dejando Memoria/Bienestar fuera y tapadas por la sección siguiente.
+     Acá neutralizamos TODO lo que deja el pin, con !important, corra o no su
+     teardown de matchMedia. */
+  @media (max-width: 767px), (pointer: coarse) {
+    .horizontal-section {
+      position: static !important;
+      inset: auto !important;
+      margin-top: 0 !important;
+      width: auto !important;
+      max-width: none !important;
+      height: auto !important;
+      max-height: none !important;
+      min-height: 0 !important;
+      transform: none !important;
+    }
+    /* El pin-spacer (PADRE de la sección) puede quedar con altura fija en px →
+       lo disolvemos (display:contents) y, como respaldo, reseteamos dimensiones. */
+    .pin-spacer {
+      display: contents !important;
+      height: auto !important;
+      max-height: none !important;
+      min-height: 0 !important;
+      width: auto !important;
+      max-width: none !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      transform: none !important;
+      inset: auto !important;
+    }
+    .horizontal-wrapper {
+      overflow: visible !important;
+      transform: none !important;
+      width: 100% !important;
+      height: auto !important;
+      max-height: none !important;
+    }
+    .track {
+      flex-direction: column !important;
+      width: auto !important;
+      height: auto !important;
+      transform: none !important;
+    }
+    .h-slide {
+      flex: none !important;
+      width: 100% !important;
+      height: auto !important;
+      min-height: 70svh;
+      padding: 10vw 6vw 8vw;
+    }
+    .h-slide.side { min-height: 40svh; }
+    /* En el stack mobile (~344px útiles) los max-width en px recortaban la medida. */
+    .h-slide__claim,
+    .h-slide__features { max-width: 100% !important; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .horizontal-section {
+      position: static !important;
+      inset: auto !important;
+      margin-top: 0 !important;
+      width: auto !important;
+      max-width: none !important;
+      height: auto !important;
+      max-height: none !important;
+      min-height: 0 !important;
+      transform: none !important;
+    }
+    .pin-spacer { display: contents !important; height: auto !important; max-height: none !important; padding: 0 !important; transform: none !important; }
+    .horizontal-wrapper { overflow: visible !important; transform: none !important; width: 100% !important; height: auto !important; max-height: none !important; }
+    .track { flex-direction: column !important; height: auto !important; transform: none !important; }
+    .h-slide { flex: none !important; width: 100% !important; height: auto !important; min-height: 60svh; }
+    .h-slide.side { min-height: 30svh; }
+  }
+
+  /* Garantía de visibilidad en mobile / touch / reduced-motion. El viaje
+     horizontal (desktop, puntero fino) esconde el contenido de las cards con
+     gsap.set(opacity:0) + SplitText antes de revelarlo por scroll. Al pasar a
+     mobile (carga directa o redimensionando), esos estilos inline podían quedar
+     y dejar los títulos/labels/trazos invisibles. Estas reglas !important ganan
+     sobre el inline y aseguran que el stack vertical SIEMPRE se vea completo. */
+  @media (max-width: 767px), (pointer: coarse), (prefers-reduced-motion: reduce) {
+    .hm-pin-label,
+    .hm-pin-text,
+    .h-slide__claim,
+    .h-slide__word,
+    .h-slide__label,
+    .h-slide__features li,
+    .slide-side__label {
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    .slide-side__svg path,
+    .slide-side__svg circle,
+    .slide-side__svg line,
+    .slide-side__svg polyline {
+      stroke-dashoffset: 0 !important;
+    }
+  }
+
+  /* El hint de scroll lateral sólo aplica al viaje horizontal (desktop, puntero
+     fino): en el stack vertical no hay "costado", así que se oculta. */
+  @media (max-width: 767px), (pointer: coarse), (prefers-reduced-motion: reduce) {
+    .hm-pin-hint { display: none; }
+  }

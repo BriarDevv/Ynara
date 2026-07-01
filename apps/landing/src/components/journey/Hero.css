@@ -1,0 +1,80 @@
+
+  .hero { height: 132svh; }
+  .hero-content { position: relative; height: 100svh; }
+  .hero-grid {
+    position: relative;
+    height: 100svh;
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: clamp(12svh, 16svh, 18svh) 6vw clamp(3svh, 5svh, 6svh);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .hero-head { max-width: 40ch; }
+  .hero-eyebrow { color: var(--c-acc); margin-bottom: 1.6rem; }
+  .hero-value {
+    margin: 0;
+    max-width: 19ch;
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 500;
+    font-size: clamp(1.6rem, 2.9vw, 2.9rem);
+    line-height: 1.1;
+    letter-spacing: -0.025em;
+    color: var(--c-ivory);
+  }
+  .hero-accent { font-style: normal; color: var(--c-blue-bright); }
+  .hero-sub {
+    margin: clamp(1.3rem, 2.2vw, 2rem) 0 0;
+    max-width: 40ch;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.95rem, 1.05vw, 1.1rem);
+    line-height: 1.6;
+    color: var(--c-ivory);
+    opacity: 0.72;
+  }
+  .hero-ctas { display: flex; align-items: center; gap: 1.6rem; flex-wrap: wrap; margin-top: clamp(1.6rem, 2.6vw, 2.2rem); }
+  .hero-cta-primary {
+    display: inline-flex; align-items: center;
+    padding: 0.95rem 2rem; border-radius: 999px;
+    background: var(--c-blue); color: #fff;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.95rem; font-weight: 600; text-decoration: none;
+    transition: transform 0.35s cubic-bezier(0.77,0,0.175,1), background 0.35s cubic-bezier(0.77,0,0.175,1);
+  }
+  .hero-cta-primary:hover { background: var(--c-blue-hover); transform: translateY(-2px); }
+  .hero-cta-secondary {
+    display: inline-flex; align-items: center; min-height: 44px;
+    color: var(--c-ivory);
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.9rem; font-weight: 600;
+    text-decoration: underline; text-decoration-thickness: 1px;
+    text-decoration-color: rgba(243,240,234,0.55); text-underline-offset: 5px;
+    transition: text-decoration-color 0.35s cubic-bezier(0.77,0,0.175,1);
+  }
+  .hero-cta-secondary:hover { text-decoration-color: var(--c-ivory); }
+  .hero-badge {
+    margin: clamp(1.8rem, 3vw, 2.6rem) 0 0;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.62rem, 0.72vw, 0.74rem);
+    font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--c-acc); opacity: 0.85;
+  }
+  /* el wordmark colosal, anclado abajo */
+  .hero-wordmark {
+    margin: 0;
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(5rem, 19vw, 21rem);
+    line-height: 0.82;
+    letter-spacing: -0.05em;
+    color: var(--c-text-bright);
+  }
+  /* span visible del wordmark — caja de bloque para que SplitText mida líneas
+     igual que el <h1> previo (el sr-only hermano queda fuera del split). */
+  .hero-wordmark-text { display: block; }
+  @media (max-width: 767px) {
+    .hero-grid { padding-top: 14svh; }
+    .hero-value { font-size: clamp(1.5rem, 6.5vw, 2.2rem); max-width: 100%; }
+    .hero-wordmark { font-size: clamp(4.5rem, 28vw, 9rem); }
+  }

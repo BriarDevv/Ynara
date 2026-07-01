@@ -1,0 +1,76 @@
+/* Storytelling · Un día — láminas de imagen. Placeholder hasta que lleguen las
+   fotos del equipo: la lámina queda armada y solo hay que pegar dDiaN.img. */
+.sd {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(1.2rem, 2.6vw, 2rem);
+  height: 100%;
+}
+.sd__figure {
+  position: relative;
+  margin: 0 auto;
+  /* Fotos VERTICALES ("Un día"): marco retrato, manejado por alto para que la
+     imagen + el caption entren en el 16:9 sin recortar a una franja apaisada. */
+  height: clamp(20rem, 64vh, 36rem);
+  aspect-ratio: 4 / 5;
+  max-width: 92%;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(243, 240, 234, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+.sd__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sd__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  /* velo navy: tapa el campo WebGL para que el marco vacío lea limpio (sin
+     mezclarse con la cresta de la onda). Solo existe mientras no haya foto. */
+  background: color-mix(in srgb, var(--c-void) 68%, transparent);
+  color: var(--c-ivory);
+}
+.sd__placeholder-mark {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1.5px dashed rgba(243, 240, 234, 0.45);
+}
+.sd__placeholder-text {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgb(243 240 234 / 0.72);
+}
+.sd__caption {
+  max-width: 880px;
+  margin: 0 auto;
+  text-align: center;
+  font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  font-weight: 500;
+  font-size: clamp(1.4rem, 2.6vw, 2.4rem);
+  line-height: 1.16;
+  letter-spacing: -0.02em;
+  color: var(--c-ivory);
+}
+@media (max-width: 767px) {
+  .sd__figure {
+    height: auto;
+    width: min(86%, 24rem);
+    aspect-ratio: 4 / 5;
+  }
+  .sd__caption {
+    font-size: clamp(1.3rem, 6vw, 1.8rem);
+  }
+}

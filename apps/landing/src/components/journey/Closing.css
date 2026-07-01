@@ -1,0 +1,116 @@
+
+  .cl {
+    position: relative;
+    z-index: 3;
+    background: var(--c-ivory);
+    color: var(--c-navy);
+    padding: clamp(9svh, 13svh, 15svh) 0 clamp(8svh, 11svh, 13svh);
+    scroll-margin-top: 96px;
+  }
+  .cl-inner {
+    width: 100%;
+    max-width: 1380px;
+    margin: 0 auto;
+    padding: 0 6vw;
+  }
+  .cl-eyebrow {
+    margin: 0 0 1.5rem;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.62rem, 0.72vw, 0.76rem);
+    font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase;
+    color: var(--c-ink-muted);
+  }
+  .cl-price-head {
+    margin: 0 0 clamp(2.4rem, 4vw, 3.5rem);
+    max-width: 16ch;
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: clamp(2rem, 3.8vw, 4rem);
+    line-height: 1.0; letter-spacing: -0.035em;
+    color: var(--c-navy-deep);
+  }
+  /* franja de planes: dos columnas editoriales con regla que se dibuja */
+  .cl-plans {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(1.5rem, 4vw, 4rem);
+  }
+  .cl-plan { position: relative; padding-top: 1.4rem; }
+  .cl-plan-rule {
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--c-ink-hair-strong);
+  }
+  .cl-plan.is-featured .cl-plan-rule { background: var(--c-violet); height: 3px; }
+  .cl-plan-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 1.2rem; }
+  .cl-plan-name {
+    margin: 0;
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 600; font-size: clamp(1.4rem, 2.2vw, 2rem); letter-spacing: -0.02em;
+    color: var(--c-navy-deep);
+  }
+  .cl-plan-price {
+    margin: 0;
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 600; font-size: clamp(1.05rem, 1.4vw, 1.3rem);
+    color: var(--c-navy-deep);
+  }
+  .cl-plan.is-featured .cl-plan-price { color: var(--c-navy-deep); }
+  .cl-plan-period {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-weight: 400; font-size: 0.82rem; color: var(--c-ink-muted);
+  }
+  .cl-plan-feats { list-style: none; margin: 0; padding: 0; }
+  .cl-plan-feat {
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--c-ink-hair);
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.95rem; color: var(--c-ink-soft);
+  }
+  .cl-note {
+    margin: clamp(2rem, 3.4vw, 3rem) 0 0;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.62rem, 0.72vw, 0.76rem);
+    font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--c-ink-muted);
+  }
+
+  /* FINALE */
+  .cl-finale {
+    margin-top: clamp(8svh, 14svh, 18svh);
+    padding-top: clamp(3rem, 6vw, 6rem);
+    border-top: 1px solid var(--c-ink-hair-2);
+  }
+  .cl-heading {
+    margin: 0;
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(2.6rem, 7vw, 8rem);
+    line-height: 0.94; letter-spacing: -0.045em;
+    color: var(--c-navy-deep);
+  }
+  .cl-body {
+    margin: clamp(1.6rem, 2.6vw, 2.4rem) 0 0;
+    max-width: 54ch;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(1rem, 1.2vw, 1.2rem);
+    line-height: 1.6; color: var(--c-ink-soft);
+  }
+  .cl-cta-row { display: flex; align-items: center; gap: 1.6rem; flex-wrap: wrap; margin-top: clamp(2rem, 3.4vw, 3rem); }
+  .cl-cta {
+    display: inline-flex; align-items: center;
+    padding: 1.05rem 2.2rem; border-radius: 999px;
+    background: var(--c-navy-deep); color: var(--c-ivory);
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 1rem; font-weight: 600; text-decoration: none;
+    transition: transform 0.35s cubic-bezier(0.77,0,0.175,1), background 0.35s cubic-bezier(0.77,0,0.175,1);
+  }
+  .cl-cta:hover { background: var(--c-blue); transform: translateY(-2px); }
+  .cl-stores {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--c-ink-muted);
+  }
+  @media (max-width: 900px) {
+    .cl-plans { grid-template-columns: 1fr; gap: 2.4rem; }
+    .cl-heading { font-size: clamp(2.6rem, 12vw, 4rem); }
+  }

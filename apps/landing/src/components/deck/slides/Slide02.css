@@ -1,0 +1,244 @@
+/* L02 · Qué es Ynara — DIAGRAMA explicativo, no titular. Mundo oscuro.
+   Estructura vertical: encabezado (eyebrow + lead) arriba; abajo el diagrama:
+   tres pilares en columna/grilla, las corrientes que confluyen, y la síntesis
+   ("te aconseja") destacada en violeta. Distinto a las láminas-statement: acá se
+   LEE qué hace la app de un vistazo.
+   Legibilidad: en oscuro el texto de apoyo va marfil >=0.8 (tokens --deck-fg*); el
+   acento es el violeta de señal. */
+.s02 {
+  height: 100%;
+  /* centrado: junta encabezado + diagrama en un bloque medio. Antes el
+     space-between dejaba un hueco muerto arriba y cargaba todo abajo. */
+  justify-content: center;
+  gap: clamp(1.4rem, 3.6vh, 2.6rem);
+}
+
+.s02__head {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.85rem, 2vh, 1.4rem);
+}
+/* Rótulo de capítulo: ancla la sección, presente como rotulación. */
+.s02__rotulo {
+  font-size: clamp(0.86rem, 0.78rem + 0.4vw, 1.05rem);
+  letter-spacing: 0.34em;
+}
+.s02__lead {
+  /* el lead orienta: una sola app, tres cosas sueltas. Marfil legible. */
+  max-width: 46ch;
+}
+
+/* ── El diagrama: pilares → confluencia → síntesis ───────────────────────── */
+.s02__diagram {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Los tres pilares: grilla de tres nodos, cada uno autocontenido. */
+.s02__pillars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.9rem, 2.2vw, 2rem);
+}
+
+.s02__pillar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.4rem, 1vh, 0.7rem);
+  /* cuerpo: altura mínima para que cada nodo lea sólido, no una etiqueta flaca.
+     El número se pega arriba y título+línea bajan al pie (margin-bottom:auto en
+     el número) → ritmo editorial en vez de texto suelto al medio. */
+  min-height: clamp(8.5rem, 23vh, 12rem);
+  padding: clamp(1.1rem, 2.6vh, 1.7rem) clamp(1.1rem, 2vw, 1.7rem);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--deck-surface-border);
+  background: var(--deck-surface);
+}
+/* hairline superior de marca: lee como "señal" en la cabeza de cada nodo. */
+.s02__pillar::before {
+  content: "";
+  position: absolute;
+  inset-inline: clamp(1rem, 2vw, 1.6rem);
+  top: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--c-blue-bright),
+    color-mix(in srgb, var(--c-blue-bright) 30%, transparent)
+  );
+  opacity: 0.85;
+}
+
+.s02__pillar-num {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.78rem, 0.72vw, 0.9rem);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  /* numeración del diagrama: marfil legible, no azul tenue. */
+  color: var(--c-ivory);
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+  /* empuja título + línea al pie del nodo → estructura editorial. */
+  margin-bottom: auto;
+}
+
+.s02__pillar-title {
+  margin: 0;
+  font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.7rem, 1.1rem + 2.2vw, 3rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: var(--deck-fg);
+  text-wrap: balance;
+}
+
+.s02__pillar-line {
+  margin: 0;
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.95rem, 0.9rem + 0.3vw, 1.12rem);
+  line-height: 1.4;
+  /* la línea concreta de QUÉ hace: marfil a opacidad plena del soft (≈0.9) para
+     que la lectura del diagrama no caiga frente a los títulos. */
+  color: var(--deck-fg-soft);
+  text-wrap: balance;
+}
+
+/* ── Las corrientes que confluyen ────────────────────────────────────────── */
+.s02__confluence {
+  height: clamp(2.6rem, 6vh, 4.4rem);
+  margin-block: clamp(0.2rem, 1vh, 0.6rem);
+}
+.s02__streams {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.s02__streams path {
+  fill: none;
+  stroke: var(--c-blue-bright);
+  /* corrientes engrosadas y subidas a alta opacidad: el ojo las sigue desde cada
+     pilar hasta el diamante sin esfuerzo (antes eran un hilo casi invisible). */
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+/* la corriente central baja directa a la síntesis; viva pero un punto bajo las
+   laterales para que se lea el cruce, no un haz plano. */
+.s02__streams path:nth-child(2) {
+  opacity: 0.68;
+}
+
+/* ── La síntesis: "te aconseja", el cruce de las tres ────────────────────── */
+/* Grilla espejo de .s02__pillars: el pill ocupa la columna central → su eje
+   coincide con el del pilar del medio y con el del haz de corrientes. Antes el
+   pill se centraba respecto del bloque y rompía el eje del diagrama. */
+.s02__synthesis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.9rem, 2.2vw, 2rem);
+  margin-top: clamp(0.2rem, 1vh, 0.6rem);
+}
+.s02__intersection {
+  /* centrada sobre el eje del haz (la convergencia cae en el centro), pero con
+     ancho propio para que "Y de cruzar las tres, te aconseja." entre en ~2 líneas
+     parejas en vez de envolver raído dentro del tercio central. */
+  grid-column: 1 / -1;
+  justify-self: center;
+  max-width: min(100%, 31rem);
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(0.7rem, 1.4vw, 1.1rem);
+  margin: 0;
+  padding: clamp(0.85rem, 2vh, 1.25rem) clamp(1.4rem, 3vw, 2.2rem);
+  border-radius: var(--r-pill);
+  /* La CÁPSULA es el violeta (señal); el TEXTO va marfil. Antes el texto violeta
+     sobre el campo brillante quedaba turbio. Fondo violeta sobre base oscura casi
+     opaca → el marfil siempre apoya sólido, sin lavarse contra las crestas. */
+  border: 1px solid color-mix(in srgb, var(--c-violet) 72%, transparent);
+  background: color-mix(in srgb, var(--c-violet) 30%, rgb(16 14 24 / 0.9));
+  box-shadow:
+    0 0 56px -14px var(--c-violet),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.07);
+  text-align: center;
+}
+.s02__intersection-diamond {
+  flex: none;
+  width: clamp(0.7rem, 1.2vw, 1rem);
+  height: clamp(0.7rem, 1.2vw, 1rem);
+  border-radius: 2px;
+  background: var(--c-violet);
+  transform: rotate(45deg);
+  box-shadow: 0 0 22px -2px var(--c-violet);
+}
+.s02__intersection-text {
+  font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.25rem, 0.95rem + 1.6vw, 2.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  /* texto MARFIL, plena legibilidad (la señal violeta la lleva la cápsula). */
+  color: var(--c-ivory);
+}
+/* el arranque ("Y de cruzar las tres,") un punto más tenue para que el remate
+   "te aconseja" gane por jerarquía/peso, sin recurrir al violeta turbio. */
+.s02__intersection-intro {
+  font-weight: 600;
+  color: rgb(243 240 234 / 0.82);
+}
+.s02__intersection-key {
+  font-weight: 800;
+  color: var(--c-ivory);
+}
+
+/* ── Angosto: los pilares se apilan, las corrientes se simplifican ───────── */
+@media (max-width: 820px) {
+  .s02__pillars {
+    grid-template-columns: 1fr;
+    gap: clamp(0.7rem, 2vh, 1.1rem);
+  }
+  .s02__pillar {
+    flex-direction: row;
+    align-items: baseline;
+    flex-wrap: wrap;
+    column-gap: 0.9rem;
+  }
+  .s02__pillar::before {
+    inset-inline: 0;
+    width: 2px;
+    height: auto;
+    inset-block: clamp(1rem, 2.4vh, 1.6rem);
+    top: clamp(1rem, 2.4vh, 1.6rem);
+    bottom: clamp(1rem, 2.4vh, 1.6rem);
+  }
+  .s02__pillar-title {
+    font-size: clamp(1.5rem, 1.1rem + 3vw, 2.1rem);
+  }
+  .s02__pillar-line {
+    flex-basis: 100%;
+  }
+  .s02__confluence {
+    height: clamp(1.8rem, 4vh, 2.6rem);
+  }
+  .s02__synthesis {
+    grid-template-columns: 1fr;
+  }
+  .s02__intersection {
+    grid-column: 1;
+    justify-self: stretch;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .s02__streams path {
+    transition: none;
+  }
+}

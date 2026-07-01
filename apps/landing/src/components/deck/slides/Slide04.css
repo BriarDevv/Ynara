@@ -1,0 +1,178 @@
+/* L04 · El caos con humor — colapso 8→1, en TRES TIEMPOS.
+ * Arriba el problema enunciado (full width). Abajo el colapso literal: ocho chips
+ * dispersos (el "antes", apagados) · flecha · "Ynara es una." (el "después",
+ * dominante). Los tres beats irónicos firman al pie. Mundo oscuro, registro caos. */
+.s04 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 0.92fr);
+  grid-template-areas:
+    "head   head   head"
+    "chaos  bridge answer"
+    "beats  beats  beats";
+  align-items: center;
+  column-gap: clamp(1rem, 3vw, 2.6rem);
+  row-gap: clamp(1.3rem, 4vh, 2.6rem);
+}
+@media (max-width: 820px) {
+  .s04 {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "head"
+      "chaos"
+      "bridge"
+      "answer"
+      "beats";
+    align-items: stretch;
+    row-gap: clamp(1rem, 3vh, 1.8rem);
+  }
+}
+
+/* ── Encabezado: el problema enunciado, a todo el ancho ───────────────────── */
+.s04__head {
+  grid-area: head;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.7rem, 1.8vh, 1.2rem);
+}
+.s04__rotulo {
+  font-size: clamp(0.86rem, 0.78rem + 0.4vw, 1.05rem);
+  letter-spacing: 0.34em;
+}
+/* "Vivís entre ocho apps." enuncia el problema arriba; la respuesta lo resuelve
+   abajo. Contenida para no pisar a "Ynara es una." */
+.s04__problem {
+  color: var(--deck-fg);
+  max-width: 22ch;
+  font-size: clamp(1.6rem, 1.05rem + 2.1vw, 2.5rem);
+}
+
+/* ── El caos: ocho chips dispersos (el "antes"), apagados y prolijos ──────── */
+.s04__chips {
+  grid-area: chaos;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(0.45rem, 1vw, 0.8rem);
+  max-width: 30ch;
+}
+.s04__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.95rem;
+  /* Los chips son el RUIDO de fondo (las ocho apps sueltas): legibles pero
+     recesivos — hairline + marfil atenuado. El desorden ahora se lee por
+     CANTIDAD, no por rotación (que leía como glitch). Sin tilt: prolijos. */
+  border: 1px solid var(--c-hair-2);
+  border-radius: var(--r-pill);
+  background: var(--c-glass);
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.86rem, 0.8rem + 0.3vw, 1.02rem);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: rgb(243 240 234 / 0.74);
+  white-space: nowrap;
+}
+
+/* ── El puente: la flecha que hace explícito 8 → 1 ───────────────────────── */
+.s04__bridge {
+  grid-area: bridge;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.s04__arrow {
+  width: clamp(2.4rem, 5.5vw, 4rem);
+  height: auto;
+  /* marfil legible + halo violeta de señal: la flecha lee siempre, y el violeta
+     firma el registro sin ser texto fino turbio. */
+  color: var(--c-ivory);
+  opacity: 0.92;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--c-violet) 75%, transparent));
+}
+@media (max-width: 820px) {
+  /* apilado: la flecha apunta hacia abajo (de las apps a la respuesta). */
+  .s04__arrow {
+    transform: rotate(90deg);
+    width: clamp(2rem, 9vw, 2.8rem);
+  }
+}
+
+/* ── La respuesta: 8 → UNA ────────────────────────────────────────────────── */
+.s04__answer {
+  grid-area: answer;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+.s04__one {
+  position: relative;
+  font-size: clamp(2.3rem, 1.1rem + 6vw, 5rem);
+  letter-spacing: -0.05em;
+  line-height: 0.96;
+  padding-left: clamp(1rem, 1.6vw, 1.6rem);
+  /* Halo sutil detrás del titular: lo despega de las ondas brillantes del campo
+     sin caja visible (radial que se desvanece). */
+  text-shadow: 0 0 28px rgb(10 12 18 / 0.55);
+}
+/* Barra de presencia: el acento del registro (violeta) marca LA respuesta. */
+.s04__one::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.12em;
+  bottom: 0.12em;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--register-accent, var(--c-violet));
+  box-shadow: 0 0 18px -2px var(--register-accent, var(--c-violet));
+}
+
+/* ── Beats: captions irónicos al pie ──────────────────────────────────────── */
+.s04__beats {
+  grid-area: beats;
+  list-style: none;
+  margin: 0;
+  padding-top: clamp(0.8rem, 2vh, 1.4rem);
+  border-top: 1px solid var(--deck-hair);
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(0.9rem, 3vw, 2.4rem);
+}
+.s04__beat {
+  position: relative;
+  padding-left: 1.1rem;
+  /* Beats a marfil legible. Halo tenue para no caer sobre las ondas del fondo. */
+  color: rgb(243 240 234 / 0.86);
+  font-size: clamp(0.92rem, 0.84rem + 0.3vw, 1.08rem);
+  line-height: 1.35;
+  text-shadow: 0 0 20px rgb(10 12 18 / 0.5);
+}
+.s04__beat::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--register-accent, var(--c-violet));
+  transform: rotate(45deg);
+}
+/* El cierre irónico ("El pegamento sos vos.") se separa del par anterior: peso
+   intermedio + marfil pleno, para que firme y no sea un caption más. */
+.s04__beat--closing {
+  font-weight: 500;
+  color: var(--deck-fg);
+}
+.s04__beat--closing::before {
+  width: 7px;
+  height: 7px;
+  box-shadow: 0 0 16px -2px var(--register-accent, var(--c-violet));
+}
+/* "vos" en el acento de señal: el remate recae en quién carga el pegamento. */
+.s04__beat-accent {
+  color: var(--register-accent, var(--c-violet));
+  font-weight: 600;
+}

@@ -1,0 +1,197 @@
+/* L05 · La identidad — "Calma en el caos." MOSTRADO, no dicho.
+ * Estructura vertical: TÍTULO arriba · DÍPTICO de dos FOTOS grande que LLENA el
+ * centro · PIE (support) abajo. Caos (día enredado) → calma (día en orden), con la
+ * flecha del lenguaje de marca entre ambas. Las fotos las pega el equipo
+ * (d05.chaos.img / d05.calm.img). */
+.s05 {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.9rem, 2.4vh, 1.5rem);
+}
+
+/* ── Título arriba ────────────────────────────────────────────────────────── */
+.s05__head {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1.4vh, 0.95rem);
+}
+/* Gana a la regla global del titular oscuro (0,3,0 → 0,4,0): prominente pero
+   acotado, para dejar el grueso del alto a las imágenes del centro. */
+.deck-slide[data-world="dark"] .deck-title.s05__statement {
+  font-size: clamp(2rem, 1.2rem + 3.4vw, 3.6rem);
+}
+
+/* ── El díptico: dos paneles-foto grandes que LLENAN el centro ─────────────── */
+.s05__diptych {
+  /* crece para tomar todo el alto entre el título y el pie → imágenes grandes. */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  gap: clamp(0.6rem, 2vw, 1.6rem);
+  width: 100%;
+  margin: 0;
+}
+
+.s05__panel {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  border-radius: var(--r-xl);
+  border: 1px solid var(--deck-hair);
+  overflow: hidden;
+  background: rgb(255 255 255 / 0.03);
+  /* sombra: despega las fotos del campo navy (que antes se fundía con los marcos). */
+  box-shadow: 0 18px 44px -28px rgb(8 9 14 / 0.82);
+}
+.s05__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Placeholder hasta que lleguen las fotos: velo navy + marca punteada + rótulo.
+   Tinte de registro por panel (violeta=caos · azul=calma) para insinuar el estado
+   aun con el marco vacío. Mismo patrón que las láminas "Un día". */
+.s05__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  background: color-mix(in srgb, var(--c-void) 68%, transparent);
+  color: var(--c-ivory);
+}
+.s05__panel--chaos .s05__placeholder {
+  background:
+    radial-gradient(120% 120% at 35% 30%, rgb(129 101 163 / 0.2), transparent 60%),
+    color-mix(in srgb, var(--c-void) 66%, transparent);
+}
+.s05__panel--calm .s05__placeholder {
+  background:
+    radial-gradient(130% 130% at 50% 40%, rgb(75 126 230 / 0.2), transparent 62%),
+    color-mix(in srgb, var(--c-void) 66%, transparent);
+}
+.s05__placeholder-mark {
+  width: clamp(40px, 5vh, 56px);
+  height: clamp(40px, 5vh, 56px);
+  border-radius: 12px;
+  border: 1.5px dashed rgb(243 240 234 / 0.45);
+}
+.s05__placeholder-text {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgb(243 240 234 / 0.72);
+}
+
+/* Etiquetas de estado: pastilla oscura en la esquina → legibles sobre CUALQUIER
+   foto (antes era texto pelado, que se perdía sobre zonas claras de la imagen). */
+.s05__tag {
+  position: absolute;
+  left: clamp(0.6rem, 3%, 1rem);
+  bottom: clamp(0.6rem, 3%, 1rem);
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--r-pill);
+  background: rgb(10 12 18 / 0.58);
+  border: 1px solid rgb(243 240 234 / 0.14);
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.86rem, 0.8rem + 0.3vw, 1.02rem);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--c-ivory);
+  text-shadow: var(--deck-halo);
+}
+.s05__tag::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 0.5rem;
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
+.s05__tag--chaos::before {
+  background: var(--c-violet);
+  box-shadow: 0 0 10px -1px var(--c-violet);
+}
+.s05__tag--calm::before {
+  background: var(--c-blue-bright);
+  box-shadow: 0 0 10px -1px var(--c-blue-bright);
+}
+
+/* ── El puente: flecha de transición caos→calma ───────────────────────────── */
+.s05__bridge {
+  align-self: center;
+  width: clamp(2.6rem, 6vw, 4.4rem);
+  color: var(--deck-fg-soft);
+}
+.s05__bridge svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.s05__arrow-line,
+.s05__arrow-head {
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+/* la línea arranca violeta (caos); la punta vira al azul (calma): gesto direccional. */
+.s05__arrow-line {
+  stroke: var(--c-violet);
+}
+.s05__arrow-head {
+  stroke: var(--c-blue-bright);
+  opacity: 0.95;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .s05__arrow-line {
+    stroke-dasharray: 48;
+    stroke-dashoffset: 48;
+    animation: s05-draw 0.7s var(--ease-soft, ease-out) 0.35s forwards;
+  }
+}
+@keyframes s05-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── El pie: support abajo, encuadra el visual ────────────────────────────── */
+.s05__support {
+  max-width: 64ch;
+  color: var(--deck-fg-soft);
+}
+
+/* ── Móvil: el díptico se apila; la flecha gira a vertical ─────────────────── */
+@media (max-width: 720px) {
+  .s05__diptych {
+    flex: 0 0 auto;
+    grid-template-columns: 1fr;
+    gap: clamp(0.7rem, 3vw, 1.1rem);
+  }
+  .s05__panel {
+    height: auto;
+    aspect-ratio: 3 / 2;
+  }
+  .s05__bridge {
+    justify-self: center;
+    width: clamp(1.8rem, 8vw, 2.6rem);
+    transform: rotate(90deg);
+  }
+}

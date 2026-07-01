@@ -1,0 +1,161 @@
+/* Galería de imágenes del deck (mundo oscuro): fila de 1..N imágenes GRANDES que
+   llenan el centro de la lámina + rótulo chico bajo cada una. El eyebrow (sección)
+   va arriba y un caption opcional al pie; ningún título tapa las imágenes. */
+.deck-gallery {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.9rem, 2.4vh, 1.6rem);
+}
+
+/* Las láminas de galería usan CASI todo el ancho de la proyección (no la columna
+   de texto acotada del resto del deck) para que las imágenes sean GRANDES y
+   llenen un buen espacio. Override de la max-width/gutter del inner. */
+.deck-slide__inner.deck-gallery {
+  max-width: min(96vw, 1760px);
+  padding-inline: clamp(1.25rem, 3vw, 2.75rem);
+  padding-block: clamp(1.75rem, 5vh, 3.25rem);
+}
+
+/* La grilla TOMA el alto entre el eyebrow y el caption → imágenes lo más grandes
+   posible. El número de columnas lo fija data-count. */
+.deck-gallery__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr));
+  gap: clamp(0.8rem, 2vw, 1.8rem);
+  align-items: stretch;
+  justify-items: center;
+}
+.deck-gallery__grid[data-count="1"] {
+  --cols: 1;
+}
+.deck-gallery__grid[data-count="2"] {
+  --cols: 2;
+}
+.deck-gallery__grid[data-count="3"] {
+  --cols: 3;
+}
+.deck-gallery__grid[data-count="4"] {
+  --cols: 4;
+}
+
+.deck-gallery__item {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+.deck-gallery__figure {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.5rem, 1.2vh, 0.85rem);
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Marco: toma el alto disponible; la imagen lo llena (cover). Sombra para
+   despegar las fotos del campo navy. */
+.deck-gallery__frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  border: 1px solid var(--deck-hair);
+  background: rgb(255 255 255 / 0.03);
+  box-shadow: 0 20px 48px -30px rgb(8 9 14 / 0.85);
+}
+.deck-gallery__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Placeholder (si todavía no hay imagen): velo navy + marca + rótulo. */
+.deck-gallery__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  background: color-mix(in srgb, var(--c-void) 68%, transparent);
+}
+.deck-gallery__placeholder-mark {
+  width: clamp(40px, 5vh, 54px);
+  height: clamp(40px, 5vh, 54px);
+  border-radius: 12px;
+  border: 1.5px dashed rgb(243 240 234 / 0.45);
+}
+.deck-gallery__placeholder-text {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgb(243 240 234 / 0.72);
+}
+
+/* Rótulo bajo cada imagen: marfil legible, con tilde de acento del registro. */
+.deck-gallery__label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.9rem, 0.82rem + 0.3vw, 1.05rem);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-ivory);
+  opacity: 0.92;
+}
+.deck-gallery__label::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 1px;
+  background: var(--register-accent, var(--c-blue-bright));
+  transform: rotate(45deg);
+}
+
+/* Caption opcional al pie (para láminas de una sola imagen). */
+.deck-gallery__caption {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.95rem, 0.88rem + 0.3vw, 1.12rem);
+  line-height: 1.45;
+  color: var(--deck-fg-soft);
+  max-width: 60ch;
+  margin-inline: auto;
+}
+
+/* Angosto: apila a 1 columna (las de 3-4 quedan en 2 en tablet). */
+@media (max-width: 1024px) {
+  .deck-gallery__grid[data-count="3"],
+  .deck-gallery__grid[data-count="4"] {
+    --cols: 2;
+  }
+}
+@media (max-width: 680px) {
+  .deck-gallery__grid {
+    --cols: 1 !important;
+  }
+  .deck-gallery__frame {
+    aspect-ratio: 4 / 3;
+    flex: 0 0 auto;
+  }
+}

@@ -1,0 +1,93 @@
+
+  .tr {
+    position: relative;
+    z-index: 3;
+    background: var(--c-ivory);
+    color: var(--c-navy);
+    padding: clamp(9svh, 13svh, 15svh) 0 clamp(8svh, 12svh, 14svh);
+    scroll-margin-top: 96px;
+  }
+  .tr-inner {
+    width: 100%;
+    max-width: 1380px;
+    margin: 0 auto;
+    padding: 0 6vw;
+  }
+  .tr-head { max-width: 60ch; }
+  .tr-eyebrow {
+    margin: 0 0 1.5rem;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.62rem, 0.72vw, 0.76rem);
+    font-weight: 600; letter-spacing: 0.26em; text-transform: uppercase;
+    color: var(--c-ink-muted);
+  }
+  .tr-statement {
+    margin: 0;
+    max-width: 16ch;
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: clamp(2.6rem, 5.4vw, 5.6rem);
+    line-height: 0.98;
+    letter-spacing: -0.04em;
+    color: var(--c-navy-deep);
+  }
+  .tr-support {
+    margin: clamp(1.4rem, 2.4vw, 2.2rem) 0 0;
+    max-width: 52ch;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.98rem, 1.15vw, 1.2rem);
+    line-height: 1.6; color: var(--c-ink-soft);
+  }
+
+  /* LEDGER numerado — filas full-width que se dibujan */
+  .tr-ledger { margin-top: clamp(3rem, 6vw, 6rem); }
+  .tr-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: clamp(3.5rem, 8vw, 8rem) minmax(8rem, 16ch) 1fr;
+    align-items: baseline;
+    gap: clamp(1rem, 3vw, 3rem);
+    padding: clamp(1.4rem, 2.4vw, 2.2rem) 0;
+  }
+  .tr-row-line {
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: var(--c-ink-hair-strong);
+  }
+  .tr-num {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 500;
+    font-size: clamp(1.6rem, 3.2vw, 3.4rem);
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--c-blue);
+  }
+  .tr-row-title {
+    margin: 0;
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: clamp(1.2rem, 1.8vw, 1.7rem);
+    letter-spacing: -0.02em;
+    color: var(--c-navy-deep);
+  }
+  .tr-row-body {
+    margin: 0;
+    max-width: 44ch;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.95rem, 1.05vw, 1.1rem);
+    line-height: 1.55; color: var(--c-ink-soft);
+  }
+  .tr-chips {
+    margin: clamp(2.6rem, 4vw, 3.5rem) 0 0;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.62rem, 0.72vw, 0.76rem);
+    font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--c-ink-muted);
+  }
+  @media (max-width: 900px) {
+    .tr-statement { font-size: clamp(2.4rem, 10vw, 3.2rem); max-width: 100%; }
+    .tr-row {
+      grid-template-columns: clamp(2.6rem, 14vw, 4rem) 1fr;
+      gap: 1rem 1.4rem;
+    }
+    .tr-row-body { grid-column: 1 / -1; max-width: 100%; }
+  }

@@ -1,0 +1,21 @@
+/* Backdrop del campo vivo en el deck (sección de marca). Vive a sangre completa
+   dentro de la lámina (que es position:absolute), detrás del inner del contenido. */
+.deck-livingfield {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* Base OPACA: tapa el campo WebGL del deck para que sólo se vea el campo vivo de
+   la app encima. Claro (marfil) en mundo de marca; navy si se usa en oscuro. */
+.deck-livingfield__base {
+  position: absolute;
+  inset: 0;
+}
+.deck-livingfield.is-light .deck-livingfield__base {
+  background: var(--c-paper);
+}
+.deck-livingfield.is-dark .deck-livingfield__base {
+  background: var(--c-void);
+}

@@ -1,0 +1,16 @@
+/* Capas CSS del campo vivo portado de la app Ynara (LivingField). El renderer
+   Canvas2D pinta blooms / ondas / nodos; acá vive el GRANO estático (materia,
+   papel — DESIGN.md §3.6) y el ajuste de movimiento reducido. */
+.field-grain {
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  background-size: 170px 170px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='170' height='170'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+/* Movimiento reducido: el campo queda como un frame estático muy tenue. */
+@media (prefers-reduced-motion: reduce) {
+  .field-atmosphere {
+    opacity: 0.08 !important;
+  }
+}

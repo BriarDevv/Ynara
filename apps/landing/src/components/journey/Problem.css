@@ -1,0 +1,101 @@
+
+  .pb { height: 175svh; }
+  .pb-stage {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    width: 100%;
+    max-width: 1380px;
+    margin: 0 auto;
+    padding: 0 6vw;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .pb-eyebrow { color: var(--c-acc); position: absolute; top: 14svh; left: 6vw; }
+  .pb-morph { position: relative; }
+
+  .pb-before { display: flex; flex-direction: column; align-items: center; gap: clamp(2rem, 4vw, 3.5rem); }
+  .pb-headline {
+    margin: 0;
+    text-align: center;
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: clamp(2.2rem, 5vw, 5rem);
+    line-height: 0.98;
+    letter-spacing: -0.04em;
+    color: var(--c-text-bright);
+    /* halo de legibilidad: el texto va centrado sobre el campo vivo y la banda
+       de brillo del shader lo cruza; el velo lateral no lo cubre del todo. */
+    text-shadow: 0 2px 28px rgba(8, 9, 14, 0.55);
+  }
+  /* las OCHO apps en una FILA horizontal */
+  .pb-track {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.7rem;
+    transform-origin: center center;
+    max-width: 1000px;
+  }
+  .pb-chip {
+    padding: 0.6rem 1.15rem;
+    border-radius: 999px;
+    background: var(--c-glass-2);
+    border: 1px solid var(--c-hair-strong);
+    backdrop-filter: blur(8px);
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.85rem, 1vw, 1.05rem);
+    font-weight: 500;
+    color: var(--c-ivory);
+    white-space: nowrap;
+  }
+
+  /* la respuesta — capa centrada por FLEXBOX sobre el mismo punto; oculta por
+     defecto (la revela el scrub). transform-origin center → escala sin descentrar. */
+  .pb-answer {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transform-origin: center center;
+  }
+  .pb-answer-text {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: clamp(2.8rem, 7vw, 7.5rem);
+    line-height: 0.96;
+    letter-spacing: -0.045em;
+    color: var(--c-text-bright);
+    text-shadow: 0 2px 30px rgba(8, 9, 14, 0.55);
+  }
+  .pb-em { font-style: normal; color: var(--c-blue-bright); }
+
+  @media (max-width: 767px) {
+    .pb-headline { font-size: clamp(2rem, 9vw, 3rem); }
+    .pb-answer-text { font-size: clamp(2.6rem, 13vw, 3.6rem); }
+  }
+
+  /* Reduced-motion: sin scrub, todo estático y legible (la respuesta en flujo). */
+  @media (prefers-reduced-motion: reduce) {
+    .pb { height: auto; }
+    .pb-stage { position: static; height: auto; padding-block: clamp(8svh, 14svh, 16svh); }
+    .pb-eyebrow { position: static; margin-bottom: 1.6rem; }
+    .pb-answer {
+      position: static;
+      inset: auto;
+      opacity: 1;
+      justify-content: flex-start;
+      text-align: left;
+      margin-top: clamp(2rem, 4vw, 3rem);
+    }
+  }
