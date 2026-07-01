@@ -356,6 +356,8 @@ export const d06b = {
     { name: "Violeta", role: "Señal", token: "var(--c-violet)", hex: "#8165A3" },
     { name: "Marfil", role: "Luz", token: "var(--c-ivory)", hex: "#F3F0EA" },
     { name: "Noche", role: "Fondo", token: "var(--c-navy)", hex: "#242C3F" },
+    { name: "Índigo", role: "Apoyo", token: "var(--c-indigo)", hex: "#434A82" },
+    { name: "Azul violáceo", role: "Apoyo", token: "var(--c-blue-violet)", hex: "#5C6FB3" },
   ],
   typefaces: [
     { name: "Space Grotesk", role: "Display", varName: "var(--font-display)" },
