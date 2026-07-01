@@ -203,36 +203,55 @@ export const DECK_SLIDES: readonly DeckSlideMeta[] = [
     register: "calma",
     field: 0.3,
   },
-  // ── Promoción (resto): cada lámina muestra MÁXIMO 3 imágenes grandes
-  //    (Redes 2+2, Vía pública 2+2). Las imágenes mandan; el rótulo dice qué es.
+  // ── Promoción (resto): UNA lámina por pieza (Redes: 4 posts + historia;
+  //    Vía pública: 3 formatos) — cada una con su proporción real, sin
+  //    compartir grilla. Las imágenes mandan; el rótulo dice qué es. ──
   { id: 22, section: "Promoción", title: "Redes", world: "dark", register: "chaos", field: 0.05 },
   { id: 23, section: "Promoción", title: "Redes", world: "dark", register: "chaos", field: 0.05 },
-  {
-    id: 24,
-    section: "Promoción",
-    title: "Vía pública",
-    world: "dark",
-    register: "chaos",
-    field: 0.06,
-  },
-  {
-    id: 25,
-    section: "Promoción",
-    title: "Vía pública",
-    world: "dark",
-    register: "chaos",
-    field: 0.06,
-  },
+  { id: 24, section: "Promoción", title: "Redes", world: "dark", register: "chaos", field: 0.05 },
+  { id: 25, section: "Promoción", title: "Redes", world: "dark", register: "chaos", field: 0.05 },
   {
     id: 26,
+    section: "Promoción",
+    title: "Redes · historia",
+    world: "dark",
+    register: "calma",
+    field: 0.3,
+  },
+  {
+    id: 27,
+    section: "Promoción",
+    title: "Vía pública",
+    world: "dark",
+    register: "chaos",
+    field: 0.06,
+  },
+  {
+    id: 28,
+    section: "Promoción",
+    title: "Vía pública",
+    world: "dark",
+    register: "chaos",
+    field: 0.06,
+  },
+  {
+    id: 29,
+    section: "Promoción",
+    title: "Vía pública",
+    world: "dark",
+    register: "chaos",
+    field: 0.06,
+  },
+  {
+    id: 30,
     section: "Próximas funcionalidades",
     title: "Roadmap",
     world: "dark",
     register: "calma",
     field: 0.45,
   },
-  { id: 27, section: "Cierre", title: "Cierre", world: "dark", register: "calma", field: 0.32 },
-  { id: 28, section: "Cierre", title: "Gracias", world: "dark", register: "calma", field: 0.9 },
+  { id: 31, section: "Cierre", title: "Cierre", world: "dark", register: "calma", field: 0.32 },
+  { id: 32, section: "Cierre", title: "Gracias", world: "dark", register: "calma", field: 0.9 },
 ] as const;
 
 export const TOTAL_SLIDES = DECK_SLIDES.length;
@@ -457,49 +476,82 @@ export const d13 = {
   fallback: "Plan B: captura fija si no responde en 5 s",
 } as const;
 
-// Promoción · Redes — publicaciones reales de Instagram (TP2), en DOS láminas de
-// 2 imágenes grandes. La cuenta no publicita la solución: documenta el problema.
-export const d14 = {
+// Promoción · Redes — publicaciones e historia reales de Instagram. UNA
+// lámina por pieza (no comparten grilla) para que cada una tenga su espacio
+// y su proporción real — nada de letterbox por apretar 2-3 en una fila.
+export const dRedes = {
   eyebrow: "Promoción · Redes",
   caption: "@ynara.app — no publicita la solución, documenta el problema.",
-  a: [
-    { img: "/promo/tp2-08.jpg", alt: "Publicación de Instagram de Ynara — «Menos apps»" },
-    {
-      img: "/promo/tp2-09.jpg",
-      alt: "Publicación de Instagram de Ynara — «Tu agenda en contexto»",
-    },
-  ],
-  b: [
-    { img: "/promo/tp2-10.jpg", alt: "Publicación de Instagram de Ynara — «Recordá mejor»" },
-    { img: "/promo/tp2-11.jpg", alt: "Publicación de Instagram de Ynara — «Dos meses gratis»" },
-  ],
 } as const;
 
-// Promoción · Vía pública — renders reales de OOH (TP2), en DOS láminas de 2
-// imágenes grandes rotuladas. Mismo gesto: te muestran tu propio caos en la calle.
-export const d15 = {
+export const dRedesAnsiedad = {
+  img: "/promo/ig-post-ansiedad-pestana.png",
+  alt: "Publicación de Instagram de Ynara — «Ansiedad de pestaña»",
+  fit: "contain",
+  aspect: "4/5",
+} as const;
+
+export const dRedesAtencion = {
+  img: "/promo/ig-post-atencion-fragmentada.png",
+  alt: "Publicación de Instagram de Ynara — «Atención fragmentada»",
+  fit: "contain",
+  aspect: "4/5",
+} as const;
+
+export const dRedesTareas = {
+  img: "/promo/ig-post-tareas.png",
+  alt: "Publicación de Instagram de Ynara — lista de tareas surreal",
+  fit: "contain",
+  aspect: "4/5",
+} as const;
+
+export const dRedesTweet = {
+  img: "/promo/ig-post-tweet.png",
+  alt: "Publicación de Instagram de Ynara en formato tweet — «Desesperación» #mePaso",
+  fit: "contain",
+  aspect: "4/5",
+} as const;
+
+// Promoción · Redes — historia (formato vertical 9:16, lámina propia).
+export const dRedesHistoria = {
+  eyebrow: "Promoción · Redes",
+  caption: "Historia de Instagram — el swipe-up lleva directo a probar la demo.",
+  img: "/promo/ig-historia.png",
+  alt: "Historia de Instagram de Ynara — «Foco. Memoria. Presencia» con CTA a probar",
+  fit: "contain",
+  aspect: "9/16",
+} as const;
+
+// Promoción · Vía pública — renders reales de OOH. UN formato por lámina
+// (cartel de calle, parada de colectivo, afiche guerrilla) — mismo criterio
+// que Redes: cada pieza con su proporción real, sin compartir grilla.
+export const dViaPublica = {
   eyebrow: "Promoción · Vía pública",
+} as const;
+
+export const dViaCartelCalle = {
+  img: "/promo/via-publica-cartel-calle.jpg",
+  label: "Cartel de calle",
+  alt: "Cartel grande de Ynara en un lote urbano — «Ynara habla en calma»",
+  fit: "contain",
+  aspect: "3/2",
   caption: "Tu propio caos, en la calle.",
-  a: [
-    {
-      img: "/promo/tp2-12.jpg",
-      label: "Cartel de autopista",
-      alt: "Cartel de Ynara en una autopista",
-    },
-    {
-      img: "/promo/tp2-13.jpg",
-      label: "Andén de subte",
-      alt: "Gráfica de Ynara en un andén de subte",
-    },
-  ],
-  b: [
-    {
-      img: "/promo/tp2-14.jpg",
-      label: "Parada de colectivo",
-      alt: "Gráfica de Ynara en una parada de colectivo",
-    },
-    { img: "/promo/tp2-15.jpg", label: "Tótem digital", alt: "Tótem digital de Ynara en interior" },
-  ],
+} as const;
+
+export const dViaParadaColectivo = {
+  img: "/promo/via-publica-parada-colectivo.jpg",
+  label: "Parada de colectivo",
+  alt: "Pantalla de Ynara en una parada de colectivo — «Orden que te acompaña»",
+  fit: "contain",
+  aspect: "3/2",
+} as const;
+
+export const dViaAfichePerdida = {
+  img: "/promo/via-publica-afiche-perdida.jpg",
+  label: "Afiche «Perdida»",
+  alt: "Afiche guerrilla de Ynara estilo aviso de mascota perdida — «Perdida: mi paciencia después de las 16hs»",
+  fit: "contain",
+  aspect: "3/2",
 } as const;
 
 // Promoción · Objetos — renders reales de producto (TP2), en TRES láminas de
