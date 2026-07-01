@@ -13,7 +13,8 @@
    **Obligatorio**, no opcional.
 3. Si tu tarea toca un app específico, leer el `AGENTS.md` de ese app
    (`apps/web/AGENTS.md`, `apps/mobile/AGENTS.md`,
-   `apps/backend/AGENTS.md`).
+   `apps/backend/AGENTS.md`, `apps/admin/AGENTS.md`,
+   `apps/landing/AGENTS.md`).
 4. Si la tarea es arquitectónica, leer los ADRs en
    `docs/architecture/adrs/`.
 

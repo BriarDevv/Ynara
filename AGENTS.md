@@ -108,6 +108,19 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 3. [`DESIGN.md`](./DESIGN.md) (placeholder)
 4. `apps/web/src/app/globals.css`
 
+**Sitio institucional (landing)**
+
+1. [`apps/landing/AGENTS.md`](./apps/landing/AGENTS.md)
+2. [`apps/landing/README.md`](./apps/landing/README.md)
+3. [`apps/landing/REBUILD-BRIEF.md`](./apps/landing/REBUILD-BRIEF.md) — fuente de verdad creativa (paleta LOCKED, spec del shader)
+4. `apps/landing/src/app/globals.css`
+
+**Panel admin**
+
+1. [`apps/admin/AGENTS.md`](./apps/admin/AGENTS.md)
+2. [`ADR-017`](./docs/architecture/adrs/ADR-017-admin-app-observabilidad-control-plane.md) — por qué existe este app y qué límites tiene
+3. [`apps/admin/docs/DATA-CONTRACTS.md`](./apps/admin/docs/DATA-CONTRACTS.md)
+
 **Mobile**
 
 1. [`apps/mobile/AGENTS.md`](./apps/mobile/AGENTS.md)
@@ -164,6 +177,8 @@ Para tareas con un solo archivo, va inline. Para tareas con múltiples pasos, ca
 | `ynara.config.json` | Configuración canónica: 5 modos, 2 modelos, capas de memoria, fase de infra |
 | `apps/web/` | Next.js 16 + Tailwind v4 CSS-first (sin `tailwind.config.ts`) + shadcn/ui |
 | `apps/mobile/` | Expo 53+ + Expo Router + NativeWind (todavía sobre Tailwind 3) |
+| `apps/admin/` | Panel interno (control plane) — Next.js 16 + TS strict + Tailwind v4, consistente 1:1 con `apps/web`. Read-only sobre agregados, nunca sobre contenido de usuario (ADR-017) |
+| `apps/landing/` | Sitio institucional — experiencia WebGL (three.js) para la tesis; home + `/presentacion` (deck). No es el producto, no consume el backend |
 | `apps/backend/app/api/v1/` | Rutas HTTP, un módulo por dominio |
 | `apps/backend/app/core/` | Settings, security (JWT con PyJWT + bcrypt directo, ADR-015), deps de FastAPI |
 | `apps/backend/app/llm/router.py` | Único punto de entrada al LLM. Decide modelo según modo |
@@ -247,6 +262,8 @@ Cosas que ya nos hicieron tropezar (o que sabemos que van a hacerlo). No las re-
 **CI con `push`/`pull_request` antes de los lockfiles.** CI hoy es solo `workflow_dispatch`. Reactivar `push`/`pull_request` recién cuando existan `pnpm-lock.yaml` y `apps/backend/uv.lock`.
 
 **Crear ramas nuevas sin verificar la base.** `git checkout -b nueva-rama` ramifica desde HEAD actual, no desde `main` automáticamente. Si recién hiciste `gh pr checkout <N>` o `git fetch origin pull/<N>/head:<rama>` para revisar un PR ajeno y no volviste a `main`, la rama nueva hereda los commits de ese PR. Cuando esa rama nueva se mergea con fast-forward, GitHub arrastra los commits ajenos a `main` por inercia (incident PR #13 — los commits de PR #3 y PR #9 entraron a `main` sin click de merge real). **Antes de cualquier `git checkout -b`, correr `bash scripts/ynara-doctor.sh`** (check 10/10 valida que la rama actual deriva del tip de `origin/main`). Si no, primero `git checkout main && git pull --ff-only`.
+
+**Apps pegadas de otro repo standalone.** `apps/landing` llegó al monorepo copiada de un repo separado (`MateoGs013/Ynara-Web`) y trajo su propio `.git` anidado (invisible para `git status` de la raíz — la carpeta entera aparecía como un solo directorio untracked), su propio `pnpm-lock.yaml`/`pnpm-workspace.yaml`, un `biome.json` con `lineEnding: crlf` (el repo usa `lf`), un `tsconfig.json` sin extender `packages/config/tsconfig.base.json`, un `package.json` con `name` sin el scope `@ynara/*`, y un `AGENTS.md`/`CLAUDE.md` boilerplate genérico sin nada de Ynara. `scripts/ynara-doctor.sh` no detecta nada de esto porque sus checks usan listas de rutas hardcodeadas (`apps/web`, `apps/mobile`, `apps/backend`) en vez de iterar `apps/*` — una app nueva pasa desapercibida salvo que alguien la agregue a mano al script. Si vas a integrar un repo externo como app nueva: borrar el `.git` anidado, borrar lockfile/workspace propios (el root ya cubre `apps/*`), heredar `biome.json`/`tsconfig.json` del root (o extenderlos explícitamente como hace `packages/core/biome.json`), renombrar el `package.json` al scope `@ynara/*`, y sumar la app a `scripts/ynara-doctor.sh` + a los workflows de CI relevantes (hoy también son paths hardcodeados, `ci-web.yml`/`ci-admin.yml`).
 
 Detalle de cada landmine con código de bien/mal: [`docs/conventions/AI-GUIDELINES.md`](./docs/conventions/AI-GUIDELINES.md).
 
