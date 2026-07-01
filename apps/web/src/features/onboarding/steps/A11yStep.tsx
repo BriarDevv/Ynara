@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { ChipGroup } from "@/components/ui/ChipGroup";
 import { Toggle } from "@/components/ui/Toggle";
 import { applyA11yClasses, type TextSize, useA11yStore } from "@/stores/a11y";
+import { applyThemeClass, type ThemePreference, useThemeStore } from "@/stores/theme";
 import { CelebrationOutro } from "../components/CelebrationOutro";
 import { StepFooter } from "../components/StepFooter";
 import { StepShell } from "../components/StepShell";
@@ -16,6 +17,12 @@ const TEXT_SIZE_OPTIONS = [
   { value: "sm" as const, label: "Chico" },
   { value: "md" as const, label: "Normal" },
   { value: "lg" as const, label: "Grande" },
+];
+
+const THEME_OPTIONS = [
+  { value: "light" as const, label: "Claro" },
+  { value: "dark" as const, label: "Oscuro" },
+  { value: "system" as const, label: "Sistema" },
 ];
 
 /**
@@ -45,6 +52,12 @@ export function A11yStep() {
   const setTextSize = useA11yStore((s) => s.setTextSize);
   const setHighContrast = useA11yStore((s) => s.setHighContrast);
   const setMotion = useA11yStore((s) => s.setMotion);
+
+  // Tema (claro/oscuro): pref de dispositivo (store propio `ynara.theme`, NO va
+  // al intake del backend). Preview vivo igual que la a11y: aplica la clase al
+  // <html> al instante.
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
 
   const { complete, isPending, isCelebrating, error, triggerOutroComplete } =
     useCompleteOnboarding();
@@ -76,6 +89,11 @@ export function A11yStep() {
     const nextMotion = reduceOn ? "reduce" : "auto";
     setMotion(nextMotion);
     applyA11yClasses({ textSize, highContrast, motion: nextMotion });
+  };
+
+  const handleTheme = (value: ThemePreference) => {
+    setTheme(value);
+    applyThemeClass({ theme: value });
   };
 
   // Memoizado: StepFooter recibe JSX por prop; sin memo recibiría un nodo nuevo
@@ -116,6 +134,7 @@ export function A11yStep() {
           value={textSize}
           onChange={handleTextSize}
         />
+        <ChipGroup label="TEMA" options={THEME_OPTIONS} value={theme} onChange={handleTheme} />
         <Toggle
           label="Alto contraste"
           hint="Bordes y textos más definidos."

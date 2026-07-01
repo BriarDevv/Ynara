@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { applyThemeClass, useThemeStore } from "./theme";
+import { applyThemeClass, resolveEffectiveTheme, useThemeStore } from "./theme";
 
 describe("useThemeStore", () => {
   // jsdom provee localStorage real y el persist de zustand lo usa directo:
@@ -56,6 +56,51 @@ describe("applyThemeClass", () => {
   it("light quita html.theme-dark y vuelve data-theme a light", () => {
     applyThemeClass({ theme: "dark" });
     applyThemeClass({ theme: "light" });
+    expect(document.documentElement.classList.contains("theme-dark")).toBe(false);
+    expect(document.documentElement.dataset.theme).toBe("light");
+  });
+});
+
+describe("resolveEffectiveTheme · system (sigue al SO)", () => {
+  const originalMatchMedia = window.matchMedia;
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    document.documentElement.classList.remove("theme-dark");
+    delete document.documentElement.dataset.theme;
+  });
+
+  function mockPrefersDark(prefersDark: boolean) {
+    window.matchMedia = ((query: string) => ({
+      matches: prefersDark,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  }
+
+  it("light/dark explícito se devuelve tal cual (no consulta al SO)", () => {
+    expect(resolveEffectiveTheme("light")).toBe("light");
+    expect(resolveEffectiveTheme("dark")).toBe("dark");
+  });
+
+  it("system → dark cuando el SO prefiere oscuro", () => {
+    mockPrefersDark(true);
+    expect(resolveEffectiveTheme("system")).toBe("dark");
+  });
+
+  it("system → light cuando el SO prefiere claro", () => {
+    mockPrefersDark(false);
+    expect(resolveEffectiveTheme("system")).toBe("light");
+  });
+
+  it("applyThemeClass con system aplica el efectivo del SO al <html>", () => {
+    mockPrefersDark(false);
+    applyThemeClass({ theme: "system" });
     expect(document.documentElement.classList.contains("theme-dark")).toBe(false);
     expect(document.documentElement.dataset.theme).toBe("light");
   });

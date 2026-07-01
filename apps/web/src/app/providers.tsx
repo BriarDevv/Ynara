@@ -63,7 +63,23 @@ function A11yApplier(): null {
 function ThemeApplier(): null {
   useEffect(() => {
     applyThemeClass(useThemeStore.getState());
-    return useThemeStore.subscribe((state) => applyThemeClass({ theme: state.theme }));
+    const unsubscribe = useThemeStore.subscribe((state) => applyThemeClass({ theme: state.theme }));
+
+    // Tema `system`: re-aplicar cuando el SO cambia de claro↔oscuro con la app
+    // abierta (solo si la preferencia sigue siendo `system`; con light/dark
+    // explícito el cambio del SO no afecta).
+    const mql = window.matchMedia?.("(prefers-color-scheme: dark)");
+    const onSystemChange = () => {
+      if (useThemeStore.getState().theme === "system") {
+        applyThemeClass(useThemeStore.getState());
+      }
+    };
+    mql?.addEventListener("change", onSystemChange);
+
+    return () => {
+      unsubscribe();
+      mql?.removeEventListener("change", onSystemChange);
+    };
   }, []);
   return null;
 }
