@@ -166,7 +166,24 @@ export function SiteNav() {
           <YnaraLockup size={16} tone={onLight ? "light" : "dark"} />
         </a>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 md:gap-8">
+          {/* Links de sección: sólo desktop (≥768px) — en mobile viven en el sheet. */}
+          <nav aria-label="Secciones" className="hidden items-center gap-6 md:flex lg:gap-8">
+            {nav.links.map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                className={
+                  onLight
+                    ? "pointer-events-auto font-body text-sm font-medium text-navy transition-colors hover:text-blue"
+                    : "pointer-events-auto font-body text-sm font-medium text-text-bright/85 transition-colors hover:text-blue-bright"
+                }
+              >
+                {l.label}
+              </a>
+            ))}
+          </nav>
+
           {/* CTA: visible siempre (desktop y mobile). */}
           <Button
             href={nav.cta.href}
