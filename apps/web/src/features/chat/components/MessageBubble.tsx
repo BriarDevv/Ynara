@@ -1,6 +1,6 @@
 "use client";
 
-import { chatErrorCopy } from "@ynara/shared-schemas";
+import { chatErrorCopy, chatPausedCopy } from "@ynara/shared-schemas";
 import { Button } from "@/components/ui/Button";
 import { MODE_BY_ID, type ModeId } from "@/components/ui/modes";
 import { cn } from "@/lib/cn";
@@ -49,6 +49,23 @@ export function MessageBubble({ message, mode, onRetry }: Props) {
             Reintentar
           </Button>
         ) : null}
+      </div>
+    );
+  }
+
+  if (message.status === "degraded") {
+    // IA no disponible (ADR-027): estado calmo/informativo, NO el rojo de error
+    // (no es un fallo del turno del usuario). El anuncio a lectores de pantalla
+    // lo hace la región viva PERSISTENTE de MessageList (un `role="status"`
+    // recién montado acá no dispara el anuncio de forma confiable), por eso el
+    // bubble es un div plano. El texto enlatado del backend ya se descartó en el
+    // store; mostramos el copy honesto. El composer queda habilitado, así que el
+    // usuario puede reintentar escribiendo de nuevo cuando la IA vuelva.
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <div className="max-w-[85%] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-soft)] px-4 py-3">
+          <p className="text-body-sm text-[var(--color-ink-soft)]">{chatPausedCopy()}</p>
+        </div>
       </div>
     );
   }

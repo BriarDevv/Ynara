@@ -99,4 +99,44 @@ describe("MessageBubble", () => {
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
+
+  it("un turno degradado muestra el copy honesto de 'IA no disponible'", () => {
+    render(
+      <MessageBubble
+        message={userMsg({ role: "assistant", status: "degraded", text: "" })}
+        mode="vida"
+      />,
+    );
+    expect(screen.getByText(/la ia no está disponible ahora mismo/i)).toBeInTheDocument();
+  });
+
+  it("el estado degradado es calmo, NO el alert rojo de error", () => {
+    render(
+      <MessageBubble
+        message={userMsg({ role: "assistant", status: "degraded", text: "" })}
+        mode="vida"
+      />,
+    );
+    // Bubble plano (sin role=alert): no es un fallo del turno. El anuncio a
+    // lectores lo hace la región viva persistente de MessageList, no el bubble.
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText(/la ia no está disponible ahora mismo/i)).toBeInTheDocument();
+  });
+
+  it("el estado degradado descarta el texto enlatado del backend", () => {
+    // Aun si por lo que sea llegara texto enlatado, NO se muestra: el store lo
+    // limpia y el bubble renderiza solo el copy honesto.
+    render(
+      <MessageBubble
+        message={userMsg({
+          role: "assistant",
+          status: "degraded",
+          text: "Estoy con un problema tecnico, proba en un ratito.",
+        })}
+        mode="vida"
+      />,
+    );
+    expect(screen.queryByText(/problema tecnico/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull();
+  });
 });
