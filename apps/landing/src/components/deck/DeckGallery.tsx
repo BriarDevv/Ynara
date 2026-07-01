@@ -3,7 +3,25 @@
 import { DeckEyebrow } from "@/components/deck/DeckEyebrow";
 import "./DeckGallery.css";
 
-export type GalleryImage = { img: string; label?: string; alt: string };
+export type GalleryImage = {
+  img: string;
+  label?: string;
+  alt: string;
+  /**
+   * "cover" (default) = llena el marco, recorta lo que sobre — para fotos
+   * reales pensadas para sangrar. "contain" = la imagen ENTERA siempre
+   * visible, sin recortar — usalo para piezas con texto/UI que no puede
+   * perder borde (posts, historias, capturas de pantalla, OOH con QR).
+   */
+  fit?: "cover" | "contain";
+  /**
+   * Proporción real de la imagen (ej. "4/5", "3/2", "9/16"). Con `fit:
+   * "contain"`, el MARCO adopta esta proporción (en vez de estirarse al
+   * alto/ancho completo de la celda) para que no queden franjas de letterbox
+   * — la imagen ocupa el marco casi entero, centrada en la lámina.
+   */
+  aspect?: string;
+};
 
 /**
  * Galería de imágenes del deck: una fila de 1..N imágenes GRANDES que llenan el
@@ -16,20 +34,31 @@ export function DeckGallery({
   eyebrow,
   images,
   caption,
+  className,
 }: {
   eyebrow?: string;
   images: ReadonlyArray<GalleryImage>;
   caption?: string;
+  /** Clase extra para el grid — p.ej. angostar una galería de 1 imagen vertical. */
+  className?: string;
 }) {
   return (
     <>
       {eyebrow ? <DeckEyebrow>{eyebrow}</DeckEyebrow> : null}
 
-      <ul className="deck-gallery__grid" data-count={images.length}>
+      <ul
+        className={className ? `deck-gallery__grid ${className}` : "deck-gallery__grid"}
+        data-count={images.length}
+      >
         {images.map((it) => (
           <li className="deck-gallery__item" data-reveal key={it.img || it.alt}>
             <figure className="deck-gallery__figure">
-              <span className="deck-gallery__frame">
+              <span
+                className={
+                  it.aspect ? "deck-gallery__frame deck-gallery__frame--fit" : "deck-gallery__frame"
+                }
+                style={it.aspect ? { aspectRatio: it.aspect } : undefined}
+              >
                 {it.img ? (
                   <img
                     className="deck-gallery__img"
@@ -37,6 +66,7 @@ export function DeckGallery({
                     alt={it.alt}
                     loading="lazy"
                     decoding="async"
+                    style={it.fit ? { objectFit: it.fit } : undefined}
                   />
                 ) : (
                   <span className="deck-gallery__placeholder" aria-hidden>
