@@ -1,0 +1,74 @@
+/* L06a · Nombre e isotipo — lockup heroico + etimología + significado, sobre el
+   CAMPO VIVO de la app (variante aurora, claro). MUNDO MARFIL (calma): el texto
+   usa los tokens world-aware del deck → tinta navy sobre el campo claro. */
+.s06a {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(1.1rem, 2.8vh, 2rem);
+}
+
+/* Lockup HEROICO: proporción canónica (isotipo 1.3125em, baseline, gap 0.625em),
+   wordmark 700/-0.06em. El isotipo gradiente lee pleno sobre el campo claro. */
+.s06a__lockup {
+  display: flex;
+  align-items: baseline;
+  gap: 0.625em;
+  font-size: clamp(3rem, 1rem + 7vw, 6.5rem);
+}
+.s06a__mark {
+  width: 1.3125em;
+  height: auto;
+  /* sombra de contacto suave para asentar el isotipo sobre el campo. */
+  filter: drop-shadow(0 8px 22px rgb(27 34 51 / 0.22));
+}
+.s06a__wordmark {
+  font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1em;
+  line-height: 0.8;
+  letter-spacing: -0.06em;
+  color: var(--deck-fg);
+}
+
+.s06a__etymology {
+  max-width: 46ch;
+  color: var(--deck-fg-soft);
+}
+
+/* Significado (figura / diamante): dos columnas, riel de acento del registro. */
+.s06a__defs {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(1rem, 2.4vw, 2.6rem);
+  max-width: 62rem;
+}
+.s06a__def {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-left: clamp(1rem, 1.4vw, 1.3rem);
+  border-left: 2px solid var(--register-accent, var(--c-blue));
+}
+.s06a__key {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1rem, 0.92rem + 0.3vw, 1.15rem);
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--register-accent, var(--c-blue)) 60%, var(--deck-fg));
+}
+.s06a__val {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.98rem, 0.92rem + 0.28vw, 1.12rem);
+  line-height: 1.5;
+  color: var(--deck-fg-soft);
+  max-width: 32ch;
+}
+
+@media (max-width: 760px) {
+  .s06a__defs {
+    grid-template-columns: 1fr;
+  }
+}

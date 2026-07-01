@@ -1,0 +1,131 @@
+/* L06b · Tipografía y color — el sistema visual sobre el CAMPO VIVO de la app
+   (variante aurora, claro). MUNDO MARFIL (calma). Dos bloques sobre superficies
+   claras translúcidas para que las muestras se lean CLARAS sobre el campo. */
+.s06b {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(1.2rem, 3vh, 2.2rem);
+}
+
+.s06b__grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: clamp(1.4rem, 3.5vw, 3rem);
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .s06b__grid {
+    grid-template-columns: 1fr;
+    gap: 1.4rem;
+  }
+}
+
+/* Bloque sobre superficie clara: las muestras se leen claras sobre el campo. */
+.s06b__block {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.9rem, 1.8vh, 1.3rem);
+  padding: clamp(1.2rem, 2.6vh, 1.8rem) clamp(1.2rem, 2.2vw, 1.7rem);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--deck-surface-border);
+  /* blanco translúcido: separa las muestras del campo sin taparlo del todo. */
+  background: rgb(255 255 255 / 0.66);
+  box-shadow: var(--shadow-ink-card);
+}
+.s06b__block-label {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--deck-fg-muted);
+}
+
+/* ── Muestras de color ──────────────────────────────────────────────────── */
+.s06b__swatches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(0.9rem, 1.8vw, 1.3rem);
+}
+.s06b__swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.s06b__chip {
+  display: block;
+  width: 100%;
+  height: clamp(2.6rem, 6vh, 3.6rem);
+  border-radius: var(--r-md);
+  /* hairline de tinta: define el chip claro ("Marfil") contra la superficie. */
+  border: 1px solid var(--c-ink-hair-2);
+  box-shadow: 0 8px 22px -16px rgb(27 34 51 / 0.35);
+}
+.s06b__chip-name {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.9rem, 0.86rem + 0.2vw, 1rem);
+  font-weight: 600;
+  color: var(--deck-fg);
+}
+.s06b__chip-hex {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.78rem, 0.74rem + 0.16vw, 0.88rem);
+  letter-spacing: 0.05em;
+  color: var(--deck-fg-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Muestras tipográficas ──────────────────────────────────────────────── */
+.s06b__fonts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.1rem, 2.4vh, 1.6rem);
+}
+.s06b__font {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.s06b__font-sample {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(2.9rem, 6.5vh, 3.7rem);
+  height: clamp(2.9rem, 6.5vh, 3.7rem);
+  border: 1px solid var(--c-ink-hair-2);
+  border-radius: var(--r-md);
+  background: var(--c-paper);
+  font-size: clamp(1.4rem, 3.2vh, 1.9rem);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--deck-fg);
+}
+.s06b__font-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+}
+.s06b__font-name {
+  font-size: clamp(1rem, 0.92rem + 0.3vw, 1.14rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--deck-fg);
+}
+.s06b__font-role {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: 0.76rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--deck-fg-muted);
+}

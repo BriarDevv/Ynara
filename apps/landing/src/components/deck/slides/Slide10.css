@@ -1,0 +1,111 @@
+/* L10 · Planes — dos franjas editoriales (regla + nombre + precio grande +
+ * features), no cards en caja. Premium con leve realce azul de marca. */
+.s10__title {
+  max-width: 22ch;
+}
+
+.s10__plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(1.4rem, 3.4vw, 3.4rem);
+  margin-top: clamp(0.4rem, 1.2vh, 1rem);
+}
+@media (max-width: 820px) {
+  .s10__plans {
+    grid-template-columns: 1fr;
+    gap: 1.6rem;
+  }
+}
+
+/* Franja: borde superior como regla editorial; no es una caja cerrada. */
+.s10__plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.65rem, 1.4vh, 1rem);
+  padding-top: clamp(1.1rem, 2.2vh, 1.6rem);
+  border-top: 2px solid var(--deck-hair);
+}
+.s10__plan.is-featured {
+  border-top-color: var(--c-blue);
+}
+
+.s10__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+}
+.s10__name {
+  font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.2rem, 1rem + 0.8vw, 1.7rem);
+  letter-spacing: -0.02em;
+  color: var(--deck-fg);
+  margin: 0;
+}
+/* Pill invertido: fondo azul de marca + texto blanco. Es el realce del plan
+   recomendado, así que debe ganar contraste, no diluirse en un wash tenue. */
+.s10__tag {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #fff;
+  padding: 0.28rem 0.66rem;
+  border-radius: var(--r-pill);
+  background: var(--c-blue);
+}
+
+.s10__price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+.s10__price {
+  font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(2.6rem, 1.6rem + 4vw, 4.6rem);
+  line-height: 0.92;
+  letter-spacing: -0.045em;
+  color: var(--deck-fg);
+}
+.s10__plan.is-featured .s10__price {
+  color: var(--c-blue);
+}
+.s10__period {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.9rem, 0.85rem + 0.3vw, 1.05rem);
+  color: var(--deck-fg-muted);
+}
+/* Altura nominal de la línea de precio en ARS (≈ 0.95rem de cuerpo · 1.4 de
+   interlínea). Se reserva idéntica en el plan que no la tiene. */
+.s10__price-alt {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: clamp(0.82rem, 0.78rem + 0.2vw, 0.95rem);
+  line-height: 1.4;
+  color: var(--deck-fg-soft);
+  margin: -0.2rem 0 0;
+  min-height: 1.33rem;
+}
+/* El plan sin precio en ARS reserva esa misma franja (alto de la línea + el gap
+   de columna que esa línea introduce en Premium), así el listado de features
+   arranca a la misma línea base en ambas columnas. */
+.s10__plan:not(:has(.s10__price-alt)) .s10__price-row {
+  margin-bottom: calc(1.33rem - 0.2rem + clamp(0.65rem, 1.4vh, 1rem));
+}
+
+/* El bloque de precio reserva la misma altura en ambos planes (ver price-alt),
+   así la primera fila de features arranca a la misma línea base en las dos
+   columnas. Sin margin-top: auto, que descuadraría ese inicio. */
+.s10__feats {
+  padding-top: clamp(0.5rem, 1.2vh, 0.9rem);
+}
+.s10__feats li {
+  font-size: clamp(0.9rem, 0.86rem + 0.25vw, 1.05rem);
+}
+
+.s10__note {
+  margin-top: clamp(0.6rem, 1.6vh, 1.2rem);
+}

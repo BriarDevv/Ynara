@@ -1,0 +1,100 @@
+
+  .vc {
+    position: relative;
+    z-index: 3;
+    background: var(--c-ivory);
+    color: var(--c-navy);
+    padding: clamp(4svh, 7svh, 9svh) 0 clamp(8svh, 12svh, 14svh);
+  }
+  .vc-inner {
+    width: 100%;
+    max-width: 1380px;
+    margin: 0 auto;
+    padding: 0 6vw;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(2rem, 5vw, 6rem);
+    align-items: center;
+  }
+  .vc-eyebrow {
+    margin: 0 0 1.5rem;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.62rem, 0.72vw, 0.76rem);
+    font-weight: 600;
+    letter-spacing: 0.26em;
+    text-transform: uppercase;
+    color: var(--c-ink-muted);
+  }
+  .vc-hairline { display: block; width: 0%; height: 1px; margin-bottom: 2.4rem; max-width: 18rem; background: var(--c-ink-hair-strong); }
+  .vc-title {
+    margin: 0;
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 600;
+    font-size: clamp(2.4rem, 4.6vw, 4.8rem);
+    line-height: 0.98;
+    letter-spacing: -0.04em;
+    color: var(--c-navy-deep);
+  }
+  .vc-lead {
+    margin: clamp(1.2rem, 2vw, 1.8rem) 0 0;
+    max-width: 42ch;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.98rem, 1.15vw, 1.2rem);
+    line-height: 1.6;
+    color: var(--c-ink-soft);
+  }
+
+  /* PANEL — mockup del producto */
+  .vc-panel {
+    background: #fff;
+    border: 1px solid var(--c-ink-hair-2);
+    border-radius: 22px;
+    box-shadow: var(--shadow-ink-card);
+    overflow: hidden;
+  }
+  .vc-panel-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 1rem 1.4rem;
+    border-bottom: 1px solid var(--c-ink-hair);
+    background: var(--c-paper);
+  }
+  .vc-dot-mark { width: 10px; height: 10px; border-radius: 999px; background: var(--c-blue); box-shadow: 0 0 0 4px rgba(47,90,166,0.15); }
+  .vc-panel-name {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 600; font-size: 0.95rem; color: var(--c-navy-deep);
+  }
+  .vc-panel-status {
+    margin-left: auto;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--c-ink-muted);
+  }
+  .vc-thread { display: flex; flex-direction: column; gap: 1.6rem; padding: clamp(1.4rem, 2vw, 2rem); }
+  .vc-ex { display: flex; flex-direction: column; gap: 0.6rem; }
+  .vc-mode {
+    align-self: flex-start;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.62rem; font-weight: 600; letter-spacing: 0.24em; text-transform: uppercase;
+    color: var(--mode-acc);
+  }
+  .vc-bubble {
+    margin: 0; padding: 0.8rem 1.05rem;
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.95rem; line-height: 1.5; border-radius: 16px; max-width: 86%;
+  }
+  .vc-user {
+    align-self: flex-end; border-bottom-right-radius: 5px;
+    background: var(--c-navy-deep); color: var(--c-ivory);
+  }
+  .vc-ynara {
+    align-self: flex-start; border-bottom-left-radius: 5px;
+    background: var(--c-paper); border: 1px solid var(--c-ink-hair-2);
+    border-left: 2px solid var(--mode-acc); color: var(--c-ink-soft);
+  }
+  @media (max-width: 880px) {
+    .vc-inner { grid-template-columns: 1fr; gap: clamp(2rem, 6vw, 3rem); }
+    .vc-title { font-size: clamp(2.4rem, 9vw, 3.2rem); }
+    .vc-lead { max-width: 100%; }
+  }

@@ -1,0 +1,282 @@
+
+  /* ── Spacer / intro pin target ─────────────────── */
+  .hl-intro {
+    position: relative;
+    min-height: 100svh;
+    display: flex;
+    align-items: flex-end;
+    padding: 8vw 6vw 10vw;
+    /* transparent → WebGL field shows through */
+    background: transparent;
+    z-index: 1;
+  }
+  .hl-intro__inner {
+    max-width: 800px;
+  }
+  .hl-intro__eyebrow {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--c-acc);
+    margin-bottom: 1.5rem;
+  }
+  .hl-intro__hairline {
+    display: block;
+    height: 1px;
+    background: var(--c-acc);
+    width: 0%;
+    margin-bottom: 2.5rem;
+    opacity: 0.5;
+  }
+  .hl-intro__manifesto {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-size: clamp(2rem, 1rem + 4.5vw, 4.5rem);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    color: var(--c-text-bright);
+    margin: 0;
+  }
+
+  /* ── Text-pin block (secondary pin target) ──────── */
+  .hl-text-pin {
+    padding: 6vw 6vw 4vw;
+    background: transparent;
+  }
+  .hl-text-pin__label {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--c-acc);
+    margin-bottom: 1rem;
+    overflow: hidden;
+  }
+  .hl-text-pin__text {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-size: clamp(1.8rem, 1rem + 3.5vw, 3.8rem);
+    font-weight: 700;
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+    color: var(--c-text-bright);
+    max-width: 700px;
+    margin: 0;
+  }
+
+  /* ── Horizontal stage ───────────────────────────── */
+  .horizontal-section {
+    width: 100vw;
+    height: 100svh;
+    margin-top: -50vh;
+    display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .horizontal-wrapper {
+    transform-origin: 100% 100%;
+    width: 100vw;
+    height: 100svh;
+    position: relative;
+    overflow: hidden;
+  }
+  .track {
+    display: flex;
+    flex: none;
+    justify-content: flex-start;
+    align-items: stretch;
+    height: 100%;
+    position: relative;
+  }
+
+  /* ── Slides ─────────────────────────────────────── */
+  .h-slide {
+    flex: 0 0 50vw;
+    height: 100%;
+    background-color: var(--c-ivory);
+    color: var(--c-navy);
+    display: flex;
+    flex-flow: column;
+    justify-content: space-between;
+    padding: 4.167vw 4.167vw 3.167vw;
+    overflow: hidden;
+  }
+  .h-slide.side {
+    background-color: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .h-slide__top {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding-top: 2vw;
+  }
+  .h-slide__claim {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(0.9rem, 0.5rem + 1vw, 1.1rem);
+    font-weight: 400;
+    line-height: 1.55;
+    color: var(--c-navy);
+    opacity: 0.75;
+    max-width: 340px;
+    margin: 0;
+  }
+  .h-slide__bot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .h-slide__label {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--c-navy);
+    opacity: 0.55;
+  }
+  .h-slide__word {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(3.5rem, 1rem + 7vw, 7.5rem);
+    line-height: 0.88;
+    letter-spacing: -0.05em;
+    color: var(--c-navy-deep);
+    margin: 0;
+  }
+
+  /* ── Side-slide content ─────────────────────────── */
+  .slide-side__content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+  }
+  .slide-side__label {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--c-ivory);
+    opacity: 0.65;
+  }
+  .slide-side__svg {
+    width: clamp(80px, 8vw, 130px);
+    height: clamp(80px, 8vw, 130px);
+    overflow: visible;
+  }
+  .slide-side__svg path,
+  .slide-side__svg circle,
+  .slide-side__svg line,
+  .slide-side__svg polyline {
+    fill: none;
+    stroke: var(--c-acc);
+    stroke-width: 1.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* ── Exit section ───────────────────────────────── */
+  .hl-exit {
+    position: relative;
+    background: var(--c-ivory);
+    padding: 8vw 6vw 10vw;
+    z-index: 3;
+  }
+  .hl-exit__inner {
+    max-width: 900px;
+  }
+  .hl-exit__eyebrow {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--c-navy);
+    opacity: 0.55;
+    margin-bottom: 1.5rem;
+  }
+  .hl-exit__hairline {
+    display: block;
+    height: 1px;
+    background: var(--c-navy);
+    width: 0%;
+    margin-bottom: 3rem;
+    opacity: 0.2;
+  }
+  .hl-exit__heading {
+    font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+    font-size: clamp(2.2rem, 1rem + 5vw, 5rem);
+    font-weight: 700;
+    line-height: 1.04;
+    letter-spacing: -0.04em;
+    color: var(--c-navy-deep);
+    margin: 0 0 2.5rem;
+  }
+  .hl-exit__body {
+    font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+    font-size: clamp(1rem, 0.6rem + 1.2vw, 1.25rem);
+    line-height: 1.6;
+    color: var(--c-navy);
+    opacity: 0.7;
+    max-width: 560px;
+    margin: 0;
+  }
+
+  /* ── Mobile reduced-motion / fallback ──────────── */
+  @media (max-width: 479px) {
+    .horizontal-section {
+      height: auto;
+      margin-top: 0;
+      position: static;
+    }
+    .horizontal-wrapper {
+      overflow: visible;
+    }
+    .track {
+      flex-direction: column;
+      height: auto;
+    }
+    .h-slide {
+      flex: none;
+      width: 100%;
+      height: auto;
+      min-height: 70svh;
+      padding: 10vw 6vw 8vw;
+    }
+    .h-slide.side {
+      min-height: 40svh;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .horizontal-section {
+      height: auto;
+      margin-top: 0;
+      position: static;
+    }
+    .horizontal-wrapper {
+      overflow: visible;
+      transform: none !important;
+    }
+    .track {
+      flex-direction: column;
+      height: auto;
+      transform: none !important;
+    }
+    .h-slide {
+      flex: none;
+      width: 100%;
+      height: auto;
+      min-height: 60svh;
+    }
+    .h-slide.side {
+      min-height: 30svh;
+    }
+  }
