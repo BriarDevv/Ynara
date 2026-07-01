@@ -46,7 +46,8 @@ export function Slide({
 }) {
   const ref = useRef<HTMLElement>(null);
   const isActive = useSlideActive(index);
-  const meta = DECK_SLIDES[index];
+  // `index` siempre referencia una lámina real de DECK_SLIDES (contrato del componente).
+  const meta = DECK_SLIDES[index]!;
 
   useGSAP(
     () => {

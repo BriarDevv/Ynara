@@ -1,6 +1,10 @@
 "use client";
 
-import { gsap, reducedMotion, registerGsap, type ScrollTrigger, SplitText } from "@/lib/motion";
+import { gsap, reducedMotion, registerGsap, SplitText } from "@/lib/motion";
+
+// ScrollTrigger.Vars resuelve por el namespace ambiental global de gsap (sin import:
+// importarlo acá solo para el tipo lo deja sin uso en runtime → TS6133).
+type ScrollTriggerVars = ScrollTrigger.Vars;
 
 export interface LineRevealOpts {
   /** Starting vertical offset — defaults to tiwis "manifesto" value */
@@ -90,7 +94,7 @@ export function lineReveal(el: Element, opts: LineRevealOpts = {}) {
         duration: dur,
         ease: "power3.inOut",
         stagger: { amount: stagger },
-        scrollTrigger: { trigger: el, start } satisfies ScrollTrigger.Vars,
+        scrollTrigger: { trigger: el, start } satisfies ScrollTriggerVars,
       });
       return tween;
     },
@@ -114,7 +118,7 @@ export function hairlineReveal(el: HTMLElement, start = "clamp(top 85%)"): gsap.
     width: "100%",
     duration: 1.2,
     ease: "power3.inOut",
-    scrollTrigger: { trigger: el, start } satisfies ScrollTrigger.Vars,
+    scrollTrigger: { trigger: el, start } satisfies ScrollTriggerVars,
   });
 }
 

@@ -80,14 +80,15 @@ export function Deck({ children }: { children: React.ReactNode }) {
   }, [next, prev, go]);
 
   // ── Campo: conducir la fase a la de la lámina activa (transición suave) ──
-  const fieldProxy = useRef({ p: DECK_SLIDES[0].field });
+  // DECK_SLIDES siempre tiene al menos una lámina — invariante del contenido, no del runtime.
+  const fieldProxy = useRef({ p: DECK_SLIDES[0]!.field });
   // Set inicial en cuanto CascadeField exponga el driver global.
   useEffect(() => {
     let raf = 0;
     let tries = 0;
     const tick = () => {
       if (window.__setFieldProgress) {
-        window.__setFieldProgress(DECK_SLIDES[0].field);
+        window.__setFieldProgress(DECK_SLIDES[0]!.field);
         return;
       }
       if (tries++ < 180) raf = requestAnimationFrame(tick);
@@ -116,12 +117,14 @@ export function Deck({ children }: { children: React.ReactNode }) {
   const touch = useRef<{ x: number; y: number } | null>(null);
   const onTouchStart = (e: React.TouchEvent) => {
     const t = e.changedTouches[0];
+    if (!t) return;
     touch.current = { x: t.clientX, y: t.clientY };
   };
   const onTouchEnd = (e: React.TouchEvent) => {
     const s = touch.current;
     if (!s) return;
     const t = e.changedTouches[0];
+    if (!t) return;
     const dx = t.clientX - s.x;
     const dy = t.clientY - s.y;
     if (Math.abs(dx) > 44 && Math.abs(dx) > Math.abs(dy)) {
@@ -138,8 +141,9 @@ export function Deck({ children }: { children: React.ReactNode }) {
     next();
   };
 
-  const world = DECK_SLIDES[active].world;
-  const meta = DECK_SLIDES[active];
+  // `active` siempre queda acotado a [0, TOTAL_SLIDES - 1] por clamp/next/prev/go.
+  const meta = DECK_SLIDES[active]!;
+  const world = meta.world;
 
   return (
     <DeckContext.Provider value={ctx}>
