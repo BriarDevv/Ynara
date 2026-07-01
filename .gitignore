@@ -95,6 +95,7 @@ backups/
 apps/web/.shots/
 playwright-report/
 test-results/
+.playwright-mcp/
 
 # Next.js generated — NO se commitea (regenerado por `next dev`/`next build`).
 apps/web/next-env.d.ts
